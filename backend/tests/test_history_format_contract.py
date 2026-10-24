@@ -119,7 +119,7 @@ async def test_actual_generation_api_reports_history_failure_before_model(monkey
     request.history = [{"role": "user", "content": "synthetic-private-invalid", "extra": "ignored"},
                        {"role": "system", "content": "synthetic-private-privileged-text"}]
     with pytest.raises(HTTPException) as caught:
-        await generate._generate_reply_impl(request)
+        await generate._generate_reply_impl(request, message_db=generate.db)
     assert caught.value.status_code == 503, repr(caught.value.__cause__)
     assert caught.value.detail == HistoryFormatError("history[1].role").public_detail()
     assert isinstance(caught.value.__cause__, HistoryFormatError)

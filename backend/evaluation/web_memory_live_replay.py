@@ -112,7 +112,7 @@ async def run(args):
     else:
         writer = RecordedCompletion(config)
     scheduler = MemoryEnrichmentScheduler(config=config, completion=writer)
-    service = gen._build_chat_generation_service(InlineAdmission(), context, database)
+    service = gen._build_chat_generation_service(InlineAdmission(), context, message_db=database)
     app = FastAPI()
     app.include_router(gen.router)
     login = {"id": "evaluation"}

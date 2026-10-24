@@ -67,7 +67,7 @@ async def test_deterministic_response_has_no_model_invocation(monkeypatch, mode,
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', deterministic)
     monkeypatch.setattr(gen, 'get_llm_semaphore', lambda: asyncio.Semaphore(2))
     result = await gen._generate_reply_impl(_request(), persist_message=True, enable_rag=False,
-                                           record_invocation=True)
+                                           record_invocation=True, message_db=gen.db)
     assert result.model == label and recorded == []
     assert len(saved) == 1 and saved[0][2] == label and saved[0][3] == 'default'
 
@@ -121,6 +121,7 @@ async def test_internal_mode_success_does_not_persist(monkeypatch):
         persist_message=False,
         enable_rag=False,
         record_invocation=False,
+        message_db=gen.db,
     )
 
     assert result.reply == "tool-reply"
@@ -162,6 +163,7 @@ async def test_internal_mode_vllm_failure_does_not_persist(monkeypatch):
     with pytest.raises(HTTPException) as caught:
         await gen._generate_reply_impl(
             _request(), persist_message=False, enable_rag=False, record_invocation=False,
+            message_db=gen.db,
         )
     assert caught.value.status_code == 503
     assert saved == []
@@ -202,6 +204,7 @@ async def test_internal_mode_model_manager_failure_does_not_record_invocation(mo
             persist_message=False,
             enable_rag=False,
             record_invocation=False,
+            message_db=gen.db,
         )
 
     assert caught.value.status_code == 500 and caught.value.__cause__ is failure
@@ -238,7 +241,7 @@ async def test_explicit_memory_operations_respect_internal_and_delivery_modes(mo
     monkeypatch.setattr(mm, 'get_model_manager', lambda: SimpleNamespace(_current_provider=SimpleNamespace(value="vllm"), get_current_provider=lambda: SimpleNamespace(name="vllm")))
     request = MessageRequest(message='忘掉我的住址。', characterId='tsukiyashiro_kisaki', loraName='default', sessionType='private', sessionId='s1')
     await gen._generate_reply_impl(request, persist_message=persist, delivery_context=delivery,
-                                  enable_rag=False, record_invocation=False)
+                                  enable_rag=False, record_invocation=False, message_db=gen.db)
     assert seen == [(allowed, persist and delivery is not None)]
     if persist and delivery is not None:
         assert delivery["completion_snapshot"]["user_scope"]["sender_id"] == "owner"
@@ -378,7 +381,7 @@ async def test_unavailable_selected_vllm_never_dispatches_another_provider(monke
     retrieval = AsyncMock()
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', retrieval)
     with pytest.raises(HTTPException) as error:
-        await gen._generate_reply_impl(_request(), persist_message=False, enable_rag=False, record_invocation=False)
+        await gen._generate_reply_impl(_request(), persist_message=False, enable_rag=False, record_invocation=False, message_db=gen.db)
     assert error.value.status_code == 503 and saved == recorded == []
     manager.async_generate.assert_not_awaited()
     retrieval.assert_not_awaited()
@@ -453,6 +456,7 @@ async def test_injected_character_service_reaches_prepare_and_complete(monkeypat
         enable_rag=False,
         record_invocation=False,
         character_service=container_service,
+        message_db=gen.db,
     )
 
     assert result.reply == "reply"

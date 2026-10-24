@@ -14,7 +14,6 @@ import json
 import time
 import asyncio
 import threading
-import logging
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
@@ -29,7 +28,7 @@ from nonebot.adapters.onebot.v11 import (
 )
 from nonebot.log import logger
 from nonebot.exception import FinishedException
-from bot.tools import execute_tool, get_tools, TOOLS
+from bot.tools import execute_tool, TOOLS
 
 # 加载环境变量 - 优先加载backend/.env，回退到bot/.env
 _backend_env = Path(__file__).parent.parent / ".env"
@@ -274,7 +273,7 @@ def _resolve_path(p: str) -> str:
 
 # H1 fix: LORA_REGISTRY 已抽取到 inference/lora_registry.py 作为中立层，
 # 消除 api/generate.py 对 bot 层的反向依赖。bot.py 保留导入以兼容现有代码。
-from inference.lora_registry import LORA_REGISTRY, LORA_NAMES, get_lora_system_prompt
+from inference.lora_registry import LORA_REGISTRY, LORA_NAMES
 
 
 def _get_char_name(lora_name: str = None) -> str:
@@ -374,6 +373,7 @@ async def _unified_generate(prompt: str, session_id: str, lora_name: str | None 
             persist_message=False,
             enable_rag=False,
             record_invocation=False,
+            message_db=db,
         ),
         session_id=session_id or "claw",
         priority=inference_runtime.priority_for("nonebot", "private"),
@@ -492,6 +492,7 @@ async def process_message(event: MessageEvent) -> str:
         result = await generate_reply_core(
             msg,
             current_user={"username": "nonebot", "user_id": 0},
+            message_db=db,
         )
         session_history.add_message(session_id, "user", user_message)
         session_history.add_message(session_id, "assistant", result.reply)
@@ -667,7 +668,7 @@ def init_bot():
                     logger.info(f"准备发送回复: 字符数={len(reply)}")
 
                     # 多消息分段
-                    import re, random
+                    import random
 
                     def _strip_outer_brackets(text: str) -> str:
                         WRAP_PAIRS = [('「', '」'), ('『', '』'), ('"', '"'), ("'", "'")]

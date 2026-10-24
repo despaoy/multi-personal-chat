@@ -51,7 +51,7 @@ async def test_generation_rejects_empty_normalized_input_before_context_model_or
     gen, runtime, request, prepare, generation, storage = generation_environment(monkeypatch, "openai_compat")
     request.message = ""
     with pytest.raises(HTTPException) as raised:
-        await gen._generate_reply_impl(request, enable_rag=False, record_invocation=False)
+        await gen._generate_reply_impl(request, enable_rag=False, record_invocation=False, message_db=gen.db)
     assert raised.value.status_code == 422
     prepare.assert_not_awaited()
     generation.assert_not_awaited()

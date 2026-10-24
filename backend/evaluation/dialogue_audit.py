@@ -180,7 +180,7 @@ async def run(args, cases: list[dict], out: Path):
             current['write_outcome'] = asdict(outcome)
             return outcome
 
-    chat = gen._build_chat_generation_service(gen.inference_runtime, TracedService(), db)
+    chat = gen._build_chat_generation_service(gen.inference_runtime, TracedService(), message_db=db)
     selected = [c for c in cases if not c['skip_reason'] and c['split'] == args.split]
     if args.limit:
         selected = selected[:args.limit]
@@ -242,7 +242,7 @@ async def run(args, cases: list[dict], out: Path):
                     return []
             isolated_service = copy.copy(service)
             isolated_service._message_repo = EmptyHistory()
-            probe_chat = gen._build_chat_generation_service(gen.inference_runtime, TracedService(isolated_service), db)
+            probe_chat = gen._build_chat_generation_service(gen.inference_runtime, TracedService(isolated_service), message_db=db)
             current.clear()
             current.update(case_id=case['id'], title=case['title'], message=request.message, mode='memory_only')
             try:

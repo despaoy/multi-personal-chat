@@ -62,7 +62,7 @@ async def provider_api(ask_rig, monkeypatch):
             return httpx.Response(state.status, json={"error": {
                 "message": PRIVATE_DETAIL + " " + PRIVATE_KEY + " " + PRIVATE_URL,
             }})
-        return httpx.Response(200, json={"choices": [{
+        return httpx.Response(200, json={"usage": {"prompt_tokens": 100, "completion_tokens": 20, "total_tokens": 120}, "choices": [{
             "finish_reason": "stop", "message": {"role": "assistant", "content": ANSWER + "[S1]"},
         }]})
 
@@ -159,6 +159,9 @@ async def test_real_provider_200_keeps_normal_answer_and_success_events(provider
         assert api.state.rig.service.cache.stats()["entries"] == 1
     assert_one_actual_call_and_cleanup(api.state)
     assert_private_diagnostics_absent(response, caplog)
+    row, = api.state.rig.database.execute_sql("SELECT * FROM model_invocations")
+    assert row["purpose"] == "knowledge_answer" and row["totalTokens"] == 120
+    assert row["usageSource"] == "provider" and row["errorType"] == ""
 
 
 @pytest.mark.asyncio

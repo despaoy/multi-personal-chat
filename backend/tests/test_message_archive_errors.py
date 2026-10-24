@@ -149,7 +149,7 @@ async def test_archive_failure_stops_fresh_generation_memory_and_delivery(genera
     context = {} if delivery else None
     with pytest.raises(HTTPException) as error:
         await generate._generate_reply_impl(request(), persist_message=True, record_invocation=False,
-            character_service=generation.service, delivery_context=context)
+            character_service=generation.service, delivery_context=context, message_db=generate.db)
     assert error.value.status_code == 503 and error.value.__cause__ is failure
     assert error.value.detail["stage"] == "message_archive" and error.value.detail["modelInvoked"] is invoked
     assert error.value.detail["messageSaved"] is None and counts == ["db_write_failures"]
@@ -166,7 +166,7 @@ async def test_success_and_internal_generation_keep_distinct_archive_semantics(g
     store = SimpleNamespace(config={"useKnowledgeBase": False}, loras=[], add_message=database.add_message)
     monkeypatch.setattr(generate, "db", store)
     result = await generate._generate_reply_impl(request(), persist_message=persist, record_invocation=False,
-        character_service=generation.service)
+        character_service=generation.service, message_db=generate.db)
     assert result.reply == REPLY and result.modelInvoked and result.warnings is None
     assert len(database.execute_sql("SELECT id FROM messages")) == int(persist)
     assert generation.service.complete_turn.await_count == int(persist)

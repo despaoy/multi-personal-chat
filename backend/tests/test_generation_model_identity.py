@@ -47,7 +47,7 @@ def rig(monkeypatch, provider="ollama"):
 @pytest.mark.parametrize("provider", ["ollama", "llama_cpp", "transformers_peft"])
 async def test_inactive_status_fault_cannot_block_selected_provider_reply(monkeypatch, provider):
     state = rig(monkeypatch, provider)
-    result = await state.api._generate_reply_impl(request())
+    result = await state.api._generate_reply_impl(request(), message_db=state.api.db)
     assert result.reply == "根据完整当前输入回答。" and result.model == f"selected-model ({provider})"
     state.selected.get_status.assert_called_once()
     state.other.get_status.assert_not_called()
@@ -66,7 +66,7 @@ async def test_missing_or_invalid_identity_never_becomes_a_successful_unknown_mo
     state = rig(monkeypatch)
     state.selected.get_status.return_value = status
     with pytest.raises(HTTPException) as caught:
-        await state.api._generate_reply_impl(request())
+        await state.api._generate_reply_impl(request(), message_db=state.api.db)
     assert caught.value.status_code == 503
     assert caught.value.detail["stage"] == "model_status"
     assert caught.value.detail["modelInvoked"] and not caught.value.detail["messageSaved"]
@@ -85,7 +85,7 @@ async def test_selected_status_read_failure_preserves_original_cause_and_failure
     failure = OSError("synthetic-private-selected-status")
     state.selected.get_status.side_effect = failure
     with pytest.raises(HTTPException) as caught:
-        await state.api._generate_reply_impl(request())
+        await state.api._generate_reply_impl(request(), message_db=state.api.db)
     assert caught.value.status_code == 503 and caught.value.__cause__.__cause__ is failure
     assert "synthetic-private" not in str(caught.value.detail) + caplog.text
     state.record.assert_awaited_once()
@@ -103,7 +103,7 @@ async def test_result_without_model_invocation_does_not_need_model_status(monkey
         False,
         {"modelInvoked": False, "answerMode": "memory_lookup"},
     )
-    result = await state.api._generate_reply_impl(request())
+    result = await state.api._generate_reply_impl(request(), message_db=state.api.db)
     assert result.model == "memory/lookup" and not result.modelInvoked
     state.selected.get_status.assert_not_called()
     state.other.get_status.assert_not_called()
@@ -120,7 +120,7 @@ async def test_local_identity_uses_request_provider_even_if_selection_changes_af
         return "根据完整当前输入回答。", False, {}
 
     state.generation.side_effect = generated
-    result = await state.api._generate_reply_impl(request())
+    result = await state.api._generate_reply_impl(request(), message_db=state.api.db)
     assert result.model == "selected-model (ollama)"
     state.other.get_status.assert_not_called()
 
@@ -134,7 +134,7 @@ async def test_cloud_identity_uses_bound_snapshot_after_runtime_selection_change
         return "根据完整当前输入回答。", False, {}
 
     state.generation.side_effect = generated
-    result = await state.api._generate_reply_impl(request())
+    result = await state.api._generate_reply_impl(request(), message_db=state.api.db)
     assert result.model == "selected-model (openai_compat)"
     state.other.get_status.assert_not_called()
     state.selected.get_status.assert_called_once()

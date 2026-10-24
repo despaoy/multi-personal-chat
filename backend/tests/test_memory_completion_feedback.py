@@ -139,7 +139,7 @@ async def test_generation_preserves_answer_and_existing_warnings(monkeypatch, pr
     )
     if mode == "archive_failure":
         with pytest.raises(HTTPException) as error:
-            await gen._generate_reply_impl(request(), enable_rag=False, record_invocation=False, character_service=service)
+            await gen._generate_reply_impl(request(), enable_rag=False, record_invocation=False, character_service=service, message_db=gen.db)
         assert error.value.status_code == 503 and error.value.detail["stage"] == "message_archive"
         assert error.value.detail["modelInvoked"] is True and error.value.detail["messageSaved"] is None
         assert error.value.__cause__ is failure
@@ -151,6 +151,7 @@ async def test_generation_preserves_answer_and_existing_warnings(monkeypatch, pr
         enable_rag=False,
         record_invocation=False,
         character_service=service,
+        message_db=gen.db,
     )
     assert result.warnings[0] == "原有检索提示" and result.confidence == 0.3 and result.citations == []
     if mode == "failed":

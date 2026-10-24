@@ -37,7 +37,7 @@ async def test_invalid_cache_response_stops_without_model_or_save(installed, mon
     monkeypatch.setattr(generate, "response_cache", cache)
     monkeypatch.setattr(generate, "_save_message", save)
     with pytest.raises(HTTPException) as caught:
-        await generate._generate_reply_impl(request(), persist_message=True, record_invocation=False)
+        await generate._generate_reply_impl(request(), persist_message=True, record_invocation=False, message_db=generate.db)
     assert caught.value.status_code == 503
     assert "缓存" in str(caught.value.detail)
     assert caught.value.detail["stage"] == "response_cache"
@@ -56,7 +56,7 @@ async def test_valid_cache_response_preserves_exact_text_and_model(installed, mo
     cached = cached_response()
     cache = SimpleNamespace(get=AsyncMock(return_value=cached), set=AsyncMock())
     monkeypatch.setattr(generate, "response_cache", cache)
-    result = await generate._generate_reply_impl(request(), persist_message=False, record_invocation=False)
+    result = await generate._generate_reply_impl(request(), persist_message=False, record_invocation=False, message_db=generate.db)
     assert result.reply == REPLY and result.model == cached["model"]
     assert result.modelInvoked is False and "cached_model_response" in result.warnings
     assert state.calls == []
@@ -69,7 +69,7 @@ async def test_real_cache_miss_still_generates_once(installed, monkeypatch):
     cache = SimpleNamespace(get=AsyncMock(return_value=None), set=AsyncMock())
     monkeypatch.setattr(generate, "response_cache", cache)
     current = request()
-    result = await generate._generate_reply_impl(current, persist_message=False, record_invocation=False)
+    result = await generate._generate_reply_impl(current, persist_message=False, record_invocation=False, message_db=generate.db)
     assert result.reply == current.message and result.model == "fixture-cloud (openai_compat)"
     assert result.modelInvoked is True and len(state.calls) == 1
     cache.get.assert_awaited_once()
@@ -83,7 +83,7 @@ async def test_wrong_cache_root_shape_is_a_data_failure(installed, monkeypatch):
     monkeypatch.setattr(generate, "response_cache", cache)
     monkeypatch.setattr(generate, "_save_message", save)
     with pytest.raises(HTTPException) as caught:
-        await generate._generate_reply_impl(request(), persist_message=True, record_invocation=False)
+        await generate._generate_reply_impl(request(), persist_message=True, record_invocation=False, message_db=generate.db)
     assert caught.value.status_code == 503
     assert caught.value.detail["reason"] == "invalid_cached_response"
     assert caught.value.detail["fields"] == ["$"]

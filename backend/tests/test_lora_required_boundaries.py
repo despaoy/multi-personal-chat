@@ -130,13 +130,13 @@ async def test_selected_lora_requires_successful_inventory_before_generation(mon
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', state.generation)
     req = MessageRequest(message="完整题设：3张票，每张2元，计算总额。", loraName="controlled-adapter")
     if inventory == "ready":
-        result = await generate._generate_reply_impl(req, record_invocation=False)
+        result = await generate._generate_reply_impl(req, record_invocation=False, message_db=generate.db)
         assert result.reply == "根据完整当前输入回答。"
         state.generation.assert_awaited_once()
         state.save.assert_awaited_once()
     else:
         with pytest.raises(HTTPException) as error:
-            await generate._generate_reply_impl(req, record_invocation=False)
+            await generate._generate_reply_impl(req, record_invocation=False, message_db=generate.db)
         assert error.value.status_code == (409 if inventory == "absent" else 503)
         assert "fiction-private" not in str(error.value.detail)
         if inventory == "fault":
@@ -157,7 +157,7 @@ async def test_explicit_base_model_does_not_require_adapter_inventory(monkeypatc
     monkeypatch.setattr(generate, "get_vllm_client", AsyncMock(return_value=SimpleNamespace(list_loras=listing, generate=AsyncMock())))
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', state.generation)
     result = await generate._generate_reply_impl(MessageRequest(message="完整题设：3张票，每张2元。", loraName="default"),
-        record_invocation=False)
+        record_invocation=False, message_db=generate.db)
     assert result.reply == "根据完整当前输入回答。"
     listing.assert_not_awaited()
 

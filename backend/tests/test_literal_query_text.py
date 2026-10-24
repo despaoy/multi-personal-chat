@@ -30,7 +30,7 @@ async def test_literal_course_text_reaches_compiled_provider_unchanged(installed
 
     @app.post("/api/generate")
     async def reply(request: MessageRequest):
-        return await generate._generate_reply_impl(request, persist_message=False, record_invocation=False)
+        return await generate._generate_reply_impl(request, persist_message=False, record_invocation=False, message_db=generate.db)
 
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://synthetic") as client:
         response = await client.post("/api/generate", json={"message": message, "loraName": "default"},

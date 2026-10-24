@@ -108,10 +108,10 @@ async def test_cache_hit_requires_valid_configuration(installed, monkeypatch, se
                              senderId="fiction-owner", conversationId="fiction-owner", conversationType="private")
     if setting is None:
         with pytest.raises(ValueError, match="useKnowledgeBase"):
-            await generate._generate_reply_impl(request, persist_message=False, record_invocation=False)
+            await generate._generate_reply_impl(request, persist_message=False, record_invocation=False, message_db=generate.db)
         cache.get.assert_not_awaited()
     else:
-        result = await generate._generate_reply_impl(request, persist_message=False, record_invocation=False)
+        result = await generate._generate_reply_impl(request, persist_message=False, record_invocation=False, message_db=generate.db)
         assert result.reply == cached.reply and result.model == cached.model
         assert result.modelInvoked is False and "cached_model_response" in result.warnings
         cache.get.assert_awaited_once()

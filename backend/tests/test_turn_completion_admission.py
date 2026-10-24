@@ -148,7 +148,7 @@ async def test_busy_route_rejects_before_prepare_model_and_archive(monkeypatch, 
     gen, runtime, request, prepare, generation, storage = generation_environment(monkeypatch, provider)
     occupied = runtime.reserve()
     with pytest.raises(HTTPException) as error:
-        await gen._generate_reply_impl(request, enable_rag=False, record_invocation=False)
+        await gen._generate_reply_impl(request, enable_rag=False, record_invocation=False, message_db=gen.db)
     assert error.value.status_code == 503 and error.value.detail["code"] == "turn_completion_busy"
     prepare.assert_not_awaited()
     generation.assert_not_awaited()
@@ -172,7 +172,8 @@ async def test_same_pre_generation_slot_survives_response_deadline(monkeypatch, 
         return SimpleNamespace(source_capture="recorded")
 
     result = await gen._generate_reply_impl(
-        request, enable_rag=False, record_invocation=False, character_service=SimpleNamespace(complete_turn=complete)
+        request, enable_rag=False, record_invocation=False, character_service=SimpleNamespace(complete_turn=complete),
+        message_db=gen.db,
     )
     assert result.reply.startswith("真实单元输出") and "尚未确认" in result.reply and result.warnings[0] == "检索提示"
     assert observed == [(0, 1, request.message, request._source_received_at, "target", "真实单元输出")]
@@ -191,7 +192,7 @@ async def test_preparation_error_or_cancel_releases_capacity(monkeypatch, failur
     gen, runtime, request, prepare, generation, storage = generation_environment(monkeypatch, "openai_compat")
     prepare.side_effect = failure
     with pytest.raises(type(failure)):
-        await gen._generate_reply_impl(request, enable_rag=False, record_invocation=False)
+        await gen._generate_reply_impl(request, enable_rag=False, record_invocation=False, message_db=gen.db)
     assert runtime.active == runtime.reserved == 0
     generation.assert_not_awaited()
     storage.assert_not_awaited()
@@ -206,7 +207,8 @@ async def test_archive_failure_releases_unused_slot_without_complete(monkeypatch
     complete = AsyncMock()
     with pytest.raises(HTTPException) as error:
         await gen._generate_reply_impl(
-            request, enable_rag=False, record_invocation=False, character_service=SimpleNamespace(complete_turn=complete)
+            request, enable_rag=False, record_invocation=False, character_service=SimpleNamespace(complete_turn=complete),
+            message_db=gen.db,
         )
     assert error.value is failure
     storage.assert_awaited_once()
@@ -226,6 +228,7 @@ async def test_internal_no_archive_does_not_reserve_completion(monkeypatch):
         enable_rag=False,
         record_invocation=False,
         character_service=SimpleNamespace(complete_turn=complete),
+        message_db=gen.db,
     )
     complete.assert_not_awaited()
     storage.assert_not_awaited()
@@ -282,7 +285,7 @@ async def test_real_context_failure_stops_generation_and_releases_slot(monkeypat
     service = SimpleNamespace(prepare_turn=AsyncMock(side_effect=failure))
     try:
         with pytest.raises(HTTPException) as caught:
-            await gen._generate_reply_impl(request, enable_rag=False, record_invocation=False, character_service=service)
+            await gen._generate_reply_impl(request, enable_rag=False, record_invocation=False, character_service=service, message_db=gen.db)
         assert caught.value.status_code == 503 and caught.value.__cause__ is failure
         assert "fiction-private" not in str(caught.value.detail)
         generation.assert_not_awaited()

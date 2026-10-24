@@ -93,7 +93,7 @@ async def test_generation_failure_is_reported_and_recorded(monkeypatch, provider
     from fastapi import HTTPException
 
     with pytest.raises(HTTPException) as caught:
-        await generate._generate_reply_impl(MessageRequest(message="按当前完整资料回答，不使用已撤销版本。"))
+        await generate._generate_reply_impl(MessageRequest(message="按当前完整资料回答，不使用已撤销版本。"), message_db=generate.db)
     assert caught.value.status_code == (503 if provider == "vllm" or failure_kind != "provider" else 500)
     if failure_kind == "context_authority":
         assert caught.value.detail["stage"] == "context_authority"
@@ -344,7 +344,7 @@ async def test_native_timeout_cancels_work_and_releases_capacity_without_breaker
     save = AsyncMock()
     monkeypatch.setattr(generate, "_save_message", save)
     with pytest.raises(HTTPException) as caught:
-        await generate._generate_reply_impl(MessageRequest(message="完整测试问题"), record_invocation=False)
+        await generate._generate_reply_impl(MessageRequest(message="完整测试问题"), record_invocation=False, message_db=generate.db)
     assert caught.value.status_code == 500 and isinstance(caught.value.__cause__, TimeoutError)
     assert cancelled.is_set() and not semaphore.locked()
     save.assert_not_awaited()

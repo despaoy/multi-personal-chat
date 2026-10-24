@@ -85,6 +85,7 @@ async def test_selected_provider_receives_messages_and_budget_without_local_over
             await generate._generate_reply_impl(
                 MessageRequest(message="我的当前住处是哪？"), persist_message=False,
                 record_invocation=False, enable_rag=False,
+                message_db=generate.db,
             )
         assert caught.value.status_code == 503
         assert not calls
@@ -92,7 +93,8 @@ async def test_selected_provider_receives_messages_and_budget_without_local_over
         return
 
     response = await generate._generate_reply_impl(
-        MessageRequest(message="我的当前住处是哪？"), persist_message=False, record_invocation=False, enable_rag=False
+        MessageRequest(message="我的当前住处是哪？"), persist_message=False, record_invocation=False, enable_rag=False,
+        message_db=generate.db,
     )
     assert response.reply == "原生提供方回答"
     if provider == "openai_compat":

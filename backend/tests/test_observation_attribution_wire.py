@@ -101,6 +101,7 @@ async def final_wire(rig):
             conversationType="private", sessionId="fiction-attribution", sourceMessageId="fiction-attribution-read",
         ),
         persist_message=False, enable_rag=False, record_invocation=False,
+        message_db=generate.db,
     )
     assert result.reply == REPLIES[rig.mode] and result.modelInvoked is True
     assert len(rig.reviews) == len(rig.answers) == 1

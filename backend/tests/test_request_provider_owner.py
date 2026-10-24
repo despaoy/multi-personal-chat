@@ -101,7 +101,7 @@ def owned(monkeypatch):
 
 async def turn():
     return await generate._generate_reply_impl(MessageRequest(message=FACTS, loraName="default"),
-        persist_message=False, record_invocation=False, enable_rag=False)
+        persist_message=False, record_invocation=False, enable_rag=False, message_db=generate.db)
 
 
 @pytest.mark.asyncio

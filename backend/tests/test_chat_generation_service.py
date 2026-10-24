@@ -176,13 +176,14 @@ async def test_generate_reply_core_keeps_compatibility_entry_point(monkeypatch):
 
     monkeypatch.setattr(
         generate,
-        "get_chat_generation_service",
-        lambda: _FakeService(),
+        "_build_chat_generation_service",
+        lambda _runtime, _character=None, *, message_db: _FakeService(),
     )
 
     actual = await generate.generate_reply_core(
         MessageRequest(message="hello"),
         {"username": "integration"},
+        message_db=object(),
     )
 
     assert actual is expected

@@ -365,7 +365,7 @@ def test_full_web_generation_and_canonical_return(repo, monkeypatch):
     app.include_router(narrative_router)
     app.dependency_overrides[get_current_user] = lambda: {"user_id": 1}
     app.dependency_overrides[gen.get_request_chat_generation_service] = lambda: gen._build_chat_generation_service(
-        runtime, build_character_context_service(repo.db), repo.db
+        runtime, build_character_context_service(repo.db), message_db=repo.db
     )
     client = TestClient(app)
     branch = create(repo)

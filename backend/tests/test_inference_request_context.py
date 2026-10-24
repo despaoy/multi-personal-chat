@@ -66,6 +66,7 @@ async def receive(trace="scope", *, character=False):
             **({"characterId": "tsukiyashiro_kisaki"} if character else {}),
         ),
         persist_message=False, record_invocation=False, enable_rag=False,
+        message_db=generate.db,
     )
 
 
@@ -240,6 +241,7 @@ async def test_nested_api_body_reuses_outer_snapshot_without_claiming_full_narra
             return await generate._generate_reply_impl(
                 request.model_copy(update={"traceId": "inner"}), current_user,
                 persist_message=False, record_invocation=False, prepared_override=object(),
+                message_db=generate.db,
             )
         assert request.traceId == "inner"
         reply, _ = await context.provider.async_complete(
@@ -251,6 +253,7 @@ async def test_nested_api_body_reuses_outer_snapshot_without_claiming_full_narra
     result = await generate._generate_reply_impl(
         MessageRequest(message=QUERY, traceId="outer", branchId="synthetic-branch"),
         persist_message=False, record_invocation=False,
+        message_db=generate.db,
     )
     assert result.reply == ANSWER and result.model == "deepseek-flash"
     assert len(seen) == 2 and seen[0] is seen[1]

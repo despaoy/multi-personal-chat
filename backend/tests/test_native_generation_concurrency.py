@@ -79,7 +79,7 @@ def installed(monkeypatch):
 
 async def receive(index=0, lora="default"):
     return await generate._generate_reply_impl(MessageRequest(message=FACTS + f"独立编号{index}", loraName=lora),
-        persist_message=False, record_invocation=False, enable_rag=False)
+        persist_message=False, record_invocation=False, enable_rag=False, message_db=generate.db)
 
 
 @pytest.mark.asyncio

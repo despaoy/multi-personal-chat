@@ -171,11 +171,11 @@ async def test_legacy_rule_config_cannot_choose_a_persona_from_a_name(monkeypatc
     req = MessageRequest(message="只是讨论胡桃这个名字，不要求切换角色。完整题设：3张票，每张2元，计算总额。",
         loraName="hutao" if selection == "explicit_adapter" else "")
     if selection == "base":
-        response = await generate._generate_reply_impl(req, persist_message=False, record_invocation=False)
+        response = await generate._generate_reply_impl(req, persist_message=False, record_invocation=False, message_db=generate.db)
         assert response.reply == "3张票，每张2元，总额6元。" and operation.await_args.args[1] == "default"
     else:
         with pytest.raises(HTTPException) as error:
-            await generate._generate_reply_impl(req, persist_message=False, record_invocation=False)
+            await generate._generate_reply_impl(req, persist_message=False, record_invocation=False, message_db=generate.db)
         assert error.value.status_code == 422
         operation.assert_not_awaited()
     manager.set_provider.assert_not_called()

@@ -94,7 +94,7 @@ def installed(monkeypatch):
 
 async def receive():
     return await generate._generate_reply_impl(MessageRequest(message=QUERY, loraName="default"),
-        persist_message=False, record_invocation=False)
+        persist_message=False, record_invocation=False, message_db=generate.db)
 
 
 @pytest.mark.asyncio
@@ -247,7 +247,7 @@ async def test_response_cache_failures_are_explicit_and_never_become_success(ins
     monkeypatch.setattr(generate, "_save_message", saved)
     with pytest.raises(HTTPException) as error:
         await generate._generate_reply_impl(MessageRequest(message=QUERY, loraName="default"),
-            persist_message=failure in {"structure", "empty"}, record_invocation=False)
+            persist_message=failure in {"structure", "empty"}, record_invocation=False, message_db=generate.db)
     assert error.value.status_code == 503
     assert "fiction-cache-private" not in str(error.value.detail)
     if failure == "write":
@@ -290,11 +290,11 @@ async def test_cache_hit_checks_archive_result_without_new_model_call(installed,
     monkeypatch.setattr(generate, "_save_message", archive)
     request = MessageRequest(message=QUERY, loraName="default")
     if saved:
-        result = await generate._generate_reply_impl(request, persist_message=True, record_invocation=False)
+        result = await generate._generate_reply_impl(request, persist_message=True, record_invocation=False, message_db=generate.db)
         assert result.reply == ANSWER and not result.modelInvoked
     else:
         with pytest.raises(HTTPException) as error:
-            await generate._generate_reply_impl(request, persist_message=True, record_invocation=False)
+            await generate._generate_reply_impl(request, persist_message=True, record_invocation=False, message_db=generate.db)
         assert error.value.status_code == 503 and error.value.detail["stage"] == "message_archive"
         assert error.value.detail["modelInvoked"] is False and error.value.detail["messageSaved"] is None
         assert error.value.__cause__ is failure

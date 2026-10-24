@@ -22,8 +22,6 @@ async def test_core_binds_source_admission_and_generation_to_selected_database(m
     reply = GenerateResponse(reply="verified", model="synthetic", costTime=0)
     handler = AsyncMock(return_value=reply)
     monkeypatch.setattr(generate, "_generate_reply_impl", handler)
-    # Rebuild the ordinary service so both implementations use this test's handler.
-    monkeypatch.setattr(generate, "_chat_generation_service", generate._build_chat_generation_service(generate.inference_runtime))
     request = MessageRequest(message="完整来源消息", characterId="fiction-role", platform="web",
                              adapter="web-character", senderId="owner", userId="owner",
                              sessionId="conversation", conversationId="conversation", sourceMessageId="source-1")

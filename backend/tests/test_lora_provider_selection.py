@@ -99,7 +99,7 @@ async def test_unsupported_selected_adapter_stops_before_lookup_or_model(monkeyp
     request = MessageRequest(message="根据本题完整数据计算3张票、每张2元的总额。",
                              loraName="controlled-adapter" if selection == "explicit" else "")
     with pytest.raises(HTTPException) as caught:
-        await state.api._generate_reply_impl(request, record_invocation=False)
+        await state.api._generate_reply_impl(request, record_invocation=False, message_db=state.api.db)
     assert caught.value.status_code == 422 and "不支持 LoRA" in caught.value.detail
     assert state.manager._current_provider.value == provider
     lookup.assert_not_called()
@@ -123,14 +123,14 @@ async def test_explicit_local_provider_requires_its_registered_adapter(tmp_path,
     monkeypatch.setattr(state.api, "get_lora_path_by_id", lookup)
     request = MessageRequest(message="根据完整当前输入回答并保留全部条件。", loraName="controlled-adapter")
     if availability == "ready":
-        response = await state.api._generate_reply_impl(request, record_invocation=False)
+        response = await state.api._generate_reply_impl(request, record_invocation=False, message_db=state.api.db)
         assert response.reply == "根据完整当前输入回答。"
         state.manager.set_lora_adapter.assert_called_once_with(str(adapter))
         state.generation.assert_awaited_once()
         state.save.assert_awaited_once()
     else:
         with pytest.raises(HTTPException) as caught:
-            await state.api._generate_reply_impl(request, record_invocation=False)
+            await state.api._generate_reply_impl(request, record_invocation=False, message_db=state.api.db)
         assert caught.value.status_code == (503 if availability == "read_failure" else 409)
         if availability == "read_failure":
             assert caught.value.__cause__ is failure

@@ -117,8 +117,6 @@ def _security_policy_response() -> GenerateResponse:
     )
 
 
-
-
 router = APIRouter()
 
 
@@ -179,7 +177,7 @@ async def _generate_reply_impl(
     enable_rag: bool = True,
     record_invocation: bool = True,
     character_service=None,
-    message_db=None,
+    message_db,
     delivery_context: dict | None = None,
     prepared_override=None,
 ):
@@ -231,19 +229,15 @@ async def _generate_reply_body(
     enable_rag: bool = True,
     record_invocation: bool = True,
     character_service=None,
-    message_db=None,
+    message_db,
     delivery_context: dict | None = None,
     prepared_override=None,
     _completion_slots=None,
 ):
-    """使用所选提供商执行共享检索和上下文编译。
+    """Generate using the accepted request's database and provider snapshot.
 
-    character_service / message_db 由 HTTP 层经容器注入（绑定当前
-    应用容器的数据库）：前者用于人物上下文（记忆/关系/历史），后者
-    用于消息持久化、模型调用记录与生成配置读取。两者为 None 时
-    （bot 直连、旧测试等非 HTTP 调用方）回退到全局单例，保持既有
-    行为。必须保证消息写入与人物历史读取使用同一数据库，否则上一
-    轮消息写入全局库、下一轮从容器库读不到，历史会断裂。
+    Context reads, invocation records and message writes share message_db;
+    this business path never selects another database.
     """
     try:
         validate_history(request.history)
@@ -268,7 +262,7 @@ async def _generate_reply_body(
         return await generate_branch_reply(
             request,
             current_user,
-            message_db if message_db is not None else db,
+            message_db,
             generate=_generate_reply_impl,
         )
 
@@ -291,16 +285,15 @@ async def _generate_reply_body(
     if not is_valid:
         raise HTTPException(status_code=422, detail={"message": "输入验证失败", "errors": errors})
 
-    source_db = message_db if message_db is not None else db
     select_active_lora = not request.loraName and not request.characterId and prepared_override is None
     try:
         if select_active_lora or request.loraName not in {"", "default"}:
             runtime_config, loras = await asyncio.gather(
-                asyncio.to_thread(lambda: source_db.config),
-                asyncio.to_thread(lambda: list(source_db.loras)),
+                asyncio.to_thread(lambda: message_db.config),
+                asyncio.to_thread(lambda: list(message_db.loras)),
             )
         else:
-            runtime_config = await asyncio.to_thread(lambda: source_db.config)
+            runtime_config = await asyncio.to_thread(lambda: message_db.config)
             loras = []
         runtime_config = {**runtime_config}
     except Exception as exc:
@@ -369,8 +362,8 @@ async def _generate_reply_body(
             )
 
             try:
-                character_service = (get_default_character_context_service() if source_db is db
-                                     else build_character_context_service(source_db))
+                character_service = (get_default_character_context_service() if message_db is db
+                                     else build_character_context_service(message_db))
             except Exception as exc:
                 raise HTTPException(503, "角色上下文配置读取失败，请检查上下文及审核配置后重试") from exc
         prepared_character_turn = await _prepare_character_turn(
@@ -469,7 +462,7 @@ async def _generate_reply_body(
             reply, used_rag, rag_meta = await chat_answer.generate_chat_answer(
                 request, vllm_effective_lora, prompt_lora_name=vllm_lora_name, runtime_config=runtime_config,
                 enable_rag=enable_rag, prepared_character_turn=prepared_character_turn,
-                message_db=source_db, model_generate=client.generate,
+                message_db=message_db, model_generate=client.generate,
                 memory_write_enabled=memory_write_enabled,
             )
             model_label = model_name
@@ -512,7 +505,7 @@ async def _generate_reply_body(
                         return await chat_answer.generate_chat_answer(
                             request, lora_name, runtime_config=runtime_config,
                             enable_rag=enable_rag, prepared_character_turn=prepared_character_turn,
-                            message_db=source_db, model_generate=adapter,
+                            message_db=message_db, model_generate=adapter,
                             memory_write_enabled=memory_write_enabled,
                         )
 
@@ -778,10 +771,9 @@ async def _prepare_character_turn(
         ) from exc
 
 
-async def _persist_completion_feedback(receipt: dict, warning: str, *, database=None) -> bool:
+async def _persist_completion_feedback(receipt: dict, warning: str, *, database) -> bool:
     """Finalize only the exact row returned by successful message storage."""
-    target_db = database if database is not None else db
-    writer = getattr(target_db, "update_message_feedback", None)
+    writer = getattr(database, "update_message_feedback", None)
     if not receipt or not callable(writer):
         return False
     try:
@@ -867,7 +859,7 @@ async def _complete_character_turn(prepared, request: MessageRequest, *, charact
 # ═══════════════════════════════════════════
 
 
-async def _validate_web_source_identity(request, current_user, *, database=None):
+async def _validate_web_source_identity(request, current_user, *, database):
     """Reject known immutable source collisions before any model or write.
 
     The writer's transactional capture guard remains authoritative. This
@@ -889,10 +881,9 @@ async def _validate_web_source_identity(request, current_user, *, database=None)
         raise HTTPException(422, "无法确认消息来源范围") from exc
     if not request.message:
         raise HTTPException(422, "消息不能为空")
-    target_db = db if database is None else database
     try:
         status = await asyncio.wait_for(asyncio.to_thread(
-            target_db.memory_source_admission, request.characterId, scope.platform, scope.adapter,
+            database.memory_source_admission, request.characterId, scope.platform, scope.adapter,
             scope.sender_id, scope.conversation_type, scope.conversation_id,
             source_message_id=request.sourceMessageId, body=request.message,
         ), timeout=_DB_WRITE_TIMEOUT)
@@ -906,7 +897,7 @@ async def _validate_web_source_identity(request, current_user, *, database=None)
         if memory_write_allowed(request.message) and not is_memory_erasure_request(request.message):
             try:
                 receipt = await asyncio.wait_for(asyncio.to_thread(
-                    target_db.reserve_memory_source, request.characterId, scope.platform, scope.adapter,
+                    database.reserve_memory_source, request.characterId, scope.platform, scope.adapter,
                     scope.sender_id, scope.conversation_type, scope.conversation_id,
                     source_message_id=request.sourceMessageId, body=request.message,
                     observed_at=datetime.now(timezone.utc),
@@ -926,16 +917,10 @@ async def _validate_web_source_identity(request, current_user, *, database=None)
         raise HTTPException(503, "暂时无法核对消息来源，请稍后重试")
 
 
-def _build_chat_generation_service(runtime, character_service=None, message_db=None) -> ChatGenerationService:
-    handler = _generate_reply_impl
-    if character_service is not None or message_db is not None:
-        # 角色上下文服务与消息库均绑定当前应用容器的数据库，
-        # 随 handler 注入；两者必须同库，历史才不会断裂
-        handler = functools.partial(
-            _generate_reply_impl,
-            character_service=character_service,
-            message_db=message_db,
-        )
+def _build_chat_generation_service(runtime, character_service=None, *, message_db) -> ChatGenerationService:
+    handler = functools.partial(
+        _generate_reply_impl, character_service=character_service, message_db=message_db,
+    )
     async def validate_request(request, current_user):
         await _validate_web_source_identity(request, current_user, database=message_db)
 
@@ -947,15 +932,6 @@ def _build_chat_generation_service(runtime, character_service=None, message_db=N
         trace_id_factory=lambda: uuid.uuid4().hex,
         validate_request=validate_request,
     )
-
-
-_chat_generation_service = _build_chat_generation_service(inference_runtime)
-
-
-def get_chat_generation_service() -> ChatGenerationService:
-    """Return the default service for non-HTTP compatibility callers."""
-
-    return _chat_generation_service
 
 
 def get_request_chat_generation_service(request: Request) -> ChatGenerationService:
@@ -970,8 +946,6 @@ def get_request_chat_generation_service(request: Request) -> ChatGenerationServi
         raise HTTPException(503, detail={
             "stage": "dependencies", "message": "Chat database or scheduler is not configured; check application startup",
         })
-    if runtime is inference_runtime and container.db is db:
-        return get_chat_generation_service()
     return _build_chat_generation_service(runtime, message_db=container.db)
 
 
@@ -983,20 +957,13 @@ async def generate_reply_core(
     enable_rag: bool = True,
     record_invocation: bool = True,
     character_service=None,
-    message_db=None,
+    message_db,
     delivery_context: dict | None = None,
 ):
-    """Compatibility entry point used by integrations and existing callers.
+    """Generate for a platform caller with its explicitly owned database."""
 
-    character_service / message_db：HTTP 调用方（如 astrbot 集成端点）
-    传入绑定当前应用容器数据库的角色服务与数据库；bot 直连等进程内
-    调用方留空，回退全局单例。
-    """
-
-    service = (
-        _build_chat_generation_service(inference_runtime, character_service, message_db)
-        if character_service is not None or message_db is not None
-        else get_chat_generation_service()
+    service = _build_chat_generation_service(
+        inference_runtime, character_service, message_db=message_db,
     )
     return await service.generate(
         request,
@@ -1048,10 +1015,6 @@ async def generate_reply(
         raise HTTPException(status_code=503, detail="推理排队超时，请稍后再试") from exc
 
 
-
-
-
-
 async def _record_model_invocation(
     request: MessageRequest,
     model_name: str,
@@ -1061,14 +1024,13 @@ async def _record_model_invocation(
     used_rag: bool = False,
     error_type: str = "",
     model_invoked: bool | None = None,
-    database=None,
+    database,
 ):
     """Record required accounting before archive; timed-out writes may still commit."""
-    target_db = database if database is not None else db
     try:
         await asyncio.wait_for(
             write_invocation(
-                target_db,
+                database,
                 {
                     "traceId": request.traceId,
                     "platform": request.platform,
@@ -1116,7 +1078,7 @@ async def _save_message(
     lora_name: str,
     cost_time: float,
     *,
-    database=None,
+    database,
     character_id: str | None = None,
     saved_receipt: dict | None = None,
     model_invoked: bool | None = None,
@@ -1125,16 +1087,14 @@ async def _save_message(
 
     Return True only with a valid storage receipt; errors stop generation.
     A timed-out thread can still commit, so an error does not prove rollback.
-    database 为容器注入的数据库（必须与人物历史读取同库），
-    None 时用全局单例。
+    database is the owning database already bound by the request entry.
     """
-    target_db = database if database is not None else db
     if saved_receipt is not None:
         saved_receipt.clear()
     try:
         stored = await asyncio.wait_for(
             asyncio.to_thread(
-                target_db.add_message,
+                database.add_message,
                 {
                     "sessionType": request.sessionType,
                     "sessionId": request.sessionId,
