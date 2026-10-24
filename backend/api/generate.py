@@ -988,14 +988,17 @@ async def generate_reply_core(
     调用方留空，回退全局单例。
     """
 
-    return await get_chat_generation_service().generate(
+    service = (
+        _build_chat_generation_service(inference_runtime, character_service, message_db)
+        if character_service is not None or message_db is not None
+        else get_chat_generation_service()
+    )
+    return await service.generate(
         request,
         current_user,
         persist_message=persist_message,
         enable_rag=enable_rag,
         record_invocation=record_invocation,
-        character_service=character_service,
-        message_db=message_db,
         delivery_context=delivery_context,
     )
 
