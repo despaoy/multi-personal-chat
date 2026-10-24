@@ -17,15 +17,19 @@ from pathlib import Path
 
 import pytest
 
-from character import (
+from character.models import (
     CharacterContext,
-    CharacterProfileNotFoundError,
-    CharacterProfileRegistry,
     RelationshipState,
     UserScope,
+)
+from character.profile_registry import (
+    CharacterProfileNotFoundError,
+    CharacterProfileRegistry,
+    get_default_profile_registry,
+)
+from character.context_builder import (
     build_user_scope,
     compile_character_context,
-    get_default_profile_registry,
 )
 from character.profile_registry import PROFILES_DIR
 

@@ -14,9 +14,16 @@ from datetime import timezone
 
 import pytest
 
-from character import (
+from character.context_builder import (
     MAX_MEMORY_TOTAL_CHARS,
     MEMORY_REFERENCE_DISCLAIMER,
+    build_user_scope,
+    compile_character_context,
+    compile_dynamic_context,
+    compile_profile_context,
+    compile_reference_context,
+)
+from character.models import (
     CharacterContext,
     CharacterProfile,
     DecisionPlan,
@@ -24,11 +31,6 @@ from character import (
     RelationshipState,
     SituationState,
     UserScope,
-    build_user_scope,
-    compile_character_context,
-    compile_dynamic_context,
-    compile_profile_context,
-    compile_reference_context,
 )
 from repositories.character_memory import decode_legacy_memory_lifecycle
 

@@ -15,7 +15,7 @@ import dataclasses
 
 import pytest
 
-from character import (
+from character.models import (
     CharacterContext,
     CharacterProfile,
     CompiledCharacterContext,
@@ -24,6 +24,8 @@ from character import (
     RelationshipState,
     SituationState,
     UserScope,
+)
+from character.context_builder import (
     compile_character_context,
 )
 from inference.generation_request import (
