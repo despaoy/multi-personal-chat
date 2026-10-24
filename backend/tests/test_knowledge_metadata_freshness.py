@@ -26,7 +26,7 @@ def saved_document(tmp_path, monkeypatch):
     )
     database.add_knowledge_chunk(dict(documentId=row["id"], chunkIndex=0, content=row["content"]))
     monkeypatch.setattr(knowledge, "db", database)
-    monkeypatch.setattr(knowledge, "_vector_index_built", True)
+    monkeypatch.setattr(knowledge, "_vector_index_revision", knowledge._get_rebuild_revision())
     database.commit_knowledge_index_revision(
         knowledge._get_rebuild_revision(), 1, knowledge._compute_chunk_fingerprint()
     )
@@ -49,7 +49,7 @@ async def test_metadata_change_invalidates_warm_index_without_rewriting_chunks(s
     assert database.get_knowledge_chunks(row["id"]) == original
     assert knowledge._compute_chunk_fingerprint() != fingerprint
     assert knowledge._read_rebuild_status()[0] == "dirty" and knowledge._get_rebuild_revision() == revision + 1
-    assert not knowledge._vector_index_built
+    assert knowledge._vector_index_revision is None
 
 
 async def test_combined_metadata_move_invalidates_once_with_full_original_source(saved_document):
@@ -89,7 +89,7 @@ async def test_unchanged_indexed_metadata_does_not_rebuild_or_drop_evidence(save
     assert knowledge._get_rebuild_revision() == revision
     assert knowledge._ensure_vector_index() is True
     forbidden.assert_not_called()
-    assert knowledge._vector_index_built
+    assert (knowledge._vector_index_revision is not None)
     assert database.get_knowledge_chunks(row["id"]) == original and knowledge._read_rebuild_status()[0] == "complete"
 
 
@@ -101,7 +101,7 @@ async def test_content_and_metadata_update_use_one_revision_and_complete_new_chu
         KnowledgeDocumentUpdate(title="新标题", content="完整新规则。原规则不再有效，仍须书面确认。"),
         dict(role="admin"),
     )
-    assert knowledge._get_rebuild_revision() == revision + 1 and not knowledge._vector_index_built
+    assert knowledge._get_rebuild_revision() == revision + 1 and knowledge._vector_index_revision is None
     chunks = database.get_knowledge_chunks(row["id"])
     assert len(chunks) == 1 and chunks[0]["content"] == "完整新规则。原规则不再有效，仍须书面确认。"
 
@@ -113,7 +113,7 @@ async def test_missing_document_does_not_change_index_authority(saved_document):
     assert (
         error.value.status_code == 404
         and knowledge._get_rebuild_revision() == revision
-        and knowledge._vector_index_built
+        and (knowledge._vector_index_revision is not None)
     )
 
 

@@ -21,7 +21,6 @@ TEXT = "2026年10月23日15:30在青岚楼二层办理登记。申请人须本�
 def publication(tmp_path, monkeypatch):
     db = SQLiteDB(tmp_path / "source.sqlite")
     monkeypatch.setattr(knowledge, "db", db)
-    monkeypatch.setattr(knowledge, "_vector_index_built", False)
     monkeypatch.setattr(knowledge, "_vector_index_revision", None)
     monkeypatch.setattr(vectors.VectorDatabase, "_check_gpu_availability", lambda self: False)
     vector = vectors.VectorDatabase(str(tmp_path / "vectors"))
@@ -94,7 +93,7 @@ async def test_create_and_import_use_one_authoritative_index_publication(publica
     assert doc["category"] == expected_category and doc["knowledge_base_id"] == rig.kb["id"]
     assert "".join(row["content"] for row in rig.db.get_knowledge_chunks(doc["id"])) == TEXT
     assert knowledge._get_rebuild_revision() == rig.revision + 1
-    assert knowledge._read_rebuild_status()[0] == "dirty" and not knowledge._vector_index_built
+    assert knowledge._read_rebuild_status()[0] == "dirty" and knowledge._vector_index_revision is None
     rig.add.assert_not_called()
     rig.encode.assert_not_called()
     rig.getter.assert_not_called()
@@ -131,7 +130,7 @@ async def test_index_failure_keeps_complete_source_and_returns_search_failure(pu
     assert raised.value.status_code == 503
     assert raised.value.__cause__ is failure
     assert "synthetic-private" not in str(raised.value.detail) + caplog.text
-    assert knowledge._read_rebuild_status()[0] != "complete" and not knowledge._vector_index_built
+    assert knowledge._read_rebuild_status()[0] != "complete" and knowledge._vector_index_revision is None
     assert knowledge._get_rebuild_revision() == rig.revision + 1
     docs = rig.db.get_knowledge_documents()
     assert len(docs) == 1 and docs[0]["content"] == TEXT
@@ -205,7 +204,7 @@ async def test_generation_retrieval_preserves_index_failure_before_evidence_use(
     if stage == "authority":
         assert rig.add.call_count == builds
     else:
-        assert not knowledge._vector_index_built and knowledge._read_rebuild_status()[0] != "complete"
+        assert knowledge._vector_index_revision is None and knowledge._read_rebuild_status()[0] != "complete"
     assert rig.db.get_knowledge_document(row["id"])["content"] == TEXT
 
 
@@ -228,7 +227,7 @@ async def test_document_creation_preserves_schema_defaults_metadata_and_folder_c
     assert request.model_dump() == original
     assert doc["chunkCount"] == 1 and "".join(row["content"] for row in rig.db.get_knowledge_chunks(doc["id"])) == TEXT
     assert knowledge._get_rebuild_revision() == rig.revision + 1 and knowledge._read_rebuild_status()[0] == "dirty"
-    assert not knowledge._vector_index_built
+    assert knowledge._vector_index_revision is None
     rig.add.assert_not_called()
     rig.getter.assert_not_called()
 
@@ -252,12 +251,11 @@ def test_loaded_native_snapshot_reuses_complete_two_chunk_source(publication, mo
     monkeypatch.setattr(loaded, "clear_all", clear)
     monkeypatch.setattr(loaded, "_get_embeddings_batch", encode)
     rig.getter.return_value = loaded
-    monkeypatch.setattr(knowledge, "_vector_index_built", False)
     monkeypatch.setattr(knowledge, "_vector_index_revision", None)
     assert knowledge._ensure_vector_index()
     clear.assert_not_called()
     encode.assert_not_called()
-    assert knowledge._vector_index_built and knowledge._vector_index_revision == knowledge._get_rebuild_revision()
+    assert (knowledge._vector_index_revision is not None) and knowledge._vector_index_revision == knowledge._get_rebuild_revision()
     assert knowledge._read_rebuild_status() == status
     assert rig.db.get_knowledge_document(row["id"])["content"] == TEXT + second
     assert [chunk["content"] for chunk in rig.db.get_knowledge_chunks(row["id"])] == [TEXT, second]

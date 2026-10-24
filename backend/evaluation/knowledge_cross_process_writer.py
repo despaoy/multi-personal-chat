@@ -48,7 +48,7 @@ async def main():
         proof["after_update"] = dict(
             revision=knowledge._get_rebuild_revision(),
             status=knowledge._read_rebuild_status(),
-            index_built=knowledge._vector_index_built,
+            index_built=(knowledge._vector_index_revision is not None),
         )
         # An actual writer-side search rebuilds its independent local index.
         rebuilt = await client.post(
@@ -59,7 +59,7 @@ async def main():
         proof["after_rebuild"] = dict(
             revision=knowledge._get_rebuild_revision(),
             status=knowledge._read_rebuild_status(),
-            index_built=knowledge._vector_index_built,
+            index_built=(knowledge._vector_index_revision is not None),
         )
         proof["sync_pending_final"] = len(db._pending)
     (output / "writer-result.json").write_text(json.dumps(proof, ensure_ascii=False, indent=2, default=str))

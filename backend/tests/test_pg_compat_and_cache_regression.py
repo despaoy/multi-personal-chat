@@ -708,7 +708,7 @@ class TestEnsureVectorIndexEndToEnd:
         original_db = kmod.db
         db = self._make_db(tmp_path)
         kmod.db = db
-        kmod._vector_index_built = False
+        kmod._vector_index_revision = None
 
         cleared = {"called": False}
         class MockVectorDB:
@@ -729,7 +729,7 @@ class TestEnsureVectorIndexEndToEnd:
             status, count, fp, rev = kmod._read_rebuild_status()
             assert (status, count, fp) == ("complete", 0, kmod._EMPTY_FINGERPRINT)
             assert rev >= 0, "revision must be recorded"
-            assert kmod._vector_index_built is True
+            assert kmod._vector_index_revision is not None
         finally:
             kmod.db = original_db
             db.close_connection()
@@ -742,7 +742,7 @@ class TestEnsureVectorIndexEndToEnd:
         db = self._make_db(tmp_path)
         original_db = kmod.db
         kmod.db = db
-        kmod._vector_index_built = False
+        kmod._vector_index_revision = None
 
         self._insert_doc_with_chunks(db, 1, "Doc1", ["c0", "c1"])
 
@@ -778,7 +778,7 @@ class TestEnsureVectorIndexEndToEnd:
             assert count == 2
             assert fp and fp != "stale_fp", "fingerprint must be updated after rebuild"
             assert rev == 1, "revision must match the post-dirty revision"
-            assert kmod._vector_index_built is True
+            assert kmod._vector_index_revision is not None
         finally:
             kmod.db = original_db
             db.close_connection()
@@ -792,7 +792,7 @@ class TestEnsureVectorIndexEndToEnd:
         db = self._make_db(tmp_path)
         original_db = kmod.db
         kmod.db = db
-        kmod._vector_index_built = False
+        kmod._vector_index_revision = None
 
         self._insert_doc_with_chunks(db, 1, "Doc1", ["original0", "original1"])
         fp_before = kmod._compute_chunk_fingerprint()
@@ -845,7 +845,7 @@ class TestEnsureVectorIndexEndToEnd:
         db = self._make_db(tmp_path)
         original_db = kmod.db
         kmod.db = db
-        kmod._vector_index_built = False
+        kmod._vector_index_revision = None
 
         self._insert_doc_with_chunks(db, 1, "Doc1", ["c0", "c1"])
 
@@ -863,7 +863,7 @@ class TestEnsureVectorIndexEndToEnd:
             def add_documents(self, docs):
                 added_docs["count"] += len(docs)
                 self._docs += len(docs)
-                # 真实 CRUD 路径：自增 revision + 写 dirty + 重置 _vector_index_built
+                # 真实 CRUD 路径：自增 revision + 写 dirty + 重置 local committed revision
                 db.mark_knowledge_index_dirty()
                 kmod._invalidate_local_knowledge_index()
 
@@ -876,7 +876,7 @@ class TestEnsureVectorIndexEndToEnd:
             status, _, _, _ = kmod._read_rebuild_status()
             assert status == "dirty", "status must be dirty after concurrent CRUD path"
             assert added_docs["count"] == 2, "rebuild must still index the documents"
-            assert kmod._vector_index_built is False
+            assert kmod._vector_index_revision is None
         finally:
             kmod.db = original_db
             db.close_connection()
@@ -890,7 +890,7 @@ class TestEnsureVectorIndexEndToEnd:
         db = self._make_db(tmp_path)
         original_db = kmod.db
         kmod.db = db
-        kmod._vector_index_built = False
+        kmod._vector_index_revision = None
 
         self._insert_doc_with_chunks(db, 1, "Doc1", ["c0", "c1"])
         real_fp = kmod._compute_chunk_fingerprint()
@@ -918,7 +918,7 @@ class TestEnsureVectorIndexEndToEnd:
         try:
             assert kmod._ensure_vector_index() is True
             assert added_docs["count"] == 2, "index_size mismatch must trigger rebuild"
-            assert kmod._vector_index_built is True
+            assert kmod._vector_index_revision is not None
         finally:
             kmod.db = original_db
             db.close_connection()
@@ -940,7 +940,7 @@ class TestEnsureVectorIndexEndToEnd:
         db = self._make_db(tmp_path)
         original_db = kmod.db
         kmod.db = db
-        kmod._vector_index_built = False
+        kmod._vector_index_revision = None
 
         self._insert_doc_with_chunks(db, 1, "Doc1", ["c0", "c1"])
 
@@ -960,7 +960,7 @@ class TestEnsureVectorIndexEndToEnd:
                 self._docs += len(docs)
             def flush(self):
                 # 模拟窄窗口：在 flush（commit 临界区之前）发生并发 CRUD。
-                # database revision invalidation 会自增 revision 并设 _vector_index_built=False。
+                # database revision invalidation 会自增 revision 并设 _vector_index_revision=None。
                 # commit 临界区随后检测到 revision 变化，拒绝标记 complete。
                 db.mark_knowledge_index_dirty()
                 kmod._invalidate_local_knowledge_index()
@@ -974,7 +974,7 @@ class TestEnsureVectorIndexEndToEnd:
             status, _, _, _ = kmod._read_rebuild_status()
             assert status == "dirty", "status must be dirty (from concurrent CRUD), not complete"
             assert added_docs["count"] == 2, "rebuild must still index the documents"
-            assert kmod._vector_index_built is False, "must not set _vector_index_built=True"
+            assert kmod._vector_index_revision is None, "must not set a committed revision"
         finally:
             kmod.db = original_db
             db.close_connection()
@@ -982,13 +982,13 @@ class TestEnsureVectorIndexEndToEnd:
     def test_skip_rebuild_concurrent_crud_does_not_set_built(self, tmp_path, monkeypatch):
         """Narrow-window race in skip branch: CRUD happens during fingerprint
         computation. The commit critical section must re-check revision under
-        _revision_lock and refuse to set _vector_index_built=True."""
+        _revision_lock and refuse to set a committed revision."""
         from api import knowledge as kmod
 
         db = self._make_db(tmp_path)
         original_db = kmod.db
         kmod.db = db
-        kmod._vector_index_built = False
+        kmod._vector_index_revision = None
 
         self._insert_doc_with_chunks(db, 1, "Doc1", ["c0", "c1"])
         real_fp = kmod._compute_chunk_fingerprint()
@@ -1039,8 +1039,8 @@ class TestEnsureVectorIndexEndToEnd:
             assert result is True, "rebuild after concurrent CRUD should succeed"
             # add_documents may or may not be called depending on whether
             # rebuild path re-fetches; the key assertion is that the skip
-            # branch did NOT set _vector_index_built without re-checking
-            assert kmod._vector_index_built is True
+            # branch did NOT set local committed revision without re-checking
+            assert kmod._vector_index_revision is not None
             assert add_called["called"], "Unvalidated old snapshot must be rebuilt"
         finally:
             kmod.db = original_db
@@ -1057,7 +1057,6 @@ class TestEnsureVectorIndexEndToEnd:
         db = self._make_db(tmp_path)
         other = type(db)(db.db_path)
         monkeypatch.setattr(kmod, 'db', db)
-        monkeypatch.setattr(kmod, '_vector_index_built', False)
         monkeypatch.setattr(kmod, '_vector_index_revision', None)
         document = db.save_knowledge_document(dict(title='完整规则', content='须书面确认。'), chunks=['须书面确认。'])
         monkeypatch.setattr(vector_db, 'get_vector_db', lambda: RecordingVector())
@@ -1089,7 +1088,7 @@ class TestEnsureVectorIndexEndToEnd:
             assert not thread.is_alive() and not failures
             assert other.get_knowledge_document(document['id'])['title'] == '新规则'
             assert kmod._read_rebuild_status()[0] == 'dirty'
-            assert not kmod._vector_index_built and kmod._vector_index_revision is None
+            assert kmod._vector_index_revision is None
         finally:
             entered.set()
             thread.join(5)
@@ -1122,7 +1121,7 @@ class TestEnsureVectorIndexEndToEnd:
         db = self._make_db(tmp_path)
         original_db = kmod.db
         kmod.db = db
-        kmod._vector_index_built = False
+        kmod._vector_index_revision = None
 
         # 创建两个知识库
         db.execute_sql_insert(
@@ -1156,7 +1155,7 @@ class TestEnsureVectorIndexEndToEnd:
         def retrieve(query, *, top_k, enable_rerank, filters, use_cache):
             assert enable_rerank and not use_cache and filters is not None
             return [
-                dict(id=row["documentId"], title=row["doc_title"], content=row["content"], score=.8)
+                dict(document_id=row["documentId"], chunk_index=row["chunkIndex"], title=row["doc_title"], content=row["content"], normalized_score=.8)
                 for row in db.iter_chunks_with_document(batch_size=500)
                 if row["doc_kb_id"] == filters["knowledge_base_id"]
             ][:top_k]

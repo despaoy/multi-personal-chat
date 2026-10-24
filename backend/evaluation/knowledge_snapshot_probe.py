@@ -74,7 +74,6 @@ async def run_snapshot_probe(
     # Start a genuinely cold vector reader on the saved real writer snapshot.
     vector = vector_db.VectorDatabase(str(output / "vectors"))
     vector_db._vector_db = vector
-    knowledge._vector_index_built = False
     knowledge._vector_index_revision = None
     proof["cold_snapshot"] = {
         "validated": vector.snapshot_validated,

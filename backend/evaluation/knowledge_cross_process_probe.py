@@ -107,7 +107,7 @@ async def run_cross_process_probe(
             cache_generation=vector.cache_generation,
             revision=knowledge._get_rebuild_revision(),
             status=knowledge._read_rebuild_status(),
-            index_built=knowledge._vector_index_built,
+            index_built=(knowledge._vector_index_revision is not None),
         )
 
     proof["before_update"] = snapshot()

@@ -789,7 +789,6 @@ async def delete_knowledge_document(doc_id: int, current_user: dict = Depends(ge
 # 搜索
 # ============================================
 
-_vector_index_built = False
 _vector_index_revision: int | None = None
 _vector_index_lock = threading.Lock()
 # 只保护本进程完成标志与缓存失效；持久化版本由数据库事务和 CAS 管理。
@@ -896,9 +895,8 @@ def _read_rebuild_status() -> tuple[str, int, str, int]:
 
 def _invalidate_local_knowledge_index() -> None:
     """Reset local acceleration only after the durable document transaction."""
-    global _vector_index_built, _vector_index_revision
+    global _vector_index_revision
     with _revision_lock:
-        _vector_index_built = False
         _vector_index_revision = None
 
 
@@ -944,7 +942,7 @@ def _ensure_vector_index():
     避免在启动时阻塞服务（尤其是多worker场景下GPU显存竞争）。
 
     C7 fix: 用 threading.Lock 保护 check-build-set 序列，防止多个并发搜索请求
-    同时观察到 _vector_index_built == False 并重复构建索引。
+    同时观察到 _vector_index_revision is None 并重复构建索引。
 
     可靠性 fix: 重建状态 = building/complete/dirty + 数量 + 内容指纹 + revision CAS。
     - building: 上次重建中断，下次必须重建
@@ -956,11 +954,11 @@ def _ensure_vector_index():
       start_revision 才写入 complete，避免重建期间并发 CRUD 被旧重建任务覆盖
     - 落盘失败（clear_all/add_documents 抛异常）不会标记 complete，状态保持 building
     """
-    global _vector_index_built, _vector_index_revision
-    # The boolean belongs to this process; the revision belongs to the DB.
+    global _vector_index_revision
+    # The local committed revision must match the durable database revision.
     # A failed authority read must not authorize old cached evidence.
     try:
-        if _vector_index_built and _vector_index_revision == _get_rebuild_revision():
+        if _vector_index_revision is not None and _vector_index_revision == _get_rebuild_revision():
             return True
     except Exception as exc:
         logger.warning("读取知识索引修订号失败: %s", type(exc).__name__)
@@ -968,9 +966,8 @@ def _ensure_vector_index():
 
     with _vector_index_lock:
         try:
-            if _vector_index_built and _vector_index_revision == _get_rebuild_revision():
+            if _vector_index_revision is not None and _vector_index_revision == _get_rebuild_revision():
                 return True
-            _vector_index_built = False
             _vector_index_revision = None
             from knowledge.vector_db import get_vector_db
 
@@ -994,7 +991,7 @@ def _ensure_vector_index():
                 if needs_clear:
                     logger.info("数据库无有效 chunk，清空向量索引并持久化空索引")
                     vector_db.clear_all()  # 失败时抛异常，不会写入 complete
-                # commit 临界区：revision 校验 + 写 complete + 设 _vector_index_built
+                # commit 临界区：revision 校验 + 写 complete + 发布本地版本号
                 # 必须原子，避免并发 CRUD 在窗口内被覆盖
                 with _revision_lock:
                     if _get_rebuild_revision() != current_revision:
@@ -1004,7 +1001,6 @@ def _ensure_vector_index():
                         return False
                     logger.info("向量索引已清空并标记 complete:0:empty:%s", current_revision)
                     _vector_index_revision = current_revision
-                    _vector_index_built = True
                 return True
 
             # 跳过重建的多重校验：status + count + metadata + FAISS ntotal +
@@ -1021,7 +1017,7 @@ def _ensure_vector_index():
                 current_fp = _compute_chunk_fingerprint()
                 if status_fp and status_fp == current_fp and _loaded_metadata_matches_database(vector_db):
                     # commit 临界区：指纹计算期间可能发生 CRUD（已自增 revision），
-                    # 必须在锁内重新校验 revision 才能设置 _vector_index_built
+                    # 必须在锁内重新校验 revision 才能发布本地版本号
                     with _revision_lock:
                         if _get_rebuild_revision() != current_revision:
                             logger.info("跳过检查期间检测到并发 CRUD，放弃跳过，进入重建")
@@ -1035,7 +1031,6 @@ def _ensure_vector_index():
                             )
                             vector_db.clear_cache()
                             _vector_index_revision = current_revision
-                            _vector_index_built = True
                             return True
                 else:
                     logger.info(
@@ -1113,7 +1108,7 @@ def _ensure_vector_index():
             # 但磁盘仍为空。flush() 强制持久化，异常向上传播（不标记 complete）。
             vector_db.flush()
 
-            # commit 临界区：revision 校验 + 写 complete + 设 _vector_index_built
+            # commit 临界区：revision 校验 + 写 complete + 发布本地版本号
             # 必须在同一 _revision_lock 内原子完成。否则 CRUD 可能在
             # final_revision 读取后、complete 写入前发生，旧重建会覆盖 dirty。
             final_fp = fp_hash.hexdigest()[:16]
@@ -1135,7 +1130,6 @@ def _ensure_vector_index():
                     start_revision,
                 )
                 _vector_index_revision = start_revision
-                _vector_index_built = True
             return True
         except Exception as e:
             logger.warning("向量索引重建失败: %s", type(e).__name__)

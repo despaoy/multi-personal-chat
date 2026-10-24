@@ -28,7 +28,6 @@ def sources(tmp_path, monkeypatch):
     kb = db.create_knowledge_base("合成目标库")
     monkeypatch.setattr(knowledge, "db", db)
     monkeypatch.setattr(knowledge, "KNOWLEDGE_BASES_DIR", root)
-    monkeypatch.setattr(knowledge, "_vector_index_built", False)
     monkeypatch.setattr(knowledge, "_vector_index_revision", None)
     app = FastAPI()
     executor = BoundedThreadExecutor(name="source-boundary-scan", max_workers=1, max_pending=2, default_timeout=3)

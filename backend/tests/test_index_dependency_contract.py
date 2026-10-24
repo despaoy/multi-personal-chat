@@ -12,7 +12,6 @@ from db.schemas import KnowledgeSearchRequest
 @pytest.mark.parametrize('stage',['dependency','revision'])
 async def test_index_preparation_failure_reaches_search_without_private_detail(monkeypatch,caplog,stage):
     private='synthetic-private-index-detail'
-    monkeypatch.setattr(knowledge,'_vector_index_built',stage=='revision')
     monkeypatch.setattr(knowledge,'_vector_index_revision',7 if stage=='revision' else None)
     monkeypatch.setattr(knowledge,'_get_rebuild_revision',Mock(return_value=7))
     if stage=='dependency':
@@ -30,4 +29,4 @@ async def test_index_preparation_failure_reaches_search_without_private_detail(m
     assert private not in str(caught.value.detail) and private not in caplog.text
     assert ('ImportError' if stage=='dependency' else 'OSError') in caplog.text
     if stage=='dependency':
-        assert not knowledge._vector_index_built and knowledge._vector_index_revision is None
+        assert knowledge._vector_index_revision is None

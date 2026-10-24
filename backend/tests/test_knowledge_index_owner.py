@@ -15,7 +15,6 @@ from knowledge import vector_db as vectors
 async def test_committed_document_change_uses_one_index_publication(tmp_path,monkeypatch,operation,fail_rebuild):
     db=SQLiteDB(tmp_path/'source.sqlite')
     monkeypatch.setattr(knowledge,'db',db)
-    monkeypatch.setattr(knowledge,'_vector_index_built',False)
     monkeypatch.setattr(knowledge,'_vector_index_revision',None)
     monkeypatch.setattr(vectors.VectorDatabase,'_check_gpu_availability',lambda self:False)
     vector=vectors.VectorDatabase(str(tmp_path/'vectors'))
@@ -38,7 +37,7 @@ async def test_committed_document_change_uses_one_index_publication(tmp_path,mon
         result=await knowledge.delete_knowledge_document(row['id'],dict(role='admin'))
         assert db.get_knowledge_document(row['id']) is None
     assert result['success'] and knowledge._get_rebuild_revision()==revision+1
-    assert knowledge._read_rebuild_status()[0]=='dirty' and not knowledge._vector_index_built
+    assert knowledge._read_rebuild_status()[0]=='dirty' and knowledge._vector_index_revision is None
     getter.assert_not_called()
     assert encode.call_count==calls
     if fail_rebuild:
@@ -47,7 +46,7 @@ async def test_committed_document_change_uses_one_index_publication(tmp_path,mon
         with pytest.raises(OSError) as raised:
             knowledge._ensure_vector_index()
         assert raised.value is failure
-        assert knowledge._read_rebuild_status()[0]!='complete' and not knowledge._vector_index_built
+        assert knowledge._read_rebuild_status()[0]!='complete' and knowledge._vector_index_revision is None
         assert knowledge._read_rebuild_status()[0]==('building' if operation=='update' else 'dirty')
     else:
         assert knowledge._ensure_vector_index()

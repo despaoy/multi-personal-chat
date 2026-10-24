@@ -50,7 +50,6 @@ async def arrange(tmp_path, monkeypatch):
     monkeypatch.setenv("RERANKER_ENABLED", "false")
     monkeypatch.setattr(knowledge, "db", database)
     monkeypatch.setattr(generate, "db", database)
-    monkeypatch.setattr(knowledge, "_vector_index_built", False)
     monkeypatch.setattr(knowledge, "_vector_index_revision", None)
     monkeypatch.setattr(vector_db.VectorDatabase, "_check_gpu_availability", lambda _: False)
     vector = vector_db.VectorDatabase(str(tmp_path / "vectors"), vector_db.IndexConfig(index_type="flat"))

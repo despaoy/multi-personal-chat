@@ -45,7 +45,6 @@ async def arrange_generic_plan(tmp_path, monkeypatch):
     monkeypatch.setenv("RERANKER_ENABLED", "false")
     monkeypatch.setattr(knowledge, "db", database)
     monkeypatch.setattr(generate, "db", database)
-    monkeypatch.setattr(knowledge, "_vector_index_built", False)
     monkeypatch.setattr(knowledge, "_vector_index_revision", None)
     monkeypatch.setattr(vector_db.VectorDatabase, "_check_gpu_availability", lambda _: False)
     vector = vector_db.VectorDatabase(str(tmp_path / "vectors"), vector_db.IndexConfig(index_type="flat"))
@@ -172,6 +171,6 @@ async def test_generic_index_failure_still_stops_api_with_503_before_answer(tmp_
         assert "synthetic index publication failure" in str(caught.value.__cause__)
         assert len(planning) == 1 and not rig.searches and not rig.helper._query_cache
         failed_publication.assert_called_once()
-        assert knowledge._read_rebuild_status()[0] != "complete" and knowledge._vector_index_built is False
+        assert knowledge._read_rebuild_status()[0] != "complete" and knowledge._vector_index_revision is None
     finally:
         rig.database.close_connection()

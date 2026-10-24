@@ -84,7 +84,7 @@ async def run_mutation_probe(
             "status": knowledge._read_rebuild_status(),
             "vector_metadata": deepcopy(vector.metadata),
             "cache_generation": vector.cache_generation,
-            "built": knowledge._vector_index_built,
+            "built": (knowledge._vector_index_revision is not None),
         }
 
     warm = await client.post("/api/knowledge/search", json={"query": fixture["search_query"], "topK": 3})
