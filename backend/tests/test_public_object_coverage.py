@@ -124,11 +124,6 @@ async def positive():
 
 
 @pytest.mark.asyncio
-async def test_complementary_sources_can_cover_one_complete_multi_object_task():
-    await positive()
-
-
-@pytest.mark.asyncio
 async def test_one_object_proof_cannot_mark_whole_multi_object_task_admitted():
     await positive()
     result, req = await run(missing=True)

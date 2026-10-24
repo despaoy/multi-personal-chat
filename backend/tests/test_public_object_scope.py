@@ -102,11 +102,6 @@ async def positive():
 
 
 @pytest.mark.asyncio
-async def test_question_objects_resolved_before_any_source_is_visible():
-    await positive()
-
-
-@pytest.mark.asyncio
 async def test_former_source_cannot_confirm_latter_even_if_reviewer_proposes_both():
     await positive()
     value = source_reply()

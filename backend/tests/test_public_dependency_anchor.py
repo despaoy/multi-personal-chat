@@ -52,11 +52,6 @@ async def positive(*, coarse=False, empty=False):
 
 
 @pytest.mark.asyncio
-async def test_complete_original_public_scope_reaches_canonical_generation():
-    await positive()
-
-
-@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "defect",
     ["tasks_only", "tasks_and_declared", "missing_declared", "duplicate", "bool", "private_parent", "legacy_downgrade"],

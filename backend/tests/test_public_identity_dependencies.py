@@ -145,11 +145,6 @@ async def positive():
 
 
 @pytest.mark.asyncio
-async def test_complete_alias_registry_and_rule_preserve_private_and_all_qualifiers():
-    await positive()
-
-
-@pytest.mark.asyncio
 @pytest.mark.parametrize("relation", ["different", "uncertain"])
 async def test_denial_and_unknown_do_not_create_identity_edges(relation):
     await positive()

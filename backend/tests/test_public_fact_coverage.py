@@ -181,11 +181,6 @@ async def positive():
 
 
 @pytest.mark.asyncio
-async def test_full_four_fact_control_preserves_whole_body_and_private():
-    await positive()
-
-
-@pytest.mark.asyncio
 async def test_fee_only_is_partial_without_turning_missing_fields_into_negatives():
     await positive()
     _, req = await run("fee")

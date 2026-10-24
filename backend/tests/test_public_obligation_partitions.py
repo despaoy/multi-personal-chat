@@ -61,11 +61,6 @@ async def positive():
 
 
 @pytest.mark.asyncio
-async def test_same_sentence_independent_businesses_do_not_share_source_confirmation():
-    await positive()
-
-
-@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "defect",
     [
