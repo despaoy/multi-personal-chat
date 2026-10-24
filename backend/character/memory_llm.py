@@ -13,7 +13,6 @@ worker 按入队顺序处理，避免同一用户连续修正事实时旧任务�
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
 import logging
 import math
@@ -144,7 +143,6 @@ MERGE/SUPERSEDE/COEXIST/RETRACT/ERASE 必须从白名单逐字复制 target_memo
 - 没有对应旧记忆时，明确省略可从最近 user history 还原并 ADD；不能从 assistant 内容创造事实。
 
 边界示例（ID/key 必须换成 payload 白名单中的真实值）：
-- 旧“养了一只年糕猫” + “又养了一只团子猫” → MERGE；
 - 旧“讨厌咖啡” + “不是完全讨厌，只是不喜欢太苦的” → COEXIST；
 - “可能明年换工作”或“好像喜欢茶，还不确定” → PENDING；
 - 旧“喜欢黑咖啡” + “刚才说错了，我并不喜欢黑咖啡” → RETRACT；
@@ -153,16 +151,15 @@ MERGE/SUPERSEDE/COEXIST/RETRACT/ERASE 必须从白名单逐字复制 target_memo
 - 长期住杭州 + “这周在北京出差，下周回杭州” → COEXIST；
 - 旧“准备保研” + “保研准备里主要练英语面试” → MERGE；
 - 旧“不喜欢咖啡” + “喝无咖啡因咖啡，普通咖啡才不喝” → COEXIST dislike=普通咖啡；
-- “请记住，推荐饮料时避开含咖啡因的” → ADD dislike=含咖啡因的饮料。
 
 对明确表达的本人未来计划，“说过这个计划”与“已经实施”是两个不同的命题。若计划的时间、地点、条件或尚未实施说明分散在长消息里，使用 kind=shared_event、operation=ADD 保存当前完整发言的原话观察，绝不确认行动发生。value 取当前连续原文中的短话题（不超过 payload.proposal_constraints.max_value_chars），evidence 只复制一段相关连续原文（不超过 max_evidence_chars），content 留空、qualifiers 使用空对象 {}，不要再次概括条件。后端保留整条当前消息及全部限定，包括末尾条件，不会用短引文代替完整来源。不要拼接开头和末尾当作连续 evidence。虚构材料、第三方计划不是用户本人的计划；未确定的外部事实仍按 PENDING 处理，不因这条规则变成事实。
 
 写入新内容的 ADD/MERGE/SUPERSEDE/COEXIST/PENDING 必须填写合法 kind 和非空 value；不能因为已有 target 就省略类型或猜测类型。kind 必须逐字选自 payload.proposal_constraints.kinds；existing_memories.memory_type 是存储类型，不是 kind。qualifiers 的值必须引用原文，不使用抽象状态标签代替证据。
-value 是短索引，不要把整段计划和全部限定塞进 value。qualifiers 的键只能来自 payload.proposal_constraints.qualifier_keys，值只能逐字复制 evidence，不要创造 status 等新键或概括条件。不能满足这些要求时使用上述完整原话观察，而不是裁掉末尾限定。
+value 可以是本条 evidence 中逐字复制的连续短字符串；需要组合分散片段时，必须显式输出有序字符串列表，后端只按你给出的顺序连接。例如 evidence 为“推荐饮料时避开含咖啡因的”，可给出 value=["含咖啡因的","饮料"]。每个片段都必须来自证据，不得创造新文字；不能把拼接后的短语冒充连续引文。所有片段连接后仍须满足 max_value_chars。明确省略的用户上下文消歧按下述约定处理；无法提供合法索引时不要输出该提议。qualifiers 的键只能来自 payload.proposal_constraints.qualifier_keys，值只能逐字复制 evidence，不要创造 status 等新键或概括条件。不能满足这些要求时使用上述完整原话观察，而不是裁掉末尾限定。
 
 籍贯或家乡使用 kind=origin；当前长期居住地使用 kind=residence，二者分别保存，不要归入 other_user_fact。只有来源没有区分来处与居住地时才用 location。
 
-结构化事实的 value 应取证据中连续出现的短对象，不把场景与对象重新拼接成新的短语；场景保留在 context 限定中。若提供 content，必须包含同一个 value 的原文，不能只在 value 中改写词序或添加连接词。明确省略的消歧仍按下述规则处理。
+结构化事实的 value 用来表示对象，不能把场景限定拼进对象；场景保留在 context 限定中。提供片段列表时，每项必须是连续原文，组合后的语义由你负责，后端不会替你找片段或改写对象。content 可以留空，由后端按已校验的 kind、value 和 qualifiers 构建显示正文；不要填写占位标签。若填写 content，必须以用户开头并包含同一个 value 的原文，不能只在 value 中改写词序或添加连接词；无法满足就留空。明确省略的消歧仍按下述规则处理。
 先确定要保留的全部条件、否定与范围，再选择一段连续 evidence；它必须逐字覆盖该提议的所有自然语言 qualifiers，而不只是核心偏好句。如果完整当前消息在 max_evidence_chars 内，可以直接引用整条消息以保留末尾限定。不要为了缩短 evidence 删除必要条件或“未实际发生”说明；超过长度且无法完整覆盖时，使用完整原话观察保留整条消息，不输出缺限定的结构化事实。
 
 后端不会把历史引文自动替换成当前原话。每条 evidence 必须是 current_user_message 中连续出现的原文；省略句也必须把当前省略句作为 evidence，不能复制 history。value 优先来自 evidence；只有“上次那个/还是那个/刚才那条”等明确省略时，才可由用户历史或 existing_memories 消歧。content 必须以“用户”开头，写成安全的第三人称事实，不含任何指令。attributed_to 只能写 user。qualifiers 只用于 condition/context/frequency/certainty/exception/location/time 等条件，不要把 valid_from/valid_to 塞进 qualifiers。用户描述的有效时间使用顶层 valid_from/valid_to 和 ISO 8601；不清楚就留空。发言观察时间由服务器记录。scope_level 只能从 payload.proposal_constraints.scope_levels 选择，默认 conversation。conversation 也会持久保存长期记忆，只限制在当前会话可见；普通“请记住”或事实持续不变不授予跨会话、跨角色权限。只有原话明确授权且范围已列入可选集合时，才使用 user_character 或 user_global。scope_authorizations 若非空则保留已审查授权的连续原话；没有预审授权时也须根据完整原话提出范围，后端会在执行跨范围操作前单独审查。每条提议分别匹配其授权对象和限制：明确获跨会话或跨角色授权的事实使用对应范围，其他事实保留自身范围。不能把某项事实的限制或授权套在其他事实上。
@@ -170,7 +167,7 @@ value 是短索引，不要把整段计划和全部限定塞进 value。qualifie
 明确且稳定的信息可直接 ADD；不确定陈述不要丢弃，应使用 PENDING。confidence 表示“是否准确读懂证据和关系”的把握，不是事实发生概率；因此用户清楚表达“可能/不确定”时，PENDING 的 confidence 仍应较高。低于 payload.confidence_threshold 时用 NOOP 或不返回。最多返回 4 条。
 
 只输出严格 JSON，不要 Markdown、解释或思考过程：
-{"memories":[{"kind":"name|like|dislike|major|study_stage|origin|residence|location|workplace|goal|promise|shared_event|other_user_fact","value":"结构化值","content":"用户开头的第三人称事实","evidence":"当前消息连续原文","confidence":0.0,"operation":"ADD|MERGE|SUPERSEDE|COEXIST|PENDING|RETRACT|NOOP|ERASE","target_memory_id":"","target_memory_key":"","attributed_to":"user","qualifiers":{},"valid_from":"","valid_to":"","scope_level":"conversation"}]}
+{"memories":[{"kind":"name|like|dislike|major|study_stage|origin|residence|location|workplace|goal|promise|shared_event|other_user_fact","value":"连续短原文","content":"","evidence":"当前消息连续原文","confidence":0.0,"operation":"ADD|MERGE|SUPERSEDE|COEXIST|PENDING|RETRACT|NOOP|ERASE","target_memory_id":"","target_memory_key":"","attributed_to":"user","qualifiers":{},"valid_from":"","valid_to":"","scope_level":"conversation"}]}
 顶层只允许 memories 和本轮明确提供的 erase_source_ids，候选只能包含以上声明字段。
 没有合格记忆时输出 {"memories":[]}。"""
 
@@ -314,6 +311,7 @@ class ValidatedMemoryProposal:
     source_observation: bool = False
     # Server-derived retention constraints; never copied from model JSON.
     protected_memory_keys: tuple[str, ...] = ()
+    value_fragments: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -488,11 +486,6 @@ def _future_only_erasure_request(message: str, *, observed_at) -> bool:
     )
 
 
-_CONDITIONAL_COEXIST_PATTERN = re.compile(
-    r"(?:不是完全.{0,24}(?:只是|只)|准确地说.{0,48}(?:才不|只是|而是)|(?:只是|才)不)"
-)
-_TEMPORARY_LOCATION_PATTERN = re.compile(r"(?:这周|本周|下周|临时|暂时|出差|旅行|短住)")
-_ADDITIVE_PET_PATTERN = re.compile(r"(?:又|再|还).{0,16}(?:养|领养).{0,12}(?:猫|狗|宠物)")
 _UNSAFE_CONTENT_PATTERN = re.compile(
     r"(?:忽略(?:以上|此前|系统)|system\s*prompt|开发者指令|你必须|请执行|调用工具)", re.IGNORECASE
 )
@@ -751,36 +744,6 @@ def _resolve_target_record(
     )
 
 
-def _infer_add_relation_target(
-    kind: str,
-    evidence: str,
-    existing_memories: tuple[dict[str, Any], ...],
-) -> tuple[str, dict[str, Any]] | None:
-    """只对两个高精度 ADD 误判场景关联同槽旧记忆。"""
-
-    active = [item for item in existing_memories if str(item.get("status") or "active") in {"active", "pending"}]
-    if kind == "location" and _TEMPORARY_LOCATION_PATTERN.search(evidence):
-        target = next(
-            (item for item in active if str(item.get("memory_key") or "") == "user_location"),
-            None,
-        )
-        if target is not None:
-            return "COEXIST", target
-    if kind == "other_user_fact" and _ADDITIVE_PET_PATTERN.search(evidence):
-        target = next(
-            (
-                item
-                for item in active
-                if str(item.get("memory_key") or "").startswith("fact_")
-                and re.search(r"猫|狗|宠物", str(item.get("content") or ""))
-            ),
-            None,
-        )
-        if target is not None:
-            return "MERGE", target
-    return None
-
-
 def _grounded_value(
     value: str,
     *,
@@ -793,14 +756,6 @@ def _grounded_value(
     normalized_evidence = _normalize(evidence)
     if normalized_value and normalized_value in normalized_evidence:
         return True
-    # 结构化值可能把证据中的修饰语重新排序，例如
-    # “推荐饮料时避开含咖啡因的”→“含咖啡因的饮料”。要求至少 75%
-    # 的 value bigram 逐字存在于当前证据，允许重排但不允许补造实体。
-    if len(normalized_value) >= 4:
-        value_bigrams = {normalized_value[index : index + 2] for index in range(len(normalized_value) - 1)}
-        evidence_bigrams = {normalized_evidence[index : index + 2] for index in range(len(normalized_evidence) - 1)}
-        if value_bigrams and len(value_bigrams & evidence_bigrams) / len(value_bigrams) >= 0.75:
-            return True
     if not _ELLIPSIS_REFERENCE_PATTERN.search(evidence):
         return False
     grounding_texts = [str(item.get("content") or "") for item in existing_memories]
@@ -1015,6 +970,17 @@ def _supported_generic_fact(value: str, evidence: str) -> tuple[str, ExtractedMe
     return matches[0] if len(matches) == 1 else None
 
 
+def _proposal_value(raw: dict[str, Any]) -> tuple[str, tuple[str, ...]]:
+    value = raw.get("value", "")
+    if isinstance(value, str):
+        return re.sub(r"\s+", " ", value).strip(), ()
+    if (not isinstance(value, list) or not value
+            or any(not isinstance(part, str) or not part.strip() for part in value)):
+        raise MemoryResponseError("value", "记忆 LLM value 必须是原文字符串或非空原文片段列表")
+    fragments = tuple(re.sub(r"\s+", " ", part) for part in value)
+    return "".join(fragments).strip(), fragments
+
+
 def _proposal_text(raw: dict[str, Any], field: str) -> str:
     value = raw.get(field, "")
     if not isinstance(value, str):
@@ -1042,7 +1008,7 @@ def _candidate_to_proposal(
     if operation not in _SEMANTIC_OPERATIONS:
         raise MemoryResponseError('operation', "记忆 LLM operation 不受支持")
     kind = _proposal_text(raw, "kind").strip()
-    value = re.sub(r"\s+", " ", _proposal_text(raw, "value")).strip()
+    value, value_fragments = _proposal_value(raw)
     writes_content = operation not in {"NOOP", "RETRACT", "ERASE"}
     if (kind or writes_content) and kind not in _ALLOWED_KINDS:
         raise MemoryResponseError("kind", "记忆 LLM kind 缺失或不受支持")
@@ -1055,8 +1021,6 @@ def _candidate_to_proposal(
     if len(evidence) > _MAX_EVIDENCE_CHARS:
         raise MemoryResponseError("evidence", "记忆 LLM evidence 超过约定长度上限")
     proposed_content = re.sub(r"\s+", " ", _proposal_text(raw, "content")).strip()
-    if proposed_content in {"用户开头的第三人称事实", "第三人称安全描述"}:
-        proposed_content = ""
     target_memory_id = _proposal_text(raw, "target_memory_id").strip()
     target_memory_key = _proposal_text(raw, "target_memory_key").strip()
 
@@ -1076,7 +1040,6 @@ def _candidate_to_proposal(
     if operation != "NOOP" and confidence < required_confidence:
         return None
     event_observation = kind == "shared_event" and operation not in {"NOOP", "RETRACT", "ERASE"}
-    generic_source_observation = False
     alias_projection = (identity_alias_projection(source=source_message, evidence=evidence, value=value)
         if kind in {'name', 'other_user_fact'} and operation in {'ADD', 'MERGE', 'SUPERSEDE', 'COEXIST'} else None)
     if kind == 'name' and explicit_alias_value(source_message, value) and alias_projection is None:
@@ -1141,20 +1104,6 @@ def _candidate_to_proposal(
     if not normalized_evidence or normalized_evidence not in normalized_source:
         return None
 
-    if (
-        operation in {"MERGE", "SUPERSEDE"}
-        and target_memory_id
-        and _CONDITIONAL_COEXIST_PATTERN.search(source_message)
-    ):
-        operation = "COEXIST"
-
-    if operation == "ADD" and not (target_memory_id or target_memory_key):
-        inferred = _infer_add_relation_target(kind, evidence, existing_memories)
-        if inferred is not None:
-            operation, inferred_target = inferred
-            target_memory_id = _record_id(inferred_target)
-            target_memory_key = str(inferred_target.get("memory_key") or "")
-
     target_record = _resolve_target_record(
         target_memory_id=target_memory_id,
         target_memory_key=target_memory_key,
@@ -1175,26 +1124,6 @@ def _candidate_to_proposal(
     elif operation == "ADD":
         target_memory_id = ""
         target_memory_key = ""
-
-    if (
-        operation == "MERGE"
-        and target_record is not None
-        and value
-        and re.sub(r"[，。！？,!?：:；;]", "", _normalize(value))
-        in re.sub(
-            r"[，。！？,!?：:；;]",
-            "",
-            _normalize(str(target_record.get("content") or "")),
-        )
-        and raw.get("qualifiers") in (None, "", {}, [])
-    ):
-        return ValidatedMemoryProposal(
-            operation="NOOP",
-            target_memory_id=target_memory_id,
-            target_memory_key=target_memory_key,
-            evidence=evidence,
-            confidence=confidence,
-        )
 
     if operation == "ERASE" and not is_memory_erasure_request(source_message):
         return None
@@ -1249,35 +1178,11 @@ def _candidate_to_proposal(
             # Rebuild the display from the literal short object and all ordinary
             # source-checked qualifiers, never the model's decorated paraphrase.
             proposed_content = ""
-    if operation not in {"RETRACT", "ERASE"} and not _grounded_value(
-        value,
-        evidence=evidence,
-        history=history,
-        existing_memories=existing_memories,
+    if operation not in {"RETRACT", "ERASE"} and not all(
+        _grounded_value(fragment, evidence=evidence, history=history, existing_memories=existing_memories)
+        for fragment in (value_fragments or (value,))
     ):
-        if event_observation:
-            # A model's short event topic is an index, not a proven predicate.
-            # Keep the independently grounded complete utterance as a quoted
-            # observation instead of discarding a real later correction.
-            generic_source_observation = True
-            proposed_content = ""
-            if target_record is not None and operation in {"MERGE", "SUPERSEDE"}:
-                # Earlier utterances remain valid observations of what was
-                # said. Link the new source without erasing that chronology.
-                operation = "COEXIST"
-        elif (kind == "other_user_fact" and (
-                operation == "ADD" and target_record is None
-                or operation == "MERGE" and target_record is not None
-                and target_memory_key.startswith("fact_"))):
-            # A generic summary's surface form is not its source. Retain a
-            # complete, explicitly labelled utterance observation instead of
-            # certifying the model's value/content as a semantic fact.
-            generic_source_observation = True
-            if target_record is not None:
-                operation = "COEXIST"
-            proposed_content = ""
-        else:
-            raise MemoryResponseError("value", "记忆 LLM value 缺少当前证据或明确指代上下文的支持")
+        raise MemoryResponseError("value", "记忆 LLM value 的每个片段必须有原文或明确用户指代的支持，不接受无来源索引")
 
     if (
         target_record is not None
@@ -1291,7 +1196,7 @@ def _candidate_to_proposal(
     # Source observations persist the entire current utterance, not this short
     # admission quote. A literal later condition is therefore part of their
     # actual evidence. Semantic facts retain the stricter quote-only gate.
-    qualifier_evidence = source_message if event_observation or generic_source_observation else evidence
+    qualifier_evidence = source_message if event_observation else evidence
     qualifiers = _sanitize_qualifiers(
         raw_qualifiers, evidence=qualifier_evidence, pending=operation == "PENDING"
     )
@@ -1312,10 +1217,6 @@ def _candidate_to_proposal(
         if canonical is None:
             return None
         memory_type, key, canonical_content, importance = canonical
-        if generic_source_observation and target_record is None:
-            # A new observation's key must not encode an unverified summary.
-            prefix = "event_source_" if kind == "shared_event" else "fact_source_"
-            key = prefix + hashlib.sha256(source_message.encode("utf-8")).hexdigest()[:24]
         if (kind == "location" and target_record is not None
                 and target_memory_key in {"user_origin", "user_residence"}
                 and key != target_memory_key):
@@ -1330,30 +1231,23 @@ def _candidate_to_proposal(
             or not proposed_content.startswith("用户")
             or _UNSAFE_CONTENT_PATTERN.search(proposed_content)
         ):
-            return None
+            raise MemoryResponseError("content", "记忆 LLM content 不符合长度、用户归属或显示文本约定")
         if (_normalize(value) not in _normalize(proposed_content)
                 and operation not in {"RETRACT", "ERASE"}):
-            if kind != "other_user_fact":
-                return None
-            # Generic values can encode a predicate whose word order differs
-            # from a natural summary. Grounding/admission already validated
-            # the source and value above. Keep the source-backed canonical
-            # view, not an unverified paraphrase or its additional claims.
-            proposed_content = ""
-            content = canonical_content
+            raise MemoryResponseError("content", "记忆 LLM content 必须包含同一提议的 value 原文，或显式留空")
         else:
             content = proposed_content
     else:
         content = canonical_content
 
-    if (kind == "shared_event" or generic_source_observation) and operation not in {"RETRACT", "ERASE"}:
+    if kind == "shared_event" and operation not in {"RETRACT", "ERASE"}:
         # A selected event topic is not proof of its actor. Keep the complete
         # utterance (including later qualifications) instead of promoting the
         # model's free-form summary to an event owned by the speaker.
         # Long quotations stay in evidence; never truncate a quotation into a
         # stronger assertion merely to fit the short display-content column.
         evidence = source_message
-        label = "用户原话记录：" if generic_source_observation else "用户原话事件记录："
+        label = "用户原话事件记录："
         quoted = label + json.dumps(source_message, ensure_ascii=False)
         prefix_size = len("待确认：") if operation == "PENDING" else 0
         content = quoted if len(quoted) + prefix_size <= MAX_MEMORY_CONTENT_CHARS else "用户原话事件记录（完整内容见证据）"
@@ -1394,7 +1288,8 @@ def _candidate_to_proposal(
         scope_level=_scope_level_for_message(_proposal_text(raw, "scope_level"), source_message, scope_authorization),
         proposed_valid_from=str(raw_valid_from or "").strip(),
         proposed_valid_to=str(raw_valid_to or "").strip(),
-        source_observation=(kind == "shared_event" or generic_source_observation)
+        value_fragments=value_fragments if writes_content else (),
+        source_observation=(kind == "shared_event")
             and operation not in {"RETRACT", "ERASE"},
     )
 
@@ -1521,6 +1416,7 @@ def build_memory_llm_messages(
         "proposal_constraints": {
             "kinds": sorted(_ALLOWED_KINDS),
             "max_value_chars": _MAX_VALUE_CHARS,
+            "value_formats": ["literal_string", "ordered_literal_fragments"],
             "max_evidence_chars": _MAX_EVIDENCE_CHARS,
             "qualifier_keys": sorted(_ALLOWED_QUALIFIER_KEYS),
             "scope_levels": (_scope_levels_for_message(message, scope_authorization) if scope_authorization is not None
@@ -2129,6 +2025,8 @@ class MemoryEnrichmentScheduler:
                 time_expression=dict(proposal.qualifiers).get("time", ""),
             ),
         }
+        if proposal.value_fragments:
+            metadata["value_fragments"] = list(proposal.value_fragments)
         if deferred is not None:
             metadata["deferred_mutation"] = dict(
                 original_operation=proposal.operation,

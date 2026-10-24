@@ -21,19 +21,21 @@ def _parse(source, initial_value, content, **changes):
     ("我的自行车是蓝色的。", "自行车是蓝色", "用户有一辆蓝色自行车"),
     ("我的书架放在客厅。", "书架放在客厅", "用户在客厅放置书架"),
 ])
-def test_generic_paraphrase_uses_grounded_canonical_view(source, value, content):
-    result = _parse(source, value, content)
+def test_generic_paraphrase_requires_valid_content_or_explicit_empty_display(source, value, content):
+    with pytest.raises(MemoryResponseError) as caught:
+        _parse(source, value, content)
+    assert caught.value.field == "content"
+    result = _parse(source, value, "")
     assert len(result) == 1
     assert result[0].memory.content == f"用户明确提到：{source}"
     assert result[0].evidence == source
 
 
-def test_fallback_does_not_preserve_unverified_summary_additions():
+def test_unverified_summary_additions_are_a_content_error():
     source = "我的书架放在客厅。"
-    result = _parse(source, "书架放在客厅", "用户在客厅放置昂贵的红木书架")
-    assert len(result) == 1
-    assert "红木" not in result[0].memory.content
-    assert result[0].evidence == source
+    with pytest.raises(MemoryResponseError) as caught:
+        _parse(source, "书架放在客厅", "用户在客厅放置昂贵的红木书架")
+    assert caught.value.field == "content"
 
 
 @pytest.mark.parametrize("changes,error", [
@@ -41,19 +43,17 @@ def test_fallback_does_not_preserve_unverified_summary_additions():
     ({"attributed_to": "assistant"}, True),
     ({"confidence": 0.1}, False),
 ])
-def test_fallback_does_not_bypass_grounding_or_admission(changes, error):
+def test_empty_display_does_not_bypass_grounding_or_admission(changes, error):
     if error:
         with pytest.raises(MemoryResponseError) as caught:
-            _parse("我的自行车是蓝色的。", "自行车是蓝色", "用户有一辆蓝色自行车", **changes)
+            _parse("我的自行车是蓝色的。", "自行车是蓝色", "", **changes)
         assert caught.value.field == "attributed_to"
     else:
-        assert not _parse("我的自行车是蓝色的。", "自行车是蓝色", "用户有一辆蓝色自行车", **changes)
+        assert not _parse("我的自行车是蓝色的。", "自行车是蓝色", "", **changes)
 
 
-def test_unverified_generic_value_is_an_observation_not_a_fabricated_fact():
+def test_unverified_generic_value_is_an_error_not_an_observation():
     source = "我的自行车是蓝色的。"
-    proposal, = _parse(source, "自行车是红色", "用户有一辆红色自行车")
-    assert proposal.source_observation
-    assert proposal.evidence == source
-    assert "蓝色" in proposal.memory.content and "红色" not in proposal.memory.content
-    assert "红色" not in proposal.memory.memory_key
+    with pytest.raises(MemoryResponseError) as caught:
+        _parse(source, "自行车是红色", "用户有一辆红色自行车")
+    assert caught.value.field == "value"

@@ -100,7 +100,7 @@ def test_uncertain_future_fact_is_pending_instead_of_becoming_active():
     assert result[0].memory.content.startswith("待确认：")
 
 
-def test_pending_uses_relation_confidence_and_reordered_value_stays_grounded():
+def test_pending_uses_relation_confidence_and_literal_value_stays_grounded():
     pending_source = "我好像更喜欢喝茶，不过还不确定。"
     pending = parse_llm_proposals(
         _response(
@@ -120,7 +120,7 @@ def test_pending_uses_relation_confidence_and_reordered_value_stays_grounded():
     reordered = parse_llm_proposals(
         _response(
             kind="dislike",
-            value="含咖啡因的饮料",
+            value="含咖啡因的",
             content="用户不喜欢含咖啡因的饮料",
             evidence=reordered_source,
             confidence=0.95,
@@ -134,7 +134,7 @@ def test_pending_uses_relation_confidence_and_reordered_value_stays_grounded():
     assert [item.operation for item in reordered] == ["ADD"]
 
 
-def test_explicit_erasure_phrase_and_duplicate_merge_are_normalized_safely():
+def test_explicit_erasure_and_noop_are_preserved():
     erase_source = "请把你记住的我的住址彻底删掉。"
     erased = parse_llm_proposals(
         _response(
@@ -159,7 +159,7 @@ def test_explicit_erasure_phrase_and_duplicate_merge_are_normalized_safely():
             content="用户正在进行或准备：保研",
             evidence=duplicate_source,
             confidence=0.95,
-            operation="MERGE",
+            operation="NOOP",
             target_memory_id="7",
             target_memory_key="goal_保研",
             attributed_to="user",
@@ -181,7 +181,7 @@ def test_model_relations_keep_literal_objects_and_whitelisted_targets():
             content="用户不喜欢太苦的咖啡",
             evidence=conditional_source,
             confidence=0.95,
-            operation="MERGE",
+            operation="COEXIST",
             target_memory_id="7",
             target_memory_key="preference_咖啡",
             attributed_to="user",
@@ -197,7 +197,7 @@ def test_model_relations_keep_literal_objects_and_whitelisted_targets():
             content="用户不喜欢普通咖啡",
             evidence=contrast_source,
             confidence=0.95,
-            operation="MERGE",
+            operation="COEXIST",
             target_memory_id="7",
             target_memory_key="preference_咖啡",
             attributed_to="user",
@@ -213,13 +213,13 @@ def test_model_relations_keep_literal_objects_and_whitelisted_targets():
     assert "含咖啡因的饮料" not in contrast[0].memory.content
 
 
-def test_ellipsis_history_is_context_not_evidence_and_add_can_link_same_slot():
+def test_ellipsis_history_and_explicit_pet_target_are_preserved():
     ellipsis_source = "还是上次那个方向。"
     ellipsis = parse_llm_proposals(
         _response(
             kind="other_user_fact",
             value="点云补全",
-            content="用户开头的第三人称事实",
+            content="",
             evidence=ellipsis_source,
             confidence=1.0,
             operation="ADD",
@@ -236,7 +236,9 @@ def test_ellipsis_history_is_context_not_evidence_and_add_can_link_same_slot():
             content="用户养了一只叫团子的猫",
             evidence=pet_source,
             confidence=1.0,
-            operation="ADD",
+            operation="MERGE",
+            target_memory_id="7",
+            target_memory_key="fact_养猫",
             attributed_to="user",
         ),
         source_message=pet_source,
@@ -249,7 +251,7 @@ def test_ellipsis_history_is_context_not_evidence_and_add_can_link_same_slot():
     assert pet[0].target_memory_id == "7"
 
 
-def test_temporary_location_links_stable_location_and_moves_time_fields():
+def test_temporary_location_preserves_explicit_target_and_time_fields():
     source = "这周我在北京出差"
     result = parse_llm_proposals(
         _response(
@@ -258,7 +260,9 @@ def test_temporary_location_links_stable_location_and_moves_time_fields():
             content="用户这周在北京出差",
             evidence=source,
             confidence=0.95,
-            operation="ADD",
+            operation="COEXIST",
+            target_memory_id="7",
+            target_memory_key="user_location",
             attributed_to="user",
             valid_from="2026-08-24T00:00:00+00:00",
             valid_to="2026-08-31T00:00:00+00:00",
