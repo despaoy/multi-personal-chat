@@ -319,7 +319,7 @@ async def test_mixed_authority_review_requires_complete_generic_success(corpus, 
 
     async def curated(messages):
         data = json.loads(messages[-1]["content"])
-        assert data["query"] == MIXED_QUERY and data["sources"][0]["excerpt"]["text"] == CURATED_BODY
+        assert data["query"] == MIXED_QUERY and "".join(span["source_quote"] for span in data["source_spans"] if span["source_id"] == data["sources"][0]["source_id"]) == CURATED_BODY
         assert MARKER not in json.dumps(messages)
         return json.dumps(selection(data))
 

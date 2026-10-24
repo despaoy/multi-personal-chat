@@ -96,7 +96,7 @@ async def reviewed(sources):
 
     async def reviewer(messages):
         payload = json.loads(messages[-1]["content"])
-        assert payload["query"] == QUERY and [source["excerpt"]["text"] for source in payload["sources"]] == [
+        assert payload["query"] == QUERY and ["".join(span["source_quote"] for span in payload["source_spans"] if span["source_id"] == source["source_id"]) for source in payload["sources"]] == [
             FIRST,
             SECOND,
         ]

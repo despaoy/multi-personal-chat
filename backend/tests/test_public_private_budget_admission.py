@@ -134,7 +134,7 @@ async def public_retrieval(setup, lengths):
 
     async def reviewer(messages):
         payload = json.loads(messages[-1]["content"])
-        assert [source["excerpt"]["text"] for source in payload["sources"]] == sources
+        assert ["".join(span["source_quote"] for span in payload["source_spans"] if span["source_id"] == source["source_id"]) for source in payload["sources"]] == sources
         selected = [
             span
             for span in payload["source_spans"]

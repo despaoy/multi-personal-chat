@@ -107,16 +107,23 @@ def selection(payload, scope="attributed_statement"):
     )
 
 
+
+
+def review_source_text(payload, source):
+    assert "text" not in source["excerpt"]
+    return "".join(span["source_quote"] for span in payload["source_spans"] if span["source_id"] == source["source_id"])
+
+
 async def reviewed(corpus):
     plan, _ = await plan_for(corpus)
 
     async def reviewer(messages):
         payload = json.loads(messages[-1]["content"])
-        assert payload["query"] == QUERY and payload["sources"][0]["excerpt"]["text"] == BODY
+        assert payload["query"] == QUERY and review_source_text(payload, payload["sources"][0]) == BODY
         assert payload["sources"][0]["indexed_claim"] == corpus.card.content
         assert (
-            "并非已核实" in payload["sources"][0]["excerpt"]["text"]
-            and "假设不能改变原作" in payload["sources"][0]["excerpt"]["text"]
+            "并非已核实" in review_source_text(payload, payload["sources"][0])
+            and "假设不能改变原作" in review_source_text(payload, payload["sources"][0])
         )
         return json.dumps(selection(payload))
 
@@ -330,8 +337,7 @@ async def test_many_short_lines_use_complete_blocks_within_actual_review_budget(
 
     async def reviewer(messages):
         payload = json.loads(messages[-1]["content"])
-        assert payload["sources"][0]["excerpt"]["text"] == body
-        assert "".join(span["source_quote"] for span in payload["source_spans"]) == body
+        assert review_source_text(payload, payload["sources"][0]) == body
         calls.append(payload)
         return json.dumps(selection(payload))
 
@@ -504,7 +510,7 @@ async def test_pure_curated_entry_uses_actual_config_binding_without_generic_aut
 
     async def source_review(messages):
         payload = json.loads(messages[-1]["content"])
-        assert payload["query"] == query and payload["sources"][0]["excerpt"]["text"] == BODY
+        assert payload["query"] == query and review_source_text(payload, payload["sources"][0]) == BODY
         assert [task["id"] for task in payload["tasks"]] == [1]
         assert all(obj["authority"] == "curated_character" for obj in payload["objects"])
         reviewed_payloads.append(payload)
@@ -625,7 +631,7 @@ async def test_curated_review_failure_stops_chat_before_answer(corpus, monkeypat
 
     async def reviewer(messages):
         payload = json.loads(messages[-1]["content"])
-        assert payload["query"] == QUERY and payload["sources"][0]["excerpt"]["text"] == BODY
+        assert payload["query"] == QUERY and review_source_text(payload, payload["sources"][0]) == BODY
         seen["review"] += 1
         if failure in {"provider", "timeout"}:
             raise error
