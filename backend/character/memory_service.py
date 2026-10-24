@@ -351,16 +351,12 @@ def _bigrams(text: str) -> frozenset[str]:
     return frozenset(normalized[i : i + 2] for i in range(len(normalized) - 1))
 
 
-def _relevance(query_grams: frozenset[str], content: str) -> float:
+def _relevance(query_grams: frozenset[str], content_grams: frozenset[str]) -> float:
     """查询与记忆内容的二元字符重合率（Jaccard）。"""
-    if not query_grams or not content:
-        return 0.0
-    content_grams = _bigrams(content)
-    if not content_grams:
+    if not query_grams or not content_grams:
         return 0.0
     overlap = len(query_grams & content_grams)
-    union = len(query_grams | content_grams)
-    return overlap / union if union else 0.0
+    return overlap / (len(query_grams) + len(content_grams) - overlap)
 
 
 def _retrieval_text(content: str) -> str:
@@ -980,15 +976,15 @@ class CharacterMemoryService:
 
         for index, row in enumerate(usable_records):
             content = str(row.get("retrieval_content") or row.get("content") or "").strip()
-            retrieval_text = _retrieval_text(content)
+            content_grams = _bigrams(_retrieval_text(content)) if query_grams else frozenset()
             event = (row.get("metadata") or {}).get("event")
-            event_subject = str(event.get("subject") or "") if isinstance(event, dict) else ""
+            event_grams = _bigrams(str(event.get("subject") or "")) if query_grams and isinstance(event, dict) else frozenset()
             relevances: list[float] = []
             for route, grams in zip(lexical_routes, query_grams, strict=True):
-                relevance = _relevance(grams, retrieval_text)
-                if event_subject:
+                relevance = _relevance(grams, content_grams)
+                if event_grams:
                     # Status/date labels must not dilute an exact event-topic match.
-                    relevance = max(relevance, _relevance(grams, event_subject))
+                    relevance = max(relevance, _relevance(grams, event_grams))
                 route[index] = relevance
                 relevances.append(relevance)
             max_relevance = max(relevances, default=0.0)
