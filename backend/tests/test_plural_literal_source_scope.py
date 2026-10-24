@@ -38,34 +38,6 @@ async def test_two_closed_source_reads_do_not_expand_to_history_union(tmp_path, 
     assert await DatabaseCharacterMemoryRepository(db).list_memory_records('role', SCOPE) == []
 
 
-@pytest.mark.parametrize('query', [
-    '请读取包含「QZ8-01」的完整原话记录。请再读取包含「QZ8-02」的完整原话记录。核对全部条件。',
-    '查找含有“QZ8-01”的原话；同时查看含有“QZ8-02”的全部原始发言记录。比较各版本。',
-    '读取包含『QZ8-01』的完整原话记录。\n另检索包含『QZ8-02』的完整原话记录。',
-    '读取包含「QZ8-01」的完整原话记录。读取包含「QZ8-02」的完整原话记录。只核对保存的资料。',
-])
-def test_independently_closed_declarations_form_literal_union(query):
-    from db.memory_source_search import literal_source_fragments
-    assert literal_source_fragments(query) == ('QZ8-01', 'QZ8-02')
-
-
-@pytest.mark.parametrize('query', [
-    '朋友说：“读取包含「QZ8-01」的完整原话记录。读取包含「QZ8-02」的完整原话记录。”',
-    '不要读取包含「QZ8-01」的完整原话记录。读取包含「QZ8-02」的完整原话记录。',
-    '读取包含「QZ8-01」的完整原话记录。不要读取包含「QZ8-02」的完整原话记录。',
-    '读取包含「QZ8-01」的完整原话记录。再读取这段原话。',
-    '读取包含「QZ8-01」和「QZ8-02」的完整原话记录。',
-    '读取包含「QZ8-01」或「QZ8-02」的完整原话记录。',
-    '读取包含「QZ8-01」的完整原话记录。再读取包含「QZ8-02的完整原话记录。',
-    '读取包含「QZ8-01」的完整原话记录。再读取包含「嵌套“QZ8-02”」的完整原话记录。',
-    '读取包含「QZ8-01」的完整原话记录。再读取包含「QZ8-02\n尾部」的完整原话记录。',
-    '读取包含「QZ8-01」的完整原话记录。另外核对其他原始记录。',
-])
-def test_unknown_or_negated_member_cannot_authorize_partial_union(query):
-    from db.memory_source_search import literal_source_fragments
-    assert literal_source_fragments(query) == ()
-
-
 @pytest.mark.asyncio
 async def test_shared_literal_roots_keep_one_whole_record_and_both_match_receipts(tmp_path):
     db = SQLiteDB(tmp_path / 'shared.sqlite')

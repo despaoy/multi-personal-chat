@@ -36,34 +36,6 @@ async def test_literal_whole_source_survives_unrelated_complete_history(tmp_path
     assert await DatabaseCharacterMemoryRepository(db).list_memory_records("role", SCOPE) == []
 
 
-@pytest.mark.parametrize("query,expected", [
-    ('请查看含有“青舟完整目录”的全部用户原话。核对前提和例外。', '青舟完整目录'),
-    ('读取包含「登记页及封签页齐全」的完整原始发言记录。核对这份转述资料。', '登记页及封签页齐全'),
-    ('检索包含"QZ8-07-001"的原话记录。核对未知实际办理结果。', 'QZ8-07-001'),
-    ('  查找包含『QZ8-07-001』的完整原话记录。', 'QZ8-07-001'),
-])
-def test_literal_reader_resolves_only_exact_locator(query, expected):
-    from db.memory_source_search import literal_source_fragments
-    assert literal_source_fragments(query) == (expected,)
-
-
-@pytest.mark.parametrize("query", [
-    '朋友说：“查找包含「QZ8-07-001」的完整原话记录。”',
-    '不要查找包含「QZ8-07-001」的完整原话记录。',
-    '查找包含「QZ8-07-001」和「另一项」的完整原话记录。',
-    '查找包含「QZ8-07-001」的完整原话记录。不要读取原始资料。',
-    '查找包含「QZ8-07-001」的完整原话记录。同时核对另一段原始发言。',
-    '查找包含「QZ8-07-001的完整原话记录。',
-    '查找包含「编号“QZ8-07-001”」的完整原话记录。',
-    '查找包含「QZ8-07-001\n封签」的完整原话记录。',
-    '仅提到「QZ8-07-001」，并未指定原话读取范围。',
-    '查找包含「   」的完整原话记录。',
-])
-def test_unresolved_or_quoted_read_does_not_narrow_source_candidates(query):
-    from db.memory_source_search import literal_source_fragments
-    assert literal_source_fragments(query) == ()
-
-
 def test_exact_locator_uses_bound_literal_and_scoped_current_grant(tmp_path):
     db = SQLiteDB(tmp_path / "bound.sqlite")
     locator = "QZ8_%'--"

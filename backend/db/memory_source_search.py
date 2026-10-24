@@ -60,42 +60,6 @@ def literal_project_source_terms(query):
     return tags
 
 
-def literal_source_fragments(query):
-    """Union of independently closed positive literal source reads.
-
-    Each leading unquoted declaration names its own complete raw record scope.
-    Do not guess a conjunctive locator, an unresolved extra read or a quoted
-    command. Exact fragments identify speech, not a subject or verified fact.
-    """
-    from character.quoted_erasure_authority import masked_quotes
-
-    if not isinstance(query, str):
-        return ()
-    try:
-        view, quotes = masked_quotes(query)
-    except ValueError:
-        return ()
-    fragments, position = [], 0
-    prefix = (r"\s*(?:(?:再|另|同时|另外)?(?:请)?|请(?:再|另|同时|另外)?)"
-              r"(?:查找|检索|读取|查看)\s*(?:包含|含有)\s*")
-    for a, z, fragment in quotes:
-        if not re.fullmatch(prefix, view[position:a]):
-            break
-        if (not fragment.strip() or "\n" in fragment or not terms(fragment)
-                or any(char in fragment for char in '“”‘’「」『』"')):
-            return ()
-        read = re.match(r"\s*的\s*(?:完整|全部)?(?:用户)?(?:原话|原始发言)(?:记录)?\s*(?:[。；;\n]|$)", view[z:])
-        if not read:
-            return ()
-        fragments.append(fragment)
-        position = z + read.end()
-    remainder = view[position:]
-    if (not fragments or re.search(r"另外|同时|以及|还要|并且|顺便", remainder)
-            or re.search(r"(?:查找|检索|读取|查看|复述|还原)[^。；;\n]*(?:原话|原始|记录)", remainder)):
-        return ()
-    return tuple(dict.fromkeys(fragments))
-
-
 def unresolved_source_read_tail(view):
     """Distinguish a source-read action from a reference to its purpose.
 
