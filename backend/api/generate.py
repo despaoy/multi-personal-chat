@@ -286,7 +286,7 @@ async def _generate_reply_body(
         )
 
     # 输入验证
-    is_valid, errors = InputValidator.validate(request.model_dump(), MESSAGE_SCHEMA)
+    is_valid, errors = InputValidator.validate({"message": request.message}, MESSAGE_SCHEMA)
     if not is_valid:
         raise HTTPException(status_code=422, detail={"message": "输入验证失败", "errors": errors})
 
