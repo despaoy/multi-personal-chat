@@ -162,3 +162,14 @@ async def test_policy_timeout_cancels_the_request():
         await policy.refine(DecisionPlan(), query="你好", history=(), profile=CharacterProfile("c", "角色"),
                             relationship=RelationshipState(), interaction=_state(), has_relevant_memory=False)
     assert cancelled.is_set()
+
+
+@pytest.mark.parametrize("timeout", [0, -1, float("nan"), float("inf"), 121])
+def test_invalid_policy_timeout_is_rejected_instead_of_clamped(timeout):
+    with pytest.raises(ValueError, match="timeout"):
+        ContextualDecisionPolicy(None, timeout_seconds=timeout)
+
+
+@pytest.mark.parametrize("timeout", [.01, 30, 120])
+def test_valid_policy_timeout_is_preserved(timeout):
+    assert ContextualDecisionPolicy(None, timeout_seconds=timeout).timeout_seconds == timeout

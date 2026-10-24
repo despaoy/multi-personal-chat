@@ -51,11 +51,11 @@ class PolicyOutcome:
 class ContextualDecisionPolicy:
     def __init__(self, reviewer: Reviewer, *, timeout_seconds: float = 30.0,
                  context_budget: ReviewContextBudget | None = None):
-        if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
-            raise ValueError("timeout must be finite and positive")
+        if not math.isfinite(timeout_seconds) or not 0 < timeout_seconds <= 120:
+            raise ValueError("timeout must be finite and within (0, 120] seconds")
         self.reviewer = reviewer
         self.context_budget = context_budget
-        self.timeout_seconds = min(120.0, timeout_seconds)
+        self.timeout_seconds = timeout_seconds
 
     async def refine(
         self,
