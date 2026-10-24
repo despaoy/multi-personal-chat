@@ -170,7 +170,6 @@ class VectorDatabase:
         self.config_path = self.db_path / "db_config.json"
         self.snapshot_path = self.db_path / SNAPSHOT_NAME
         self.snapshot_validated = False
-        self._snapshot_bm25 = None
 
         self.config = index_config or IndexConfig()
         self.index: Optional[faiss.Index] = None
@@ -193,7 +192,6 @@ class VectorDatabase:
 
         self._ensure_index()
         self._rebuild_id_mapping()
-        self._load_bm25()
 
         logger.info(f"向量数据库初始化完成，使用GPU: {self._use_gpu}，"
                     f"文档数: {len(self.metadata)}")
@@ -260,16 +258,9 @@ class VectorDatabase:
     def _load_index(self):
         if not self.snapshot_path.exists():
             raise ValueError("Legacy vector index has no encoding contract; explicitly rebuild it from source documents")
-        self.index, self.metadata, self._snapshot_bm25 = load_snapshot(
+        self.index, self.metadata, bm25_data = load_snapshot(
             self.db_path, self.EMBEDDING_DIM, self._to_faiss_id
         )
-        self.snapshot_validated = True
-        logger.info(f"加载FAISS索引完成，共 {len(self.metadata)} 条记录")
-
-    def _load_bm25(self):
-        if not self.snapshot_path.exists():
-            return
-        bm25_data = self._snapshot_bm25
         self.bm25.corpus = bm25_data["corpus"]
         self.bm25.doc_freqs = defaultdict(int, bm25_data["doc_freqs"])
         self.bm25.doc_lens = bm25_data["doc_lens"]
@@ -277,6 +268,8 @@ class VectorDatabase:
         self.bm25.idf = bm25_data["idf"]
         self.bm25.tokenized_corpus = bm25_data["tokenized_corpus"]
         self.bm25._built = bm25_data["built"]
+        self.snapshot_validated = True
+        logger.info(f"加载FAISS索引完成，共 {len(self.metadata)} 条记录")
 
     def _bm25_state(self):
         return {
