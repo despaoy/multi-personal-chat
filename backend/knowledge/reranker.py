@@ -59,8 +59,6 @@ class CrossEncoderReranker:
         self.device = self.config.device
         self.tokenizer = None
         self.model = None
-        self._model_loaded = False
-        self._warmup_done = False
         self._load_lock = RLock()
 
         if self.device == "auto":
@@ -70,80 +68,64 @@ class CrossEncoderReranker:
 
         logger.info("Cross-Encoder device: %s", self.device)
 
-    def _load_model(self) -> bool:
+    def _load_model(self) -> None:
         with self._load_lock:
-            if self._model_loaded:
-                return True
-            try:
-                logger.info(
-                    f"正在加载Cross-Encoder模型: {self.config.model_name} (允许联网下载={self.config.allow_download})"
-                )
+            if self.model is not None:
+                return
+            logger.info(
+                f"正在加载Cross-Encoder模型: {self.config.model_name} (允许联网下载={self.config.allow_download})"
+            )
 
-                from transformers import AutoModelForSequenceClassification, AutoTokenizer
+            from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
-                start_time = time.time()
+            start_time = time.time()
 
-                # 默认离线加载：local_files_only=True保证不会静默联网下载
-                load_kwargs: dict[str, Any] = {"local_files_only": not self.config.allow_download}
+            # 默认离线加载：local_files_only=True保证不会静默联网下载
+            load_kwargs: dict[str, Any] = {"local_files_only": not self.config.allow_download}
+            if self.device != "cpu":
+                # CPU路径不使用CUDA专属dtype
+                load_kwargs["torch_dtype"] = torch.float16
+
+            tokenizer = AutoTokenizer.from_pretrained(self.config.model_name, **load_kwargs)
+            model = AutoModelForSequenceClassification.from_pretrained(self.config.model_name, **load_kwargs)
+
+            model.to(self.device)
+            model.eval()
+
+            for param in model.parameters():
+                param.requires_grad = False
+
+            load_time = time.time() - start_time
+
+            model_size = sum(p.numel() for p in model.parameters())
+            model_mem = sum(p.numel() * p.element_size() for p in model.parameters()) / 1024**2
+            logger.info(
+                f"Cross-Encoder模型加载完成: "
+                f"参数量={model_size:,}, "
+                f"模型大小={model_mem:.1f}MB, "
+                f"设备={self.device}, "
+                f"加载时间={load_time:.2f}s"
+            )
+
+            if self.config.warmup_on_init:
+                logger.info("Cross-Encoder模型预热中...")
+                dummy_input = tokenizer(
+                    "预热查询",
+                    "预热文档内容",
+                    truncation=True,
+                    padding=True,
+                    max_length=self.config.max_length,
+                    return_tensors="pt",
+                ).to(self.device)
+
+                with torch.no_grad():
+                    _ = model(**dummy_input)
+
                 if self.device != "cpu":
-                    # CPU路径不使用CUDA专属dtype
-                    load_kwargs["torch_dtype"] = torch.float16
+                    torch.cuda.empty_cache()
 
-                self.tokenizer = AutoTokenizer.from_pretrained(self.config.model_name, **load_kwargs)
-                self.model = AutoModelForSequenceClassification.from_pretrained(self.config.model_name, **load_kwargs)
-
-                self.model.to(self.device)
-                self.model.eval()
-
-                for param in self.model.parameters():
-                    param.requires_grad = False
-
-                load_time = time.time() - start_time
-
-                model_size = sum(p.numel() for p in self.model.parameters())
-                model_mem = sum(p.numel() * p.element_size() for p in self.model.parameters()) / 1024**2
-                logger.info(
-                    f"Cross-Encoder模型加载完成: "
-                    f"参数量={model_size:,}, "
-                    f"模型大小={model_mem:.1f}MB, "
-                    f"设备={self.device}, "
-                    f"加载时间={load_time:.2f}s"
-                )
-
-                if self.config.warmup_on_init:
-                    self._warmup()
-
-                self._model_loaded = True
-                return True
-
-            except Exception:
-                self.tokenizer = None
-                self.model = None
-                raise
-
-    def _warmup(self):
-        if self._warmup_done:
-            return
-
-        logger.info("Cross-Encoder模型预热中...")
-        dummy_input = self.tokenizer(
-            "预热查询",
-            "预热文档内容",
-            truncation=True,
-            padding=True,
-            max_length=self.config.max_length,
-            return_tensors="pt",
-        ).to(self.device)
-
-        with torch.no_grad():
-            _ = self.model(**dummy_input)
-
-        if self.device != "cpu":
-            torch.cuda.empty_cache()
-
-        self._warmup_done = True
-        logger.info("Cross-Encoder模型预热完成")
-
+                logger.info("Cross-Encoder模型预热完成")
+            self.tokenizer, self.model = tokenizer, model
 
     def _normalize_scores(self, scores: list[float]) -> list[float]:
         if not scores or not self.config.score_normalize:

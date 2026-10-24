@@ -79,6 +79,6 @@ def test_shared_reranker_loads_one_tokenizer_and_model(monkeypatch):
         AutoTokenizer=SimpleNamespace(from_pretrained=tokenizer),
         AutoModelForSequenceClassification=SimpleNamespace(from_pretrained=lambda *a, **k: model())))
     encoder = CrossEncoderReranker(RerankConfig(model_name="synthetic-concurrent-model", device="cpu"))
-    assert all(concurrent(encoder._load_model))
+    concurrent(encoder._load_model)
     assert tokenizer.call_count == model.call_count == 1
-    assert encoder._model_loaded and encoder.tokenizer is not None and encoder.model.eval_called
+    assert encoder.model is not None and encoder.tokenizer is not None and encoder.model.eval_called

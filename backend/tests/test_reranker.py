@@ -170,7 +170,6 @@ def test_missing_model_raises_with_original_cause(monkeypatch, caplog):
         reranker.rerank('查询', _make_candidates(), top_k=2)
     assert caught.value is error
     assert reranker.model is None and reranker.tokenizer is None
-    assert not reranker._model_loaded
     assert 'private-model-load-detail' not in caplog.text
 
 
@@ -183,7 +182,7 @@ def test_loading_can_recover_on_next_request(monkeypatch, tmp_path):
     assert len(calls) == 1
     _install_fake_transformers(monkeypatch, tokenizer=_FakeTokenizer(), model=_FakeModel())
     assert len(reranker.rerank('查询', _make_candidates())) == 3
-    assert reranker._model_loaded
+    assert reranker.model is not None and reranker.tokenizer is not None
 
 
 # ---------- 输入保护与输出分数 ----------
@@ -241,7 +240,7 @@ def test_empty_skips_loading_but_single_candidate_gets_model_score(monkeypatch):
     assert result[0]['rerank_score'] == pytest.approx(0.7)
     assert result[0]['id'] == 'only' and result[0] is not single[0]
     assert 'rerank_score' not in single[0]
-    assert reranker._model_loaded
+    assert reranker.model is not None and reranker.tokenizer is not None
 
 
 # ---------- 设备处理 ----------
@@ -370,17 +369,18 @@ def test_requested_warmup_is_completed_or_raises(monkeypatch, fail):
                 queries, texts = [queries], [texts]
             return super().__call__(queries, texts, **kwargs)
 
-    _install_fake_transformers(monkeypatch, tokenizer=WarmupTokenizer(), model=_FakeModel(forward_error=error))
+    _install_fake_transformers(monkeypatch, tokenizer=WarmupTokenizer(), model=(model := _FakeModel(forward_error=error)))
     encoder = CrossEncoderReranker(RerankConfig(model_name='fake-model', warmup_on_init=True))
     if fail:
         with pytest.raises(OSError) as caught:
             encoder.rerank('查询', _make_candidates())
         assert caught.value is error
-        assert not encoder._model_loaded and not encoder._warmup_done
         assert encoder.model is None and encoder.tokenizer is None
     else:
         assert len(encoder.rerank('查询', _make_candidates())) == 3
-        assert encoder._model_loaded and encoder._warmup_done
+        assert encoder.model is model and encoder.tokenizer is not None
+        assert model.forward_calls[0] == ["预热文档内容"]
+        assert len(model.forward_calls) == 2
 
 
 def test_config_reads_model_path_when_constructed(monkeypatch):
