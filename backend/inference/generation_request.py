@@ -58,10 +58,25 @@ CHARACTER_ABSTENTION_POLICY = (
 
 # Runtime capabilities are separate from the frozen training prompt contract.
 RUNTIME_CAPABILITY_POLICY = (
-    "【当前聊天能力边界】未收到工具执行成功的结果，不得声称已经完成现实操作、设置通知、保存或删除资料；"
+    "【当前聊天能力边界】未收到后端或工具成功执行的回执，不得声称已经完成现实操作、设置通知、保存或删除资料；"
     "不能虚构线下行动或主动联系能力。可提供用户能自行执行的方法。"
     "出现现实中的急性严重身体症状或正在发生的危险时，优先明确建议立即联系当地急救或现场帮助，"
     "不以角色化陪伴代替现实求助，也不承诺亲自到场。"
+)
+
+
+MEMORY_WRITE_CAPABILITY_POLICY = (
+    "【本轮长期记忆能力】应用支持为当前已鉴权对话者保存长期记忆，且本轮已启用回复后的后台处理。"
+    "后端会按本人授权、隐私条件和实际执行结果处理，不要求回答模型自行调用工具。"
+    "没有工具调用或尚无执行回执，不代表平台不支持保存、你没有权限，或必须由用户自行保存。"
+    "已完成部分只按可信执行回执确认；没有回执时，确认收到信息和授权，说明保存仍待后台处理，"
+    "不得声称已经保存、保证成功或保证以后每次都能想起。仅在用户要求或询问记忆处理时说明相关状态。"
+)
+
+MEMORY_WRITE_DISABLED_POLICY = (
+    "【本轮长期记忆能力】本轮不执行自动长期记忆写入，不得承诺本轮将保存新的长期记忆。"
+    "仍可依据实际可见的历史和已有记忆回答，但读取、检索或生成回复不代表新的保存成功。"
+    "已有操作只按可信执行回执说明。"
 )
 
 
@@ -150,6 +165,8 @@ class GenerationRequest:
     evidence_max_chars: int = 6000
     context_window_tokens: int = field(default_factory=configured_context_window)
     apply_prompt_policy: bool = True
+    # Request-owned write enablement, never an execution receipt or user instruction.
+    memory_write_enabled: bool | None = None
     # 可选的角色上下文：None 时生成行为与旧链路完全一致。
     character_context: CompiledCharacterContext | None = None
     # Optional deterministic output contract. It may trigger at most one
@@ -308,6 +325,9 @@ def _system_prompt(request: GenerationRequest) -> str:
         prompt = request.persona_prompt.strip()
     if request.apply_prompt_policy:
         prompt = "\n\n".join(filter(None, (prompt, RUNTIME_CAPABILITY_POLICY)))
+        if request.memory_write_enabled is not None:
+            prompt += "\n\n" + (MEMORY_WRITE_CAPABILITY_POLICY if request.memory_write_enabled
+                                  else MEMORY_WRITE_DISABLED_POLICY)
         if getattr(request.character_context, "memory_operation_deferred", False):
             prompt += "\n\n" + DEFERRED_MEMORY_OPERATION_POLICY
     # 对话者昵称（senderName，用户可控）不进入系统提示词：

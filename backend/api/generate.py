@@ -408,6 +408,14 @@ async def _generate_reply_body(
         except Exception as exc:
             raise HTTPException(503, "所选 LoRA 状态查询失败，请检查 vLLM 服务及适配器后重试") from exc
 
+    memory_write_enabled = None
+    if prepared_character_turn is not None:
+        from character.memory_llm import get_memory_enrichment_scheduler
+
+        memory_write_enabled = bool(
+            persist_message and not request.branchId and get_memory_enrichment_scheduler().enabled
+        )
+
     completion_warning = None
     start_time = time.time()
     prompt_hash = cache_key = ""
@@ -472,6 +480,7 @@ async def _generate_reply_body(
                 request, vllm_effective_lora, prompt_lora_name=vllm_lora_name, runtime_config=runtime_config,
                 enable_rag=enable_rag, prepared_character_turn=prepared_character_turn,
                 message_db=message_db, model_generate=client.generate,
+                memory_write_enabled=memory_write_enabled,
             )
             model_label = model_name
             stored_model_name = "vllm"
@@ -514,6 +523,7 @@ async def _generate_reply_body(
                             request, lora_name, runtime_config=runtime_config,
                             enable_rag=enable_rag, prepared_character_turn=prepared_character_turn,
                             message_db=message_db, model_generate=adapter,
+                            memory_write_enabled=memory_write_enabled,
                         )
 
                     reply, used_rag, rag_meta = await asyncio.wait_for(generate(), timeout=_MODEL_INFERENCE_TIMEOUT)
@@ -1068,6 +1078,7 @@ async def _generate_with_retrieval(
     enable_rag: bool = True,
     prepared_character_turn=None,
     message_db=None,
+    memory_write_enabled: bool | None = None,
 ) -> tuple[str, bool, dict[str, Any]]:
     """Shared retrieval, abstention and character policy for either transport."""
     # 使用请求开始时读取的配置快照，避免同一次生成多次同步访问数据库。
@@ -1240,6 +1251,7 @@ async def _generate_with_retrieval(
             # 编译后的角色上下文：画像/关系/情景/决策进系统提示词，
             # 长期记忆只进用户消息的不可信参考区。
             character_context=(prepared_character_turn.compiled if prepared_character_turn else None),
+            memory_write_enabled=memory_write_enabled,
             reply_guard=getattr(prepared_character_turn, "reply_guard", None),
             private_context_revalidator=make_private_context_revalidator(
                 prepared_character_turn, message_db if message_db is not None else db,
