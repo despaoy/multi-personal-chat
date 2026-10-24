@@ -169,7 +169,7 @@ async def test_generation_stops_when_a_required_index_is_missing(retrieval, sema
 
     lookup = AsyncMock(side_effect=retrieve)
     model = AsyncMock(side_effect=AssertionError("Required index failure must stop answer generation"))
-    monkeypatch.setattr(generate, "_retrieve_rag_bundle", lookup)
+    monkeypatch.setattr(generate, "retrieve_chat_knowledge", lookup)
     monkeypatch.setattr(generate, "_rag_retrieval_timeout", lambda: 30.0)
     with pytest.raises(HTTPException) as caught:
         await generate._generate_with_retrieval(MessageRequest(message=QUERY), None,

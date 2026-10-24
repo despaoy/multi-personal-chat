@@ -1,5 +1,7 @@
 """A delayed real writer read, intervening commits and one new pro answer."""
 
+from knowledge import chat_retrieval
+
 from knowledge import index_lifecycle
 
 import asyncio
@@ -30,7 +32,6 @@ async def run_concurrency_probe(
 ):
     import asyncpg
 
-    from api import generate
     from knowledge.vector_db import get_vector_db
 
     async def connect(name):
@@ -188,7 +189,7 @@ async def run_concurrency_probe(
             await finish("A")
             proof["actual_database_lock_wait"] = []
         await search("after_A_before_C")
-        await generate._retrieve_rag_bundle(fixture["cases"][0]["message"], 3, None)
+        await chat_retrieval.retrieve_chat_knowledge(fixture["cases"][0]["message"], 3, None)
         proof["reader_warmed_after_A"] = snapshot()
         await launch("C", doc_id)
         await finish("C")

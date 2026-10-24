@@ -170,7 +170,7 @@ async def run(args):
     manifest["canonical_plan_remains_inline"] = args.separate_source_packet
     unexpected_local_calls = []
     from evaluation.retrieval_trace import RecordedRetrieval
-    retrieval_trace = RecordedRetrieval(gen._retrieve_rag_bundle, current,
+    retrieval_trace = RecordedRetrieval(gen.retrieve_chat_knowledge, current,
                                         top_k=getattr(args, 'rag_top_k', None))
     manifest['experimental_rag_top_k'] = retrieval_trace.top_k
 
@@ -182,7 +182,7 @@ async def run(args):
         with ExitStack() as routes, \
              patch("character.memory_llm.get_memory_enrichment_scheduler", return_value=scheduler), \
              patch.object(gen, "generate_character_response", traced_generation), patch.object(gen, "response_cache", None):
-            routes.enter_context(patch.object(gen, '_retrieve_rag_bundle', retrieval_trace))
+            routes.enter_context(patch.object(gen, 'retrieve_chat_knowledge', retrieval_trace))
             if cloud is not None:
                 routes.enter_context(patch('inference.vllm_client.VLLMClient.generate', reject_local_generation))
                 if args.rag:

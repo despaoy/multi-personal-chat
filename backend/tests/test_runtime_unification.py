@@ -338,7 +338,7 @@ async def test_vllm_generation_reuses_one_rag_result(monkeypatch, semantic_plan,
             assert payload["answer"] == "answer" and "evidence" in payload["sources"][0]["body"]
             return '{"citations": []}'
 
-    monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
+    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "system")
 
     semantic_plan("question", {"public_knowledge": [0]})
@@ -422,7 +422,7 @@ async def test_vllm_rag_abstention_generates_character_uncertainty(monkeypatch, 
                 raise RuntimeError("model unavailable")
             return outcome
 
-    monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
+    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "system")
 
     semantic_plan("unknown question", {"public_knowledge": [0]})

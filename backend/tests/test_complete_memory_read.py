@@ -127,7 +127,7 @@ async def test_nonpersonal_or_branch_turns_use_full_semantic_plan(monkeypatch, s
 
     monkeypatch.setattr(generate, '_get_system_prompt', lambda _: 'persona')
     monkeypatch.setattr(public_question_binding, 'resolve_question_binding', binding)
-    monkeypatch.setattr(generate, '_retrieve_rag_bundle', retrieve)
+    monkeypatch.setattr(generate, 'retrieve_chat_knowledge', retrieve)
     await generate._generate_with_retrieval(
         MessageRequest(message=query), None, runtime_config={'useKnowledgeBase': True},
         prepared_character_turn=SimpleNamespace(history=(), compiled=replace(missing_context(), branch_context=branch)),

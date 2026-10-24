@@ -138,7 +138,7 @@ async def test_actual_route_uses_dependencies_not_presence_of_one_memory(monkeyp
 
     monkeypatch.setattr(public_question_binding, "resolve_question_binding", no_binding)
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
-    monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
+    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "人物规则")
     if mode == "legacy":
         from fastapi import HTTPException

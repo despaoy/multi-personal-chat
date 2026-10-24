@@ -1,5 +1,7 @@
 """Named document tasks own their source route despite character topic words."""
 
+from knowledge import chat_retrieval
+
 from knowledge import index_lifecycle
 from threading import RLock
 from types import SimpleNamespace
@@ -32,7 +34,6 @@ def test_background_negative_or_incomplete_named_read_does_not_grant_a_route(que
 
 
 async def test_named_role_document_uses_fresh_generic_authority_and_complete_body(monkeypatch):
-    from api import generate
     from knowledge import rag_helper, vector_db
     from knowledge.multiscale_rag import runtime
 
@@ -51,7 +52,7 @@ async def test_named_role_document_uses_fresh_generic_authority_and_complete_bod
     monkeypatch.setattr(index_lifecycle, '_vector_index_revision', 77)
     monkeypatch.setattr(index_lifecycle, '_get_rebuild_revision', lambda: 77)
     monkeypatch.setattr(vector_db, 'get_vector_db', lambda: indexed)
-    monkeypatch.setattr(generate, 'db', SimpleNamespace(get_knowledge_document=lambda identity:
+    monkeypatch.setattr(chat_retrieval, 'db', SimpleNamespace(get_knowledge_document=lambda identity:
         dict(id=identity, title='合成偏好', category='演练', knowledge_base_id=7, content=body)))
     monkeypatch.setenv('CORRECTIVE_RAG_ENABLED', 'false')
 
@@ -62,7 +63,7 @@ async def test_named_role_document_uses_fresh_generic_authority_and_complete_bod
 
     monkeypatch.setattr(rag_helper, 'get_rag_helper', lambda: SimpleNamespace(
         retrieve_with_citations=retrieve, build_citations=lambda records: []))
-    result = await generate._retrieve_rag_bundle(
+    result = await chat_retrieval.retrieve_chat_knowledge(
         '请核对演练场景中《合成偏好》的当前修订：月社妃当前最喜欢哪个方案？', 3, None)
     assert calls == ['fresh', 'generic']
     assert result['requested_source_titles'] == ['合成偏好']
@@ -71,11 +72,10 @@ async def test_named_role_document_uses_fresh_generic_authority_and_complete_bod
 
 
 async def test_named_read_with_unready_generic_index_fails_without_curated_substitution(monkeypatch):
-    from api import generate
     from knowledge.multiscale_rag import runtime
 
     monkeypatch.setattr(index_lifecycle, '_ensure_vector_index', lambda: False)
     monkeypatch.setattr(runtime, 'get_multiscale_rag_service', lambda:
         pytest.fail('A missing named document index must not substitute curated character material'))
     with pytest.raises(RuntimeError, match='Generic knowledge index is not ready'):
-        await generate._retrieve_rag_bundle('核对《合成偏好》中月社妃的记录。', 3, None)
+        await chat_retrieval.retrieve_chat_knowledge('核对《合成偏好》中月社妃的记录。', 3, None)

@@ -1,5 +1,7 @@
 """Create/import publish source once; the shared search gate owns indexing."""
 
+from knowledge import chat_retrieval
+
 from knowledge import index_lifecycle
 
 import io
@@ -180,7 +182,6 @@ async def test_scan_reuses_existing_named_base_before_atomic_document_publicatio
 
 @pytest.mark.parametrize("stage", ["authority", "flush"])
 async def test_generation_retrieval_preserves_index_failure_before_evidence_use(publication, monkeypatch, caplog, stage):
-    from api import generate
     from knowledge import rag_helper
 
     rig = publication
@@ -198,7 +199,7 @@ async def test_generation_retrieval_preserves_index_failure_before_evidence_use(
     monkeypatch.setattr(rag_helper, "get_rag_helper", retrieval)
     builds = rig.add.call_count
     with pytest.raises(OSError) as raised:
-        await generate._retrieve_rag_bundle(
+        await chat_retrieval.retrieve_chat_knowledge(
             "登记办理的完整条件及未确认付款限制", 5, {"knowledge_base_id": rig.kb["id"]}
         )
     assert raised.value is failure

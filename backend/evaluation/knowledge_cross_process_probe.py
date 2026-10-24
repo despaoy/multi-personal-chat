@@ -1,5 +1,7 @@
 """Warm reader, real separate writer rebuild, then one new pro answer."""
 
+from knowledge import chat_retrieval
+
 from knowledge import index_lifecycle
 
 import asyncio
@@ -30,7 +32,6 @@ async def run_cross_process_probe(
 ):
     import asyncpg
 
-    from api import generate
     from knowledge.rag_helper import get_rag_helper
     from knowledge.vector_db import get_vector_db
 
@@ -98,7 +99,7 @@ async def run_cross_process_probe(
     warm = await search("original_scope_warm", fixture["knowledge_bases"][0])
     assert any(r["documentId"] == f"doc_{doc_id}_chunk_0" for r in warm["response"]["results"])
     # Populate the actual RAG helper cache with the new query, without a model answer.
-    await generate._retrieve_rag_bundle(fixture["cases"][0]["message"], 3, None)
+    await chat_retrieval.retrieve_chat_knowledge(fixture["cases"][0]["message"], 3, None)
     vector = get_vector_db()
 
     def snapshot():

@@ -41,7 +41,7 @@ async def test_unprepared_public_state_uses_final_fact_coverage(monkeypatch, mod
 
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
     monkeypatch.setattr("knowledge.public_question_binding.resolve_question_binding", no_binding)
-    monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieved_or_reviewed)
+    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieved_or_reviewed)
     monkeypatch.setattr(public_task_evidence, "review_public_candidates", retrieved_or_reviewed)
     _, used, meta = await generate._generate_with_retrieval(
         MessageRequest(message=QUERY), None,
@@ -64,7 +64,7 @@ async def test_fact_scope_failure_stops_before_generation(monkeypatch, semantic_
         return (await run("full", scope_failure=True))[0]
 
     model = AsyncMock(side_effect=AssertionError("Failed evidence review must stop before generation"))
-    monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
+    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
     monkeypatch.setattr(public_task_evidence, "review_public_candidates", failing_review)
     with pytest.raises(HTTPException) as error:
         await generate._generate_with_retrieval(

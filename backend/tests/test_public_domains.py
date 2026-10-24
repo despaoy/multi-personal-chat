@@ -1,5 +1,7 @@
 """Fictional source authorities exercise real review and final packet admission."""
 
+from knowledge import chat_retrieval
+
 from knowledge import index_lifecycle
 
 import copy
@@ -240,11 +242,10 @@ async def test_branch_id_collision_rejected_instead_of_renaming_curated_sources(
 
 @pytest.mark.parametrize("filters", [None, {"knowledge_base_id": 2}])
 async def test_actual_api_mixed_retrieval_reads_fresh_business_after_curated_success(config, monkeypatch, filters):
-    from api import generate
 
     installed = install_api_retrieval(config, monkeypatch, filters)
     plan, _ = await make_plan(config)
-    result = await generate._retrieve_rag_bundle(QUERY, 3, filters, question_binding=plan["binding"])
+    result = await chat_retrieval.retrieve_chat_knowledge(QUERY, 3, filters, question_binding=plan["binding"])
     assert installed.calls == ["curated", "fresh", "generic"]
     container = result["independent_domains"]
     assert (
@@ -256,7 +257,6 @@ async def test_actual_api_mixed_retrieval_reads_fresh_business_after_curated_suc
 def install_api_retrieval(config, monkeypatch, filters=None):
     from threading import RLock
 
-    from api import generate
     from knowledge import rag_helper, vector_db
     from knowledge.multiscale_rag import runtime
 
@@ -290,7 +290,7 @@ def install_api_retrieval(config, monkeypatch, filters=None):
         ),
     )
     monkeypatch.setattr(
-        generate,
+        chat_retrieval,
         "db",
         SimpleNamespace(
             get_knowledge_document=lambda identity: dict(

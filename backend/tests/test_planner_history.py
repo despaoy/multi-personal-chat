@@ -123,7 +123,7 @@ async def test_actual_generation_route_passes_the_same_effective_history(monkeyp
 
     prepared = SimpleNamespace(compiled=CompiledCharacterContext("", "", ""), history=database_history)
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", unit_planner)
-    monkeypatch.setattr(generate, "_retrieve_rag_bundle", forbidden_public)
+    monkeypatch.setattr(generate, "retrieve_chat_knowledge", forbidden_public)
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "单元角色规则")
     _, _, meta = await generate._generate_with_retrieval(
         MessageRequest(message=QUERY, history=request_history if history_source == "request_override" else []),

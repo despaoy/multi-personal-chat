@@ -39,7 +39,7 @@ async def test_vllm_generation_receives_request_history(monkeypatch):
 
     monkeypatch.setattr(gen, "generate_character_response", fake_character_response)
     monkeypatch.setattr(gen, "_get_system_prompt", lambda *args, **kwargs: "")
-    monkeypatch.setattr(gen, "_retrieve_rag_bundle", lambda *args, **kwargs: {})
+    monkeypatch.setattr(gen, "retrieve_chat_knowledge", lambda *args, **kwargs: {})
     monkeypatch.setenv("VLLM_MAX_MODEL_LEN", "8192")
     monkeypatch.setenv("RAG_CITATIONS_ENABLED", "true")
     monkeypatch.setenv("CHARACTER_INDEPENDENT_TASKS_ENABLED", "false")

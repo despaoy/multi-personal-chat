@@ -53,7 +53,7 @@ async def test_profile_routes_to_actual_generation_with_or_without_saved_records
 
     monkeypatch.setattr(intent_detector, '_ML_AVAILABLE', False)
     monkeypatch.setattr(intent_detector, '_load_ml_model', lambda: pytest.fail('Personal dependency needs no classifier'))
-    monkeypatch.setattr(generate, '_retrieve_rag_bundle', retrieval)
+    monkeypatch.setattr(generate, 'retrieve_chat_knowledge', retrieval)
     monkeypatch.setattr(generate, '_get_system_prompt', lambda _: 'persona')
     item = MemoryItem('profile', 'user_fact', '用户说自己叫岚舟', memory_key='user_name',
                       evidence=('我叫岚舟。',), source_message_ids=('source',))
@@ -83,7 +83,7 @@ async def test_mixed_profile_keeps_actual_external_retrieval_and_uncertainty(mon
         return '你叫岚舟，原作人物的关系暂时无法核实。'
     monkeypatch.setattr(intent_detector, '_ML_AVAILABLE', False)
     monkeypatch.setattr(intent_detector, '_load_ml_model', lambda: None)
-    monkeypatch.setattr(generate, '_retrieve_rag_bundle', retrieval)
+    monkeypatch.setattr(generate, 'retrieve_chat_knowledge', retrieval)
     monkeypatch.setattr(generate, '_get_system_prompt', lambda _: 'persona')
     query=QUERY+'月社妃和琉璃是什么关系？'
     semantic_plan(query, {"private_memory": [0], "control": [1], "public_knowledge": [2]})

@@ -359,7 +359,7 @@ async def test_chat_annotation_failure_propagates_without_returning_an_answer(mo
         return "{"
 
     monkeypatch.setattr(generate, "db", SimpleNamespace(get_knowledge_document=authoritative.get))
-    monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
+    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "保留原文的全部费用、日期、原件及雨天例外。")
     monkeypatch.setattr(public_question_binding, "resolve_question_binding", binding)
     monkeypatch.setattr(public_task_evidence, "review_public_candidates", reviewed)

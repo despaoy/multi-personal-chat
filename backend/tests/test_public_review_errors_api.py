@@ -67,7 +67,7 @@ async def test_public_review_errors_api_stop_before_answer(monkeypatch, semantic
         evidence_max_chars=0,
     )
     monkeypatch.setattr(generate, "get_provider_context_budget", lambda: budget)
-    monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
+    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
     monkeypatch.setattr(public_question_binding, "resolve_question_binding", binding)
     monkeypatch.setattr(public_task_evidence, "review_public_candidates", review)
     with pytest.raises(HTTPException) as caught:

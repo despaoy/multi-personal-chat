@@ -181,14 +181,14 @@ async def run(args):
         "generation": [],
         "auth_statuses": [],
     }
-    original_retrieve = api._retrieve_rag_bundle
+    original_retrieve = api.retrieve_chat_knowledge
 
     async def observed_retrieve(*pos, **kwargs):
         result = await original_retrieve(*pos, **kwargs)
         proof["retrieval"].append(result)
         return result
 
-    api._retrieve_rag_bundle = observed_retrieve
+    api.retrieve_chat_knowledge = observed_retrieve
     CharacterContextService.prepare_turn = observe_preparation(
         CharacterContextService.prepare_turn, proof, root / "preparation-observed.json",
     )

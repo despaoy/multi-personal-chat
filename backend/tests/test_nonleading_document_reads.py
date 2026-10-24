@@ -1,5 +1,7 @@
 """Independent synthetic compound-task examples; no native private fixtures."""
 
+from knowledge import chat_retrieval
+
 from knowledge import index_lifecycle
 
 from threading import RLock
@@ -43,7 +45,6 @@ def test_quoted_negative_ambiguous_or_incomplete_tasks_do_not_grant_reads(query)
 
 
 async def test_nonleading_read_resolves_exact_originals_after_semantic_abstention(monkeypatch):
-    from api import generate
     from knowledge import rag_helper, vector_db
     from knowledge.multiscale_rag import runtime
 
@@ -68,7 +69,7 @@ async def test_nonleading_read_resolves_exact_originals_after_semantic_abstentio
     monkeypatch.setattr(index_lifecycle, "_vector_index_revision", 77)
     monkeypatch.setattr(index_lifecycle, "_get_rebuild_revision", lambda: 77)
     monkeypatch.setattr(vector_db, "get_vector_db", lambda: indexed)
-    monkeypatch.setattr(generate, "db", SimpleNamespace(get_knowledge_document=lambda identity: docs[identity - 1]))
+    monkeypatch.setattr(chat_retrieval, "db", SimpleNamespace(get_knowledge_document=lambda identity: docs[identity - 1]))
     monkeypatch.setenv("CORRECTIVE_RAG_ENABLED", "false")
     query = "请记住我喜欢紫茶。\n读取《紫茶规则》《合成角色偏好》。核对条件及例外。"
 
@@ -81,7 +82,7 @@ async def test_nonleading_read_resolves_exact_originals_after_semantic_abstentio
         "get_rag_helper",
         lambda: SimpleNamespace(retrieve_with_citations=retrieve, build_citations=lambda records: []),
     )
-    result = await generate._retrieve_rag_bundle(query, 3, None)
+    result = await chat_retrieval.retrieve_chat_knowledge(query, 3, None)
     assert result["requested_source_titles"] == ["紫茶规则", "合成角色偏好"]
     assert [p["original_body"] for p in result["original_source_packets"]] == [d["content"] for d in docs]
     assert all(p["original_source_receipt"]["authority_revision"] == 77 for p in result["source_coverage"])

@@ -284,7 +284,7 @@ async def test_actual_api_uses_verified_object_links_and_retains_private_answer(
         return "已有私人偏好及前者费用可答，后者时长本次没有对应依据。"
 
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
-    monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
+    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
     install_public_source_reader(monkeypatch, generate, bundle())
     from knowledge import public_fact_coverage
 

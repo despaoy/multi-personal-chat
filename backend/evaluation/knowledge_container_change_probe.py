@@ -1,5 +1,7 @@
 """Retain full parent rules while real administrative paths change."""
 
+from knowledge import chat_retrieval
+
 from knowledge import index_lifecycle
 
 import asyncio
@@ -29,7 +31,6 @@ async def run_container_probe(
 ):
     import asyncpg
 
-    from api import generate
     from knowledge.vector_db import get_vector_db
 
     async def parent_snapshot():
@@ -103,7 +104,7 @@ async def run_container_probe(
     warm = await client.post("/api/knowledge/search", json={"query": fixture["search_query"], "topK": 3})
     assert warm.status_code == 200
     for case in fixture["cases"]:
-        await generate._retrieve_rag_bundle(case["message"], 3, None)
+        await chat_retrieval.retrieve_chat_knowledge(case["message"], 3, None)
     proof["initial_state"] = snapshot()
     proof["writers"] = {}
     proof["writer_handles"] = {}

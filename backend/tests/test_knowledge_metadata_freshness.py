@@ -1,5 +1,7 @@
 """Changed document metadata and ordinary generic-RAG freshness only."""
 
+from knowledge import chat_retrieval
+
 from knowledge import index_lifecycle
 
 from types import SimpleNamespace
@@ -7,7 +9,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi import HTTPException
 
-from api import generate, knowledge
+from api import knowledge
 from db.database import SQLiteDB
 from db.schemas import KnowledgeDocumentUpdate
 
@@ -134,7 +136,7 @@ async def test_generic_generation_checks_freshness_before_cache(monkeypatch):
         calls.append("source")
         return {**record, "id": identity}
 
-    monkeypatch.setattr(generate.db, "get_knowledge_document", read_original)
+    monkeypatch.setattr(chat_retrieval.db, "get_knowledge_document", read_original)
     bundle = dict(results=[dict(record, score=0.8, fused_score=0.8, normalized_score=0.8)], citations=[], confidence=0.8, abstained=False)
     indexed = SimpleNamespace(_lock=RLock(), cache_generation=11, snapshot_validated=True, metadata=[record],
                               _match_filters=lambda row, filters: all(row.get(k) == v for k, v in filters.items()))
@@ -152,7 +154,7 @@ async def test_generic_generation_checks_freshness_before_cache(monkeypatch):
 
     monkeypatch.setattr(index_lifecycle, "_ensure_vector_index", ready)
     monkeypatch.setattr(rag_module, "get_rag_helper", lambda: SimpleNamespace(retrieve_with_citations=generic, build_citations=lambda rows: object.__new__(rag_module.RAGHelper).build_citations(rows)))
-    actual = await generate._retrieve_rag_bundle("核对规则", 3, {"knowledge_base_id": 7})
+    actual = await chat_retrieval.retrieve_chat_knowledge("核对规则", 3, {"knowledge_base_id": 7})
     assert actual["results"] == bundle["results"] and actual["source_coverage"] and calls == ["ensure", "generic", "source"]
     assert actual["source_coverage"][0]["original_source_receipt"]["authority"] == "fresh_knowledge_document_read"
 
@@ -168,7 +170,7 @@ async def test_unready_index_never_returns_stale_cached_sources(monkeypatch):
 
     monkeypatch.setattr(rag_module, "get_rag_helper", forbidden)
     with pytest.raises(RuntimeError, match="index.*not ready"):
-        await generate._retrieve_rag_bundle("核对现行规则", 3, {"knowledge_base_id": 7})
+        await chat_retrieval.retrieve_chat_knowledge("核对现行规则", 3, {"knowledge_base_id": 7})
 
 
 async def test_curated_character_evidence_does_not_depend_on_generic_index(monkeypatch):
@@ -189,4 +191,4 @@ async def test_curated_character_evidence_does_not_depend_on_generic_index(monke
         raise AssertionError("Character evidence must keep its own index contract")
 
     monkeypatch.setattr(index_lifecycle, "_ensure_vector_index", forbidden)
-    assert await generate._retrieve_rag_bundle("人物经历", 3, None) is bundle
+    assert await chat_retrieval.retrieve_chat_knowledge("人物经历", 3, None) is bundle

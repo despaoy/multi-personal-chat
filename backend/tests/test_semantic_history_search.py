@@ -94,7 +94,7 @@ async def test_only_semantically_bound_names_extend_the_complete_question(monkey
         observed.append("retrieval")
         raise ReachedRetrieval()
 
-    monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
+    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
     with pytest.raises(ReachedRetrieval):
         await generate._generate_with_retrieval(MessageRequest(message=query, history=history), None,
             runtime_config={"useKnowledgeBase": True}, model_generate=model)
@@ -108,7 +108,7 @@ async def test_modified_binding_cannot_authorize_history_search(monkeypatch, tmp
     history = [dict(row) for row in HISTORY]
     generate, observed, model = install(monkeypatch, tmp_path, query, history, corrupt=corrupt)
     retrieve = AsyncMock()
-    monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
+    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
     with pytest.raises(HTTPException) as caught:
         await generate._generate_with_retrieval(MessageRequest(message=query, history=history), None,
             runtime_config={"useKnowledgeBase": True}, model_generate=model)

@@ -126,7 +126,7 @@ async def test_shared_api_preserves_missing_title_status_without_extra_model_cal
         observed.append(kwargs["messages"])
         return "A明确不豁免身份核验；本次未找到B，不能核对其条件。"
 
-    monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
+    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
     planning = semantic_plan("读取《A》《B》", dict(public_knowledge=[0]))
     monkeypatch.setenv("RAG_CITATIONS_ENABLED", "false")
     reply, used, metadata = await generate._generate_with_retrieval(

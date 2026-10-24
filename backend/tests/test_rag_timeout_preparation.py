@@ -43,7 +43,7 @@ async def test_failed_timeout_preparation_stops_before_retrieval_or_answer(monke
                         lambda: SimpleNamespace(is_warm=faulty))
     retrieve = Mock(side_effect=AssertionError("No retrieval coroutine may be created after preparation failure"))
     answer = AsyncMock(side_effect=AssertionError("No model call may follow preparation failure"))
-    monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
+    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
     monkeypatch.setattr(generate, "get_provider_context_budget", lambda: SimpleNamespace(
         review=ReviewContextBudget(65536), window_tokens=65536, evidence_max_chars=0,
     ))
@@ -79,7 +79,7 @@ async def test_successful_preparation_preserves_legitimate_empty_retrieval(monke
         return "单元控制：没有提供出处，暂时无法核对该结论。"
 
     monkeypatch.setattr(generate, "_rag_retrieval_timeout", timeout)
-    monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
+    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "只根据已提供的完整来源回答，缺失则明确说明。")
     monkeypatch.setattr(generate, "get_provider_context_budget", lambda: SimpleNamespace(
         review=ReviewContextBudget(65536), window_tokens=65536, evidence_max_chars=0,

@@ -62,7 +62,7 @@ async def test_add_read_repeat_correct_across_sessions(tmp_path, monkeypatch, se
             calls.append(kwargs)
             return reply
 
-        monkeypatch.setattr(generate, '_retrieve_rag_bundle', forbidden)
+        monkeypatch.setattr(generate, 'retrieve_chat_knowledge', forbidden)
         monkeypatch.setattr(generate, '_get_system_prompt', lambda _: 'persona')
         semantic_plan(query, {"private_memory": [0]})
         delivered, _, meta = await generate._generate_with_retrieval(

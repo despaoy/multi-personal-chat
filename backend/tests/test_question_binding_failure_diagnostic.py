@@ -220,7 +220,7 @@ async def run_api(tmp_path, monkeypatch, defect=None, *, private=True, fee_only=
         )
 
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
-    monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
+    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
     monkeypatch.setattr(public_task_evidence, "_review", review)
     monkeypatch.setattr(public_fact_coverage, "_review_facts", facts)
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "独立测试人物规则")

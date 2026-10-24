@@ -1,5 +1,7 @@
 """Complete question bindings precede and constrain domain routing."""
 
+from knowledge import chat_retrieval
+
 from knowledge import index_lifecycle
 
 import copy
@@ -104,7 +106,6 @@ async def test_cancellation_propagates_without_invented_binding():
 async def test_generic_route_reaches_fresh_authority_and_full_body(monkeypatch):
     from threading import RLock
 
-    from api import generate
     from knowledge import rag_helper, vector_db
     from knowledge.multiscale_rag import runtime
 
@@ -137,7 +138,7 @@ async def test_generic_route_reaches_fresh_authority_and_full_body(monkeypatch):
         lambda: SimpleNamespace(_lock=RLock(), cache_generation=11, snapshot_validated=True, metadata=[row]),
     )
     monkeypatch.setattr(
-        generate,
+        chat_retrieval,
         "db",
         SimpleNamespace(
             get_knowledge_document=lambda i: dict(
@@ -161,14 +162,13 @@ async def test_generic_route_reaches_fresh_authority_and_full_body(monkeypatch):
         lambda: SimpleNamespace(retrieve_with_citations=retrieve, build_citations=lambda records: []),
     )
     receipt = await binding()
-    bundle = await generate._retrieve_rag_bundle(QUERY, 3, None, question_binding=receipt)
+    bundle = await chat_retrieval.retrieve_chat_knowledge(QUERY, 3, None, question_binding=receipt)
     assert calls == ["fresh", "generic"]
     assert bundle["original_source_packets"][0]["original_body"] == body
     assert bundle["source_coverage"][0]["original_source_receipt"]["authority_revision"] == 77
 
 
 async def test_explicit_character_unavailable_is_still_strict(monkeypatch):
-    from api import generate
     from knowledge.multiscale_rag import runtime
 
     calls = []
@@ -180,7 +180,7 @@ async def test_explicit_character_unavailable_is_still_strict(monkeypatch):
         ),
     )
     with pytest.raises(RuntimeError, match="Requested character knowledge domain is unavailable"):
-        await generate._retrieve_rag_bundle(
+        await chat_retrieval.retrieve_chat_knowledge(
             "只读已保存的完整本人偏好。请核对妃的家庭关系和末尾否定限制。",
             3,
             None,

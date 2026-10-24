@@ -1,4 +1,6 @@
 
+from knowledge import chat_retrieval
+
 from knowledge import index_lifecycle
 from unittest.mock import AsyncMock
 from types import SimpleNamespace
@@ -16,7 +18,6 @@ pytestmark = pytest.mark.usefixtures("no_live_context_review")
 @pytest.mark.parametrize("outcome", ["success", "load_failure", "retrieval_failure"])
 async def test_character_runtime_owns_domain_and_failure(monkeypatch, outcome):
     from unittest.mock import Mock
-    from api import generate
     from knowledge.multiscale_rag import runtime
     from test_multiscale_rag_runtime import ranking_score_runtime
 
@@ -34,13 +35,13 @@ async def test_character_runtime_owns_domain_and_failure(monkeypatch, outcome):
     monkeypatch.setattr(index_lifecycle, "_ensure_vector_index", generic)
     monkeypatch.setattr(runtime, "get_multiscale_rag_service", lambda: service)
     if outcome == "success":
-        result = await generate._retrieve_rag_bundle("妃和琉璃是什么关系？", 3, None)
+        result = await chat_retrieval.retrieve_chat_knowledge("妃和琉璃是什么关系？", 3, None)
         assert result["domains"] == [service.config.domain_id]
         assert result["results"][0]["content"] == "只能离线验收，禁止联网。"
         assert result["abstained"] is False
     else:
         with pytest.raises(OSError) as raised:
-            await generate._retrieve_rag_bundle("妃和琉璃是什么关系？", 3, None)
+            await chat_retrieval.retrieve_chat_knowledge("妃和琉璃是什么关系？", 3, None)
         assert raised.value is failure
     generic.assert_not_called()
 
@@ -120,7 +121,7 @@ async def test_retrieval_errors_stop_before_model_generation(monkeypatch, semant
         return "暂时还不能确定。"
 
     semantic_plan("人物关系是什么", dict(unresolved_source=[0]))
-    monkeypatch.setattr(generate, "_retrieve_rag_bundle", broken_retrieval)
+    monkeypatch.setattr(generate, "retrieve_chat_knowledge", broken_retrieval)
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "persona")
     from fastapi import HTTPException
 
@@ -253,7 +254,7 @@ async def test_production_rag_uses_shared_grounded_request(monkeypatch, semantic
 
     monkeypatch.setattr(public_question_binding, "resolve_question_binding", binding)
     monkeypatch.setattr(public_task_evidence, "review_public_candidates", transmission_control)
-    monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
+    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "persona")
     monkeypatch.setattr(generate, "get_provider_context_budget", lambda: SimpleNamespace(
         review=ReviewContextBudget(65536), window_tokens=65536, evidence_max_chars=0,

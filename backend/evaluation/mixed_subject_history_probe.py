@@ -428,7 +428,7 @@ async def run(args):
             return current
 
         output_guard.validate_reply = observed_guard_validation
-    original_retrieve = api._retrieve_rag_bundle
+    original_retrieve = api.retrieve_chat_knowledge
 
     async def observed_retrieve(*pos, **kwargs):
         try:
@@ -442,7 +442,7 @@ async def run(args):
         proof["retrieval"].append(result)
         return result
 
-    api._retrieve_rag_bundle = observed_retrieve
+    api.retrieve_chat_knowledge = observed_retrieve
     original_prepare = CharacterContextService.prepare_turn
 
     async def observed_prepare(service, turn, character_id):

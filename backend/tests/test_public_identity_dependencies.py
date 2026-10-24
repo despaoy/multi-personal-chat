@@ -308,7 +308,7 @@ async def test_actual_api_production_identity_stage_keeps_registry_rules_and_pri
         return "续办费用与原件及例外依完整规则回答，周末偏好保留。"
 
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
-    monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
+    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
     install_public_source_reader(monkeypatch, generate, bundle())
     from knowledge import public_fact_coverage
 

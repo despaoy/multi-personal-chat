@@ -5,6 +5,8 @@ object-binding parser, source expansion and fresh original reads are used.
 Only embeddings/review outputs are controlled; no real model or network.
 """
 
+from knowledge import chat_retrieval
+
 from knowledge import index_lifecycle
 
 import json
@@ -48,6 +50,7 @@ async def arrange_generic_plan(tmp_path, monkeypatch):
     monkeypatch.setattr(knowledge, "db", database)
     monkeypatch.setattr(index_lifecycle, "db", database)
     monkeypatch.setattr(generate, "db", database)
+    monkeypatch.setattr(chat_retrieval, "db", database)
     monkeypatch.setattr(index_lifecycle, "_vector_index_revision", None)
     monkeypatch.setattr(vector_db.VectorDatabase, "_check_gpu_availability", lambda _: False)
     vector = vector_db.VectorDatabase(str(tmp_path / "vectors"), vector_db.IndexConfig(index_type="flat"))
@@ -75,6 +78,7 @@ async def arrange_generic_plan(tmp_path, monkeypatch):
         env={"OPENAI_COMPAT_CONTEXT_WINDOW_TOKENS": "65536"},
     )
     monkeypatch.setattr(generate, "get_provider_context_budget", lambda: budget)
+    monkeypatch.setattr(chat_retrieval, "get_provider_context_budget", lambda: budget)
     config = KnowledgeDomainConfig("fixture-curated", tmp_path, lambda _: [])
     forbidden_curated = Mock(side_effect=AssertionError("Bound generic objects must not load a curated model"))
     monkeypatch.setattr(runtime, "get_multiscale_rag_service", lambda: SimpleNamespace(
@@ -95,7 +99,7 @@ async def arrange_generic_plan(tmp_path, monkeypatch):
 
 
 async def retrieve_bound(rig):
-    return await generate._retrieve_rag_bundle(QUERY, 3, None, question_binding=rig.binding)
+    return await chat_retrieval.retrieve_chat_knowledge(QUERY, 3, None, question_binding=rig.binding)
 
 
 async def baseline_preflight(rig, monkeypatch, *, old_flag):

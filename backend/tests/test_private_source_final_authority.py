@@ -90,7 +90,7 @@ async def exercise(tmp_path, monkeypatch, *, erase_during_review):
 
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
     monkeypatch.setattr(public_question_binding, "resolve_question_binding", binding)
-    monkeypatch.setattr(generate, "_retrieve_rag_bundle", empty_public_result)
+    monkeypatch.setattr(generate, "retrieve_chat_knowledge", empty_public_result)
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "虚构评测角色规则")
     _, used, meta = await generate._generate_with_retrieval(
         MessageRequest(message=QUERY, characterId="fiction-role"),

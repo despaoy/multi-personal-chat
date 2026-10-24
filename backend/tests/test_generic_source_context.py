@@ -1,5 +1,7 @@
 """Only the source expansion, authority and final packet budget boundaries."""
 
+from knowledge import chat_retrieval
+
 from knowledge import index_lifecycle
 
 import copy
@@ -141,7 +143,6 @@ def test_abstained_candidates_never_gain_source_support():
 
 
 async def test_database_revision_change_during_retrieval_rejects_expanded_evidence(monkeypatch):
-    from api import generate
     from knowledge import rag_helper, vector_db
 
     anchor = row(0)
@@ -162,4 +163,4 @@ async def test_database_revision_change_during_retrieval_rejects_expanded_eviden
     monkeypatch.setattr(rag_helper, "get_rag_helper", Helper)
     monkeypatch.setenv("CORRECTIVE_RAG_ENABLED", "false")
     with pytest.raises(RuntimeError, match="authority changed"):
-        await generate._retrieve_rag_bundle("完整规程", 3, {"knowledge_base_id": 7})
+        await chat_retrieval.retrieve_chat_knowledge("完整规程", 3, {"knowledge_base_id": 7})

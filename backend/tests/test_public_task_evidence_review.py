@@ -273,7 +273,7 @@ async def test_actual_api_marks_partial_answer_only_for_visible_private_context(
         return "本人偏好有记录，公共规定本次无法确认。"
 
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
-    monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
+    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
     async def no_fact_support(messages):
         payload = json.loads(messages[-1]["content"])
         return json.dumps(dict(assessments=[dict(aspect_id=row["aspect_id"], evidence=[])
@@ -330,7 +330,7 @@ async def test_abstention_model_failure_propagates(monkeypatch):
         raise RuntimeError("generation failed")
 
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
-    monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
+    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
     async def no_fact_support(messages):
         payload = json.loads(messages[-1]["content"])
         return json.dumps(dict(assessments=[dict(aspect_id=row["aspect_id"], evidence=[])

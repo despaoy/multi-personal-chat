@@ -285,7 +285,7 @@ async def test_actual_api_marks_partial_multi_object_scope_without_erasing_priva
         return "青桥费用及末尾限定有依据，蓝岸本次缺对应资料；你的私人偏好保留。"
 
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
-    monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
+    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
     install_public_source_reader(monkeypatch, generate, bundle(missing=True))
     from knowledge import public_fact_coverage
 

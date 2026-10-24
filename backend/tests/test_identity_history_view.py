@@ -101,7 +101,7 @@ async def test_production_adapter_preserves_query_binding(monkeypatch, query_bou
         observed.append(kwargs['messages'])
         return '身份回答'
 
-    monkeypatch.setattr(generate, '_retrieve_rag_bundle', retrieve)
+    monkeypatch.setattr(generate, 'retrieve_chat_knowledge', retrieve)
     monkeypatch.setattr(generate, '_get_system_prompt', lambda _: 'persona')
     await generate._generate_with_retrieval(
         MessageRequest(message='林远是谁？', history=list(identity_request().history)), None,

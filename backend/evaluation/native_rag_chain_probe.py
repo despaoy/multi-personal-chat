@@ -173,14 +173,14 @@ async def main(args):
     from api import generate as generation_api
 
     retrieval_diagnostics = []
-    original_retrieval = generation_api._retrieve_rag_bundle
+    original_retrieval = generation_api.retrieve_chat_knowledge
 
     async def observed_retrieval(query, top_k, filters):
         bundle = await original_retrieval(query, top_k, filters)
         retrieval_diagnostics.append(dict(query=query, filters=filters, bundle=bundle))
         return bundle
 
-    generation_api._retrieve_rag_bundle = observed_retrieval
+    generation_api.retrieve_chat_knowledge = observed_retrieval
     original_generation = generation_api.generate_character_response
 
     async def observed_prepare(service, turn, character_id):

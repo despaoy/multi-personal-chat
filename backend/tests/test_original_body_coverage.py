@@ -1,5 +1,7 @@
 """Original-body grants require fresh scope, whole actual wire packets and exact body fingerprints."""
 
+from knowledge import chat_retrieval
+
 from knowledge import index_lifecycle
 
 import copy
@@ -214,7 +216,6 @@ def test_abstention_never_reads_or_grants_raw_originals():
 
 
 async def test_revision_change_during_original_read_rejects_whole_retrieval(monkeypatch):
-    from api import generate
     from knowledge import rag_helper, vector_db
 
     anchor = record()
@@ -239,10 +240,10 @@ async def test_revision_change_during_original_read_rejects_whole_retrieval(monk
         revision[0] += 1
         return original(identity)
 
-    monkeypatch.setattr(generate.db, "get_knowledge_document", read)
+    monkeypatch.setattr(chat_retrieval.db, "get_knowledge_document", read)
     monkeypatch.setenv("CORRECTIVE_RAG_ENABLED", "false")
     with pytest.raises(RuntimeError, match="authority changed"):
-        await generate._retrieve_rag_bundle("完整规程", 3, {"knowledge_base_id": 7})
+        await chat_retrieval.retrieve_chat_knowledge("完整规程", 3, {"knowledge_base_id": 7})
 
 
 @pytest.mark.parametrize("body", [None, "", "   "])

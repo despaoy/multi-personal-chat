@@ -108,7 +108,7 @@ async def test_citations_off_reaches_model_once_with_complete_evidence(monkeypat
         return "规程 XL-936-N 的最终限制禁止联网、训练和微调。"
 
     monkeypatch.setenv("RAG_CITATIONS_ENABLED", "false")
-    monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
+    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "人物规则")
     monkeypatch.setattr(public_question_binding, "resolve_question_binding", binding)
     monkeypatch.setattr(public_task_evidence, "review_public_candidates", transmission_control)
@@ -174,7 +174,7 @@ async def test_corrupt_retrieved_document_returns_error_before_model(monkeypatch
         return "must not silently omit invalid source evidence"
 
     monkeypatch.setenv("RAG_CITATIONS_ENABLED", "false")
-    monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
+    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "人物规则")
     with pytest.raises(HTTPException) as error:
         await generate._generate_with_retrieval(

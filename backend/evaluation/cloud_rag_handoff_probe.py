@@ -134,14 +134,14 @@ async def run(args):
         "retrieval": [],
         "generation": [],
     }
-    original_retrieve = api._retrieve_rag_bundle
+    original_retrieve = api.retrieve_chat_knowledge
 
     async def observed_retrieve(*pos, **kwargs):
         bundle = await original_retrieve(*pos, **kwargs)
         proof["retrieval"].append(bundle)
         return bundle
 
-    api._retrieve_rag_bundle = observed_retrieve
+    api.retrieve_chat_knowledge = observed_retrieve
     original_generation = api.generate_character_response
 
     async def observed_generation(request, generate):

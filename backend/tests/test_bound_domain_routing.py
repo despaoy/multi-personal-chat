@@ -1,5 +1,7 @@
 """A proven source scope cannot be replaced by a second keyword decision."""
 
+from knowledge import chat_retrieval
+
 from knowledge import index_lifecycle
 
 import json
@@ -11,7 +13,6 @@ import pytest
 from scope_fixtures import open_scope_response
 from test_multiscale_card_recall import ControlledRanking, arrange
 
-from api import generate
 from knowledge.multiscale_rag import runtime as runtime_module
 from knowledge.multiscale_rag.runtime import MultiScaleRagRuntime, _retrieval_index
 from knowledge.multiscale_rag.service import RoutedMultiScaleService
@@ -78,7 +79,7 @@ async def bound_scope(query=QUERY, names=("岚",)):
 
 async def test_proven_single_character_scope_uses_complete_curated_original(tmp_path, monkeypatch):
     rig = setup_scope(tmp_path, monkeypatch)
-    result = await generate._retrieve_rag_bundle(QUERY, 1, None, question_binding=await bound_scope())
+    result = await chat_retrieval.retrieve_chat_knowledge(QUERY, 1, None, question_binding=await bound_scope())
     assert result["domains"] == [rig.config.domain_id]
     assert result["curated_source_catalog"]["sources"][0]["excerpt"]["text"] == BODY
     assert result["query_analysis"]["matched_domains"] == [rig.config.domain_id]
@@ -96,7 +97,7 @@ async def test_required_curated_failure_never_changes_authority(tmp_path, monkey
         monkeypatch.setattr(rig.runtime, "retrieve_with_citations", lambda *args, **kwargs: None)
         expected = RuntimeError
     with pytest.raises(expected):
-        await generate._retrieve_rag_bundle(QUERY, 1, None, question_binding=await bound_scope())
+        await chat_retrieval.retrieve_chat_knowledge(QUERY, 1, None, question_binding=await bound_scope())
     rig.generic.assert_not_called()
 
 
@@ -107,7 +108,7 @@ async def test_whole_business_name_is_not_its_embedded_character_alias(tmp_path,
     )
     query = "核对岚展期的公开办理规则。"
     with pytest.raises(GenericRouteReached):
-        await generate._retrieve_rag_bundle(query, 1, None, question_binding=await bound_scope(query, ("岚展期",)))
+        await chat_retrieval.retrieve_chat_knowledge(query, 1, None, question_binding=await bound_scope(query, ("岚展期",)))
     rig.runtime.retrieve_with_citations.assert_not_called()
     rig.generic.assert_called_once()
 
@@ -174,7 +175,7 @@ async def test_invalid_curated_container_never_changes_authority(tmp_path, monke
     rig = setup_scope(tmp_path, monkeypatch)
     monkeypatch.setattr(rig.runtime, "retrieve_with_citations", lambda *args, **kwargs: [])
     with pytest.raises(TypeError, match="expected a dictionary"):
-        await generate._retrieve_rag_bundle(QUERY, 1, None, question_binding=await bound_scope())
+        await chat_retrieval.retrieve_chat_knowledge(QUERY, 1, None, question_binding=await bound_scope())
     rig.generic.assert_not_called()
 
 
@@ -183,7 +184,7 @@ async def test_healthy_empty_curated_index_is_ordinary_abstention(tmp_path, monk
 
     rig = setup_scope(tmp_path, monkeypatch)
     rig.service.retriever.index = _memory_index(rig.config.domain_id, [], np.zeros((0, 384), dtype=np.float32))
-    result = await generate._retrieve_rag_bundle(QUERY, 1, None, question_binding=await bound_scope())
+    result = await chat_retrieval.retrieve_chat_knowledge(QUERY, 1, None, question_binding=await bound_scope())
     assert result["abstained"] and result["results"] == []
     assert result["domains"] == [rig.config.domain_id]
     assert rig.embedding.calls == []
@@ -243,7 +244,7 @@ async def test_history_bound_single_character_scope_keeps_current_original(tmp_p
     binding = await resolve_question_binding(deps, query, window_tokens=65536, history=history, reviewer=review, with_retrieval_scope=True)
     retrieval_query = bound_retrieval_query(binding, query)
     assert retrieval_query == "岚\n" + query
-    result = await generate._retrieve_rag_bundle(retrieval_query, 1, None, question_binding=binding)
+    result = await chat_retrieval.retrieve_chat_knowledge(retrieval_query, 1, None, question_binding=binding)
     assert result["curated_source_catalog"]["sources"][0]["excerpt"]["text"] == BODY
     assert binding["input"]["query"] == query
     rig.generic.assert_not_called()

@@ -87,7 +87,7 @@ async def test_api_passes_the_same_effective_history_to_shortcut_and_generation(
     async def forbidden(*args, **kwargs):
         pytest.fail('Private lookup needs no external RAG')
 
-    monkeypatch.setattr(generate, '_retrieve_rag_bundle', forbidden)
+    monkeypatch.setattr(generate, 'retrieve_chat_knowledge', forbidden)
     planning = semantic_plan('我住哪里？', dict(private_memory=[0]))
     calls = []
 

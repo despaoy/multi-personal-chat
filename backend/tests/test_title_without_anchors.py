@@ -1,5 +1,7 @@
 """Exact named reads use verified source authority, never weak semantic candidates."""
 
+from knowledge import chat_retrieval
+
 from knowledge import index_lifecycle
 
 from threading import RLock
@@ -116,7 +118,6 @@ def test_budget_exhausted_is_located_but_not_visible_or_usable_evidence():
 
 
 async def test_named_read_rejects_original_authority_revision_race(monkeypatch):
-    from api import generate
     from knowledge import rag_helper, vector_db
 
     v = vector([row(1, "A")])
@@ -135,4 +136,4 @@ async def test_named_read_rejects_original_authority_revision_race(monkeypatch):
     monkeypatch.setattr(rag_helper, "get_rag_helper", Helper)
     monkeypatch.setenv("CORRECTIVE_RAG_ENABLED", "false")
     with pytest.raises(RuntimeError, match="authority changed"):
-        await generate._retrieve_rag_bundle("读取《A》", 3, {"knowledge_base_id": 7})
+        await chat_retrieval.retrieve_chat_knowledge("读取《A》", 3, {"knowledge_base_id": 7})

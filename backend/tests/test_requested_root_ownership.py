@@ -1,5 +1,7 @@
 """Complete synthetic source ownership, not native private fixtures."""
 
+from knowledge import chat_retrieval
+
 from knowledge import index_lifecycle
 
 import copy
@@ -209,7 +211,6 @@ def test_referenced_context_cannot_survive_omitted_root_in_generation_budget():
 
 
 async def test_real_retrieval_assembly_attaches_only_scoped_complete_original_bodies(monkeypatch):
-    from api import generate
     from knowledge import rag_helper, vector_db
 
     docs = [
@@ -227,7 +228,7 @@ async def test_real_retrieval_assembly_attaches_only_scoped_complete_original_bo
     monkeypatch.setattr(index_lifecycle, "_get_rebuild_revision", lambda: 77)
     monkeypatch.setattr(vector_db, "get_vector_db", lambda: indexed)
     monkeypatch.setattr(
-        generate, "db", SimpleNamespace(get_knowledge_document=lambda i: next(d for d in docs if d["id"] == i))
+        chat_retrieval, "db", SimpleNamespace(get_knowledge_document=lambda i: next(d for d in docs if d["id"] == i))
     )
     monkeypatch.setenv("CORRECTIVE_RAG_ENABLED", "false")
     query = "读取《紫茶规程》《本人版本说明》。分别核对完整条件与主体。"
@@ -244,6 +245,6 @@ async def test_real_retrieval_assembly_attaches_only_scoped_complete_original_bo
         build_citations=lambda results: [dict(source_id=r["id"]) for r in results],
     )
     monkeypatch.setattr(rag_helper, "get_rag_helper", lambda: helper)
-    result = await generate._retrieve_rag_bundle(query, 3, None)
+    result = await chat_retrieval.retrieve_chat_knowledge(query, 3, None)
     assert {p["original_body"] for p in result["original_source_packets"]} == {d["content"] for d in docs[:2]}
     assert all("doc_9" not in c["source_id"] for c in result["citations"])

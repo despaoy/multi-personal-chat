@@ -278,7 +278,7 @@ async def test_normal_api_binding_receives_same_effective_history_as_planning(mo
 
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
     monkeypatch.setattr(public_question_binding, "resolve_question_binding", resolver)
-    monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieval)
+    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieval)
     prepared = SimpleNamespace(compiled=CompiledCharacterContext("", "", ""), history=tuple(HISTORY))
     with pytest.raises(ExpectedStop):
         await generate._generate_with_retrieval(

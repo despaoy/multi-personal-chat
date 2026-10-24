@@ -136,7 +136,7 @@ async def exercise(tmp_path, monkeypatch, mode):
 
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
     monkeypatch.setattr(public_question_binding, "resolve_question_binding", binding)
-    monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
+    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "虚构角色依据可见来源回答")
     monkeypatch.setattr(generate, "generate_character_response", capture)
     try:

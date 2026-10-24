@@ -4,6 +4,8 @@ Resolver and retrieval components are controlled; these are routing tests,
 not native authorization, vector quality, or actual model evaluations.
 """
 
+from knowledge import chat_retrieval
+
 from knowledge import index_lifecycle
 
 import json
@@ -59,7 +61,6 @@ async def binding(*, empty=False):
 
 @pytest.mark.parametrize("curated_error", [False, True])
 async def test_api_preserves_normal_business_or_propagates_curated_fault(monkeypatch, curated_error):
-    from api import generate
     from knowledge import rag_helper, vector_db
     from knowledge.multiscale_rag import runtime
 
@@ -94,7 +95,7 @@ async def test_api_preserves_normal_business_or_propagates_curated_fault(monkeyp
         lambda: SimpleNamespace(_lock=RLock(), cache_generation=12, snapshot_validated=True, metadata=[row]),
     )
     monkeypatch.setattr(
-        generate,
+        chat_retrieval,
         "db",
         SimpleNamespace(
             get_knowledge_document=lambda i: dict(
@@ -117,10 +118,10 @@ async def test_api_preserves_normal_business_or_propagates_curated_fault(monkeyp
     )
     if curated_error:
         with pytest.raises(RuntimeError, match="Controlled unresolved character branch unavailable"):
-            await generate._retrieve_rag_bundle(QUERY, 3, None, question_binding=receipt)
+            await chat_retrieval.retrieve_chat_knowledge(QUERY, 3, None, question_binding=receipt)
         assert calls == ["curated"]
         return
-    bundle = await generate._retrieve_rag_bundle(QUERY, 3, None, question_binding=receipt)
+    bundle = await chat_retrieval.retrieve_chat_knowledge(QUERY, 3, None, question_binding=receipt)
     assert calls == ["curated", "fresh", "generic"]
     branches = bundle["independent_domains"]["branches"]
     assert branches["curated_character"]["status"] == "retrieved"

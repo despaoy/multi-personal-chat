@@ -1,5 +1,7 @@
 """Same-object businesses need independent candidates from complete source data."""
 
+from knowledge import chat_retrieval
+
 from knowledge import index_lifecycle
 
 import json
@@ -53,6 +55,7 @@ async def arrange(tmp_path, monkeypatch):
     monkeypatch.setattr(knowledge, "db", database)
     monkeypatch.setattr(index_lifecycle, "db", database)
     monkeypatch.setattr(generate, "db", database)
+    monkeypatch.setattr(chat_retrieval, "db", database)
     monkeypatch.setattr(index_lifecycle, "_vector_index_revision", None)
     monkeypatch.setattr(vector_db.VectorDatabase, "_check_gpu_availability", lambda _: False)
     vector = vector_db.VectorDatabase(str(tmp_path / "vectors"), vector_db.IndexConfig(index_type="flat"))
@@ -89,6 +92,7 @@ async def arrange(tmp_path, monkeypatch):
     budget = get_provider_context_budget(manager=SimpleNamespace(_current_provider=SimpleNamespace(value="openai_compat")),
         env={"OPENAI_COMPAT_CONTEXT_WINDOW_TOKENS": "65536"})
     monkeypatch.setattr(generate, "get_provider_context_budget", lambda: budget)
+    monkeypatch.setattr(chat_retrieval, "get_provider_context_budget", lambda: budget)
     curated = Mock(side_effect=AssertionError("These bound businesses are not curated character evidence"))
     monkeypatch.setattr(runtime, "get_multiscale_rag_service", lambda: SimpleNamespace(
         config=KnowledgeDomainConfig("fixture-curated", tmp_path, lambda _: []), retrieve_with_citations=curated, is_warm=lambda: True))
@@ -108,7 +112,7 @@ async def arrange(tmp_path, monkeypatch):
 async def test_same_object_businesses_retain_both_full_sources(tmp_path, monkeypatch, top_k):
     rig = await arrange(tmp_path, monkeypatch)
     try:
-        bundle = await generate._retrieve_rag_bundle(QUERY, top_k, None, question_binding=rig.binding)
+        bundle = await chat_retrieval.retrieve_chat_knowledge(QUERY, top_k, None, question_binding=rig.binding)
         retained = {packet["original_body"] for packet in bundle["original_source_packets"]}
         assert BODIES[0] in retained and BODIES[-1] in retained
         assert rig.searches[0] == QUERY
@@ -127,7 +131,7 @@ async def test_task_receipts_preserve_complete_queries_and_their_binding(tmp_pat
 
     rig = await arrange(tmp_path, monkeypatch)
     try:
-        bundle = await generate._retrieve_rag_bundle(QUERY, 3, None, question_binding=rig.binding)
+        bundle = await chat_retrieval.retrieve_chat_knowledge(QUERY, 3, None, question_binding=rig.binding)
         records = bundle["task_candidate_coverage"]
         checked = validate_task_candidates(records, query=QUERY)
         assert len(checked) == 3 and all(row["reference_binding"] == rig.binding for row in checked[1:])
@@ -217,7 +221,7 @@ async def test_capacity_error_reaches_generation_as_actionable_failure(monkeypat
     retrieve = AsyncMock(side_effect=failure)
     model = AsyncMock()
     monkeypatch.setattr(public_question_binding, "resolve_question_binding", AsyncMock(return_value=None))
-    monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
+    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
     monkeypatch.setattr(generate, "_rag_retrieval_timeout", lambda: 30.0)
     with pytest.raises(HTTPException) as caught:
         await generate._generate_with_retrieval(MessageRequest(message=query), None,

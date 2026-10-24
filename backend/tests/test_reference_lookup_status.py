@@ -190,7 +190,7 @@ async def test_production_api_carries_reference_receipt_and_warning_once(monkeyp
         observed.append(kwargs["messages"])
         return "主体条款应按本轮可见资料核对；引用版本尚不能确定。"
 
-    monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
+    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
     planning = semantic_plan("说明主体条款及引用范围", dict(public_knowledge=[0]))
     monkeypatch.setenv("RAG_CITATIONS_ENABLED", "false")
     _, used, metadata = await generate._generate_with_retrieval(

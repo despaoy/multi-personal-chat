@@ -69,7 +69,7 @@ async def test_complete_semantic_plan_alone_controls_public_dispatch(monkeypatch
     monkeypatch.setattr(intent_detector, "_load_ml_model", forbidden)
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
     monkeypatch.setattr(public_question_binding, "resolve_question_binding", binding)
-    monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
+    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "完整虚构角色，只依据已给出的内容回答。")
     monkeypatch.setattr(generate, "get_provider_context_budget", lambda: SimpleNamespace(
         review=budget, window_tokens=65536, evidence_max_chars=0,
@@ -106,7 +106,7 @@ async def test_semantic_gate_failure_never_continues_with_rules_or_answer(monkey
 
     monkeypatch.setattr(intent_detector, "predict_rag_intent", forbidden)
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
-    monkeypatch.setattr(generate, "_retrieve_rag_bundle", forbidden)
+    monkeypatch.setattr(generate, "retrieve_chat_knowledge", forbidden)
     monkeypatch.setattr(generate, "_get_system_prompt", forbidden)
     monkeypatch.setattr(generate, "get_provider_context_budget", lambda: SimpleNamespace(
         review=ReviewContextBudget(1024 if failure == "capacity" else 65536),
@@ -134,7 +134,7 @@ async def test_explicit_retrieval_off_does_not_pay_for_planning(monkeypatch):
         return "本题假设总额为6.75元。"
 
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", forbidden)
-    monkeypatch.setattr(generate, "_retrieve_rag_bundle", forbidden)
+    monkeypatch.setattr(generate, "retrieve_chat_knowledge", forbidden)
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "只根据完整题设计算。")
     monkeypatch.setattr(generate, "get_provider_context_budget", lambda: SimpleNamespace(window_tokens=65536, evidence_max_chars=0))
     _, used, _ = await generate._generate_with_retrieval(

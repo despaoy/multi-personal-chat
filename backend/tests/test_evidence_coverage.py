@@ -200,7 +200,7 @@ async def test_shared_api_exports_partial_source_warning_without_extra_model_cal
         observed.append(kwargs)
         return "当前能核对部分资料，设备为 RTX 3060 12GB，其余条件无法确认。"
 
-    monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
+    monkeypatch.setattr(generate, "retrieve_chat_knowledge", retrieve)
     monkeypatch.setattr(generate, "get_provider_context_budget", lambda: SimpleNamespace(
         review=ReviewContextBudget(8192), window_tokens=8192, evidence_max_chars=0))
     monkeypatch.setenv("RAG_CITATIONS_ENABLED", "false")

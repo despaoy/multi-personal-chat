@@ -25,7 +25,7 @@ def control(monkeypatch):
     source = Mock(side_effect=AssertionError("No public source read is expected"))
     monkeypatch.setattr(generate, "db", SimpleNamespace(get_knowledge_document=source))
     rag = AsyncMock(side_effect=AssertionError("Disabled or invalid configuration must not retrieve"))
-    monkeypatch.setattr(generate, "_retrieve_rag_bundle", rag)
+    monkeypatch.setattr(generate, "retrieve_chat_knowledge", rag)
     provider = cloud_connection("boolean-config-control")
     context = InferenceRequestContext("openai_compat", provider,
                                       text_token_counter("openai_compat", provider.base_url, provider.model))
