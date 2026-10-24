@@ -143,7 +143,7 @@ def test_repaired_index_can_be_used_by_a_later_request(retrieval):
     assert retriever.index.is_healthy()
 
 
-@pytest.mark.parametrize("channel", ["sparse", "vector"])
+@pytest.mark.parametrize("channel", ["sparse", "vector", "documents"])
 async def test_generation_stops_when_a_required_index_is_missing(retrieval, semantic_plan, monkeypatch, channel):
     from unittest.mock import AsyncMock
 
@@ -156,8 +156,10 @@ async def test_generation_stops_when_a_required_index_is_missing(retrieval, sema
     retriever, analysis, _ = retrieval
     if channel == "vector":
         retriever.index._faiss_index = None
-    else:
+    elif channel == "sparse":
         retriever.index.bm25 = BM25Index()
+    else:
+        monkeypatch.setattr(retriever.index.bm25, "search", lambda *a: [(2, 1.0)])
     semantic_plan(QUERY, dict(unresolved_source=list(range(len(query_segments(QUERY))))))
 
     async def retrieve(query, top_k, filters):
@@ -174,7 +176,24 @@ async def test_generation_stops_when_a_required_index_is_missing(retrieval, sema
             runtime_config={"useKnowledgeBase": True}, model_generate=model)
     assert caught.value.status_code == 503
     assert isinstance(caught.value.__cause__, RetrievalIndexError)
-    assert caught.value.detail == RetrievalIndexError(channel, "not_initialized").public_detail()
+    assert caught.value.detail == RetrievalIndexError(channel, "invalid_row" if channel == "documents" else "not_initialized").public_detail()
     assert QUERY not in str(caught.value.detail)
     lookup.assert_awaited_once()
     model.assert_not_awaited()
+
+
+@pytest.mark.parametrize("channel", ["sparse", "vector", "entity"])
+@pytest.mark.parametrize("row", [-1, 2])
+def test_invalid_document_row_is_not_a_successful_empty_result(retrieval, monkeypatch, channel, row):
+    retriever, analysis, _ = retrieval
+    if channel == "sparse":
+        monkeypatch.setattr(retriever.index, "search_sparse", lambda *a: [(row, 1.0)])
+    elif channel == "vector":
+        monkeypatch.setattr(retriever.index, "search_vector", lambda *a, **kw: [(row, 1.0)])
+    else:
+        analysis.entities = ["青岚"]
+        retriever.index._entity_rows = {"青岚": [row]}
+    with pytest.raises(RetrievalIndexError) as caught:
+        retriever.search(analysis, top_k=2, mode=channel if channel != "entity" else "hybrid")
+    assert caught.value.channel == "documents" and caught.value.reason == "invalid_row"
+    assert QUERY not in str(caught.value) and "重建" in caught.value.public_detail()["message"]

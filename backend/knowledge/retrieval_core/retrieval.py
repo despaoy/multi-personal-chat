@@ -154,7 +154,7 @@ class HybridRetriever:
         for query_text in dict.fromkeys(query_texts):
             for rank0, (row, score) in enumerate(self.index.search_sparse(query_text, recall_k)):
                 doc = self.index.get_document(row)
-                if doc is None or not match_metadata_filters(doc, filters):
+                if not match_metadata_filters(doc, filters):
                     continue
                 rank = rank0 + 1
                 prev = best.get(row)
@@ -173,7 +173,7 @@ class HybridRetriever:
         query_vector = self.embedding_provider.embed_query(analysis.original_query)
         for rank0, (row, score) in enumerate(self.index.search_vector(query_vector, recall_k, threshold=threshold)):
             doc = self.index.get_document(row)
-            if doc is None or not match_metadata_filters(doc, filters):
+            if not match_metadata_filters(doc, filters):
                 continue
             best[row] = (rank0 + 1, score)
         return best
@@ -197,7 +197,7 @@ class HybridRetriever:
             result = []
             for row in rows:
                 doc = self.index.get_document(row)
-                if doc is None or not match_metadata_filters(doc, filters):
+                if not match_metadata_filters(doc, filters):
                     continue
                 result.append(row)
             return result
@@ -310,8 +310,6 @@ class HybridRetriever:
         result: list[RetrievalCandidate] = []
         for row, (rank, score) in sorted(channel.items(), key=lambda kv: (kv[1][0], kv[0])):
             doc = self.index.get_document(row)
-            if doc is None:
-                continue
             candidate = RetrievalCandidate(row=row, document=doc)
             setattr(
                 candidate,

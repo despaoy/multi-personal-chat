@@ -158,10 +158,10 @@ class DomainIndex:
             rows.update(self._entity_rows.get(entity, []))
         return sorted(rows)
 
-    def get_document(self, row: int) -> KnowledgeIndexDocument | None:
-        if 0 <= row < len(self.documents):
-            return self.documents[row]
-        return None
+    def get_document(self, row: int) -> KnowledgeIndexDocument:
+        if not 0 <= row < len(self.documents):
+            raise RetrievalIndexError("documents", "invalid_row")
+        return self.documents[row]
 
     # -- 状态 -------------------------------------------------------------
     def count(self) -> int:
