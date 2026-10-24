@@ -23,7 +23,7 @@ PUBLIC = "虚构公共规程：桐屿续签收费31元，需要本人申请卡�
 async def exercise(tmp_path, monkeypatch, mode):
     from api import generate
     from db.schemas import MessageRequest
-    from knowledge import intent_detector, public_question_binding, retrieval_query_plan
+    from knowledge import public_question_binding, retrieval_query_plan
 
     monkeypatch.setattr(generate, "_rag_retrieval_timeout", lambda: 30.0)
 
@@ -135,7 +135,6 @@ async def exercise(tmp_path, monkeypatch, mode):
         return "明确零云单元检查占位，私人来源保留，公共未知；不是实际模型答案。"
 
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
-    monkeypatch.setattr(intent_detector, "needs_rag", lambda _: (True, "declared-unit", None))
     monkeypatch.setattr(public_question_binding, "resolve_question_binding", binding)
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "虚构角色依据可见来源回答")

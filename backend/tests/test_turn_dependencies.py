@@ -106,7 +106,7 @@ async def test_every_full_original_segment_reaches_planner(monkeypatch):
 async def test_actual_route_uses_dependencies_not_presence_of_one_memory(monkeypatch, mode):
     from api import generate
     from db.schemas import MessageRequest
-    from knowledge import intent_detector, public_question_binding, retrieval_query_plan
+    from knowledge import public_question_binding, retrieval_query_plan
 
     value = baseline()
     if mode == "mixed":
@@ -138,7 +138,6 @@ async def test_actual_route_uses_dependencies_not_presence_of_one_memory(monkeyp
 
     monkeypatch.setattr(public_question_binding, "resolve_question_binding", no_binding)
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
-    monkeypatch.setattr(intent_detector, "needs_rag", lambda _: (True, "unit", None))
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "人物规则")
     if mode == "legacy":

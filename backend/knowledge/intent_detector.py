@@ -10,7 +10,7 @@ import os
 import json
 import logging
 from pathlib import Path
-from typing import Tuple, Dict, Any, Optional
+from typing import Tuple, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -99,12 +99,6 @@ def _ml_predict(message: str) -> Tuple[bool, str, float, Optional[str]]:
 
     return True, f"ML分类器: 路由到「{best_label}」(置信度: {best_score:.2%})", best_score, best_label
 
-
-def needs_rag(message: str, context: Optional[Dict[str, Any]] = None) -> Tuple[bool, str, Optional[str]]:
-    """Use the trained classifier decision, including a negative result."""
-    _load_ml_model()
-    pred, reason, _confidence, kb_name = _ml_predict(message)
-    return pred, reason, kb_name
 
 
 def predict_rag_intent(message: str) -> Tuple[bool, float, Optional[str]]:

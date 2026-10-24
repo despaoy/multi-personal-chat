@@ -127,7 +127,7 @@ async def test_api_status_task_skips_public_retrieval_and_answer_generation(monk
     from knowledge import intent_detector
 
     monkeypatch.setattr(generate, '_get_system_prompt', lambda _: 'persona')
-    monkeypatch.setattr(intent_detector, 'needs_rag', lambda _: pytest.fail('Storage status is not external knowledge'))
+    monkeypatch.setattr(intent_detector, 'predict_rag_intent', lambda _: pytest.fail('Storage status is not external knowledge'))
 
     async def model(**kwargs):
         pytest.fail('Storage status needs no model')

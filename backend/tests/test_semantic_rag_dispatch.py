@@ -65,7 +65,7 @@ async def test_complete_semantic_plan_alone_controls_public_dispatch(monkeypatch
 
     monkeypatch.setenv("RAG_TASK_PLANNER_ENABLED", "false")
     monkeypatch.setenv("DYNAMIC_CONTEXT_SEMANTIC_REVIEW_ENABLED", "false")
-    monkeypatch.setattr(intent_detector, "needs_rag", forbidden)
+    monkeypatch.setattr(intent_detector, "predict_rag_intent", forbidden)
     monkeypatch.setattr(intent_detector, "_load_ml_model", forbidden)
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
     monkeypatch.setattr(public_question_binding, "resolve_question_binding", binding)
@@ -104,7 +104,7 @@ async def test_semantic_gate_failure_never_continues_with_rules_or_answer(monkey
     def forbidden(*args, **kwargs):
         pytest.fail("Failed semantic planning cannot continue with rules, retrieval or answer")
 
-    monkeypatch.setattr(intent_detector, "needs_rag", forbidden)
+    monkeypatch.setattr(intent_detector, "predict_rag_intent", forbidden)
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", forbidden)
     monkeypatch.setattr(generate, "_get_system_prompt", forbidden)

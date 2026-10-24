@@ -95,7 +95,7 @@ async def test_condition_read_uses_no_external_retrieval(monkeypatch, semantic_p
         pytest.fail('No generation needed')
 
     monkeypatch.setattr(generate, '_get_system_prompt', lambda _: 'persona')
-    monkeypatch.setattr(intent_detector, 'needs_rag', lambda _: pytest.fail('No external RAG needed'))
+    monkeypatch.setattr(intent_detector, 'predict_rag_intent', lambda _: pytest.fail('No external RAG needed'))
     semantic_plan("如果休息好，我就一定开长途车吗？", {"private_memory": [0]})
     reply, rag, meta = await generate._generate_with_retrieval(
         MessageRequest(message='如果休息好，我就一定开长途车吗？'), None,

@@ -221,7 +221,7 @@ async def test_actual_api_uses_verified_object_links_and_retains_private_answer(
     from api import generate
     from character.models import CompiledCharacterContext
     from db.schemas import MessageRequest
-    from knowledge import intent_detector, public_task_evidence, retrieval_query_plan
+    from knowledge import public_task_evidence, retrieval_query_plan
     from knowledge.retrieval_query_plan import RetrievalQueryPlan
 
     await positive()
@@ -284,7 +284,6 @@ async def test_actual_api_uses_verified_object_links_and_retains_private_answer(
         return "已有私人偏好及前者费用可答，后者时长本次没有对应依据。"
 
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
-    monkeypatch.setattr(intent_detector, "needs_rag", lambda _: (True, "unit", None))
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
     install_public_source_reader(monkeypatch, generate, bundle())
     from knowledge import public_fact_coverage

@@ -312,7 +312,6 @@ async def test_composite_rate_limit_refunds_earlier_scopes(monkeypatch):
 async def test_vllm_generation_reuses_one_rag_result(monkeypatch, semantic_plan, controlled_public_bundle):
     from api import generate
     from db.schemas import MessageRequest
-    from knowledge import intent_detector
 
     calls = 0
     captured = {}
@@ -339,7 +338,6 @@ async def test_vllm_generation_reuses_one_rag_result(monkeypatch, semantic_plan,
             assert payload["answer"] == "answer" and "evidence" in payload["sources"][0]["body"]
             return '{"citations": []}'
 
-    monkeypatch.setattr(intent_detector, "needs_rag", lambda _: (True, "test", None))
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "system")
 
@@ -405,7 +403,6 @@ async def test_vllm_generation_omits_rag_policy_without_evidence(monkeypatch):
 async def test_vllm_rag_abstention_generates_character_uncertainty(monkeypatch, outcome, semantic_plan, controlled_public_bundle):
     from api import generate
     from db.schemas import MessageRequest
-    from knowledge import intent_detector
 
     captured = {}
 
@@ -425,7 +422,6 @@ async def test_vllm_rag_abstention_generates_character_uncertainty(monkeypatch, 
                 raise RuntimeError("model unavailable")
             return outcome
 
-    monkeypatch.setattr(intent_detector, "needs_rag", lambda _: (True, "test", None))
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "system")
 

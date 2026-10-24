@@ -241,7 +241,7 @@ async def test_actual_api_production_identity_stage_keeps_registry_rules_and_pri
     from api import generate
     from character.models import CompiledCharacterContext
     from db.schemas import MessageRequest
-    from knowledge import intent_detector, public_task_evidence, retrieval_query_plan
+    from knowledge import public_task_evidence, retrieval_query_plan
     from knowledge.retrieval_query_plan import RetrievalQueryPlan
 
     await positive()
@@ -308,7 +308,6 @@ async def test_actual_api_production_identity_stage_keeps_registry_rules_and_pri
         return "续办费用与原件及例外依完整规则回答，周末偏好保留。"
 
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
-    monkeypatch.setattr(intent_detector, "needs_rag", lambda _: (True, "unit", None))
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
     install_public_source_reader(monkeypatch, generate, bundle())
     from knowledge import public_fact_coverage

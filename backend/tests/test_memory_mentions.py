@@ -91,7 +91,7 @@ async def test_provenance_display_uses_no_external_rag_or_model(monkeypatch, use
         pytest.fail('Provenance display must not invent or rewrite statements')
 
     monkeypatch.setattr(generate, '_get_system_prompt', lambda _: 'persona')
-    monkeypatch.setattr(intent_detector, 'needs_rag', lambda _: pytest.fail('Not external knowledge'))
+    monkeypatch.setattr(intent_detector, 'predict_rag_intent', lambda _: pytest.fail('Not external knowledge'))
     semantic_plan(message, {"private_memory": [0]})
     reply, used_rag, meta = await generate._generate_with_retrieval(MessageRequest(message=message), None,
         runtime_config={'useKnowledgeBase': use_kb}, prepared_character_turn=SimpleNamespace(history=(), compiled=context),

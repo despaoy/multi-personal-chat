@@ -18,5 +18,5 @@ def test_loaded_classifier_failure_is_not_replaced_by_rules(monkeypatch, error_t
     monkeypatch.setattr(intent_detector, "_ML_AVAILABLE", True)
     monkeypatch.setattr(intent_detector, "_ml_predict", predict)
     with pytest.raises(error_type) as caught:
-        intent_detector.needs_rag(QUERY)
+        intent_detector.predict_rag_intent(QUERY)
     assert caught.value is error

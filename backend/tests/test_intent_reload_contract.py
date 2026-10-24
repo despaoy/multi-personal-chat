@@ -283,8 +283,8 @@ def test_classifier_decisions_are_not_overridden_by_rules_or_private_keyword_sho
 
     monkeypatch.setattr(task_dependency, "local_context_only", forbidden)
     before = len(rig.encoded)
-    result, reason, selected = detector.needs_rag(query)
-    assert result is expected and "ML" in reason
+    result, confidence, selected = detector.predict_rag_intent(query)
+    assert result is expected and 0.0 <= confidence <= 1.0
     assert selected == (LABEL if expected else None)
     assert len(rig.encoded) == before + 1 and rig.encoded[-1] == (query,)
 

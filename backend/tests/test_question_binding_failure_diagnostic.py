@@ -95,7 +95,7 @@ async def run_api(tmp_path, monkeypatch, defect=None, *, private=True, fee_only=
     from character.models import CompiledCharacterContext
     from db.schemas import MessageRequest
     from inference.provider_context import ProviderContextBudget
-    from knowledge import intent_detector, public_fact_coverage, public_task_evidence, retrieval_query_plan
+    from knowledge import public_fact_coverage, public_task_evidence, retrieval_query_plan
     from knowledge.retrieval_query_plan import RetrievalQueryPlan
 
     observed = dict(binding=[], retrieval_calls=0, model_calls=0)
@@ -220,7 +220,6 @@ async def run_api(tmp_path, monkeypatch, defect=None, *, private=True, fee_only=
         )
 
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
-    monkeypatch.setattr(intent_detector, "needs_rag", lambda _: (True, "declared-unit", None))
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", retrieve)
     monkeypatch.setattr(public_task_evidence, "_review", review)
     monkeypatch.setattr(public_fact_coverage, "_review_facts", facts)

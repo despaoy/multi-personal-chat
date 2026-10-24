@@ -96,7 +96,7 @@ async def test_actual_generation_route_passes_the_same_effective_history(monkeyp
     from api import generate
     from character.models import CompiledCharacterContext
     from db.schemas import MessageRequest
-    from knowledge import intent_detector, retrieval_query_plan
+    from knowledge import retrieval_query_plan
 
     database_history = ({"role": "user", "content": PREMISE},)
     request_history = [
@@ -123,7 +123,6 @@ async def test_actual_generation_route_passes_the_same_effective_history(monkeyp
 
     prepared = SimpleNamespace(compiled=CompiledCharacterContext("", "", ""), history=database_history)
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", unit_planner)
-    monkeypatch.setattr(intent_detector, "needs_rag", lambda _: (True, "unit", None))
     monkeypatch.setattr(generate, "_retrieve_rag_bundle", forbidden_public)
     monkeypatch.setattr(generate, "_get_system_prompt", lambda _: "单元角色规则")
     _, _, meta = await generate._generate_with_retrieval(
