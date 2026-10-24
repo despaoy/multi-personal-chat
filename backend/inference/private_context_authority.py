@@ -97,11 +97,18 @@ async def revalidate_private_sources(
     # Source erasure can also change a copied claim's evidence. Keep independent
     # claims; a retained projection is valid only if the old packet still equals
     # the currently scoped stored evidence, never by its old source ID alone.
+    affected = tuple(packet for packet in context.memory_packets if revoked.intersection(packet.source_message_ids))
+    records = {}
+    for offset in range(0, len(affected), 200):
+        batch = affected[offset:offset + 200]
+        rows = await repository.list_memory_records(
+            character_id, scope, limit=None, include_inactive=True,
+            memory_ids=tuple(int(packet.memory_id) for packet in batch),
+        )
+        records.update((str(row["id"]), row) for row in rows)
     removed = set()
-    for packet in context.memory_packets:
-        if not revoked.intersection(packet.source_message_ids):
-            continue
-        row = await repository.get_memory_record(int(packet.memory_id), character_id, scope)
+    for packet in affected:
+        row = records.get(packet.memory_id)
         valid = row is not None and row["content"] == packet.content and row["evidence"] == list(packet.evidence)
         if not valid:
             removed.add(packet.memory_id)
