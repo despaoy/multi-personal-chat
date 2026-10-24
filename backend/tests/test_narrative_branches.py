@@ -430,7 +430,7 @@ def test_invalid_branch_setting_is_not_reported_as_disabled(monkeypatch, value):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("failure", [None, "snapshot", "prepare"])
+@pytest.mark.parametrize("failure", [None, "snapshot", "prepare", "budget"])
 async def test_canonical_preparation_and_generation_share_one_model_context(monkeypatch, failure):
     from api import narrative, generate
     from app.runtime import RuntimeContainer
@@ -440,7 +440,10 @@ async def test_canonical_preparation_and_generation_share_one_model_context(monk
     from services import character_context
 
     events = []
-    error = RuntimeError("isolated context preparation failure")
+    from character.context_builder import MemoryContextBudgetError
+
+    error = (MemoryContextBudgetError("isolated budget failure") if failure == "budget"
+             else RuntimeError("isolated context preparation failure"))
     provider = SimpleNamespace(name="openai_compat", base_url="https://isolated.invalid/v1", model="isolated-model", api_key="")
     manager = SimpleNamespace(_current_provider=SimpleNamespace(value="openai_compat"), get_current_provider=lambda: provider)
 
@@ -468,9 +471,13 @@ async def test_canonical_preparation_and_generation_share_one_model_context(monk
         async def prepare(turn, character_id):
             assert turn.message == "核对已提供的完整记录，不推断实际办理结果。"
             assert character_id == "isolated-character"
+            assert (turn.platform, turn.adapter, turn.sender_id, turn.conversation_id, turn.conversation_type) == (
+                "web", "narrative:isolated-character", "1", "canonical:isolated-character", "private",
+            )
+            assert turn.history == () and turn.received_at is None
             assert get_request_context() is captured[0]
             events.append("prepare")
-            if failure == "prepare":
+            if failure in {"prepare", "budget"}:
                 raise error
             return prepared
 
@@ -499,10 +506,15 @@ async def test_canonical_preparation_and_generation_share_one_model_context(monk
             await narrative.canonical_generate(body, SimpleNamespace(app=app), {"user_id": 1})
         assert caught.value.status_code == 503 and caught.value.__cause__ is error
         assert events == ["snapshot"]
-    elif failure == "prepare":
-        with pytest.raises(RuntimeError) as caught:
+    elif failure in {"prepare", "budget"}:
+        with pytest.raises(HTTPException) as caught:
             await narrative.canonical_generate(body, SimpleNamespace(app=app), {"user_id": 1})
-        assert caught.value is error and events == ["snapshot", "build", "prepare"]
+        assert caught.value.status_code == 503 and caught.value.__cause__ is error
+        assert events == ["snapshot", "build", "prepare"]
+        assert str(error) not in str(caught.value.detail)
+        if failure == "budget":
+            assert caught.value.detail["stage"] == "memory_context"
+            assert caught.value.detail["reason"] == "selected_evidence_budget_exceeded"
     else:
         response = await narrative.canonical_generate(body, SimpleNamespace(app=app), {"user_id": 1})
         assert response.model == "isolated-model"

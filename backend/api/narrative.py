@@ -57,9 +57,9 @@ def characters(user=Depends(get_current_user)):
 
 @router.post("/canonical/generate")
 async def canonical_generate(body: CanonicalMessage, request: Request, user=Depends(get_current_user)):
-    from api.generate import _generate_reply_impl, _is_high_risk_prompt, _security_policy_response
+    from api.generate import _generate_reply_impl, _is_high_risk_prompt, _prepare_character_turn, _security_policy_response
     from infra.concurrency_control import InferenceQueueFull, RateLimitExceeded
-    from services.character_context import TurnInput, build_character_context_service
+    from services.character_context import build_character_context_service
     from inference.model_manager import get_model_manager
     from inference.request_context import resolve_request_context, use_request_context
 
@@ -97,8 +97,6 @@ async def canonical_generate(body: CanonicalMessage, request: Request, user=Depe
             raise HTTPException(503, "模型配置读取失败，请检查配置及模型状态后重试") from exc
         with use_request_context(context):
             service = build_character_context_service(container.db)
-            turn = TurnInput(message, "web", adapter, owner, session, "private")
-            prepared = await service.prepare_turn(turn, body.character_id)
             req = MessageRequest(
                 message=message,
                 traceId=body.traceId or uuid.uuid4().hex,
@@ -110,6 +108,7 @@ async def canonical_generate(body: CanonicalMessage, request: Request, user=Depe
                 conversationId=session,
                 conversationType="private",
             )
+            prepared = await _prepare_character_turn(req, body.character_id, character_service=service)
             return await _generate_reply_impl(
                 req, user, message_db=container.db, character_service=service, prepared_override=prepared
             )
