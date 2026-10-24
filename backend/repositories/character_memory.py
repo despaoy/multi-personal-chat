@@ -320,7 +320,7 @@ class DatabaseCharacterMemoryRepository:
             user_scope.conversation_type, user_scope.conversation_id, None,
             scope_levels=("conversation",), memory_keys=keys, include_inactive=True,
         )
-        return [_decode_memory_record(dict(row)) for row in rows]
+        return [_decode_memory_record(row) for row in rows]
 
     async def list_relationship_notes(self, character_id: str, user_scope: UserScope) -> list[dict[str, Any]]:
         from character.natural_relationship import is_note
@@ -331,7 +331,7 @@ class DatabaseCharacterMemoryRepository:
             user_scope.sender_id, user_scope.conversation_type, user_scope.conversation_id,
             None, relationship_notes_only=True,
         )
-        rows = [_decode_memory_record(dict(row)) for row in rows]
+        rows = [_decode_memory_record(row) for row in rows]
         return [row for row in rows if is_note(row)]
 
     async def get_relationship_record(
@@ -420,7 +420,7 @@ class DatabaseCharacterMemoryRepository:
             scope_levels=scope_levels,
             memory_ids=memory_ids,
         )
-        return [_decode_memory_record(dict(row)) for row in rows]
+        return [_decode_memory_record(row) for row in rows]
 
     async def get_memory_record(
         self, memory_id: int, character_id: str, user_scope: UserScope
@@ -435,7 +435,7 @@ class DatabaseCharacterMemoryRepository:
             user_scope.conversation_type,
             user_scope.conversation_id,
         )
-        return _decode_memory_record(dict(row)) if row else None
+        return _decode_memory_record(row) if row else None
 
     async def append_claim(
         self,
@@ -504,7 +504,7 @@ class DatabaseCharacterMemoryRepository:
             source_message_ids_json=json.dumps(source_ids, ensure_ascii=False),
             metadata_json=json.dumps(metadata_payload, ensure_ascii=False),
         )
-        return _decode_memory_record(dict(record))
+        return _decode_memory_record(record)
 
     async def delete_memory(
         self, memory_id: int, character_id: str, user_scope: UserScope
