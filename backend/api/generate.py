@@ -678,6 +678,22 @@ async def _generate_reply_body(
 # ═══════════════════════════════════════════
 
 
+def _character_turn_input(request: MessageRequest):
+    """Map one API request consistently for context reads and completion writes."""
+    from services.character_context import TurnInput
+
+    return TurnInput(
+        message=request.message,
+        platform=request.platform,
+        adapter=request.adapter,
+        sender_id=request.senderId or request.userId,
+        conversation_id=request.conversationId or request.sessionId,
+        conversation_type=request.conversationType or request.sessionType,
+        history=tuple(request.history or []),
+        received_at=request._source_received_at,
+    )
+
+
 async def _prepare_character_turn(
     request: MessageRequest, character_id: str, *, character_service=None, execute_memory_operations: bool = False,
     defer_memory_operations: bool = False
@@ -694,20 +710,10 @@ async def _prepare_character_turn(
     try:
         from services.character_context import (
             ContextAfterMemoryOperationError,
-            TurnInput,
             get_default_character_context_service,
         )
 
-        turn_input = TurnInput(
-            message=request.message,
-            platform=request.platform,
-            adapter=request.adapter,
-            sender_id=request.senderId or request.userId,
-            conversation_id=request.conversationId or request.sessionId,
-            conversation_type=request.conversationType or request.sessionType,
-            history=tuple(request.history or []),
-            received_at=request._source_received_at,
-        )
+        turn_input = _character_turn_input(request)
         service = character_service or get_default_character_context_service()
         if execute_memory_operations:
             from character.memory_llm import is_memory_erasure_request
@@ -788,20 +794,10 @@ async def _complete_character_turn(prepared, request: MessageRequest, *, charact
     """
     try:
         from services.character_context import (
-            TurnInput,
             get_default_character_context_service,
         )
 
-        turn_input = TurnInput(
-            message=request.message,
-            platform=request.platform,
-            adapter=request.adapter,
-            sender_id=request.senderId or request.userId,
-            conversation_id=request.conversationId or request.sessionId,
-            conversation_type=request.conversationType or request.sessionType,
-            history=tuple(request.history or []),
-            received_at=request._source_received_at,
-        )
+        turn_input = _character_turn_input(request)
         service = character_service or get_default_character_context_service()
         from services.turn_completion import get_turn_completion_runtime
 
