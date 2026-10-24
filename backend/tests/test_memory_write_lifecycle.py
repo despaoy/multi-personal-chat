@@ -172,12 +172,12 @@ def test_explicit_erasure_phrase_and_duplicate_merge_are_normalized_safely():
     assert [item.operation for item in duplicate] == ["NOOP"]
 
 
-def test_model_relation_format_mistakes_are_normalized_with_evidence_and_whitelist():
+def test_model_relations_keep_literal_objects_and_whitelisted_targets():
     conditional_source = "不是完全讨厌咖啡，只是不喜欢太苦的。"
     conditional = parse_llm_proposals(
         _response(
-            kind="like",
-            value="不喜欢太苦的咖啡",
+            kind="dislike",
+            value="太苦的",
             content="用户不喜欢太苦的咖啡",
             evidence=conditional_source,
             confidence=0.95,
@@ -193,8 +193,8 @@ def test_model_relation_format_mistakes_are_normalized_with_evidence_and_whiteli
     contrast = parse_llm_proposals(
         _response(
             kind="dislike",
-            value="含咖啡因的饮料",
-            content="用户不喜欢含咖啡因的饮料",
+            value="普通咖啡",
+            content="用户不喜欢普通咖啡",
             evidence=contrast_source,
             confidence=0.95,
             operation="MERGE",

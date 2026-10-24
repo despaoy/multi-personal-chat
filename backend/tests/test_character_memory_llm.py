@@ -8,6 +8,7 @@ from character.memory_extractor import ExtractedMemory
 from character.memory_llm import (
     MemoryEnrichmentScheduler,
     MemoryLlmConfig,
+    MemoryResponseError,
     _search_existing_memories,
     parse_llm_proposals,
 )
@@ -48,20 +49,20 @@ def test_llm_candidate_cannot_invent_evidence_or_value():
         ),
         source_message="我喜欢红茶。",
     )
-    invented_value = parse_llm_proposals(
-        _response(
-            {"attributed_to": "user",
-                "operation": "ADD", "kind": "like",
-                "value": "咖啡",
-                "evidence": "我喜欢红茶",
-                "confidence": 0.99,
-            }
-        ),
-        source_message="我喜欢红茶。",
-    )
+    with pytest.raises(MemoryResponseError, match="value"):
+        parse_llm_proposals(
+            _response(
+                {"attributed_to": "user",
+                    "operation": "ADD", "kind": "like",
+                    "value": "咖啡",
+                    "evidence": "我喜欢红茶",
+                    "confidence": 0.99,
+                }
+            ),
+            source_message="我喜欢红茶。",
+        )
 
     assert invented_evidence == []
-    assert invented_value == []
 
 
 def test_llm_path_respects_opt_out_sensitive_and_uncertain_policy():

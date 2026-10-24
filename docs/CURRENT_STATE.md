@@ -6,6 +6,8 @@
 
 近期已同步服务器、本地和 GitHub 的主要链路：
 
+- 记忆后处理不再根据同段否定词改写偏好或猜测无证据对象；保留模型目标原值，缺证据值明确报错，见[记忆模型值归属](reports/backend-memory-value-owner-20261025.md)。
+
 - 旧NoneBot严格解析工具调用，脚本失败停止完成通知；异步执行及进程清理归工具执行模块，删除执行前重复模型说明，见[工具执行与失败语义](reports/backend-nonebot-tools-owner-20261025.md)。
 
 - 旧NoneBot删除独立模型加载和隐式选择回退，统一生成实际接收所选模型；工具调用独立计量，见[机器人模型归属与计量](reports/backend-nonebot-provider-owner-20261025.md)。

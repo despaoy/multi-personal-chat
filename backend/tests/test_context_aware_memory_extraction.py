@@ -2,7 +2,9 @@
 
 import json
 
-from character.memory_llm import parse_llm_proposals
+import pytest
+
+from character.memory_llm import MemoryResponseError, parse_llm_proposals
 
 
 def _response(*, attributed_to="user", **memory):
@@ -90,9 +92,10 @@ def test_ellipsis_value_must_be_grounded_in_supplied_context():
         source_message="还是上次那个方向。",
         history=({"role": "user", "content": "我最近在做点云补全"},),
     )
-    invented = parse_llm_proposals(raw, source_message="还是上次那个方向。")
+    with pytest.raises(MemoryResponseError) as caught:
+        parse_llm_proposals(raw, source_message="还是上次那个方向。")
     assert len(grounded) == 1
-    assert invented == []
+    assert caught.value.field == "value"
 
 
 def test_third_party_fact_is_not_saved():
@@ -108,7 +111,7 @@ def test_third_party_fact_is_not_saved():
     assert parse_llm_proposals(third_party, source_message="我的朋友喜欢咖啡。") == []
 
 
-def test_add_ignores_model_generated_key_and_normalizes_goal_value():
+def test_add_ignores_model_generated_key_and_keeps_literal_goal_value():
     raw = _response(
         kind="goal",
         value="准备保研面试",
@@ -120,14 +123,14 @@ def test_add_ignores_model_generated_key_and_normalizes_goal_value():
     )
     proposals = parse_llm_proposals(raw, source_message="我正在准备保研面试。")
     assert len(proposals) == 1
-    assert proposals[0].memory.memory_key == "goal_保研面试"
+    assert proposals[0].memory.memory_key == "goal_准备保研面试"
     assert proposals[0].target_memory_key == ""
 
 
-def test_negative_preference_kind_and_value_are_normalized():
+def test_negative_preference_uses_explicit_model_kind_and_literal_value():
     raw = _response(
-        kind="like",
-        value="不喜欢太苦的",
+        kind="dislike",
+        value="太苦的",
         content="用户不喜欢太苦的咖啡",
         evidence="不是完全讨厌咖啡，只是不喜欢太苦的。",
         confidence=0.95,

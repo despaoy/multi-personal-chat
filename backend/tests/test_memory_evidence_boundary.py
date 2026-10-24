@@ -33,8 +33,10 @@ def test_copied_historical_quote_is_not_rewritten_into_new_evidence():
 def test_current_quote_can_still_use_user_history_to_resolve_value():
     (proposal,) = parse(candidate(CURRENT))
     assert proposal.evidence == CURRENT and proposal.memory.content == "用户正在进行或准备：保研面试"
-    assert parse(candidate(CURRENT), history=()) == []
-    assert parse(candidate(CURRENT), history=({"role": "assistant", "content": HISTORY[0]["content"]},)) == []
+    with pytest.raises(MemoryResponseError, match="value"):
+        parse(candidate(CURRENT), history=())
+    with pytest.raises(MemoryResponseError, match="value"):
+        parse(candidate(CURRENT), history=({"role": "assistant", "content": HISTORY[0]["content"]},))
 
 
 @pytest.mark.parametrize("confidence", [0.1, 0.95])

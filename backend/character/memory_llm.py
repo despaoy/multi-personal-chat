@@ -493,9 +493,6 @@ _CONDITIONAL_COEXIST_PATTERN = re.compile(
 )
 _TEMPORARY_LOCATION_PATTERN = re.compile(r"(?:这周|本周|下周|临时|暂时|出差|旅行|短住)")
 _ADDITIVE_PET_PATTERN = re.compile(r"(?:又|再|还).{0,16}(?:养|领养).{0,12}(?:猫|狗|宠物)")
-_NEGATED_OBJECT_PATTERN = re.compile(
-    r"(?:^|[，,；;])(?P<value>[^，,；;。！？]{1,20}?)(?:才|就)?不(?:喝|喜欢|碰|吃|用)(?:[。！？!?]|$)"
-)
 _UNSAFE_CONTENT_PATTERN = re.compile(
     r"(?:忽略(?:以上|此前|系统)|system\s*prompt|开发者指令|你必须|请执行|调用工具)", re.IGNORECASE
 )
@@ -784,13 +781,6 @@ def _infer_add_relation_target(
     return None
 
 
-def _negative_object_from_evidence(evidence: str) -> str:
-    match = _NEGATED_OBJECT_PATTERN.search(evidence)
-    if match is None:
-        return ""
-    return re.sub(r"^(?:准确地说|其实|但是|不过)", "", match.group("value")).strip()
-
-
 def _grounded_value(
     value: str,
     *,
@@ -840,19 +830,6 @@ def _target_key_matches_kind(kind: str, target_memory_key: str) -> bool:
         "other_user_fact": "fact_",
     }[kind]
     return target_memory_key.startswith(expected_prefix)
-
-
-def _normalize_kind_and_value(kind: str, value: str, evidence: str) -> tuple[str, str]:
-    """把常见模型表述归一成数据库模板需要的结构化值。"""
-    normalized_kind = kind
-    normalized_value = value.strip()
-    if kind == "like" and re.search(r"(?:不喜欢|不碰|不喝|避开)", f"{value} {evidence}"):
-        normalized_kind = "dislike"
-    if normalized_kind == "goal":
-        normalized_value = re.sub(r"^(?:正在|最近|目前|主要|在)*(?:准备|备考)", "", normalized_value).strip()
-    if normalized_kind == "dislike":
-        normalized_value = re.sub(r"^(?:平时)?(?:不喜欢|不碰|不喝|避开)", "", normalized_value).strip()
-    return normalized_kind, normalized_value
 
 
 def _infer_kind_from_target(record: dict[str, Any]) -> str:
@@ -1300,18 +1277,7 @@ def _candidate_to_proposal(
                 operation = "COEXIST"
             proposed_content = ""
         else:
-            grounded_negative = _negative_object_from_evidence(evidence) if kind in {"like", "dislike"} else ""
-            if not grounded_negative:
-                return None
-            kind = "dislike"
-            value = grounded_negative
-            # 模型的抽象 content 可能不再对应证据中更精确的对象；回退到
-            # 本地 canonical 模板，避免保留未经证据支持的泛化。
-            proposed_content = ""
-
-    kind, value = _normalize_kind_and_value(kind, value, evidence)
-    if not value:
-        return None
+            raise MemoryResponseError("value", "记忆 LLM value 缺少当前证据或明确指代上下文的支持")
 
     if (
         target_record is not None

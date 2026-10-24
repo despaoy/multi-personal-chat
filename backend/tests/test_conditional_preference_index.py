@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from character.memory_llm import MemoryEnrichmentScheduler, MemoryLlmConfig, parse_llm_proposals
+from character.memory_llm import MemoryEnrichmentScheduler, MemoryLlmConfig, MemoryResponseError, parse_llm_proposals
 from character.models import MemoryItem
 from character.temporal_projection import project_temporal_record
 from db.database import SQLiteDB
@@ -108,11 +108,16 @@ async def test_complete_conditional_label_preserves_short_index_full_condition_a
         ),
         ({"evidence": "“" + EVIDENCE + "”"}, "“" + EVIDENCE + "”"),
         ({"kind": "dislike"}, SOURCE),
-        ({"value": "测试紫茶(仅表格已提交且预约确认通过时）"}, SOURCE),
     ],
 )
 def test_condition_or_actor_mismatch_does_not_shorten_an_unproven_label(changes, source):
     assert parse(candidate(**changes), source=source) == []
+
+
+def test_malformed_condition_index_is_an_explicit_value_error():
+    with pytest.raises(MemoryResponseError) as caught:
+        parse(candidate(value="测试紫茶(仅表格已提交且预约确认通过时）"), source=SOURCE)
+    assert caught.value.field == "value"
 
 
 def test_already_literal_short_index_retains_ordinary_admission():
