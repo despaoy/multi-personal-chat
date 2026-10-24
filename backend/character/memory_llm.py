@@ -22,6 +22,7 @@ import re
 from collections import Counter, deque
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
+from itertools import chain
 from typing import TYPE_CHECKING, Any, Protocol
 
 import httpx
@@ -514,8 +515,10 @@ def _select_existing_memories(
     """实际注入过的记忆优先进入白名单，其余保持仓储返回顺序。"""
 
     preferred = {str(item) for item in feedback_target_ids if str(item)}
-    ordered = [item for item in records if _record_id(item) in preferred]
-    ordered.extend(item for item in records if _record_id(item) not in preferred)
+    ordered = chain(
+        (item for item in records if _record_id(item) in preferred),
+        (item for item in records if _record_id(item) not in preferred),
+    )
     seen: set[tuple[str, str]] = set()
     selected: list[dict[str, Any]] = []
     for item in ordered:
