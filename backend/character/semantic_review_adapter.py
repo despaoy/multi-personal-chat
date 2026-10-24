@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from infra.environment import read_bool
+from inference.review_client import copy_review_messages
 
 SEMANTIC_REVIEW_ENABLED_ENV = "DYNAMIC_CONTEXT_SEMANTIC_REVIEW_ENABLED"
 SEMANTIC_REVIEW_TIMEOUT_ENV = "DYNAMIC_CONTEXT_SEMANTIC_REVIEW_TIMEOUT_SECONDS"
@@ -70,7 +71,7 @@ class VLLMSemanticReviewer:
         self._client_factory = client_factory or _default_vllm_client_factory
 
     async def __call__(self, messages: Sequence[Mapping[str, str]]) -> object:
-        request_messages = _copy_messages(messages)
+        request_messages = copy_review_messages(messages)
         client = await self._client_factory()
         if client is None:
             raise RuntimeError("semantic review client is unavailable")
@@ -126,21 +127,6 @@ async def _default_vllm_client_factory() -> SemanticReviewClient:
     from inference.review_client import get_context_review_client
 
     return await get_context_review_client()
-
-
-def _copy_messages(messages: Sequence[Mapping[str, str]]) -> list[dict[str, str]]:
-    copied: list[dict[str, str]] = []
-    for message in messages:
-        if not isinstance(message, Mapping):
-            raise TypeError("semantic review messages must be mappings")
-        role = message.get("role")
-        content = message.get("content")
-        if role not in {"system", "user", "assistant"} or not isinstance(content, str):
-            raise ValueError("semantic review message has an invalid role or content")
-        copied.append({"role": role, "content": content})
-    if not copied:
-        raise ValueError("semantic review messages cannot be empty")
-    return copied
 
 
 def _parse_timeout(raw: object) -> float:
