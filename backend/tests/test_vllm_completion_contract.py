@@ -13,7 +13,8 @@ from unittest.mock import AsyncMock
 import httpx
 import pytest
 
-from api import ask, generate
+from api import ask
+from app import providers
 from db.schemas import AskRequest
 from inference import model_manager
 from inference.vllm_client import VLLMClient
@@ -212,12 +213,12 @@ async def test_actual_ask_stream_rejects_corruption_after_fully_cited_body_and_c
         return complete_bundle(source_path)
 
     service = GroundedAnswerService(retriever=retrieve)
-    provider = SimpleNamespace(get_status=lambda: {"modelName": "fiction-vllm-model"})
+    provider = SimpleNamespace(name="vllm", get_status=lambda: {"modelName": "fiction-vllm-model"})
     manager = SimpleNamespace(
         _current_provider=SimpleNamespace(value="vllm"), get_current_provider=lambda: provider,
     )
     monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
-    monkeypatch.setattr(generate, "get_vllm_client", AsyncMock(return_value=rig.client))
+    monkeypatch.setattr(providers, "get_vllm_client", AsyncMock(return_value=rig.client))
     monkeypatch.setattr(ask, "get_grounded_answer_service", AsyncMock(return_value=service))
     request = AskRequest(message=QUERY, domainId="fiction-archive", topK=1, temperature=.2,
                          maxTokens=256, topP=.9, wantCitations=True)

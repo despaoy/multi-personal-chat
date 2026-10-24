@@ -88,8 +88,8 @@ async def arrange_observation_attribution(tmp_path, monkeypatch, mode):
         rig.answers.append({"messages": [dict(message) for message in messages], "context": get_request_context()})
         return REPLIES[mode], 0.0
 
-    monkeypatch.setattr(rig.manager.get_current_provider(), "async_complete", completion)
     rig.manager._current_provider = provider_fixture.model_manager.ModelProvider.OPENAI_COMPAT
+    monkeypatch.setattr(rig.manager.get_current_provider(), "async_complete", completion)
     return rig
 
 

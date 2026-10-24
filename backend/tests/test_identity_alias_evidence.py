@@ -5,15 +5,17 @@ from datetime import datetime, timezone
 
 import pytest
 
-from character.memory_llm import MemoryResponseError, parse_llm_proposals
+from character.memory_llm import MemoryResponseError, MemoryScopeAuthorization, parse_llm_proposals
 
 POSITIVE = "我的常用别名是芷露。芷露只是本人的别名，不是本人的规范姓名。"
 NEGATIVE = "小岚不是本人的别名。小岚是朋友兰溪的别名，只属于朋友。"
-SOURCE = POSITIVE + NEGATIVE + "请记住，以后这个角色记住本人别名和否定归属，用于同一个角色的其他会话。"
+SCOPE_GRANT = "请记住，以后这个角色记住本人别名和否定归属，用于同一个角色的其他会话。"
+SOURCE = POSITIVE + NEGATIVE + SCOPE_GRANT
+AUTHORIZATION = MemoryScopeAuthorization(SOURCE, (("user_character", SCOPE_GRANT),))
 
 
 def parse(
-    evidence, *, value="芷露", kind="name", source=SOURCE, operation="ADD", target="", existing=(), qualifiers=None, scope_level="user_character"
+    evidence, *, value="芷露", kind="name", source=SOURCE, operation="ADD", target="", existing=(), qualifiers=None, scope_level="user_character", scope_authorization=None
 ):
     raw = dict(
         kind=kind,
@@ -31,13 +33,14 @@ def parse(
     return parse_llm_proposals(
         json.dumps({"memories": [raw]}, ensure_ascii=False),
         source_message=source,
+        scope_authorization=scope_authorization,
         existing_memories=existing,
         confidence_threshold=0.85,
     )
 
 
 def test_alias_name_label_projects_separate_predicate_without_losing_negation():
-    (proposal,) = parse(POSITIVE)
+    (proposal,) = parse(POSITIVE, scope_authorization=AUTHORIZATION)
     assert proposal.memory.memory_key == "user_alias"
     assert proposal.memory.content == "用户明确说自己的常用别名是芷露"
     assert proposal.evidence == POSITIVE and not proposal.qualifiers
@@ -45,7 +48,7 @@ def test_alias_name_label_projects_separate_predicate_without_losing_negation():
 
 
 def test_complete_self_alias_exclusion_keeps_named_friend_explanation():
-    (proposal,) = parse(NEGATIVE, value="小岚", kind="other_user_fact")
+    (proposal,) = parse(NEGATIVE, value="小岚", kind="other_user_fact", scope_authorization=AUTHORIZATION)
     assert proposal.memory.memory_key == "user_alias_exclusion_小岚"
     assert proposal.memory.content == "用户明确说小岚不是本人的别名"
     assert proposal.evidence == NEGATIVE and not proposal.qualifiers
@@ -79,7 +82,7 @@ def test_explicit_alias_update_can_only_target_its_own_predicate():
         content="用户明确说自己的常用别名是若翎",
         status="active",
     )
-    (proposal,) = parse(POSITIVE, operation="SUPERSEDE", target="user_alias", existing=(current,))
+    (proposal,) = parse(POSITIVE, operation="SUPERSEDE", target="user_alias", existing=(current,), scope_authorization=AUTHORIZATION)
     assert proposal.memory.memory_key == "user_alias" and proposal.target_memory_key == "user_alias"
 
 
@@ -96,7 +99,9 @@ def test_positive_friend_name_is_not_a_negative_self_alias_predicate():
 
 
 def test_ordinary_self_primary_name_keeps_existing_slot():
-    (proposal,) = parse("我叫青岑。", value="青岑", source="我叫青岑。请记住，以后这个角色记住。", qualifiers={})
+    source = "我叫青岑。请记住，以后这个角色记住。"
+    authorization = MemoryScopeAuthorization(source, (("user_character", "请记住，以后这个角色记住。"),))
+    (proposal,) = parse("我叫青岑。", value="青岑", source=source, qualifiers={}, scope_authorization=authorization)
     assert proposal.memory.memory_key == "user_name"
 
 
@@ -146,6 +151,11 @@ async def test_normal_scheduler_storage_keeps_primary_and_alias_separate(tmp_pat
 
         async def complete(self, messages):
             # Explicit component completion; never a claimed real-model result.
+            payload = json.loads(messages[-1]["content"])
+            if "candidate_scopes" in payload:
+                assert payload["current_user_message"] == SOURCE
+                assert payload["candidate_scopes"] == ["user_character"]
+                return json.dumps({"decisions": [{"scope_level": "user_character", "authorized": True, "evidence": SCOPE_GRANT}]}, ensure_ascii=False)
             return json.dumps(
                 {
                     "memories": [
@@ -196,7 +206,7 @@ async def test_normal_scheduler_storage_keeps_primary_and_alias_separate(tmp_pat
 
 def test_exclusion_index_can_include_its_own_contiguous_friend_explanation():
     (proposal,) = parse(
-        NEGATIVE, value="小岚是朋友兰溪的别名", kind="other_user_fact", qualifiers={"certainty": "明确"}
+        NEGATIVE, value="小岚是朋友兰溪的别名", kind="other_user_fact", qualifiers={"certainty": "明确"}, scope_authorization=AUTHORIZATION
     )
     assert proposal.memory.memory_key == "user_alias_exclusion_小岚"
     assert proposal.memory.content == "用户明确说小岚不是本人的别名"

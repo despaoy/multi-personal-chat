@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from character.memory_llm import MemoryResponseError, parse_llm_proposals
+from character.memory_llm import MemoryResponseError, MemoryScopeAuthorization, parse_llm_proposals
 
 QUOTE = "我的常用别名是澄羽。这个本人常用别名是没有角色专用别名记录时使用的全角色默认记录，所有角色记住这条默认别名。"
 CONDITION = "没有角色专用别名记录时使用的全角色默认记录"
@@ -34,6 +34,7 @@ def parse(*, certainty="明确立即生效", context=CONDITION):
             ensure_ascii=False,
         ),
         source_message=SOURCE,
+        scope_authorization=MemoryScopeAuthorization(SOURCE, (("user_global", QUOTE),)),
         confidence_threshold=0.85,
     )
 

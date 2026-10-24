@@ -326,18 +326,28 @@ async def test_simultaneous_ask_requests_keep_distinct_snapshots_and_reset_their
     assert cleaned == [None, None] and get_request_context() is None
 
 
-async def test_provider_type_change_before_dispatch_fails_without_switch_or_cached_success(ask_rig):
+async def test_provider_type_change_keeps_current_owner_and_blocks_new_unsupported_request(ask_rig):
     rig = ask_rig
+    rig.manager._providers[model_manager.ModelProvider.OLLAMA] = SimpleNamespace(
+        name="ollama", get_status=lambda: {"modelName": "synthetic-ollama"},
+    )
     rig.after_retrieve = lambda: setattr(rig.manager, "_current_provider", model_manager.ModelProvider.OLLAMA)
     try:
-        with pytest.raises(RuntimeError):
+        first = await ask.ask(request(), current_user=USER)
+        assert first.answer == ANSWER and first.model == "openai_compat/deepseek-flash"
+        assert first.modelInvoked and not first.cacheHit and len(rig.calls) == 1
+        assert rig.calls[0]["body"]["model"] == "deepseek-flash"
+        assert rig.retrieval_contexts[0].provider_name == "openai_compat"
+        assert get_request_context() is None
+        with pytest.raises(ValueError, match="Knowledge answers require"):
             await ask.ask(request(), current_user=USER)
+        assert len(rig.calls) == 1 and rig.retrievals == 2
+        assert rig.retrieval_contexts[1].provider_name == "ollama"
+        assert get_request_context() is None
     finally:
         rig.manager._current_provider = model_manager.ModelProvider.OPENAI_COMPAT
-    assert not rig.calls and rig.service.cache.stats()["entries"] == 0
-    assert rig.retrievals == 1 and get_request_context() is None
-    healthy = await ask.ask(request(), current_user=USER)
-    assert healthy.answer == ANSWER and healthy.modelInvoked and not healthy.cacheHit
-    assert healthy.model == "openai_compat/deepseek-flash"
+    cached = await ask.ask(request(), current_user=USER)
+    assert cached.answer == ANSWER and not cached.modelInvoked and cached.cacheHit
+    assert cached.model == "openai_compat/deepseek-flash"
     assert len(rig.calls) == 1 and rig.snapshots.call_count == 2
     assert get_request_context() is None
