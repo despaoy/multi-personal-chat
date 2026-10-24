@@ -710,7 +710,9 @@ async def test_scope_review_uses_the_same_bounded_delivery_retry_contract(delive
                 raise provider_error(str(status))
             return json.dumps({"decisions": [dict(scope_level="user_global", authorized=True, evidence=rig.body)]})
         proposals.append(payload)
-        return proposal(rig.body)
+        result = json.loads(proposal(rig.body))
+        result["memories"][0]["scope_level"] = "user_global"
+        return json.dumps(result)
 
     rig.completion.complete.side_effect = complete
     for attempt, status in enumerate(statuses, 1):
@@ -721,13 +723,13 @@ async def test_scope_review_uses_the_same_bounded_delivery_retry_contract(delive
             receipt = marker["semantic_receipt"]
             assert receipt["stage"] == "scope_review" and receipt["status"] == "failed"
             assert receipt["retryable"] is (status == 503) and receipt["persisted"] == 0
-            assert not proposals
+            assert len(proposals) == attempt
         if attempt < len(statuses):
             assert response["memory_completion_state"] == "pending" and rig.selectable()
             assert marker["reason"] == "transient_model_failure"
             await rig.rebuild()
     if statuses[-1] == 200:
-        assert len(proposals) == 1
+        assert len(proposals) == len(statuses)
         await assert_saved_once(rig, response, attempts=len(statuses))
     else:
         assert response["memory_completion_state"] == "blocked" and not rig.selectable()

@@ -46,7 +46,7 @@ def proposal(scope):
 ])
 async def test_one_review_shared_by_request_and_write_validation(source, decisions, expected):
     completion = SimpleNamespace(complete=AsyncMock(return_value=response(decisions)))
-    authorization = await review_memory_scopes(completion, source)
+    authorization = await review_memory_scopes(completion, source, requested_scopes=tuple(d["scope_level"] for d in decisions))
     assert authorization.scope_levels == expected
     completion.complete.assert_awaited_once()
     review = json.loads(completion.complete.call_args.args[0][1]["content"])
@@ -61,9 +61,9 @@ async def test_one_review_shared_by_request_and_write_validation(source, decisio
 
 
 @pytest.mark.asyncio
-async def test_ordinary_memory_needs_no_scope_model_call():
+async def test_no_cross_scope_proposal_needs_no_scope_model_call():
     completion = SimpleNamespace(complete=AsyncMock())
-    authorization = await review_memory_scopes(completion, "请记住我叫海岚，这个名字一直没变。")
+    authorization = await review_memory_scopes(completion, "请记住我叫海岚，这个名字一直没变。", requested_scopes=())
     assert authorization.scope_levels == ("conversation",)
     completion.complete.assert_not_awaited()
 
@@ -78,7 +78,7 @@ async def test_ordinary_memory_needs_no_scope_model_call():
 async def test_incomplete_uncertain_or_invalid_review_is_an_error(raw):
     completion = SimpleNamespace(complete=AsyncMock(return_value=raw))
     with pytest.raises(MemoryResponseError):
-        await review_memory_scopes(completion, LOCAL)
+        await review_memory_scopes(completion, LOCAL, requested_scopes=("user_global",))
     completion.complete.assert_awaited_once()
 
 
@@ -86,8 +86,12 @@ def test_missing_review_and_review_from_different_source_cannot_authorize():
     for authorization in (None, MemoryScopeAuthorization(GLOBAL + "这是另一条消息。", (("user_global", "请所有角色记住这个名字"),))):
         with pytest.raises(MemoryResponseError):
             parse_llm_proposals(proposal("user_global"), source_message=GLOBAL, scope_authorization=authorization)
-        with pytest.raises(MemoryResponseError):
-            build_memory_llm_messages(GLOBAL, (), (), (), 2000, .85, scope_authorization=authorization)
+        if authorization is not None:
+            with pytest.raises(MemoryResponseError):
+                build_memory_llm_messages(GLOBAL, (), (), (), 2000, .85, scope_authorization=authorization)
+    constraints = json.loads(build_memory_llm_messages(GLOBAL, (), (), (), 2000, .85)[1]["content"])["proposal_constraints"]
+    assert constraints["scope_levels"] == ["conversation", "user_character", "user_global"]
+    assert constraints["scope_authorizations"] == []
 
 
 @pytest.mark.asyncio
@@ -102,16 +106,16 @@ async def test_scope_review_checks_its_actual_model_budget_before_calling():
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("granted,writer_scope,expected_status,expected_stage,expected_calls", [
-    (False, "conversation", "saved", "persistence", 2),
+    (False, "conversation", "saved", "persistence", 1),
     (True, "user_global", "saved", "persistence", 2),
     (False, "user_global", "failed", "proposal_validation", 2),
-    (None, "user_global", "failed", "scope_review", 1),
+    (None, "user_global", "failed", "scope_review", 2),
 ])
 async def test_review_and_writer_success_and_failure_are_truthful(tmp_path, granted, writer_scope,
         expected_status, expected_stage, expected_calls):
     source = GLOBAL if granted else LOCAL
     completion = SimpleNamespace(complete=AsyncMock(side_effect=[
-        response([decision(authorized=granted, evidence=source)]), proposal(writer_scope),
+        proposal(writer_scope), response([decision(authorized=granted, evidence=source)]),
     ]), close=AsyncMock())
     database = SQLiteDB(tmp_path / "scope-review.sqlite")
     repository = DatabaseCharacterMemoryRepository(database)
@@ -145,7 +149,7 @@ async def test_review_and_writer_success_and_failure_are_truthful(tmp_path, gran
 ])
 async def test_authorized_fact_quote_reaches_writer_without_expanding_other_facts(scope, source, decisions):
     completion = SimpleNamespace(complete=AsyncMock(return_value=response(decisions)))
-    authorization = await review_memory_scopes(completion, source)
+    authorization = await review_memory_scopes(completion, source, requested_scopes=tuple(d["scope_level"] for d in decisions))
     messages = build_memory_llm_messages(source, (), (), (), 2000, .85, scope_authorization=authorization)
     constraints = json.loads(messages[1]["content"])["proposal_constraints"]
     assert constraints["scope_levels"] == ["conversation", scope]
@@ -157,3 +161,39 @@ async def test_authorized_fact_quote_reaches_writer_without_expanding_other_fact
                                  source_message=source, scope_authorization=authorization)
     assert {item.memory.memory_key: item.scope_level for item in parsed} == {"user_name": scope, "user_major": "conversation"}
     completion.complete.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("target_scope,source", [
+    ("user_character", "我叫海岚；授权今后在与林栖的每段谈话里沿用这个名字。"),
+    ("user_global", "我叫海岚；授权今后在每个人物的对话里沿用这个名字。"),
+])
+async def test_proposed_scope_is_reviewed_without_keyword_nomination(tmp_path, target_scope, source):
+    seen = []
+
+    async def complete(messages):
+        payload = json.loads(messages[-1]["content"])
+        seen.append(payload)
+        assert payload["current_user_message"] == source
+        if len(seen) == 1:
+            assert payload["proposal_constraints"]["scope_levels"] == ["conversation", "user_character", "user_global"]
+            return proposal(target_scope)
+        assert payload["candidate_scopes"] == [target_scope]
+        return response([decision(target_scope, True, source)])
+
+    database = SQLiteDB(tmp_path / "semantic-scope.sqlite")
+    repository = DatabaseCharacterMemoryRepository(database)
+    scope = UserScope("web", "semantic-scope", "synthetic-owner", "first", "group")
+    worker = MemoryEnrichmentScheduler(config=MemoryLlmConfig(True, "unused", "fixture"),
+        completion=SimpleNamespace(complete=complete, close=AsyncMock()))
+    try:
+        receipt = await worker.schedule_and_wait(repository=repository, character_id="role", user_scope=scope,
+            message=source, rule_hints=(), source_message_id="source", immediate=True)
+        assert receipt["status"] == "saved" and receipt["persisted"] == 1 and len(seen) == 2
+        other_scope = UserScope("web", "semantic-scope", "synthetic-owner", "second", "group")
+        records = await repository.list_memory_records("role", other_scope)
+        assert len(records) == 1 and records[0]["scope_level"] == target_scope
+        assert "海岚" in records[0]["content"]
+    finally:
+        await worker.shutdown(timeout=1)
+        database.close_connection()

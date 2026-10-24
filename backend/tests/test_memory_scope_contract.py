@@ -52,7 +52,8 @@ async def test_scope_failure_rejects_whole_batch_without_partial_claims(tmp_path
     repository=DatabaseCharacterMemoryRepository(database)
     scope=UserScope("web", "scope-contract", "synthetic-owner", "synthetic-owner", "private")
     payload=json.dumps(dict(memories=[entry(), entry(scope_level="user_global")]))
-    completion=SimpleNamespace(complete=AsyncMock(return_value=payload), close=AsyncMock())
+    completion=SimpleNamespace(complete=AsyncMock(side_effect=[payload,
+        json.dumps({"decisions": [dict(scope_level="user_global", authorized=False, evidence="我叫清舟。")]})]), close=AsyncMock())
     worker=MemoryEnrichmentScheduler(config=MemoryLlmConfig(True, "unused", "fixture"), completion=completion)
     try:
         receipt=await worker.schedule_and_wait(repository=repository, character_id="role", user_scope=scope,
@@ -62,7 +63,7 @@ async def test_scope_failure_rejects_whole_batch_without_partial_claims(tmp_path
         assert receipt["accepted"] == receipt["persisted"] == 0
         assert await repository.list_memory_records("role", scope) == []
         assert len(await repository.list_sources("role", scope)) == 1
-        completion.complete.assert_awaited_once()
+        assert completion.complete.await_count == 2
     finally:
         await worker.shutdown(timeout=1)
         database.close_connection()
