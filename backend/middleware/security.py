@@ -981,17 +981,6 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
 # ═══════════════════════════════════════════════════════════════
 
 import uuid
-import contextvars
-
-# 上下文变量：同一次请求内所有日志自动携带 request_id
-_request_id_ctx: contextvars.ContextVar[str] = contextvars.ContextVar(
-    "request_id", default="-"
-)
-
-
-def get_request_id() -> str:
-    """获取当前请求的 request_id（供日志/业务代码使用）。"""
-    return _request_id_ctx.get()
 
 
 class RequestIdMiddleware(BaseHTTPMiddleware):
@@ -999,7 +988,6 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
 
     为每个请求生成唯一 UUID，注入到：
     - X-Request-Id 响应头（客户端可记录）
-    - contextvars（日志自动携带）
     - request.state.request_id（业务代码可读取）
 
     优先级：客户端传入 > 服务端生成
@@ -1008,11 +996,7 @@ class RequestIdMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         # 优先使用客户端传入的 X-Request-Id，否则生成
         req_id = request.headers.get("X-Request-Id") or str(uuid.uuid4())
-        token = _request_id_ctx.set(req_id)
         request.state.request_id = req_id
-        try:
-            response = await call_next(request)
-            response.headers["X-Request-Id"] = req_id
-            return response
-        finally:
-            _request_id_ctx.reset(token)
+        response = await call_next(request)
+        response.headers["X-Request-Id"] = req_id
+        return response

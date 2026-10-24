@@ -7,7 +7,6 @@
 
 from __future__ import annotations
 
-import abc
 from typing import Any, Dict, List, Optional, Protocol, runtime_checkable
 
 
@@ -53,81 +52,6 @@ class DatabaseInterface(Protocol):
         doc_kb_id）。孤儿 chunk 的 doc_title 为 None。
         SQLiteDB / SyncPgAdapter 必须实现此方法以支持向量索引重建。
         """
-        ...
-
-
-# ============================================
-# 推理引擎接口
-# ============================================
-
-@runtime_checkable
-class InferenceInterface(Protocol):
-    """推理引擎接口 - vLLM / Ollama / Mock 的统一抽象"""
-
-    async def generate(
-        self,
-        messages: List[Dict[str, str]],
-        lora_name: Optional[str] = None,
-        temperature: float = 0.85,
-        max_tokens: int = 512,
-        top_p: float = 0.92,
-        stream: bool = False,
-    ) -> Any:
-        """生成推理结果"""
-        ...
-
-    async def health_check(self) -> Dict[str, Any]:
-        """健康检查"""
-        ...
-
-
-# ============================================
-# 缓存接口
-# ============================================
-
-@runtime_checkable
-class CacheInterface(Protocol):
-    """缓存接口 - 语义缓存 / Redis 缓存的统一抽象"""
-
-    async def get(self, key: str) -> Optional[Any]:
-        """获取缓存"""
-        ...
-
-    async def set(self, key: str, value: Any, ttl: Optional[float] = None) -> None:
-        """设置缓存"""
-        ...
-
-    async def delete(self, key: str) -> bool:
-        """删除缓存"""
-        ...
-
-    async def clear(self) -> None:
-        """清除所有缓存"""
-        ...
-
-
-# ============================================
-# 向量检索接口
-# ============================================
-
-@runtime_checkable
-class VectorSearchInterface(Protocol):
-    """向量检索接口 - Faiss / Qdrant 的统一抽象"""
-
-    async def search(
-        self, query: str, top_k: int = 5, threshold: float = 0.5
-    ) -> List[Dict[str, Any]]:
-        """语义搜索"""
-        ...
-
-    async def add_documents(
-        self, documents: List[Dict[str, Any]]
-    ) -> int:
-        """添加文档到向量库"""
-        ...
-
-    async def delete_documents(self, doc_ids: List[str]) -> int:
-        """从向量库删除文档"""
         ...
 
 

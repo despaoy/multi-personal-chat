@@ -10,7 +10,7 @@ import json
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 
 from pydantic import BaseModel, Field
 
@@ -88,10 +88,3 @@ def load_jsonl(path: Path) -> List[PreferencePair]:
             data = json.loads(line)
             pairs.append(PreferencePair(**data))
     return pairs
-
-
-def filter_by_status(pairs: List[PreferencePair], status: str) -> List[PreferencePair]:
-    """按审核状态过滤偏好对。"""
-    if status == "all":
-        return pairs
-    return [p for p in pairs if p.review_status == status]
