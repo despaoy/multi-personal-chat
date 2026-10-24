@@ -3,7 +3,6 @@
 import asyncio
 import logging
 import os
-import time
 from fastapi import APIRouter, HTTPException, Depends, Response, Request
 
 from db.schemas import RegisterRequest, LoginRequest
@@ -11,6 +10,7 @@ from db.errors import RegistrationClosedError
 from app.config import create_access_token
 from app.dependencies import get_current_user, get_request_database
 from infra.auth_work import run_auth_database
+from infra.token_revocation import revoke_token
 from infra.environment import read_positive_int, read_positive_float
 from infra.bounded_executor import (
     BlockingWorkRejected,
@@ -79,47 +79,6 @@ async def _run_database_work(func, /, *args):
             detail="Authentication service is busy; retry later",
             headers={"Retry-After": "1"},
         ) from exc
-
-
-# Token 黑名单（内存 TTL，服务重启清空）
-# 存储已注销的 jti → 过期时间戳
-_TOKEN_BLACKLIST: dict[str, float] = {}
-_BLACKLIST_MAX_SIZE = 10000
-
-
-def _revoke_token(token: str) -> None:
-    """将 Token 加入黑名单，有效期为其剩余 JWT 寿命"""
-    import jwt as pyjwt
-    from app.config import JWT_SECRET, JWT_ALGORITHM
-    try:
-        payload = pyjwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM],
-                               options={"verify_exp": False})
-        jti = payload.get("jti", "")
-        exp = payload.get("exp", 0)
-        if jti and exp > time.time():
-            _TOKEN_BLACKLIST[jti] = exp
-            # 清理过期黑名单条目
-            _cleanup_blacklist()
-    except Exception:
-        pass  # token 无效则无需加入黑名单
-
-
-def _cleanup_blacklist() -> None:
-    """清理已过期的黑名单条目"""
-    now = time.time()
-    expired = [jti for jti, exp in _TOKEN_BLACKLIST.items() if exp <= now]
-    for jti in expired:
-        del _TOKEN_BLACKLIST[jti]
-    # 防止内存无限增长
-    if len(_TOKEN_BLACKLIST) > _BLACKLIST_MAX_SIZE:
-        oldest = sorted(_TOKEN_BLACKLIST.items(), key=lambda x: x[1])[:len(_TOKEN_BLACKLIST) // 2]
-        for jti, _ in oldest:
-            del _TOKEN_BLACKLIST[jti]
-
-
-def is_token_revoked(jti: str) -> bool:
-    """检查 Token 是否已被注销"""
-    return jti in _TOKEN_BLACKLIST and _TOKEN_BLACKLIST[jti] > time.time()
 
 
 def _bootstrap_registration_only() -> bool:
@@ -252,7 +211,7 @@ async def logout(request: Request, response: Response):
         if auth_header.startswith("Bearer "):
             token = auth_header[7:]
     if token:
-        _revoke_token(token)
+        revoke_token(token)
     response.delete_cookie(key="access_token", path="/")
     return {"success": True}
 

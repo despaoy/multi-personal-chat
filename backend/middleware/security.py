@@ -587,7 +587,7 @@ class SecurityMiddleware(BaseHTTPMiddleware):
                 # 导致未使用 Depends(get_current_user) 的路由（如 /api/stats、
                 # /api/model/status）在 Token 注销后仍可访问 24 小时。
                 # 现在在中间件层统一检查黑名单，所有路由都受益。
-                from api.auth import is_token_revoked
+                from infra.token_revocation import is_token_revoked
                 if is_token_revoked(payload.get("jti", "")):
                     return JSONResponse(
                         status_code=401,

@@ -117,7 +117,7 @@ async def test_get_current_admin_allows_admin_role(monkeypatch):
 
     # 绕过 token 黑名单检查
     monkeypatch.setattr(
-        "api.auth.is_token_revoked", lambda jti: False, raising=False
+        "infra.token_revocation.is_token_revoked", lambda jti: False, raising=False
     )
     # DB 复核仍返回 admin
     monkeypatch.setattr(
@@ -143,7 +143,7 @@ async def test_get_current_admin_rejects_non_admin_role(monkeypatch):
     request = _FakeRequest(payload, database)
 
     monkeypatch.setattr(
-        "api.auth.is_token_revoked", lambda jti: False, raising=False
+        "infra.token_revocation.is_token_revoked", lambda jti: False, raising=False
     )
     monkeypatch.setattr(
         database, "get_user_by_username",
@@ -167,7 +167,7 @@ async def test_get_current_admin_rejects_when_db_unreachable(monkeypatch):
     request = _FakeRequest(payload, database)
 
     monkeypatch.setattr(
-        "api.auth.is_token_revoked", lambda jti: False, raising=False
+        "infra.token_revocation.is_token_revoked", lambda jti: False, raising=False
     )
 
     def _raise(_username):
@@ -188,7 +188,7 @@ async def test_get_current_user_returns_role_from_payload(monkeypatch):
     from app import dependencies
 
     monkeypatch.setattr(
-        "api.auth.is_token_revoked", lambda jti: False, raising=False
+        "infra.token_revocation.is_token_revoked", lambda jti: False, raising=False
     )
 
     # 1. payload 含 role

@@ -21,7 +21,7 @@ async def get_current_user(request: Request) -> dict:
     if hasattr(request.state, "jwt_payload") and request.state.jwt_payload:
         payload = request.state.jwt_payload
         # 检查 Token 是否已被注销
-        from api.auth import is_token_revoked
+        from infra.token_revocation import is_token_revoked
         if is_token_revoked(payload.get("jti", "")):
             raise HTTPException(status_code=401, detail="Token 已注销，请重新登录")
         return {
@@ -56,7 +56,7 @@ async def get_current_user(request: Request) -> dict:
     payload = verify_token(token)
 
     # 检查 Token 是否已被注销
-    from api.auth import is_token_revoked
+    from infra.token_revocation import is_token_revoked
     if is_token_revoked(payload.get("jti", "")):
         raise HTTPException(status_code=401, detail="Token 已注销，请重新登录")
 
