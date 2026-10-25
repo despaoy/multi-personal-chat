@@ -115,7 +115,7 @@ def generation_environment(monkeypatch, provider):
     monkeypatch.setattr(gen, "get_llm_semaphore", lambda: asyncio.Semaphore(1))
     monkeypatch.setattr(gen, "get_vllm_client", AsyncMock(return_value=SimpleNamespace(generate=AsyncMock()) if provider == 'vllm' else None))
     prepared = SimpleNamespace(
-        character_id="tsukiyashiro_kisaki",
+        memory_operation_receipt=None, character_id="tsukiyashiro_kisaki",
         compiled=SimpleNamespace(profile_context="", dynamic_context="", reference_context=""),
         history=(),
     )

@@ -190,7 +190,7 @@ async def test_both_consumers_use_actual_saved_row_and_keep_visible_failure(monk
     meta = dict(warnings=["原有检索提示"], answerMode="unit", confidence=0.3, citations=[])
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', AsyncMock(return_value=("原始模型内容", False, meta)))
     prepared = SimpleNamespace(
-        character_id=request.characterId,
+        memory_operation_receipt=None, character_id=request.characterId,
         compiled=SimpleNamespace(profile_context="", dynamic_context="", reference_context=""),
         history=(),
     )

@@ -121,7 +121,7 @@ async def generation(monkeypatch):
     monkeypatch.setattr(generate, "response_cache", None)
     monkeypatch.setattr(generate, "circuit_breaker_registry", None)
     monkeypatch.setattr(generate, "get_llm_semaphore", lambda: asyncio.Semaphore(1))
-    prepared = SimpleNamespace(character_id="tsukiyashiro_kisaki",
+    prepared = SimpleNamespace(memory_operation_receipt=None, character_id="tsukiyashiro_kisaki",
         compiled=SimpleNamespace(profile_context="", dynamic_context="", reference_context=""), history=())
     monkeypatch.setattr(generate, "_prepare_character_turn", AsyncMock(return_value=prepared))
     runtime = turn_completion.TurnCompletionRuntime(capacity=1)

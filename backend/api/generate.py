@@ -8,7 +8,7 @@ import logging
 import os
 import time
 import uuid
-from contextlib import nullcontext
+from contextlib import ExitStack, contextmanager, nullcontext
 from datetime import datetime, timezone
 from typing import Any
 
@@ -190,47 +190,61 @@ async def _generate_reply_impl(
             context = await resolve_request_context(get_model_manager())
         except Exception as exc:
             raise HTTPException(503, "模型配置读取失败，请检查配置及模型状态后重试") from exc
-    slots = []
     started_at = time.time()
+    with ExitStack() as turn_scope, use_request_context(context), collect_usage():
+        try:
+            return await _generate_reply_body(
+                request,
+                current_user,
+                persist_message=persist_message,
+                enable_rag=enable_rag,
+                record_invocation=record_invocation,
+                invocation_purpose=invocation_purpose,
+                character_service=character_service,
+                message_db=message_db,
+                delivery_context=delivery_context,
+                prepared_override=prepared_override,
+                _turn_scope=turn_scope,
+            )
+        except (Exception, asyncio.CancelledError) as error:
+            if record_invocation and has_pending_usage():
+                try:
+                    await _record_model_invocation(
+                        request,
+                        context.provider.model,
+                        "default",
+                        round(time.time() - started_at, 2),
+                        error_type=type(error.__cause__ or error).__name__,
+                        database=message_db,
+                        purpose=invocation_purpose,
+                    )
+                except HTTPException as record_error:
+                    if isinstance(error, asyncio.CancelledError):
+                        raise error from record_error
+                    detail = with_provider_error(record_error.detail, error)
+                    if isinstance(error, HTTPException):
+                        detail = dict(detail, requestError=error.detail)
+                    raise HTTPException(503, detail=detail) from error
+            raise
+
+
+@contextmanager
+def _report_memory_operation(prepared):
+    """Preserve a committed operation receipt on later API failures."""
     try:
-        with use_request_context(context), collect_usage():
-            try:
-                return await _generate_reply_body(
-                    request,
-                    current_user,
-                    persist_message=persist_message,
-                    enable_rag=enable_rag,
-                    record_invocation=record_invocation,
-                    invocation_purpose=invocation_purpose,
-                    character_service=character_service,
-                    message_db=message_db,
-                    delivery_context=delivery_context,
-                    prepared_override=prepared_override,
-                    _completion_slots=slots,
-                )
-            except (Exception, asyncio.CancelledError) as error:
-                if record_invocation and has_pending_usage():
-                    try:
-                        await _record_model_invocation(
-                            request,
-                            context.provider.model,
-                            "default",
-                            round(time.time() - started_at, 2),
-                            error_type=type(error.__cause__ or error).__name__,
-                            database=message_db,
-                            purpose=invocation_purpose,
-                        )
-                    except HTTPException as record_error:
-                        if isinstance(error, asyncio.CancelledError):
-                            raise error from record_error
-                        detail = with_provider_error(record_error.detail, error)
-                        if isinstance(error, HTTPException):
-                            detail = dict(detail, requestError=error.detail)
-                        raise HTTPException(503, detail=detail) from error
-                raise
-    finally:
-        for slot in slots:
-            slot.release()
+        yield
+    except HTTPException as error:
+        if prepared.memory_operation_receipt is not None:
+            from character.memory_operation import operation_receipt_context
+
+            receipt = operation_receipt_context(prepared.memory_operation_receipt)
+            detail = error.detail if isinstance(error.detail, dict) else {"message": error.detail}
+            error.detail = {
+                **detail,
+                "memoryOperation": receipt,
+                "message": f"{detail['message']}\n请核对本轮记忆操作回执：\n{receipt}",
+            }
+        raise
 
 
 async def _invoke_model(generate, **kwargs):
@@ -259,7 +273,7 @@ async def _generate_reply_body(
     message_db,
     delivery_context: dict | None = None,
     prepared_override=None,
-    _completion_slots=None,
+    _turn_scope: ExitStack,
 ):
     """Generate using the accepted request's database and provider snapshot.
 
@@ -387,7 +401,7 @@ async def _generate_reply_body(
                     "message": "长期记忆回写繁忙，本轮尚未生成，请稍后重试。",
                 },
             ) from None
-        _completion_slots.append(completion_slot)
+        _turn_scope.callback(completion_slot.release)
 
     if mapped_character_id and prepared_override is None:
         if character_service is None:
@@ -413,6 +427,7 @@ async def _generate_reply_body(
         )
     if prepared_character_turn is not None:
         mapped_character_id = prepared_character_turn.character_id
+        _turn_scope.enter_context(_report_memory_operation(prepared_character_turn))
 
     # 检查vLLM是否实际支持该LoRA，避免404触发熔断
     vllm_effective_lora = vllm_lora_name if lora_name != "default" else None

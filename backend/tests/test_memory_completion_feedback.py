@@ -128,7 +128,7 @@ async def test_generation_preserves_answer_and_existing_warnings(monkeypatch, pr
     else:
         monkeypatch.setattr(gen, "_save_message", AsyncMock(return_value=True))
     prepared = SimpleNamespace(
-        character_id="tsukiyashiro_kisaki",
+        memory_operation_receipt=None, character_id="tsukiyashiro_kisaki",
         compiled=SimpleNamespace(profile_context="", dynamic_context="", reference_context=""),
         history=(),
     )
