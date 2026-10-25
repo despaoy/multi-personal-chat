@@ -1136,7 +1136,7 @@ def _candidate_to_proposal(
         return None
 
     if alias_projection is not None and target_record is not None and target_memory_key != alias_projection[1]:
-        return None  # Alias ownership cannot mutate the primary-name predicate.
+        raise MemoryResponseError("target_memory_key", "记忆 LLM 别名只能更新同一别名字段，不能修改规范姓名或其他身份字段")
     if operation == "ERASE" and not is_memory_erasure_request(source_message):
         return None
     if operation == "RETRACT" and not _CORRECTION_PATTERN.search(source_message):
@@ -1188,7 +1188,7 @@ def _candidate_to_proposal(
         and alias_projection is None
         and not _target_key_matches_kind(kind, target_memory_key)
     ):
-        return None
+        raise MemoryResponseError("kind", "记忆 LLM kind 与目标字段不匹配，不能将其他类别的事实写入该目标")
 
     raw_qualifiers = raw.get("qualifiers")
     # Source observations persist the entire current utterance, not this short
@@ -1218,7 +1218,7 @@ def _candidate_to_proposal(
         if (kind == "location" and target_record is not None
                 and target_memory_key in {"user_origin", "user_residence"}
                 and key != target_memory_key):
-            return None  # Same value type does not mean the same predicate.
+            raise MemoryResponseError("kind", "记忆 LLM location 的证据字段与目标不一致，来源地和居住地不能相互覆盖")
 
     if alias_projection is not None:
         proposed_content = ''  # Keep only the independently grounded alias predicate.

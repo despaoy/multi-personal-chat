@@ -71,7 +71,9 @@ def test_alias_cannot_supersede_primary_name_target():
     current = dict(
         memory_id="1", memory_key="user_name", memory_type="user_fact", content="用户说自己叫青岑", status="active"
     )
-    assert not parse(POSITIVE, operation="SUPERSEDE", target="user_name", existing=(current,))
+    with pytest.raises(MemoryResponseError) as caught:
+        parse(POSITIVE, operation="SUPERSEDE", target="user_name", existing=(current,))
+    assert caught.value.field == "target_memory_key"
 
 
 def test_explicit_alias_update_can_only_target_its_own_predicate():

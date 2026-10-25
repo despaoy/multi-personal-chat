@@ -6,6 +6,8 @@
 
 近期已同步服务器、本地和 GitHub 的主要链路：
 
+- 三类记忆目标冲突明确报错，非法提议在整批事实写入前失败；合法更新和来源保留经168项相关检查，见[目标冲突与批次失败](reports/backend-memory-target-contract-20261025.md)。
+
 - 记忆证据不再按后续提问的词面规则裁剪，模型显式选择连续原文片段，统一来源表保留问号与钟点，见[原文证据归属](reports/backend-memory-evidence-owner-20261025.md)。
 
 - 删除偏好条件标签的规则修补，模型用显式来源片段保存限定；真实写入、检索、参考编译和读回保留条件与否定，见[偏好对象与限定来源](reports/backend-memory-preference-owner-20261025.md)。

@@ -14,6 +14,7 @@ def _response(*, attributed_to="user", **memory):
 def test_supersede_must_use_existing_memory_key_and_overwrites_that_key():
     old = (
         {
+            "id": "1",
             "memory_key": "goal_点云补全",
             "memory_type": "shared_event",
             "content": "用户正在进行或准备：点云补全",
@@ -26,6 +27,7 @@ def test_supersede_must_use_existing_memory_key_and_overwrites_that_key():
         evidence="补全方向暂时不考虑了，我最近改做点云识别",
         confidence=0.97,
         operation="SUPERSEDE",
+        target_memory_id="1",
         target_memory_key="goal_点云补全",
     )
 
@@ -49,14 +51,16 @@ def test_supersede_rejects_invented_target_memory_key():
         evidence="我最近改做点云识别",
         confidence=0.99,
         operation="SUPERSEDE",
+        target_memory_id="1",
         target_memory_key="goal_不存在",
     )
-    proposals = parse_llm_proposals(
-        raw,
-        source_message="我最近改做点云识别。",
-        existing_memories=({"memory_key": "goal_点云补全", "content": "用户正在做点云补全"},),
-    )
-    assert proposals == []
+    with pytest.raises(MemoryResponseError) as caught:
+        parse_llm_proposals(
+            raw,
+            source_message="我最近改做点云识别。",
+            existing_memories=({"id": "1", "memory_key": "goal_点云补全", "content": "用户正在做点云补全"},),
+        )
+    assert caught.value.field == "target_memory_key"
 
 
 def test_supersede_rejects_real_but_incompatible_target_key():
@@ -67,14 +71,16 @@ def test_supersede_rejects_real_but_incompatible_target_key():
         evidence="我叫小明",
         confidence=0.99,
         operation="SUPERSEDE",
+        target_memory_id="1",
         target_memory_key="goal_点云补全",
     )
-    proposals = parse_llm_proposals(
-        raw,
-        source_message="我叫小明。",
-        existing_memories=({"memory_key": "goal_点云补全", "content": "用户正在做点云补全"},),
-    )
-    assert proposals == []
+    with pytest.raises(MemoryResponseError) as caught:
+        parse_llm_proposals(
+            raw,
+            source_message="我叫小明。",
+            existing_memories=({"id": "1", "memory_key": "goal_点云补全", "content": "用户正在做点云补全"},),
+        )
+    assert caught.value.field == "kind"
 
 
 def test_ellipsis_value_must_be_grounded_in_supplied_context():
@@ -111,7 +117,7 @@ def test_third_party_fact_is_not_saved():
     assert parse_llm_proposals(third_party, source_message="我的朋友喜欢咖啡。") == []
 
 
-def test_add_ignores_model_generated_key_and_keeps_literal_goal_value():
+def test_add_rejects_invented_target_and_keeps_literal_value_without_target():
     raw = _response(
         kind="goal",
         value="准备保研面试",
@@ -121,7 +127,12 @@ def test_add_ignores_model_generated_key_and_keeps_literal_goal_value():
         operation="ADD",
         target_memory_key="goal_准备保研面试",
     )
-    proposals = parse_llm_proposals(raw, source_message="我正在准备保研面试。")
+    with pytest.raises(MemoryResponseError) as caught:
+        parse_llm_proposals(raw, source_message="我正在准备保研面试。")
+    assert caught.value.field == "target_memory_id"
+    payload = json.loads(raw)
+    payload["memories"][0]["target_memory_key"] = ""
+    proposals = parse_llm_proposals(json.dumps(payload, ensure_ascii=False), source_message="我正在准备保研面试。")
     assert len(proposals) == 1
     assert proposals[0].memory.memory_key == "goal_准备保研面试"
     assert proposals[0].target_memory_key == ""
@@ -135,12 +146,13 @@ def test_negative_preference_uses_explicit_model_kind_and_literal_value():
         evidence="不是完全讨厌咖啡，只是不喜欢太苦的。",
         confidence=0.95,
         operation="SUPERSEDE",
+        target_memory_id="1",
         target_memory_key="preference_咖啡",
     )
     proposals = parse_llm_proposals(
         raw,
         source_message="不是完全讨厌咖啡，只是不喜欢太苦的。",
-        existing_memories=({"memory_key": "preference_咖啡", "content": "用户说不喜欢咖啡"},),
+        existing_memories=({"id": "1", "memory_key": "preference_咖啡", "content": "用户说不喜欢咖啡"},),
     )
     assert len(proposals) == 1
     assert proposals[0].memory.content == "用户不喜欢太苦的咖啡"

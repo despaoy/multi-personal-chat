@@ -77,8 +77,8 @@ def test_explicit_id_keeps_same_key_records_unambiguous(reverse):
     assert "年糕" in proposal.memory.content and "豆包" not in proposal.memory.content
 
 
-@pytest.mark.parametrize("invalid", [False, True])
-async def test_actual_worker_rejects_a_bad_target_before_any_fact_write(tmp_path, invalid):
+@pytest.mark.parametrize("target_error", ["", "missing_id", "incompatible_kind"])
+async def test_actual_worker_rejects_a_bad_target_before_any_fact_write(tmp_path, target_error):
     from datetime import datetime, timedelta, timezone
     from types import SimpleNamespace
     from unittest.mock import AsyncMock
@@ -98,7 +98,9 @@ async def test_actual_worker_rejects_a_bad_target_before_any_fact_write(tmp_path
     source = "我的专业是材料工程。我家的猫叫年糕，它现在三岁。"
     new = dict(operation="ADD", kind="major", value="材料工程", content="", evidence="我的专业是材料工程。",
                confidence=.99, attributed_to="user")
-    selected = target_response(target_memory_id="" if invalid else str(cat["id"]))
+    selected = target_response(target_memory_id="" if target_error == "missing_id" else str(cat["id"]))
+    if target_error == "incompatible_kind":
+        selected.update(kind="major", value="材料工程", content="用户的专业是材料工程", evidence=new["evidence"])
     completion = SimpleNamespace(complete=AsyncMock(return_value=json.dumps({"memories": [new, selected]}, ensure_ascii=False)), close=AsyncMock())
     worker = MemoryEnrichmentScheduler(config=MemoryLlmConfig(True, "unused", "fixture"), completion=completion,
         embedding_provider=SimpleNamespace(embed_texts=lambda texts: [[1., 0.] for _ in texts]))
@@ -107,9 +109,11 @@ async def test_actual_worker_rejects_a_bad_target_before_any_fact_write(tmp_path
             message=source, rule_hints=(), source_message_id="new", feedback_target_ids=tuple(str(row["id"]) for row in before))
         rows = await repository.list_memory_records("role", scope, include_inactive=True)
         assert result["source_capture"] == "recorded"
-        if invalid:
+        if target_error:
             assert result["status"] == "failed" and result["stage"] == "proposal_validation"
-            assert result["field"] == "target_memory_id" and result["accepted"] == result["persisted"] == 0
+            expected_field = "target_memory_id" if target_error == "missing_id" else "kind"
+            assert result["field"] == expected_field and result["accepted"] == result["persisted"] == 0
+            assert result["reason"] == "invalid_model_response" and not result["retryable"]
             assert rows == before
         else:
             assert result["status"] == "saved" and result["persisted"] == 2
@@ -123,3 +127,26 @@ async def test_actual_worker_rejects_a_bad_target_before_any_fact_write(tmp_path
     finally:
         await worker.shutdown(timeout=1)
         database.close_connection()
+
+
+@pytest.mark.parametrize("kind,value,source,right_key,wrong_key", [
+    ("major", "考古学", "我的专业是考古学。", "user_major", "user_name"),
+    ("like", "红茶", "我喜欢红茶。", "preference_咖啡", "user_major"),
+    ("location", "丽水", "我目前住在丽水。", "user_residence", "user_origin"),
+    ("location", "宣城", "我的老家在宣城。", "user_origin", "user_residence"),
+])
+@pytest.mark.parametrize("wrong", [False, True])
+def test_target_predicate_must_match_the_declared_fact(kind, value, source, right_key, wrong_key, wrong):
+    key = wrong_key if wrong else right_key
+    record = dict(id="101", memory_key=key, memory_type="user_fact", content="用户此前保存的记录", status="active")
+    item = dict(kind=kind, value=value, evidence=source, content="", operation="SUPERSEDE",
+                confidence=.99, attributed_to="user", target_memory_id="101", target_memory_key=key)
+    if wrong:
+        with pytest.raises(MemoryResponseError) as caught:
+            parse_target(item, [record])
+        assert caught.value.field == "kind"
+    else:
+        proposal, = parse_target(item, [record])
+        assert proposal.operation == "SUPERSEDE" and proposal.target_memory_id == "101"
+        assert proposal.target_memory_key == proposal.memory.memory_key == right_key
+        assert value in proposal.memory.content and proposal.evidence == source
