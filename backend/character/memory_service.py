@@ -898,7 +898,7 @@ class CharacterMemoryService:
             trace['status'] = 'no_records_returned'
             return (), 0
 
-        intents = _detect_memory_intents(query)
+        intents = _MemoryIntents() if for_contextual_selection else _detect_memory_intents(query)
         if not self._query_expansion_enabled and intents.goal:
             # goal 类别路由属于平衡版 query expansion，不污染关闭该开关
             # 的 legacy 消融路径；姓名/偏好/promise 的既有安全意图不变。
@@ -938,9 +938,9 @@ class CharacterMemoryService:
             semantic_scores = await asyncio.to_thread(self._semantic_similarities, retrieval_query, usable_records)
             trace['semantic_status'] = 'available'
 
-        query_views = (
-            _expand_memory_query(query, intents) if self._query_expansion_enabled else ((query or "").strip(),)
-        )
+        query_views = ((query or "").strip(),)
+        if self._query_expansion_enabled and not for_contextual_selection:
+            query_views = _expand_memory_query(query, intents)
         if for_contextual_selection and retrieval_query != query:
             query_views = (*query_views, retrieval_query)
         query_grams = tuple(_bigrams(view) for view in query_views if view)
@@ -967,7 +967,9 @@ class CharacterMemoryService:
                 relevances.append(relevance)
             max_relevance = max(relevances, default=0.0)
             lexical_max_scores[index] = max_relevance
-            intent_match = _matches_intent(row, intents) or bool(query_plan.matched_fields(row))
+            intent_match = not for_contextual_selection and (
+                _matches_intent(row, intents) or bool(query_plan.matched_fields(row))
+            )
             if intent_match:
                 intent_scores[index] = INTENT_RELEVANCE_FLOOR
 
@@ -1013,7 +1015,6 @@ class CharacterMemoryService:
             # not dilute the contextual lexical signal.
             contextual_routes = [
                 (1.0, _rank_route(lexical_max_scores, eligible)),
-                (1.0, _rank_route(intent_scores, eligible)),
             ]
             if semantic_scores is not None:
                 contextual_routes.append((1.0, _rank_route(semantic_scores, eligible)))

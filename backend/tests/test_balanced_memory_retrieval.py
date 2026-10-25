@@ -375,3 +375,25 @@ async def test_evidence_decode_complete_event_links_keep_evidence_and_version_bi
         "kisaki", _scope(), "我喜欢咖啡吗？")
     assert len(selected) == 1 and selected[0].evidence == ("我喜欢咖啡。", event["content"])
     assert selected[0].storage_versions == (("1", record_version(parent)), ("99", record_version(event)))
+
+
+
+@pytest.mark.parametrize("expansion", [False, True])
+async def test_contextual_recall_keeps_independent_equipment_among_many_relevant_preferences(expansion):
+    records = [
+        _row(index, f"用户喜欢玄叶{index:02}茶", memory_key=f"preference_玄叶{index:02}茶",
+             memory_type="user_fact", evidence=[f"我喜欢玄叶{index:02}茶。"],
+             metadata={"fact_kind": "preference"})
+        for index in range(1, 41)
+    ]
+    equipment = "我手头唯一的冲泡设备是青石电热壶，没有别的冲泡器具。"
+    records.append(_row(41, "用户手头唯一的冲泡设备是青石电热壶，没有其他冲泡器具。",
+        memory_key="fact_equipment", memory_type="user_fact", evidence=[equipment],
+        metadata={"fact_kind": "other_user_fact"}))
+    service = CharacterMemoryService(_Repo(records), semantic_enabled=False, query_expansion_enabled=expansion)
+    query = "请从我喜欢的茶里选一种，结合我手头唯一的冲泡设备给出做法。"
+    packets, total = await service.load_relevant_memories("kisaki", _scope(), query, for_contextual_selection=True)
+    assert total == 41 and len(packets) == 24
+    device, = (item for item in packets if item.memory_id == "41")
+    assert device.evidence == (equipment,)
+    assert any(item.memory_key.startswith("preference_") for item in packets)

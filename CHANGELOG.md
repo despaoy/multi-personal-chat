@@ -23,6 +23,9 @@ interfaces.
 
 ### Changed
 
+- Rank contextual memory candidates using actual query and history relevance; remove
+  duplicate keyword-intent boosts that crowd out evidence for independent subtasks.
+
 - Let the existing contextual selector resolve memory subjects from complete history;
   remove duplicate regex vetoes before review while retaining scoped source authority.
 
