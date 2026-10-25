@@ -890,6 +890,9 @@ class CharacterMemoryService:
                 and _is_current_record(row, now, include_pending=False)
                 for field, key in PERSONAL_MEMORY_KEYS.items()
                 if key not in current_keys and key in (row.get('legacy_field_keys') or ()))
+            if any((row.get('metadata') or {}).get('fact_kind') == 'other_user_fact'
+                   and _is_current_record(row, now, include_pending=False) for row in records):
+                ambiguous_fields.update(field for field, key in PERSONAL_MEMORY_KEYS.items() if key not in current_keys)
             trace['ambiguous_fields'] = sorted(ambiguous_fields)
             for field in ambiguous_fields:
                 trace['field_presence'][field] = None

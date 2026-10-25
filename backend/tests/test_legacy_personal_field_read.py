@@ -288,3 +288,59 @@ async def test_every_linked_source_must_support_the_same_current_field(tmp_path,
     assert result.status == ("known" if confirmed else "unverified")
     if not confirmed:
         assert items and second_source in items[0].content
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["other_user_fact", "major", "invalid_kind"])
+async def test_current_model_kind_is_preserved_through_actual_write_and_recall(tmp_path, kind):
+    import json
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    from character.memory_llm import MemoryEnrichmentScheduler, MemoryLlmConfig
+
+    database = SQLiteDB(tmp_path / "current-kind.sqlite")
+    repo = DatabaseCharacterMemoryRepository(database)
+    source = "我的专业是考古学。"
+    content = "用户明确记录考古学"
+    raw = dict(kind=kind, value="考古学", content=content, evidence=source,
+               operation="ADD", confidence=.99, attributed_to="user")
+    completion = SimpleNamespace(complete=AsyncMock(return_value=json.dumps({"memories": [raw]}, ensure_ascii=False)),
+                                 close=AsyncMock())
+    worker = MemoryEnrichmentScheduler(config=MemoryLlmConfig(True, "unused", "fixture"), completion=completion,
+        embedding_provider=SimpleNamespace(embed_texts=lambda texts: [[1., 0.] for _ in texts]))
+    try:
+        result = await worker.schedule_and_wait(repository=repo, character_id="role", user_scope=SCOPE,
+            message=source, rule_hints=(), source_message_id="current-kind")
+        rows = await repo.list_memory_records("role", SCOPE)
+        assert result["source_capture"] == "recorded"
+        assert (await repo.list_sources("role", SCOPE))[0]["body"] == source
+        if kind == "invalid_kind":
+            assert result["status"] == "failed" and result["stage"] == "proposal_validation"
+            assert result["field"] == "kind" and result["accepted"] == result["persisted"] == 0
+            assert not rows
+            return
+        assert result["status"] == "saved" and result["persisted"] == 1
+        record, = rows
+        expected_key = "fact_考古学" if kind == "other_user_fact" else "user_major"
+        assert record["memory_key"] == expected_key and record["content"] == content
+        assert record["metadata"]["fact_kind"] == kind and record["evidence"] == [source]
+        trace = {}
+        packets, _ = await CharacterMemoryService(repo, semantic_enabled=False).load_relevant_memories(
+            "role", SCOPE, "我的专业是什么？", diagnostics=trace)
+        packet, = packets
+        assert packet.memory_key == expected_key and packet.memory_id == str(record["id"])
+        assert source in packet.evidence and not trace["legacy_projected_ids"]
+        assert trace["field_presence"]["major"] is (None if kind == "other_user_fact" else True)
+        context = CompiledCharacterContext("", "", "参考", (packet.memory_id,), memory_status="available",
+            memory_packets=packets, memory_field_presence=tuple(trace["field_presence"].items()))
+        read_result, = read_memory_fields("我的专业是什么？", context)
+        if kind == "other_user_fact":
+            assert read_result.status == "unverified"
+            assert render_memory_response("我的专业是什么？", context) is None
+        else:
+            assert read_result.status == "known" and read_result.value == "考古学"
+        assert await repo.list_memory_records("role", SCOPE) == rows
+        completion.complete.assert_awaited_once()
+    finally:
+        await worker.shutdown(timeout=1)
+        database.close_connection()

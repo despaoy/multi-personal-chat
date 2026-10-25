@@ -153,7 +153,7 @@ MERGE/SUPERSEDE/COEXIST/RETRACT/ERASE 必须从白名单逐字复制 target_memo
 
 对明确表达的本人未来计划，“说过这个计划”与“已经实施”是两个不同的命题。若计划的时间、地点、条件或尚未实施说明分散在长消息里，使用 kind=shared_event、operation=ADD 保存当前完整发言的原话观察，绝不确认行动发生。value 取当前连续原文中的短话题（不超过 payload.proposal_constraints.max_value_chars），evidence 只复制一段相关连续原文（不超过 max_evidence_chars），content 留空、qualifiers 使用空对象 {}，不要再次概括条件。后端保留整条当前消息及全部限定，包括末尾条件，不会用短引文代替完整来源。不要拼接开头和末尾当作连续 evidence。虚构材料、第三方计划不是用户本人的计划；未确定的外部事实仍按 PENDING 处理，不因这条规则变成事实。
 
-写入新内容的 ADD/MERGE/SUPERSEDE/COEXIST/PENDING 必须填写 payload.proposal_constraints.kinds 中的 kind 和非空 value，不能从 target 的存储类型猜 kind。value 只表示对象，不包含场景、必要条件或格式化标签；场景和条件分别写入 qualifiers。籍贯/家乡用 origin，长期现居用 residence；原话没有区分来处与现居时才用 location。
+写入新内容的 ADD/MERGE/SUPERSEDE/COEXIST/PENDING 必须填写 payload.proposal_constraints.kinds 中的 kind 和非空 value，不能从 target 的存储类型猜 kind。value 只表示对象，不包含场景、必要条件或格式化标签；场景和条件分别写入 qualifiers。籍贯/家乡用 origin，长期现居用 residence；原话没有区分来处与现居时才用 location。 已列出的个人字段使用对应 kind，other_user_fact 仅用于未列出的个人事实；请直接给出正确 kind，不要依赖后端从通用类别补出个人字段。
 
 value 有两个格式：本条 evidence 中逐字复制的连续短字符串，或模型给出的有序原文片段列表。需要组合分散对象片段时必须显式使用列表，例如 evidence 为“推荐饮料时避开含咖啡因的”，value 可以是 ["含咖啡因的","饮料"]。每片必须有证据，组合后不超过 max_value_chars；后端不猜片段、不改写对象。明确省略的用户上下文消歧遵守下段约定。
 
@@ -313,6 +313,7 @@ class ValidatedMemoryProposal:
     # Server-derived retention constraints; never copied from model JSON.
     protected_memory_keys: tuple[str, ...] = ()
     value_fragments: tuple[str, ...] = ()
+    fact_kind: str = ""
 
 
 @dataclass(frozen=True)
@@ -1156,19 +1157,6 @@ def _candidate_to_proposal(
             confidence=confidence,
         )
 
-    # Generic labels must not hide independently proven personal fields.
-    # Preserve qualified/ambiguous observations and existing generic targets.
-    if (kind == "other_user_fact" and target_record is None
-            and operation == "ADD" and not raw.get("qualifiers")):
-        supported = _supported_generic_fact(value, evidence)
-        complete_support = _supported_generic_fact(value, source_message)
-        if (supported is not None and complete_support is not None
-                and supported[0] == complete_support[0]
-                and supported[1].memory_key == complete_support[1].memory_key
-                and supported[1].content == complete_support[1].content):
-            kind, supported_memory = supported
-            proposed_content = supported_memory.content
-
     if kind not in _ALLOWED_KINDS:
         # Target-only withdrawal and erasure may omit a new fact kind.
         kind = _infer_kind_from_target(target_record)
@@ -1287,6 +1275,7 @@ def _candidate_to_proposal(
         proposed_valid_from=str(raw_valid_from or "").strip(),
         proposed_valid_to=str(raw_valid_to or "").strip(),
         value_fragments=value_fragments if writes_content else (),
+        fact_kind=kind,
         source_observation=(kind == "shared_event")
             and operation not in {"RETRACT", "ERASE"},
     )
@@ -2017,6 +2006,7 @@ class MemoryEnrichmentScheduler:
         metadata = {
             "qualifiers": dict(proposal.qualifiers),
             "target_memory_key": proposal.target_memory_key,
+            "fact_kind": proposal.fact_kind,
             "write_mode": job.write_mode,
             "feedback_target_ids": list(job.feedback_target_ids),
             "temporal_provenance": model_temporal_provenance(

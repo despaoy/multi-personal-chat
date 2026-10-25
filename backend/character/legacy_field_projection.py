@@ -46,6 +46,8 @@ def project_legacy_personal_record(row, sources):
     key = str(row.get("memory_key") or "")
     if not key.startswith("fact_") or row.get("memory_type") != "user_fact":
         return row
+    if (row.get("metadata") or {}).get("fact_kind"):
+        return row
     quotes = row.get("evidence")
     if not isinstance(quotes, (list, tuple)) or not quotes or not all(isinstance(q, str) for q in quotes):
         return row

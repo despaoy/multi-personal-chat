@@ -1,6 +1,7 @@
-"""Generic model labels must not hide independently proven personal fields."""
+"""Declared model kinds remain visible without backend type promotion."""
 
 import json
+from datetime import datetime, timezone
 
 import pytest
 
@@ -26,7 +27,7 @@ from repositories.character_memory import DatabaseCharacterMemoryRepository
         ("我目前住在丽水。", "丽水", "我目前住哪里？", "residence"),
     ],
 )
-async def test_generic_proposal_is_visible_to_real_personal_field_recall(tmp_path, source, value, query, field):
+async def test_declared_personal_kind_is_visible_to_real_field_recall(tmp_path, source, value, query, field):
     raw = dict(
         kind="other_user_fact",
         value=value,
@@ -36,11 +37,17 @@ async def test_generic_proposal_is_visible_to_real_personal_field_recall(tmp_pat
         operation="ADD",
         attributed_to="user",
     )
+    (generic,) = parse_llm_proposals(json.dumps({"memories": [raw]}, ensure_ascii=False), source_message=source)
+    assert generic.fact_kind == "other_user_fact" and generic.memory.memory_key == "fact_" + value
+    assert generic.memory.content == raw["content"] and generic.evidence == source
+    raw["kind"] = field
     (proposal,) = parse_llm_proposals(json.dumps({"memories": [raw]}, ensure_ascii=False), source_message=source)
     repo = DatabaseCharacterMemoryRepository(SQLiteDB(tmp_path / "fields.sqlite"))
     scope = build_user_scope(
         platform="web", adapter="test", sender_id="alice", conversation_id="alice", conversation_type="private"
     )
+    observed = datetime.now(timezone.utc)
+    await repo.capture_source("kisaki", scope, source_message_id="source-1", body=source, observed_at=observed)
     await repo.append_claim(
         "kisaki",
         scope,
@@ -49,6 +56,8 @@ async def test_generic_proposal_is_visible_to_real_personal_field_recall(tmp_pat
         evidence=(proposal.evidence,),
         source_message_id="source-1",
         confidence=proposal.confidence,
+        metadata={"fact_kind": proposal.fact_kind},
+        observed_at=observed.isoformat(),
     )
     items, _, trace = await CharacterMemoryService(repo, semantic_enabled=False).recall_with_diagnostics(
         "kisaki", scope, query

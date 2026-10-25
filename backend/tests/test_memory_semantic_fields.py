@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from character.memory_llm import parse_llm_proposals
+from character.memory_llm import MemoryResponseError, parse_llm_proposals
 
 
 def parse(kind, value, source, **extra):
@@ -37,4 +37,6 @@ def test_origin_and_residence_cannot_overwrite_each_other(kind, key):
                 attributed_to="user", target_memory_id="1", target_memory_key=key)
     old = dict(id="1", memory_type="user_fact", memory_key=key, content="用户说自己居住在宣城",
                importance=.6, confidence=.98, status="active")
-    assert parse_llm_proposals(json.dumps({"memories": [item]}), source_message=source, existing_memories=(old,)) == []
+    with pytest.raises(MemoryResponseError) as caught:
+        parse_llm_proposals(json.dumps({"memories": [item]}), source_message=source, existing_memories=(old,))
+    assert caught.value.field == "kind"

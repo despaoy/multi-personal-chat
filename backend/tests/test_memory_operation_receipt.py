@@ -7,6 +7,7 @@ import pytest
 from character.memory_llm import (
     MemoryEnrichmentScheduler,
     MemoryLlmConfig,
+    MemoryResponseError,
     classify_memory_write_mode,
     is_memory_erasure_request,
     parse_llm_proposals,
@@ -29,15 +30,20 @@ def test_natural_erasure_routes_to_same_hot_path_and_admission(source):
     assert len(parse_llm_proposals(response(source), source_message=source, existing_memories=(record(),))) == 1
 
 
-@pytest.mark.parametrize('source', [
-    '不要忘掉我的住址。', '别从记忆里删除我的猫名。',
-    '如果要从记忆里删除那条记录，该怎么做？',
-    '他说请忘掉我的住址。', '“请忘掉我的住址”是示例命令。',
-    '我不希望你把这条记忆删除。',
+@pytest.mark.parametrize('source,field', [
+    ('不要忘掉我的住址。', None), ('别从记忆里删除我的猫名。', None),
+    ('如果要从记忆里删除那条记录，该怎么做？', 'evidence'),
+    ('他说请忘掉我的住址。', None), ('“请忘掉我的住址”是示例命令。', None),
+    ('我不希望你把这条记忆删除。', None),
 ])
-def test_non_authorizing_text_cannot_erase_even_with_model_erase_proposal(source):
+def test_non_authorizing_text_cannot_erase_even_with_model_erase_proposal(source, field):
     assert not is_memory_erasure_request(source)
-    assert not parse_llm_proposals(response(source), source_message=source, existing_memories=(record(),))
+    if field:
+        with pytest.raises(MemoryResponseError) as caught:
+            parse_llm_proposals(response(source), source_message=source, existing_memories=(record(),))
+        assert caught.value.field == field
+    else:
+        assert not parse_llm_proposals(response(source), source_message=source, existing_memories=(record(),))
 
 
 def record():
