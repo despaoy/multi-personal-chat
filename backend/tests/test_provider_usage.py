@@ -112,6 +112,15 @@ async def test_api_records_actual_usage_even_if_answer_rejected(installed, monke
     assert rows[0]["totalTokens"] == 120 * expected_calls
     assert rows[0]["usageSource"] == "provider"
     assert bool(rows[0]["errorType"]) == (finish == "length")
+    from services.stats import StatsService
+
+    monkeypatch.setattr("services.stats.check_service", lambda _port: False)
+    recorded = StatsService(database=database, inference_runtime=generate.inference_runtime,
+        env={"ASTRBOT_ENABLED": "false"}).collect()["metrics"]
+    assert recorded["chatGenerations"] == 1
+    assert recorded["chatGenerationFailures"] == int(finish == "length")
+    assert recorded["chatGenerationFailureRate"] == float(finish == "length")
+
 
 
 def test_source_migration_keeps_legacy_values_and_is_idempotent(monkeypatch):
@@ -345,3 +354,9 @@ async def test_model_alert_tracks_actual_generation_failure(
     assert [alert["value"] for alert in model_alerts] == ([3] if last_failure == "provider" else [])
     assert len(installed.calls) == len(publication_database.execute_sql('SELECT id FROM model_invocations')) == 3
     assert publication_database.execute_sql('SELECT id FROM messages') == []
+    monkeypatch.setattr("services.stats.check_service", lambda _port: False)
+    recorded = StatsService(database=publication_database, inference_runtime=generate.inference_runtime,
+        env={"ASTRBOT_ENABLED": "false"}).collect()["metrics"]
+    assert recorded["chatGenerations"] == recorded["chatGenerationFailures"] == 3
+    assert recorded["chatGenerationFailureRate"] == 1.0
+    assert not {"modelFailureRate", "modelFailures", "modelInvocations"} & recorded.keys()

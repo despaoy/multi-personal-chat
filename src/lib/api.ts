@@ -61,6 +61,7 @@ export class ApiRequestError extends Error {
 export interface StatsResponse {
   todayReplies: number;
   avgResponseTime: number;
+  chatGenerationFailureRate: number;
   activeSessions: number;
   modelLoad: number;
   cpuUsage: number;

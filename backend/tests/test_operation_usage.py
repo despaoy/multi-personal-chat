@@ -196,8 +196,8 @@ def test_background_and_knowledge_records_do_not_change_chat_metrics(tmp_path):
     for purpose in ['memory_judgement', 'knowledge_answer']:
         rig.database.add_model_invocation({'purpose': purpose, 'costTime': 9000.0, 'errorType': 'synthetic'})
     metrics = StatsService(database=rig.database, inference_runtime=rig.queue, env={'ASTRBOT_ENABLED': 'false'}).collect()['metrics']
-    assert metrics['modelInvocations'] == 1 and metrics['modelFailures'] == 0
-    assert metrics['modelFailureRate'] == 0 and metrics['p95ResponseTime'] == metrics['p99ResponseTime'] == 2.0
+    assert metrics['chatGenerations'] == 1 and metrics['chatGenerationFailures'] == 0
+    assert metrics['chatGenerationFailureRate'] == 0 and metrics['p95ResponseTime'] == metrics['p99ResponseTime'] == 2.0
     assert len(rig.database.execute_sql('SELECT * FROM model_invocations')) == 3
 
 

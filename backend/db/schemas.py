@@ -139,7 +139,7 @@ class StatsResponse(BaseModel):
     avgResponseTime: float = 0.0
     p95ResponseTime: float = 0.0
     p99ResponseTime: float = 0.0
-    modelFailureRate: float = 0.0
+    chatGenerationFailureRate: float
     ragFailureRate: float = 0.0
     activeSessions: int = 0
     modelLoad: int = 0

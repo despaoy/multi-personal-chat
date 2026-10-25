@@ -53,6 +53,7 @@ def rig_factory(tmp_path, monkeypatch):
 async def test_collection_failure_is_safe_503_not_successful_zero_metrics(rig_factory, caplog, stage):
     rig = rig_factory(env={})
     rig.seed()
+    rig.database.add_model_invocation({"purpose": "chat", "costTime": 1.0})
     rig.db.failure = stage
     async with rig.client() as client:
         response = await client.get("/api/stats/metrics")
@@ -121,6 +122,7 @@ async def test_expired_snapshot_does_not_hide_outage_and_recovers(rig_factory):
 async def test_counts_over_ten_thousand_use_small_aggregates_and_real_queue_load(rig_factory):
     rig = rig_factory()
     rig.seed(10001)
+    rig.database.add_model_invocation({"purpose": "chat", "costTime": 1.0})
     async with rig.client() as client:
         response = await client.get("/api/stats")
     assert response.status_code == 200
@@ -210,3 +212,26 @@ async def test_collection_cancellation_keeps_its_original_type(rig_factory, monk
         with pytest.raises(asyncio.CancelledError) as caught:
             await client.get("/api/stats/metrics")
     assert caught.value is failure
+
+
+
+async def test_generation_percentiles_never_substitute_message_history(rig_factory):
+    rig = rig_factory(env={"STATS_CACHE_TTL_SECONDS": "0", "ASTRBOT_ENABLED": "false"})
+    rig.seed(3, cost=99.0)
+    async with rig.client() as client:
+        empty = await client.get("/api/stats/metrics")
+        assert empty.status_code == 200
+        assert empty.json()["p95ResponseTime"] == empty.json()["p99ResponseTime"] == 0.0
+        assert empty.json()["chatGenerations"] == 0
+        for cost in [2.0, 4.0]:
+            rig.database.add_model_invocation({"purpose": "chat", "costTime": cost})
+        rig.database.add_model_invocation({"purpose": "memory_judgement", "costTime": 9000.0, "errorType": "synthetic"})
+        measured = await client.get("/api/stats/metrics")
+        basic = await client.get("/api/stats")
+    assert measured.status_code == basic.status_code == 200
+    data = measured.json()
+    assert data["todayMessages"] == 3 and data["avgResponseTime"] == 99.0
+    assert data["p95ResponseTime"] == data["p99ResponseTime"] == 4.0
+    assert data["chatGenerations"] == 2 and data["chatGenerationFailures"] == 0
+    assert data["chatGenerationFailureRate"] == basic.json()["chatGenerationFailureRate"] == 0.0
+    assert not {"modelFailureRate", "modelFailures", "modelInvocations"} & data.keys()

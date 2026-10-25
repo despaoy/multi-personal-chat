@@ -674,7 +674,7 @@ class TestObservability:
         assert metrics["todayReplies"] == 3
         assert metrics["p95ResponseTime"] == 10.0
         assert metrics["p99ResponseTime"] == 10.0
-        assert metrics["modelFailureRate"] == 0.5
+        assert metrics["chatGenerationFailureRate"] == 0.5
         assert metrics["queueLength"] >= 0
 
     def test_alerts_include_queue_slow_auth_and_model_failure(self):

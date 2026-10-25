@@ -312,9 +312,10 @@ export interface StatsMetricsResponse {
   avgResponseTime: number;
   p95ResponseTime: number;
   p99ResponseTime: number;
-  modelFailureRate: number;
-  modelFailures: number;
-  modelInvocations: number;
+  /** Recorded chat generations; each operation may include several provider calls. */
+  chatGenerationFailureRate: number;
+  chatGenerationFailures: number;
+  chatGenerations: number;
   ragFailureRate: number;
   ragFailures: number;
   activeSessions: number;

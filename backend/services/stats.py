@@ -130,17 +130,17 @@ class StatsService:
             result[platform] = {"enabled": enabled, "status": status, "lastEvent": last_event}
         return result
 
-    def _quantiles(self, table: str, count: int, bounds: dict[str, str]) -> tuple[float, float]:
+    def _quantiles(self, count: int, bounds: dict[str, str]) -> tuple[float, float]:
         if count == 0:
             return 0.0, 0.0
         p95, p99 = (round((count - 1) * fraction) + 1 for fraction in (0.95, 0.99))
-        purpose = " AND purpose = 'chat'" if table == "model_invocations" else ""
         rows = self._query(
-            f"SELECT latency, position FROM ("
-            f'SELECT COALESCE("costTime", 0) AS latency, '
-            f'ROW_NUMBER() OVER (ORDER BY COALESCE("costTime", 0)) AS position '
-            f'FROM {table} WHERE "createdAt" >= :start AND "createdAt" < :end{purpose}'
-            f") AS ranked WHERE position IN (:p95, :p99)",
+            "SELECT latency, position FROM ("
+            'SELECT COALESCE("costTime", 0) AS latency, '
+            'ROW_NUMBER() OVER (ORDER BY COALESCE("costTime", 0)) AS position '
+            "FROM model_invocations WHERE purpose = 'chat' "
+            'AND "createdAt" >= :start AND "createdAt" < :end'
+            ") AS ranked WHERE position IN (:p95, :p99)",
             {**bounds, "p95": p95, "p99": p99},
         )
         values = {int(row["position"]): float(row["latency"]) for row in rows}
@@ -170,11 +170,9 @@ class StatsService:
         costs = [float(row[key]) for row in (messages, invocations) for key in ("minimum", "maximum")]
         if any(not math.isfinite(value) or value < 0 for value in costs):
             raise ValueError("Stored response latency must be finite and nonnegative")
+        # One chat-generation record can aggregate review and answer calls.
         invocation_count = int(invocations["total"])
-        table, count = (
-            ("model_invocations", invocation_count) if invocation_count else ("messages", int(messages["total"]))
-        )
-        p95, p99 = self._quantiles(table, count, bounds)
+        p95, p99 = self._quantiles(invocation_count, bounds)
         hourly = self._query(
             'SELECT SUBSTR(CAST("createdAt" AS TEXT), 12, 2) AS hour, COUNT(*) AS messages, '
             "SUM(CASE WHEN reply IS NOT NULL AND reply <> '' THEN 1 ELSE 0 END) AS replies "
@@ -199,9 +197,9 @@ class StatsService:
             "avgResponseTime": round(float(messages["average"]), 2),
             "p95ResponseTime": p95,
             "p99ResponseTime": p99,
-            "modelFailureRate": round(int(invocations["failures"]) / invocation_count, 4) if invocation_count else 0.0,
-            "modelFailures": int(invocations["failures"]),
-            "modelInvocations": invocation_count,
+            "chatGenerationFailureRate": round(int(invocations["failures"]) / invocation_count, 4) if invocation_count else 0.0,
+            "chatGenerationFailures": int(invocations["failures"]),
+            "chatGenerations": invocation_count,
             "ragFailureRate": round(rag_failures / rag_total, 4) if rag_total else 0.0,
             "ragFailures": rag_failures,
             "activeSessions": int(messages["sessions"]),
