@@ -215,7 +215,10 @@ class InferenceRuntime:
         self._stats["submitted"] += 1
         try:
             return await asyncio.wait_for(future, timeout=wait_timeout)
-        except (asyncio.TimeoutError, asyncio.CancelledError):
+        except (asyncio.TimeoutError, asyncio.CancelledError) as exc:
+            # A job TimeoutError leaves a completed future, not a cancelled wait.
+            if isinstance(exc, TimeoutError) and not future.cancelled():
+                raise
             self._stats["cancelled"] += 1
             if not future.done():
                 future.cancel()
@@ -235,7 +238,8 @@ class InferenceRuntime:
                 return
             self._workers = [
                 asyncio.create_task(
-                    self._worker(idx), name=f"inference-worker-{idx}", context=detached_request_context())
+                    self._worker(idx), name=f"inference-worker-{idx}", context=detached_request_context()
+                )
                 for idx in range(self.worker_count)
             ]
             self._maintenance_task = asyncio.create_task(
@@ -324,7 +328,8 @@ class InferenceRuntime:
         cutoff = time.monotonic() - max_age
         async with self._session_locks_guard:
             stale = [
-                key for key, entry in self._session_locks.items()
+                key
+                for key, entry in self._session_locks.items()
                 if entry.users == 0 and not entry.lock.locked() and entry.last_used < cutoff
             ]
             for key in stale:

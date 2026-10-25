@@ -148,3 +148,89 @@ async def test_positive_queue_capacity_rejects_overflow_and_preserves_admitted_j
         release.set()
         await asyncio.gather(*admitted, return_exceptions=True)
         await runtime.shutdown()
+
+
+
+@pytest.mark.parametrize("ending", ["job_timeout", "running_deadline", "queued_deadline", "cancel"])
+async def test_job_timeout_is_failure_while_expired_or_cancelled_wait_is_cancellation(monkeypatch, ending):
+    from fastapi import HTTPException
+    from api import generate
+    from db.schemas import MessageRequest
+    from services.chat_generation import ChatGenerationService
+
+    monkeypatch.setenv("INFERENCE_WORKERS", "1")
+    monkeypatch.setenv("INFERENCE_QUEUE_TIMEOUT", "0.1")
+    runtime = controls.InferenceRuntime()
+    entered, stopped, release, occupied = (asyncio.Event() for _ in range(4))
+    failure = TimeoutError("synthetic internal service deadline")
+    facts = "完整虚构题设：周四14:00至15:00开会，尚未出发，下雨改线上。请求仅用于隔离调度测试。"
+    calls = []
+    pending = blocker = None
+
+    async def job(request, current_user):
+        assert request.message == facts and current_user["user_id"] == 41
+        calls.append(request.traceId)
+        entered.set()
+        try:
+            if ending == "job_timeout":
+                raise failure
+            await release.wait()
+        finally:
+            stopped.set()
+
+    async def blocking_job():
+        occupied.set()
+        await release.wait()
+        return "occupied-source"
+
+    service = ChatGenerationService(generate_handler=job, inference_runtime=runtime,
+        is_high_risk_prompt=lambda _: False, security_response_factory=Mock(),
+        trace_id_factory=lambda: "fiction-queue-timeout")
+    try:
+        if ending == "queued_deadline":
+            blocker = asyncio.create_task(runtime.submit(blocking_job, session_id="occupied", priority=1, timeout=2))
+            await asyncio.wait_for(occupied.wait(), 1)
+        pending = asyncio.create_task(generate.generate_reply(
+            MessageRequest(message=facts, sessionId="fiction-session"),
+            current_user={"username": "fiction-user", "user_id": 41}, service=service,
+        ))
+        if ending == "cancel":
+            await asyncio.wait_for(entered.wait(), 1)
+            pending.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await pending
+        else:
+            with pytest.raises(HTTPException) as caught:
+                await asyncio.wait_for(pending, 2)
+            error = caught.value
+            assert error.status_code == 503
+            if ending == "job_timeout":
+                assert error.__cause__ is failure
+            else:
+                assert isinstance(error.__cause__, TimeoutError)
+        stats = runtime.stats()
+        assert stats["failed"] == (ending == "job_timeout")
+        assert stats["cancelled"] == (ending != "job_timeout")
+        assert len(calls) == (ending != "queued_deadline")
+        assert entered.is_set() == stopped.is_set() == (ending != "queued_deadline")
+        assert stats["active"] == (ending == "queued_deadline")
+        if ending != "cancel":
+            assert error.detail == "请求处理超时，请检查队列和后端服务后重试"
+        release.set()
+        if blocker is not None:
+            assert await blocker == "occupied-source"
+        assert await runtime.submit(lambda: asyncio.sleep(0, result="complete-after-failure"),
+            session_id="fiction-session", priority=1, timeout=1) == "complete-after-failure"
+        stats = runtime.stats()
+        assert stats["completed"] == 1 + (ending == "queued_deadline")
+        assert stats["failed"] == (ending == "job_timeout")
+        assert stats["cancelled"] == (ending != "job_timeout")
+        assert stats["active"] == stats["queue_size"] == 0
+        assert all(not worker.done() for worker in runtime._workers)
+    finally:
+        release.set()
+        for task in (pending, blocker):
+            if task is not None and not task.done():
+                task.cancel()
+        await asyncio.gather(*(task for task in (pending, blocker) if task is not None), return_exceptions=True)
+        await runtime.shutdown()

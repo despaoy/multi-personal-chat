@@ -1266,7 +1266,7 @@ async def generate_reply(
     except InferenceQueueFull as exc:
         raise HTTPException(status_code=503, detail="推理队列已满，请稍后再试") from exc
     except TimeoutError as exc:
-        raise HTTPException(status_code=503, detail="推理排队超时，请稍后再试") from exc
+        raise HTTPException(status_code=503, detail="请求处理超时，请检查队列和后端服务后重试") from exc
 
 
 async def _record_model_invocation(
