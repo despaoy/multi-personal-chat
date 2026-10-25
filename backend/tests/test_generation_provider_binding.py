@@ -14,9 +14,22 @@ from db.schemas import MessageRequest
 async def test_each_provider_receives_same_bound_request_context(monkeypatch, provider):
     state = install_api(monkeypatch, provider)
     database = SimpleNamespace(config={"temperature": 0.3, "maxTokens": 256, "topP": 1.0}, loras=[])
-    model = AsyncMock()
+    reply = "3张票，每张2元，共6元。"
+    model = AsyncMock(return_value=reply)
+    connection = state.manager.get_current_provider()
+    connection.async_complete.side_effect = None
+    connection.async_complete.return_value = (reply, 0.1)
     monkeypatch.setattr(state.api, "get_vllm_client", AsyncMock(return_value=SimpleNamespace(generate=model)))
-    request = MessageRequest(message="仅按当前资料回答。", loraName="default")
+    request = MessageRequest(message="虚构票价：每张2元，共买3张。总价是多少？", loraName="default")
+    messages = [{"role": "system", "content": "仅按本题完整票价和数量作答。"},
+                {"role": "user", "content": request.message}]
+    options = dict(temperature=0.3, max_tokens=256, top_p=1.0)
+
+    async def generated(*args, model_generate, **kwargs):
+        answer = await model_generate(messages=messages, **options)
+        return answer, False, {"modelInvoked": True}
+
+    state.generation.side_effect = generated
 
     result = await state.api._generate_reply_impl(
         request,
@@ -26,7 +39,7 @@ async def test_each_provider_receives_same_bound_request_context(monkeypatch, pr
         enable_rag=False,
     )
 
-    assert result.reply == "根据完整当前输入回答。"
+    assert result.reply == reply and result.modelInvoked is True
     state.generation.assert_awaited_once()
     args, kwargs = state.generation.await_args
     assert args == (request, None if provider == "vllm" else "default")
@@ -37,9 +50,12 @@ async def test_each_provider_receives_same_bound_request_context(monkeypatch, pr
     assert kwargs["memory_write_enabled"] is None
     assert callable(kwargs["model_generate"])
     if provider == "vllm":
-        assert kwargs["model_generate"] is model
+        model.assert_awaited_once_with(messages=messages, **options)
+        connection.async_complete.assert_not_awaited()
         assert kwargs["prompt_lora_name"] == "default"
     else:
         assert "prompt_lora_name" not in kwargs
+        connection.async_complete.assert_awaited_once_with(messages=messages, **options)
+        model.assert_not_awaited()
     state.save.assert_not_awaited()
     state.manager.set_provider.assert_not_called()
