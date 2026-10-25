@@ -817,28 +817,6 @@ class PgDatabase:
             row = (await session.execute(knowledge_documents_table.select().where(knowledge_documents_table.c.id == doc_id))).fetchone()
             return _row_to_dict(row)
 
-    async def add_knowledge_document(self, document: Dict) -> Dict:
-        """添加知识库文档"""
-        now = datetime.now().isoformat()
-        async with self.async_session() as session:
-            stmt = knowledge_documents_table.insert().values(
-                title=document.get("title", ""),
-                content=document.get("content", ""),
-                category=document.get("category", "未分类"),
-                knowledge_base_id=document.get("knowledge_base_id"),
-                folder_id=document.get("folder_id"),
-                sourceType=document.get("sourceType", "text"),
-                sourceUrl=document.get("sourceUrl"),
-                fileType=document.get("fileType"),
-                fileSize=document.get("fileSize"),
-                chunkCount=document.get("chunkCount", 0),
-                createdAt=now,
-                updatedAt=now,
-            )
-            result = await session.execute(stmt)
-            await session.commit()
-            doc_id = result.inserted_primary_key[0]
-            return {**document, "id": doc_id, "createdAt": now, "updatedAt": now}
 
     async def get_knowledge_documents(
         self,
@@ -876,43 +854,6 @@ class PgDatabase:
             row = result.fetchone()
             return _row_to_dict(row) if row else None
 
-    KNOWLEDGE_DOC_UPDATABLE_COLUMNS = {
-        "title",
-        "content",
-        "category",
-        "knowledge_base_id",
-        "folder_id",
-        "sourceType",
-        "sourceUrl",
-        "fileType",
-        "fileSize",
-        "chunkCount",
-        "updatedAt",
-    }
-
-    async def update_knowledge_document(self, doc_id: int, document: Dict) -> Optional[Dict]:
-        """更新知识库文档 - 只更新提供的字段（白名单校验）"""
-        now = datetime.now().isoformat()
-        async with self.async_session() as session:
-            values = {"updatedAt": now}
-            for key, value in document.items():
-                if key in ("id", "createdAt"):
-                    continue
-                if key not in self.KNOWLEDGE_DOC_UPDATABLE_COLUMNS:
-                    logger.warning(f"update_knowledge_document: 忽略非法列名 '{key}'")
-                    continue
-                if value is not None:
-                    values[key] = value
-
-            stmt = knowledge_documents_table.update().where(knowledge_documents_table.c.id == doc_id).values(**values)
-            await session.execute(stmt)
-            await session.commit()
-
-            # 获取更新后的文档
-            sel_stmt = knowledge_documents_table.select().where(knowledge_documents_table.c.id == doc_id)
-            result = await session.execute(sel_stmt)
-            row = result.fetchone()
-            return _row_to_dict(row) if row else None
 
     async def delete_knowledge_document(self, doc_id: int) -> bool:
         """Delete source and publish dirty authority in the same transaction."""
@@ -929,21 +870,6 @@ class PgDatabase:
     # ============================================
     # 知识库分块管理
     # ============================================
-    async def add_knowledge_chunk(self, chunk: Dict) -> Dict:
-        """添加知识库文档片段"""
-        now = datetime.now().isoformat()
-        async with self.async_session() as session:
-            stmt = knowledge_chunks_table.insert().values(
-                documentId=chunk.get("documentId"),
-                chunkIndex=chunk.get("chunkIndex"),
-                content=chunk.get("content"),
-                embedding=chunk.get("embedding"),
-                createdAt=now,
-            )
-            result = await session.execute(stmt)
-            await session.commit()
-            chunk_id = result.inserted_primary_key[0]
-            return {**chunk, "id": chunk_id, "createdAt": now}
 
     async def get_knowledge_chunks(self, doc_id: int) -> List[Dict]:
         """获取文档的所有片段"""
@@ -3062,14 +2988,10 @@ class SyncPgAdapter:
     def save_knowledge_document(self, document, doc_id=None, chunks=None):
         return self._run(self._pg.save_knowledge_document(document, doc_id=doc_id, chunks=chunks))
 
-    def add_knowledge_document(self, doc_data):
-        return self._run(self._pg.add_knowledge_document(doc_data))
 
     def get_knowledge_document(self, doc_id):
         return self._run(self._pg.get_knowledge_document(doc_id))
 
-    def update_knowledge_document(self, doc_id, document):
-        return self._run(self._pg.update_knowledge_document(doc_id, document))
 
     def delete_knowledge_document(self, doc_id):
         return self._run(self._pg.delete_knowledge_document(doc_id))
@@ -3102,8 +3024,6 @@ class SyncPgAdapter:
             finally:
                 self._knowledge_readers.discard(batches)
 
-    def add_knowledge_chunk(self, chunk_data):
-        return self._run(self._pg.add_knowledge_chunk(chunk_data))
 
     def get_knowledge_stats(self):
         return self._run(self._pg.get_knowledge_stats())

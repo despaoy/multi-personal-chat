@@ -16,6 +16,7 @@ from character.source_memory import SourceMemoryService, attach_sources
 from db.database import SQLiteDB
 from inference.generation_request import GenerationRequest, RetrievalResult, generate_character_response
 from inference.public_context_authority import make_public_context_revalidator
+from knowledge import index_lifecycle
 from knowledge.evidence_packets import document_evidence_packets
 from knowledge.original_sources import attach_original_sources
 
@@ -29,7 +30,7 @@ def fixture(tmp_path):
     db = SQLiteDB(tmp_path / "knowledge.sqlite")
     bases = [db.create_knowledge_base(name, "完整虚构单元资料") for name in ("甲库", "乙库")]
     documents = [
-        db.add_knowledge_document(dict(title=title, content=body, category="规则", knowledge_base_id=base["id"]))
+        db.save_knowledge_document(dict(title=title, content=body, category="规则", knowledge_base_id=base["id"]), chunks=[body])
         for title, body, base in zip(("鹭岸规则", "杉港规则"), (BODY_A, BODY_B), bases)
     ]
     results = [
@@ -49,7 +50,7 @@ def fixture(tmp_path):
         dict(results=results, source_coverage=coverage),
         db.get_knowledge_document,
         source_budget_tokens=10000,
-        authority_revision=0,
+        authority_revision=db.get_config_value(index_lifecycle._VECTOR_REBUILD_REVISION_KEY),
     )
     packets = document_evidence_packets(results) + bundle["original_source_packets"]
     retrieval = RetrievalResult(
@@ -86,7 +87,7 @@ async def test_authority_change_removes_whole_source_and_keeps_independent(tmp_p
         assert db.delete_knowledge_document(identity)
     else:
         value = docs[1]["knowledge_base_id"] if change == "knowledge_base_id" else "修改后的版本不继承旧审核"
-        assert db.update_knowledge_document(identity, {change: value})
+        assert db.save_knowledge_document({change: value}, doc_id=identity, chunks=[value] if change == "content" else None)
     updated = await request.public_context_revalidator(request)
     assert BODY_A not in updated.retrieval.evidence and BODY_B in updated.retrieval.evidence
     assert len(updated.retrieval.documents) == len(updated.retrieval.citations) == 1
@@ -110,7 +111,7 @@ async def test_authority_change_removes_whole_source_and_keeps_independent(tmp_p
 async def test_same_source_and_irrelevant_metadata_preserve_exact_request(tmp_path):
     db, docs, request = fixture(tmp_path)
     assert await request.public_context_revalidator(request) is request
-    db.update_knowledge_document(docs[0]["id"], dict(sourceUrl="https://example.invalid/fiction"))
+    db.save_knowledge_document(dict(sourceUrl="https://example.invalid/fiction"), doc_id=docs[0]["id"])
     assert await request.public_context_revalidator(request) is request
     assert "source_authority_snapshot" not in wire(
         __import__("inference.generation_request", fromlist=["build_generation_request"])

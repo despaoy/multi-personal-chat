@@ -53,7 +53,7 @@ async def ask_rig(tmp_path, monkeypatch):
         "openaiCompatApiKey": "synthetic-first-key",
         "openaiCompatModel": "deepseek-flash",
     })
-    document = database.add_knowledge_document({"title": "虚构档案馆完整开放资料", "content": SOURCE})
+    document = database.save_knowledge_document({"title": "虚构档案馆完整开放资料", "content": SOURCE}, chunks=[SOURCE])
     source_path = tmp_path / "ask-scope-complete-source.txt"
     source_path.write_text(SOURCE, encoding="utf-8")
     rig = SimpleNamespace(

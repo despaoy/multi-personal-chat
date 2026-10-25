@@ -1844,39 +1844,6 @@ class SQLiteDB:
         except BaseException:
             conn.rollback()
             raise
-    def add_knowledge_document(self, document: Dict):
-        """添加知识库文档"""
-        conn = self._get_connection()
-        cursor = conn.cursor()
-        now = datetime.now().isoformat()
-
-        cursor.execute('''
-            INSERT INTO knowledge_documents (title, content, category, knowledge_base_id, folder_id, sourceType, sourceUrl, fileType, fileSize, chunkCount, createdAt, updatedAt)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (
-            document.get("title", ""),
-            document.get("content", ""),
-            document.get("category", "未分类"),
-            document.get("knowledge_base_id"),
-            document.get("folder_id"),
-            document.get("sourceType", "text"),
-            document.get("sourceUrl"),
-            document.get("fileType"),
-            document.get("fileSize"),
-            document.get("chunkCount", 0),
-            now,
-            now
-        ))
-
-        doc_id = cursor.lastrowid
-        conn.commit()
-
-        return {
-            **document,
-            "id": doc_id,
-            "createdAt": now,
-            "updatedAt": now
-        }
 
     def get_knowledge_documents(self, limit: int = 100, offset: int = 0, category: Optional[str] = None, knowledge_base_id: Optional[int] = None, folder_id: Optional[int] = None):
         """获取知识库文档列表，支持按分类/知识库/文件夹筛选"""
@@ -1912,52 +1879,6 @@ class SQLiteDB:
             return dict(row)
         return None
 
-    # knowledge_documents 表允许更新的列名白名单
-    # 与 pg_database.py 保持一致；此前 SQLite 白名单包含不存在的列
-    # (summary/folderId/kbId/charCount/status/tags/source)，已修正。
-    KNOWLEDGE_DOC_UPDATABLE_COLUMNS = {
-        "title", "content", "category",
-        "knowledge_base_id", "folder_id",
-        "sourceType", "sourceUrl", "fileType", "fileSize",
-        "chunkCount", "updatedAt",
-    }
-
-    def update_knowledge_document(self, doc_id: int, document: Dict):
-        """更新知识库文档 - 只更新提供的字段（白名单校验）"""
-        conn = self._get_connection()
-        cursor = conn.cursor()
-        now = datetime.now().isoformat()
-
-        # 构建动态SET子句，只更新提供的字段（白名单校验防止SQL注入）
-        set_clauses = ["updatedAt = ?"]
-        values = [now]
-
-        for key, value in document.items():
-            if key in ("id", "createdAt"):
-                continue
-            if key not in self.KNOWLEDGE_DOC_UPDATABLE_COLUMNS:
-                logger.warning(f"update_knowledge_document: 忽略非法列名 '{key}'")
-                continue
-            if value is not None:
-                set_clauses.append(f"{key} = ?")
-                values.append(value)
-
-        values.append(doc_id)
-
-        cursor.execute(
-            f'UPDATE knowledge_documents SET {", ".join(set_clauses)} WHERE id = ?',
-            values
-        )
-
-        conn.commit()
-
-        # 获取更新后的文档
-        cursor.execute('SELECT * FROM knowledge_documents WHERE id = ?', (doc_id,))
-        row = cursor.fetchone()
-
-        if row:
-            return dict(row)
-        return None
 
     def delete_knowledge_document(self, doc_id: int):
         """Delete source and invalidate its index in one transaction."""
@@ -1976,31 +1897,6 @@ class SQLiteDB:
             conn.rollback()
             raise
 
-    def add_knowledge_chunk(self, chunk: Dict):
-        """添加知识库文档片段"""
-        conn = self._get_connection()
-        cursor = conn.cursor()
-        now = datetime.now().isoformat()
-
-        cursor.execute('''
-            INSERT INTO knowledge_chunks (documentId, chunkIndex, content, embedding, createdAt)
-            VALUES (?, ?, ?, ?, ?)
-        ''', (
-            chunk.get("documentId"),
-            chunk.get("chunkIndex"),
-            chunk.get("content"),
-            chunk.get("embedding"),
-            now
-        ))
-
-        chunk_id = cursor.lastrowid
-        conn.commit()
-
-        return {
-            **chunk,
-            "id": chunk_id,
-            "createdAt": now
-        }
 
     def get_knowledge_chunks(self, doc_id: int):
         """获取文档的所有片段"""

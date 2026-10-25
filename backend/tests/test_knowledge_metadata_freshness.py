@@ -19,16 +19,16 @@ def saved_document(tmp_path, monkeypatch):
     database = SQLiteDB(tmp_path / "knowledge.db")
     old = database.create_knowledge_base("草案库", "old")
     new = database.create_knowledge_base("现行库", "new")
-    row = database.add_knowledge_document(
+    body = "完整规则。末尾仍需书面确认。"
+    row = database.save_knowledge_document(
         dict(
             title="旧标题",
-            content="完整规则。末尾仍需书面确认。",
+            content=body,
             category="草案",
             knowledge_base_id=old["id"],
-            chunkCount=1,
-        )
+        ),
+        chunks=[body],
     )
-    database.add_knowledge_chunk(dict(documentId=row["id"], chunkIndex=0, content=row["content"]))
     monkeypatch.setattr(knowledge, "db", database)
     monkeypatch.setattr(index_lifecycle, "db", database)
     monkeypatch.setattr(index_lifecycle, "_vector_index_revision", index_lifecycle._get_rebuild_revision())

@@ -50,10 +50,9 @@ async def exercise(tmp_path, monkeypatch, mode):
     )
     assert PRIVATE in context.episodic_reference_context
     base = database.create_knowledge_base("虚构公共规则", "声明的单元候选库")
-    document = database.add_knowledge_document(
-        dict(title="桐屿续签规程", content=PUBLIC, knowledge_base_id=base["id"], chunkCount=1)
+    document = database.save_knowledge_document(
+        dict(title="桐屿续签规程", content=PUBLIC, knowledge_base_id=base["id"]), chunks=[PUBLIC]
     )
-    database.add_knowledge_chunk(dict(documentId=document["id"], chunkIndex=0, content=PUBLIC))
     before = database.list_memory_sources(**fields)
     seen = dict(retrieval=0, model=0, binding=0)
     original_plan = retrieval_query_plan.plan_retrieval

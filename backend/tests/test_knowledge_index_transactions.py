@@ -151,10 +151,8 @@ def test_all_ready_branches_reject_real_revision_change_at_completion(tmp_path, 
     other = SQLiteDB(database.db_path)
     vector = RecordingVector()
     if branch != "empty":
-        doc = database.add_knowledge_document(
-            dict(title="完整规则", content="完整安排。末尾须书面确认。", category="现行", chunkCount=1)
-        )
-        database.add_knowledge_chunk(dict(documentId=doc["id"], chunkIndex=0, content=doc["content"]))
+        body = "完整安排。末尾须书面确认。"
+        database.save_knowledge_document(dict(title="完整规则", content=body, category="现行"), chunks=[body])
     monkeypatch.setattr(knowledge, "db", database)
     monkeypatch.setattr(index_lifecycle, "db", database)
     monkeypatch.setattr(vector_module, "get_vector_db", lambda: vector)

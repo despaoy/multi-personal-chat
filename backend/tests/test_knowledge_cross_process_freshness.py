@@ -56,16 +56,16 @@ def readers(tmp_path, monkeypatch):
     writer = SQLiteDB(path)
     old = reader.create_knowledge_base("旧库", "")
     new = reader.create_knowledge_base("新库", "")
-    doc = reader.add_knowledge_document(
+    body = "完整课程规则。普通雨照常，红色暴雨停课。末尾仍须书面确认。"
+    doc = reader.save_knowledge_document(
         dict(
             title="旧标题",
-            content="完整课程规则。普通雨照常，红色暴雨停课。末尾仍须书面确认。",
+            content=body,
             category="旧类",
             knowledge_base_id=old["id"],
-            chunkCount=1,
-        )
+        ),
+        chunks=[body],
     )
-    reader.add_knowledge_chunk(dict(documentId=doc["id"], chunkIndex=0, content=doc["content"]))
     vector = RecordingVector()
     monkeypatch.setattr(knowledge, "db", reader)
     monkeypatch.setattr(index_lifecycle, "db", reader)
@@ -76,17 +76,16 @@ def readers(tmp_path, monkeypatch):
 
 
 def external_update(writer, doc, change, complete=False):
-    writer.update_knowledge_document(doc["id"], change)
-    if "content" in change:
-        writer.execute_sql("DELETE FROM knowledge_chunks WHERE documentId = :doc_id", {"doc_id": doc["id"]})
-        writer.add_knowledge_chunk(dict(documentId=doc["id"], chunkIndex=0, content=change["content"]))
-    revision = int(writer.get_config_value(index_lifecycle._VECTOR_REBUILD_REVISION_KEY, "0")) + 1
-    writer.set_config_value(index_lifecycle._VECTOR_REBUILD_REVISION_KEY, str(revision))
-    # Unit-only simulated global marker; live probe builds a real second index.
-    writer.set_config_value(
-        index_lifecycle._VECTOR_REBUILD_STATUS_KEY,
-        f"complete:1:{index_lifecycle._compute_chunk_fingerprint()}:{revision}" if complete else "dirty",
+    writer.save_knowledge_document(
+        change, doc_id=doc["id"], chunks=[change["content"]] if "content" in change else None,
     )
+    revision = writer.get_config_value(index_lifecycle._VECTOR_REBUILD_REVISION_KEY)
+    # Unit-only simulated global marker; live probe builds a real second index.
+    if complete:
+        writer.set_config_value(
+            index_lifecycle._VECTOR_REBUILD_STATUS_KEY,
+            f"complete:1:{index_lifecycle._compute_chunk_fingerprint()}:{revision}",
+        )
     return revision
 
 
