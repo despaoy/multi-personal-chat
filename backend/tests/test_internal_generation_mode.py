@@ -30,9 +30,18 @@ def _request():
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('mode,label', [('current_constraint', 'statement/constraint'),
-    ('memory_lookup', 'memory/lookup'), ('source_excerpt', 'rag/source_excerpt'),
-    ('memory_operation', 'memory/operation'), ('task_composite', 'tasks/composite')])
+@pytest.mark.parametrize("mode,label", [
+    ("current_constraint", "statement/constraint"),
+    ("memory_lookup", "memory/lookup"),
+    ("memory_storage_status", "memory/storage_status"),
+    ("memory_mentions", "memory/mentions"),
+    ("memory_field_result", "memory/field_result"),
+    ("memory_operation", "memory/operation"),
+    ("task_composite", "tasks/composite"),
+    ("source_excerpt", "rag/source_excerpt"),
+    ("source_unavailable", "rag/abstained"),
+    ("abstention", "rag/abstained"),
+])
 @pytest.mark.parametrize("provider", ["vllm", "openai_compat"])
 async def test_deterministic_response_has_no_model_invocation(monkeypatch, mode, label, provider):
     import api.generate as gen

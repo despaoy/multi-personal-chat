@@ -61,6 +61,8 @@ _DETERMINISTIC_MODEL_LABELS = {
     "memory_operation": "memory/operation",
     "task_composite": "tasks/composite",
     "source_excerpt": "rag/source_excerpt",
+    "source_unavailable": "rag/abstained",
+    "abstention": "rag/abstained",
 }
 _local_model_lock: asyncio.Lock | None = None
 _local_model_lock_loop: asyncio.AbstractEventLoop | None = None
@@ -573,7 +575,19 @@ async def _generate_reply_body(
         cost_time = round(time.time() - start_time, 2)
         model_invoked = rag_meta.get("modelInvoked", True) is not False
         if not model_invoked:
-            model_name = _DETERMINISTIC_MODEL_LABELS.get(rag_meta.get("answerMode"), "rag/abstained")
+            try:
+                model_name = _DETERMINISTIC_MODEL_LABELS[rag_meta.get("answerMode")]
+            except (KeyError, TypeError) as exc:
+                raise HTTPException(
+                    503,
+                    detail={
+                        "stage": "generation_result",
+                        "reason": "unknown_response_mode",
+                        "modelInvoked": False,
+                        "messageSaved": False,
+                        "message": "生成结果类型缺失或未受支持，本轮结果未保存。请检查生成链路后重试。",
+                    },
+                ) from exc
             model_label = stored_model_name = model_name
         stored_lora_name = lora_name if model_invoked else "default"
         if record_invocation and (model_invoked or has_pending_usage()):

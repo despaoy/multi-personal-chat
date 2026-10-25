@@ -23,6 +23,9 @@ interfaces.
 
 ### Changed
 
+- Reject undeclared no-model generation results before archiving; keep valid source
+  unavailability explicit and account only for actual completed review usage.
+
 - Reject invented or copied historical proposal evidence before admission, with an
   explicit model-protocol error and no partial fact writes; retain valid no-change outcomes.
 - Carry observation source text once in memory evidence; retain temporal uncertainty

@@ -138,3 +138,29 @@ async def test_cloud_identity_uses_bound_snapshot_after_runtime_selection_change
     assert result.model == "selected-model (openai_compat)"
     state.other.get_status.assert_not_called()
     state.selected.get_status.assert_called_once()
+
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("provider", ["ollama", "openai_compat"])
+@pytest.mark.parametrize("mode", [None, "synthetic-private-unknown-mode", []])
+async def test_undeclared_no_model_result_fails_before_archive_without_invented_usage(monkeypatch, caplog, provider, mode):
+    state = rig(monkeypatch, provider)
+    meta = {"modelInvoked": False}
+    if mode is not None:
+        meta["answerMode"] = mode
+    state.generation.return_value = ("隔离合成结果。", False, meta)
+    with pytest.raises(HTTPException) as caught:
+        await state.api._generate_reply_impl(request(), message_db=state.api.db)
+    assert caught.value.status_code == 503
+    assert caught.value.detail["stage"] == "generation_result"
+    assert caught.value.detail["reason"] == "unknown_response_mode"
+    assert caught.value.detail["modelInvoked"] is False and caught.value.detail["messageSaved"] is False
+    assert isinstance(caught.value.__cause__, (KeyError, TypeError))
+    assert "synthetic-private" not in str(caught.value.detail) + caplog.text
+    state.generation.assert_awaited_once()
+    state.save.assert_not_awaited()
+    state.record.assert_not_awaited()
+    state.selected.get_status.assert_not_called()
+    state.other.get_status.assert_not_called()
+    state.manager.set_provider.assert_not_called()

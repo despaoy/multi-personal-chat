@@ -219,3 +219,35 @@ async def test_review_only_record_failure_does_not_claim_main_generation(review_
     assert caught.value.detail["stage"] == "model_invocation_record"
     assert caught.value.detail["modelInvoked"] is False and caught.value.detail["messageSaved"] is False
     assert rig.writer.call_count == len(rig.installed.calls) == 1 and rig.rows() == []
+
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("record", [True, False])
+async def test_unknown_result_after_review_keeps_only_actual_usage_and_does_not_archive(review_usage, monkeypatch, record):
+    rig = review_usage
+
+    async def prepare(turn, role):
+        await rig.consume()
+        return SimpleNamespace(character_id=role)
+
+    rig.service.prepare_turn = prepare
+    monkeypatch.setattr(chat_answer, "generate_chat_answer", AsyncMock(return_value=(
+        "Synthetic undeclared result.", False,
+        {"modelInvoked": False, "answerMode": "synthetic-unknown-mode"},
+    )))
+    with pytest.raises(HTTPException) as caught:
+        await rig.run(record)
+    assert caught.value.status_code == 503 and caught.value.detail["stage"] == "generation_result"
+    assert caught.value.detail["modelInvoked"] is False and caught.value.detail["messageSaved"] is False
+    assert isinstance(caught.value.__cause__, KeyError)
+    assert len(rig.installed.calls) == 1 and rig.writer.call_count == int(record)
+    rows = rig.rows()
+    assert len(rows) == int(record)
+    if record:
+        row, = rows
+        assert (row["promptTokens"], row["completionTokens"], row["totalTokens"]) == (100, 20, 120)
+        assert row["modelName"] == "fixture-model" and row["usageSource"] == "provider"
+        assert row["errorType"] == "KeyError"
+    assert rig.database.execute_sql("SELECT id FROM messages") == []
+    assert get_request_context() is None and not has_pending_usage()

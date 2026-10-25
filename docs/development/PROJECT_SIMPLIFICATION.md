@@ -269,3 +269,11 @@ not a claim about later source. Only backend was restarted; readiness/login are
 200 and protected unauthenticated access is 401 with nosniff. Frontend process
 and configuration are unchanged. Browser, external-platform and sustained-load
 acceptance remain separate work.
+
+## 2026-10-25：生成结果类型与失败归属
+
+GitHub当前没有待合并PR。此前提交的PR #3已审查并合入主分支，来源读取阶段86d6799的[CI 40190362792](https://github.com/despaoy/multi-personal-chat/actions/runs/40190362792)也已全部通过：后端10,883通过、1跳过、8警告，前端与Docker构建通过。
+
+修复未调用主模型的未知结果类型被统一标成rag/abstained并存档的问题。现在仅接受已声明类型，缺失、未知或非法类型在存档前明确返回503，保留原始异常原因；正常无可用原文及显式弃答继续按实际业务结果返回。复用现有用量归集，前面已经发生的复核只记录真实用量，没有发生主生成时不创建虚构调用。没有新模型、语义规则、错误处理框架或重复计量层；功能文件净增14行，用于去除静默默认分支。
+
+八个直接关联文件156项全部通过，覆盖合法结果、错误结果、存档、提供商身份和真实SQLite用量记录；四个改动Python文件语法、Ruff及仓库完整性检查通过。仅隔离合成资料和模拟传输，没有调用付费模型，没有手动重跑完整后端。上一版本CI不能替代本次提交的后续CI，也不等于完成真实浏览器、外部平台和长期负载验收。
