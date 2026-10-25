@@ -189,7 +189,7 @@ jobs:
           set -o pipefail
           python -m pytest tests/ -v --tb=short \
             --ignore=tests/fault_injection_test.py \
-            --basetemp=.test_tmp/pytest 2>&1 | tee pytest_output.txt
+            --basetemp="$RUNNER_TEMP/backend-pytest" 2>&1 | tee pytest_output.txt
       - name: Surface test failures
         if: failure()
         run: |
