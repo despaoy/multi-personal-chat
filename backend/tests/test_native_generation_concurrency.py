@@ -43,18 +43,20 @@ def installed(monkeypatch):
     provider.async_complete = complete
     provider.snapshot = lambda: provider
     provider.get_status = lambda: {"modelName": "fixture-cloud"}
-    async def local(**kwargs):
+    async def local(messages, **kwargs):
         before = state.selected
-        result = await complete([{"role": "user", "content": kwargs["prompt"]}])
+        assert messages[0] == {"role": "system", "content": "保留完整题设。"}
+        assert kwargs == {"temperature": 0.1, "max_tokens": 128, "top_p": 1, "lora_name": None}
+        result = await complete(messages, **kwargs)
         assert state.selected == before
         return result
 
     manager = SimpleNamespace(_current_provider=SimpleNamespace(value="openai_compat"),
-        get_current_provider=lambda: provider, async_generate=local,
+        get_current_provider=lambda: provider,
         set_lora_adapter=Mock(side_effect=lambda path: setattr(state, "selected", path)),
         get_status=lambda: {"currentProvider": manager._current_provider.value,
             "providers": {"openai_compat": {"modelName": "fixture-cloud"}, "transformers_peft": {"modelName": "fixture-local"}}})
-    local_provider = SimpleNamespace(name="transformers_peft", async_generate=local,
+    local_provider = SimpleNamespace(name="transformers_peft", async_complete=local,
         set_lora_adapter=manager.set_lora_adapter, get_status=lambda: {"modelName": "fixture-local"})
     manager._providers = {model_manager.ModelProvider.OPENAI_COMPAT: provider,
         model_manager.ModelProvider.TRANSFORMERS_PEFT: local_provider}

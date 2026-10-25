@@ -373,7 +373,8 @@ class LlamaCppProvider(_AsyncProvider):
     async def async_generate(self, prompt: str, session_history: List[Dict] = None,
                              max_tokens_override: int = None) -> Tuple[str, float]:
         config = _get_db_config()
-        messages = [*(session_history or []), {"role": "user", "content": prompt}]
+        messages = [{"role": entry["role"], "content": entry["content"]} for entry in (session_history or [])]
+        messages.append({"role": "user", "content": prompt})
         return await self.async_complete(
             messages, temperature=float(config.get('temperature', 0.8)),
             max_tokens=read_provider_max_tokens(config, max_tokens_override), top_p=0.9,
