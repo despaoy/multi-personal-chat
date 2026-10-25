@@ -153,3 +153,136 @@ def test_both_databases_preserve_measurement_and_unknown(source_database, source
     assert len(rows) == 1
     assert tuple(rows[0][key] for key in ("promptTokens", "completionTokens", "totalTokens")) == counts
     assert rows[0]["usageSource"] == source
+
+
+@pytest.fixture
+def publication_database(installed, monkeypatch, tmp_path):
+    from api import generate
+    from db.database import SQLiteDB
+
+    database = SQLiteDB(tmp_path / "result-publication.sqlite")
+    database.update_config(dict(installed.config, useKnowledgeBase=False))
+    monkeypatch.setattr(generate, "db", database)
+    try:
+        yield database
+    finally:
+        database.close_connection()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("confidence", [{"invalid": "source confidence must be numeric"}, float("nan")])
+async def test_invalid_result_stops_before_archive_and_accounts_once(installed, publication_database, monkeypatch, confidence):
+    from fastapi import HTTPException
+    from pydantic import ValidationError
+    from api import generate
+    from db.schemas import MessageRequest
+    from test_compiled_cloud_transport import QUERY
+
+    compiled = chat_answer.generate_chat_answer
+
+    async def malformed(*args, **kwargs):
+        reply, used_rag, metadata = await compiled(*args, **kwargs)
+        return reply, used_rag, dict(metadata, confidence=confidence)
+
+    monkeypatch.setattr(chat_answer, "generate_chat_answer", malformed)
+    request = MessageRequest(message=QUERY, loraName="default", platform="web", adapter="result-fixture",
+        userId="synthetic-owner", senderId="synthetic-owner", sessionId="synthetic-result",
+        conversationId="synthetic-result", sourceMessageId="synthetic-source", traceId="synthetic-result-trace")
+    with pytest.raises(HTTPException) as caught:
+        await generate._generate_reply_impl(request, enable_rag=False, message_db=publication_database)
+    rows = publication_database.execute_sql('SELECT * FROM model_invocations')
+    messages = publication_database.execute_sql('SELECT id FROM messages')
+    actual = (caught.value.status_code, len(installed.calls), len(rows),
+              sum(row["totalTokens"] for row in rows), len(messages))
+    assert actual == (503, 1, 1, 120, 0)
+    assert isinstance(caught.value.__cause__, ValidationError)
+    assert caught.value.detail["stage"] == "generation_result"
+    assert caught.value.detail["reason"] == "invalid_generation_result"
+    assert caught.value.detail["messageSaved"] is False
+    assert caught.value.detail["fields"] == ["confidence"]
+    assert rows[0]["errorType"] == "ValidationError" and rows[0]["usageSource"] == "provider"
+    assert "source confidence" not in str(caught.value.detail)
+
+
+@pytest.mark.asyncio
+async def test_post_archive_error_does_not_count_usage_again(installed, publication_database, monkeypatch):
+    from fastapi import HTTPException
+    from api import generate
+    from db.schemas import MessageRequest
+    from test_compiled_cloud_transport import QUERY, ANSWER
+
+    original = generate.log_event
+    failure = OSError("synthetic-private-publication-error")
+
+    def event(name, **kwargs):
+        if name == "message_generated":
+            raise failure
+        return original(name, **kwargs)
+
+    monkeypatch.setattr(generate, "log_event", event)
+    request = MessageRequest(message=QUERY, loraName="default", platform="web", adapter="result-fixture",
+        userId="synthetic-owner", senderId="synthetic-owner", sessionId="synthetic-result",
+        conversationId="synthetic-result", sourceMessageId="synthetic-source", traceId="synthetic-result-trace")
+    with pytest.raises(HTTPException) as caught:
+        await generate._generate_reply_impl(request, enable_rag=False, message_db=publication_database)
+    rows = publication_database.execute_sql('SELECT * FROM model_invocations')
+    messages = publication_database.execute_sql('SELECT * FROM messages')
+    assert caught.value.status_code == 500 and caught.value.__cause__ is failure
+    assert caught.value.detail["stage"] == "generation" and caught.value.detail["messageSaved"] is True
+    assert "已存档" in caught.value.detail["message"]
+    assert len(installed.calls) == len(rows) == len(messages) == 1
+    assert rows[0]["totalTokens"] == 120 and rows[0]["errorType"] == ""
+    assert messages[0]["message"] == QUERY and messages[0]["reply"] == ANSWER
+    assert "synthetic-private" not in str(caught.value.detail)
+
+
+@pytest.mark.asyncio
+async def test_invalid_no_model_result_does_not_invent_an_invocation(installed, publication_database, monkeypatch):
+    from fastapi import HTTPException
+    from api import generate
+    from db.schemas import MessageRequest
+
+    async def unavailable(*args, **kwargs):
+        return "当前没有可核对的第五条公告原文。", False, {
+            "modelInvoked": False, "answerMode": "source_unavailable", "confidence": {"invalid": True},
+        }
+
+    monkeypatch.setattr(chat_answer, "generate_chat_answer", unavailable)
+    request = MessageRequest(message="当前只提供了两条公告，未提供第五条。请读取第五条原文；没有原文就明确说明。",
+        loraName="default", platform="web", adapter="result-fixture", senderId="synthetic-owner",
+        conversationId="synthetic-result", sessionId="synthetic-result")
+    with pytest.raises(HTTPException) as caught:
+        await generate._generate_reply_impl(request, enable_rag=False, message_db=publication_database)
+    assert caught.value.status_code == 503 and caught.value.detail["messageSaved"] is False
+    assert not installed.calls
+    assert publication_database.execute_sql('SELECT id FROM model_invocations') == []
+    assert publication_database.execute_sql('SELECT id FROM messages') == []
+
+
+@pytest.mark.asyncio
+async def test_invalid_review_only_result_accounts_for_actual_provider(installed, publication_database, monkeypatch):
+    from fastapi import HTTPException
+    from api import generate
+    from db.schemas import MessageRequest
+    from inference.request_context import get_request_context
+    from test_compiled_cloud_transport import QUERY
+
+    async def reviewed(*args, **kwargs):
+        await get_request_context().provider.async_complete(
+            [{"role": "user", "content": "合成审核：只核对已提供的公告资料，不生成给用户的最终回答。" + QUERY}],
+            temperature=0, max_tokens=173, top_p=1.0,
+        )
+        return "没有第五条公告原文。", False, {
+            "modelInvoked": False, "answerMode": "source_unavailable", "confidence": {"invalid": True},
+        }
+
+    monkeypatch.setattr(chat_answer, "generate_chat_answer", reviewed)
+    with pytest.raises(HTTPException) as caught:
+        await generate._generate_reply_impl(MessageRequest(message=QUERY, loraName="default"),
+            enable_rag=False, message_db=publication_database)
+    rows = publication_database.execute_sql('SELECT * FROM model_invocations')
+    assert caught.value.status_code == 503 and caught.value.detail["messageSaved"] is False
+    assert len(installed.calls) == len(rows) == 1
+    assert rows[0]["modelName"] == "fixture-model" and rows[0]["totalTokens"] == 120
+    assert rows[0]["errorType"] == "ValidationError"
+    assert publication_database.execute_sql('SELECT id FROM messages') == []

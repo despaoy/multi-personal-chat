@@ -52,6 +52,12 @@ def has_pending_usage() -> bool:
     return ledger is not None and bool(ledger.attempts) and not ledger.record_started
 
 
+def usage_record_started() -> bool:
+    """A write attempt started; its database commit may still be unconfirmed."""
+    ledger = _current.get()
+    return ledger is not None and ledger.record_started
+
+
 def invocation_usage(*, record_started=False) -> dict:
     ledger = _current.get()
     if ledger is not None and record_started:

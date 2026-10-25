@@ -38,7 +38,7 @@ from inference.history import HistoryFormatError, validate_history
 from inference.lora_registry import get_lora_character_id
 from inference.lora_utils import resolve_lora_served_name
 from inference.openai_protocol import ProviderResponseError, validate_completion_options, with_provider_error
-from inference.usage import collect_usage, has_pending_usage
+from inference.usage import collect_usage, has_pending_usage, usage_record_started
 from infra.circuit_breaker import CircuitOpenError
 from infra.concurrency_control import InferenceQueueFull, RateLimitExceeded, inference_runtime
 from infra.environment import read_bool
@@ -505,6 +505,8 @@ async def _generate_reply_body(
     )
     is_vllm = request_provider == "vllm"
     model_name = f"vllm/{get_vllm_served_model_name()}" if is_vllm else "model_manager"
+    message_saved = False
+    model_invoked = None
     try:
         if is_vllm:
             client = await get_vllm_client()
@@ -587,6 +589,18 @@ async def _generate_reply_body(
                 ) from exc
             model_label = stored_model_name = model_name
         stored_lora_name = lora_name if model_invoked else "default"
+        result = GenerateResponse(
+            reply=reply,
+            model=model_label,
+            costTime=cost_time,
+            citations=rag_meta.get("citations"),
+            confidence=rag_meta.get("confidence"),
+            abstained=rag_meta.get("abstained", False),
+            answerMode=rag_meta.get("answerMode"),
+            domainId=rag_meta.get("domainId"),
+            modelInvoked=model_invoked,
+            warnings=rag_meta.get("warnings"),
+        )
         if record_invocation and (model_invoked or has_pending_usage()):
             await _record_model_invocation(
                 request,
@@ -601,7 +615,6 @@ async def _generate_reply_body(
             )
         if model_invoked:
             set_consecutive("model_failure", True)
-        message_saved = False
         archive_receipt = {}
         if persist_message:
             await _save_message(
@@ -664,22 +677,9 @@ async def _generate_reply_body(
             usedRag=used_rag,
         )
 
-        result = GenerateResponse(
-            reply=reply_with_warning(reply, completion_warning),
-            model=model_label,
-            costTime=cost_time,
-            citations=rag_meta.get("citations"),
-            confidence=rag_meta.get("confidence"),
-            abstained=rag_meta.get("abstained", False),
-            answerMode=rag_meta.get("answerMode"),
-            domainId=rag_meta.get("domainId"),
-            modelInvoked=model_invoked,
-            warnings=(
-                [*(rag_meta.get("warnings") or []), completion_warning]
-                if completion_warning
-                else rag_meta.get("warnings")
-            ),
-        )
+        if completion_warning:
+            result.reply = reply_with_warning(result.reply, completion_warning)
+            result.warnings = [*(result.warnings or []), completion_warning]
         if use_response_cache:
             try:
                 await response_cache.set(prompt_hash, cache_key, result.model_dump(), ttl=cache_ttl)
@@ -716,21 +716,33 @@ async def _generate_reply_body(
             costTime=failed_cost,
             errorType=type(e).__name__,
         )
-        if record_invocation:
+        if record_invocation and not usage_record_started() and (model_invoked is not False or has_pending_usage()):
             try:
                 await _record_model_invocation(
                     request,
-                    model_name,
+                    provider.model if model_invoked is False else model_name,
                     lora_name,
                     failed_cost,
                     used_rag=False,
                     error_type=type(e).__name__,
+                    model_invoked=model_invoked,
                     database=message_db,
                     purpose=invocation_purpose,
                 )
             except HTTPException as record_error:
                 # Keep the model cause and recording error on separate chains.
                 raise HTTPException(503, detail=with_provider_error(record_error.detail, e)) from e
+        if isinstance(e, ValidationError):
+            raise HTTPException(
+                503,
+                detail={
+                    "stage": "generation_result",
+                    "reason": "invalid_generation_result",
+                    "messageSaved": message_saved,
+                    "fields": sorted({str(error["loc"][0]) for error in e.errors(include_input=False) if error["loc"]}),
+                    "message": "生成结果结构无效，本轮结果未保存。请检查生成及检索返回格式后重试。",
+                },
+            ) from e
         if isinstance(e, (HistoryFormatError, InputBudgetError)):
             raise HTTPException(503, detail=e.public_detail()) from e
         if isinstance(e, _ModelIdentityError):
@@ -777,7 +789,18 @@ async def _generate_reply_body(
             ) from e
         # 安全：不把内部异常字符串返回给客户端（信息泄露），
         # 日志记录错误类型；异常链保留内部原因，客户端收到通用消息。
-        raise HTTPException(503 if is_vllm else 500, "生成回复失败，请检查所选模型服务后重试") from e
+        raise HTTPException(
+            503 if is_vllm else 500,
+            detail={
+                "stage": "generation",
+                "messageSaved": message_saved,
+                "message": (
+                    "回复已存档，但后续处理失败。请核对聊天记录。"
+                    if message_saved
+                    else "生成回复失败，请检查所选模型服务后重试"
+                ),
+            },
+        ) from e
 
 
 # ═══════════════════════════════════════════

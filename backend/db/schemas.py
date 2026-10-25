@@ -64,7 +64,7 @@ class MessageRequest(BaseModel):
 
 
 class GenerateResponse(BaseModel):
-    model_config = ConfigDict(hide_input_in_errors=True)
+    model_config = ConfigDict(hide_input_in_errors=True, allow_inf_nan=False)
 
     branchId: str | None = None
     branchRevision: int | None = None
