@@ -173,3 +173,35 @@ Baseline collection contained 10,901 executed cases; four duplicate removals
 and four new probe contracts leave that total unchanged. Collection equivalence
 is not a claim of runtime success; aggregate test results are recorded separately.
 The live provider/PostgreSQL evaluator scenarios themselves remain unexecuted.
+
+
+## Integration review and observation evidence ownership (2026-10-25)
+
+PR #3 was reviewed and merged at `edec840`. Its exact head `34daed4` has verified
+CI results: 10,873 backend passes, one applicability skip, eight warnings, and
+43 frontend passes. A separate server snapshot passed 145 targeted checks;
+17 affected frontend checks passed locally. An extra Windows backend attempt
+stalled during collection and was terminated without completed results.
+
+The subsequent memory change keeps full observation sources solely in evidence,
+with observation time and uncertainty in display content. Retrieval text and
+persisted/admin records are unchanged. Revocation cleanup uses original evidence
+rather than the common display label, preserving unrelated history. Production
+code is two lines shorter, with no new semantic rule or abstraction.
+
+After integration, 235 related checks and six-file syntax/Ruff checks passed.
+Two new DeepSeek Flash requests verified complete synthetic identity, alias,
+negative-alias and location evidence through stored recall, actual selection,
+reference compilation and readback (3,755 tokens). The fixed sample's reference
+shrank from 3,911 to 3,581 characters and selector input from 5,993 to 5,663;
+other packet fields and stored memory remained unchanged. An earlier preflight
+copied SQLite over an already opened destination and made zero provider calls;
+the corrected test copies before importing the database singleton.
+
+The server frontend was rebuilt with locked Next.js 16.4.1 and both services
+restarted. A cross-filesystem rename interrupted the initial artifact switch;
+explicit cross-filesystem copying completed it. Readiness/login return 200 and
+unauthenticated protected access returns 401 with nosniff. Configuration and
+other services are unchanged. These checks do not prove browser rendering,
+external-platform delivery, sustained load, large-index performance or Windows
+process cleanup. Broad model quality and remaining architectural work stay open.

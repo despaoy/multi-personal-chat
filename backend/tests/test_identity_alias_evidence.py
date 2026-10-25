@@ -95,7 +95,9 @@ async def test_alias_reference_never_becomes_a_primary_fact_or_hides_complete_so
                 "role", scope, "芷露", for_contextual_selection=True)
             packet, = packets
             assert packet.temporal_mode == "observation" and source in packet.evidence
-            assert source in packet.content and packet.memory_key != "user_name"
+            assert source not in packet.content and packet.memory_key != "user_name"
+            from character.context_builder import _complete_memory_evidence_packet
+            assert source in json.loads(_complete_memory_evidence_packet(packet)[2:])["evidence"]
         else:
             assert receipt["status"] == "no_change"
     finally:

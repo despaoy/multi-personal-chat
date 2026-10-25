@@ -217,7 +217,11 @@ async def test_temporal_observation_keeps_complete_source_when_the_quote_was_cli
     )
     items, trace, context = await read(repo, "我的居住地是什么？")
     assert trace["field_presence"]["residence"] is None
-    assert items and source in items[0].content and source in items[0].evidence
+    assert items and source in items[0].evidence and source not in items[0].content
+    from character.context_builder import compile_reference_context
+    from character.evidence_selector import selection_messages
+    assert source in compile_reference_context(items, complete_evidence=True)[0]
+    assert source in selection_messages("我的居住地是什么？", items)[1]["content"]
     assert items[0].source_observation and items[0].temporal_mode == "observation"
     assert read_memory_fields("我的居住地是什么？", context)[0].value is None
 

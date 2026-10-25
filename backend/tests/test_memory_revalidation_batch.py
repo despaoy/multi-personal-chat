@@ -250,3 +250,56 @@ async def test_failed_second_claim_batch_preserves_error_and_can_recover():
     repo.list_memory_records.reset_mock()
     assert await revalidate_private_memories(request, repo, ROLE, scope) is request
     assert [len(call.kwargs["memory_ids"]) for call in repo.list_memory_records.await_args_list] == [200, 1]
+
+
+async def test_revoked_observation_removes_source_history_without_erasing_shared_status_label(tmp_path):
+    from datetime import datetime, timedelta, timezone
+    from character.memory_service import CharacterMemoryService
+    from character.temporal_provenance import model_temporal_provenance
+    from db.database import SQLiteDB
+    from repositories.character_memory import DatabaseCharacterMemoryRepository
+
+    database = SQLiteDB(tmp_path / "observation-label.sqlite")
+    repository = DatabaseCharacterMemoryRepository(database)
+    scope = UserScope("test", "observation-label", "owner", "room", "private")
+    observed = datetime.now(timezone.utc) - timedelta(days=1)
+    bodies = ("我这周在南宁出差，下周返回。", "我周末才用芷露这个昵称，平日不用。")
+    try:
+        for index, body in enumerate(bodies):
+            await repository.capture_source(ROLE, scope, source_message_id=str(index), body=body, observed_at=observed)
+            await repository.append_claim(ROLE, scope, MemoryItem("", "user_fact", "用户提到：" + body, .9),
+                memory_key="fact_observation_" + str(index), evidence=(body,), source_message_id=str(index),
+                observed_at=observed.isoformat(), metadata={"fact_kind": "other_user_fact",
+                    "temporal_provenance": model_temporal_provenance(evidence=body, observed_at=observed)})
+        packets, _ = await CharacterMemoryService(repository, semantic_enabled=False).load_relevant_memories(
+            ROLE, scope, "查看原话", for_contextual_selection=True)
+        assert len(packets) == 2 and all(packet.temporal_mode == "observation" for packet in packets)
+        label = packets[0].content
+        assert label == packets[1].content
+        retained = next(packet for packet in packets if bodies[1] in packet.evidence)
+        reference, used = compile_reference_context(packets, complete_evidence=True)
+        history = ({"role": "user", "content": "查看独立显示说明"}, {"role": "assistant", "content": label},
+                   {"role": "user", "content": bodies[0]}, {"role": "assistant", "content": "已记录出差说明"},
+                   {"role": "user", "content": bodies[1]}, {"role": "assistant", "content": "已记录称呼说明"})
+        conversation = "独立显示说明：" + label
+        branch = "独立分支说明：" + label
+        context = CompiledCharacterContext("", "", reference, used, memory_packets=packets, memory_status="available",
+            conversation_reference_context=conversation, branch_context=branch)
+        request = GenerationRequest(message="继续查看原话", history=history, character_context=context)
+        identity = source_identity(source_scope(ROLE, scope.platform, scope.adapter, scope.sender_id,
+            scope.conversation_type, scope.conversation_id), "0")
+        connection = database._get_connection()
+        cursor = connection.execute("UPDATE memory_sources SET body=NULL,state='revoked' WHERE source_key=? AND state='recorded'",
+                                    (identity["source_key"],))
+        assert cursor.rowcount == 1
+        connection.commit()
+        assert len(await repository.list_memory_records(ROLE, scope)) == 2
+        updated = await revalidate_private_memories(request, repository, ROLE, scope)
+        assert updated.character_context.used_memory_ids == (retained.memory_id,)
+        assert bodies[0] not in updated.character_context.reference_context
+        assert bodies[1] in updated.character_context.reference_context
+        assert updated.history == history[:2] + history[4:]
+        assert updated.character_context.conversation_reference_context == conversation
+        assert updated.character_context.branch_context == branch
+    finally:
+        database.close_connection()

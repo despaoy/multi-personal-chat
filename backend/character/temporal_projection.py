@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import re
 
 from character.memory_extractor import complete_self_assertions, extract_memories
@@ -89,11 +88,10 @@ def project_temporal_record(row: dict, sources: dict | None = None) -> dict:
         # Conflicting source values remain unresolved, and storage is untouched.
         view["content"] = next(iter(supported_contents))
     else:
-        quotes = json.dumps(list(dict.fromkeys((*bodies, *evidence))), ensure_ascii=False)
         # Search source semantics, not the display label, clock or uncertainty
         # boilerplate. These fields are a read view and never persisted.
         view["retrieval_content"] = "\n".join(bodies or evidence)
-        view["content"] = f"用户原话记录（时效未核实，不代表当前状态；记录于{observed.isoformat()}）：{quotes}"
+        view["content"] = f"用户原话记录（时效未核实，不代表当前状态；记录于{observed.isoformat()}；原话见证据）"
     if bodies:
         view["evidence"] = tuple(dict.fromkeys((*bodies, *evidence)))
     return view

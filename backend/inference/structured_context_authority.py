@@ -104,7 +104,7 @@ async def revalidate_private_memories(
         value
         for packet in context.memory_packets
         if packet.memory_id in removed
-        for value in (packet.content, *packet.evidence)
+        for value in (packet.evidence if packet.temporal_mode == "observation" else (packet.content, *packet.evidence))
         if value
     )
     changes = {

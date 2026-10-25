@@ -173,7 +173,8 @@ def test_unknown_or_partially_supported_statement_is_a_quote(text, content, key)
     row = record(text, content, key)
     view = project_temporal_record(row)
     assert view["temporal_mode"] == "observation"
-    assert text in view["content"] and OBSERVED.isoformat() in view["content"]
+    assert text in view["evidence"] and text not in view["content"]
+    assert OBSERVED.isoformat() in view["content"]
     assert "不代表当前状态" in view["content"]
     assert view["evidence"] == row["evidence"]
     assert view["valid_to"] == ""
@@ -234,8 +235,11 @@ async def test_zero_width_source_survives_actual_recall_and_compilation():
     assert "有效期" not in packet and "有效时间未核实" in packet
     complete = json.loads(_complete_memory_evidence_packet(item)[2:])
     assert complete["temporal_mode"] == "observation"
+    assert row["evidence"][0] in complete["evidence"] and row["evidence"][0] not in complete["content"]
+    assert row["evidence"][0] in packet
     selected = json.loads(selection_messages("出差安排呢？", items)[-1]["content"])
     assert selected["candidates"][0]["observed_at"] == OBSERVED.isoformat()
+    assert row["evidence"][0] in selected["candidates"][0]["evidence"]
     assert trace["temporal_views"]["observation"] == 1
 
 

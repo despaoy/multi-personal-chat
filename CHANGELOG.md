@@ -23,6 +23,8 @@ interfaces.
 
 ### Changed
 
+- Carry observation source text once in memory evidence; retain temporal uncertainty
+  in display content and revoke history using original evidence rather than shared labels.
 - Reject corrupt training configuration, invalid authentication subjects and failed
   required migrations instead of silently substituting defaults. Share SQLite /
   PostgreSQL task decoding and LoRA metadata reading without invented progress.
