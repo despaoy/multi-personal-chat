@@ -303,3 +303,26 @@ async def test_revoked_observation_removes_source_history_without_erasing_shared
         assert updated.character_context.branch_context == branch
     finally:
         database.close_connection()
+
+
+@pytest.mark.parametrize("reader_name", ["linked_source_revisions", "linked_source_receipts"])
+@pytest.mark.parametrize("corruption", ["duplicate", "unrequested"])
+async def test_initial_recall_rejects_malformed_exact_source_reads(tmp_path, reader_name, corruption):
+    from character.memory_service import CharacterMemoryService
+
+    request, _prepared, repo, db, scope, _target, _public = await structured_request(tmp_path, projected=True)
+    original = getattr(repo, reader_name)
+    async def malformed(*args, **kwargs):
+        rows = await original(*args, **kwargs)
+        assert rows
+        extra = rows[0] if corruption == "duplicate" else dict(rows[0], memory_id=999999)
+        return [*rows, extra]
+    setattr(repo, reader_name, AsyncMock(side_effect=malformed))
+    repo.linked_sources = AsyncMock(side_effect=AssertionError("Broad source reads are not authorized"))
+    try:
+        with pytest.raises(RuntimeError, match="duplicate or unrequested"):
+            await CharacterMemoryService(repo, semantic_enabled=False).load_relevant_memories(
+                ROLE, scope, request.message, for_contextual_selection=True)
+        repo.linked_sources.assert_not_awaited()
+    finally:
+        db.close_connection()

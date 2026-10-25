@@ -59,3 +59,21 @@ def read_source_record_bindings(claims, source_pairs, revisions):
     versions = tuple((key, source_id, source_record_version(revisions[key][source_id]))
                      for key, source_id in pairs if source_id in revisions.get(key, {}))
     return pairs, versions
+
+
+async def read_claim_sources(repository, method, character_id, scope, pairs):
+    """Read exact scoped claim/source pairs with one bounded response contract."""
+    pairs = tuple(dict.fromkeys((int(key), sid) for key, sid in pairs))
+    sources = {}
+    if not pairs:
+        return sources
+    reader = getattr(repository, method)
+    for start in range(0, len(pairs), 200):
+        batch = pairs[start:start + 200]
+        requested = {(str(key), sid) for key, sid in batch}
+        for row in await reader(character_id, scope, claim_sources=batch):
+            pair = (str(row["memory_id"]), str(row["source_message_id"]))
+            if pair not in requested or pair in sources:
+                raise RuntimeError("Memory source reader returned a duplicate or unrequested pair")
+            sources[pair] = row
+    return sources

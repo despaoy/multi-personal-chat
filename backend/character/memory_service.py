@@ -24,7 +24,7 @@ from character.context_builder import MAX_MEMORY_ITEMS
 from character.event_memory import event_reference_content
 from character.memory_clock import parse_memory_timestamp
 from character.memory_query import AMBIGUOUS_MEMORY_KEYS, PERSONAL_MEMORY_KEYS, plan_memory_query
-from character.memory_read_authority import source_event_ids
+from character.memory_read_authority import read_claim_sources, source_event_ids
 from character.memory_subject import is_source_observation
 from character.models import MemoryItem, UserScope
 from character.source_fragment_provenance import source_fragment_fields
@@ -598,9 +598,7 @@ def _source_ids(row: dict[str, Any]) -> tuple[str, ...]:
     return tuple(dict.fromkeys(str(item).strip() for item in values if str(item).strip()))
 
 
-def _row_evidence(
-    row: dict[str, Any], rows_by_id: dict[str, dict[str, Any]], *, complete: bool = False
-) -> tuple[str, ...]:
+def _row_evidence(row: dict[str, Any], rows_by_id: dict[str, dict[str, Any]]) -> tuple[str, ...]:
     """提取 claim 自带 evidence，并按显式 source event ID 附一跳事件。"""
 
     values = [item if isinstance(item, str) else item["quote"] for item in row["evidence"]]
@@ -616,10 +614,7 @@ def _row_evidence(
         if content:
             values.append(content)
 
-    # Legacy compilation carries four snippets. A semantic reviewer must see
-    # every snippet (including late corrections), or reject the whole budget.
-    evidence = tuple(dict.fromkeys(value for value in values if value))
-    return evidence if complete else evidence[:4]
+    return tuple(dict.fromkeys(value for value in values if value))
 
 
 def _rank_route(values: dict[int, float], eligible: set[int]) -> dict[int, float]:
@@ -813,11 +808,9 @@ class CharacterMemoryService:
         pairs = tuple(dict.fromkeys((int(key), str(source_id)) for key, ids in source_pairs.items() for source_id in ids))
         if pairs:
             trace['stage'] = 'source_revisions'
-            for start in range(0, len(pairs), 200):
-                revisions = await self._repo.linked_source_revisions(
-                    character_id, user_scope, claim_sources=pairs[start:start + 200])
-                for revision in revisions:
-                    source_revisions.setdefault(str(revision['memory_id']), {})[str(revision['source_message_id'])] = revision
+            revisions = await read_claim_sources(self._repo, "linked_source_revisions", character_id, user_scope, pairs)
+            for (key, source_id), revision in revisions.items():
+                source_revisions.setdefault(key, {})[source_id] = revision
             trace['claim_revision_status'] = 'available'
         from character.memory_read_authority import read_source_record_bindings
         # Read source authority through actual claim links, in bounded batches.
@@ -839,12 +832,10 @@ class CharacterMemoryService:
         if pairs:
             trace['stage'] = 'source_receipts'
             trace['source_receipt_pairs_requested'] = len(pairs)
-            for start in range(0, len(pairs), 200):
-                linked = await self._repo.linked_source_receipts(
-                    character_id, user_scope, claim_sources=pairs[start:start + 200])
-                for source in linked:
-                    if isinstance(source.get('body'), str) and str(source.get('memory_id', '')).isdigit():
-                        claim_sources.setdefault(str(source['memory_id']), {})[str(source['source_message_id'])] = source
+            linked = await read_claim_sources(self._repo, "linked_source_receipts", character_id, user_scope, pairs)
+            for (key, source_id), source in linked.items():
+                if isinstance(source.get('body'), str):
+                    claim_sources.setdefault(key, {})[source_id] = source
             trace['source_receipt_pairs_returned'] = sum(len(sources) for sources in claim_sources.values())
             trace['source_authority_reader'] = 'exact_claim_source_pairs'
             for name, rows in (('legacy_source_status', legacy_rows), ('temporal_source_status', semantic_rows)):
@@ -1124,7 +1115,7 @@ class CharacterMemoryService:
                         content=content,
                         importance=importance,
                         evidence=(
-                            _row_evidence(row, rows_by_id, complete=True)
+                            _row_evidence(row, rows_by_id)
                             if evidence_enabled
                             else ()
                         ),

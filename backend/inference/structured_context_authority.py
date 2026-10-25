@@ -5,24 +5,12 @@ from inference.history import without_history_turns
 from datetime import datetime, timezone
 
 from character.context_builder import _memory_is_injectable, compile_reference_context
-from character.memory_read_authority import record_version, source_record_version, source_version
+from character.memory_read_authority import read_claim_sources, record_version, source_record_version, source_version
 
 
 async def _read_source_versions(repository, method, character_id, scope, pairs, version):
-    pairs = tuple(dict.fromkeys((int(key), sid) for key, sid in pairs))
-    versions = {}
-    if not pairs:
-        return versions
-    reader = getattr(repository, method)
-    for start in range(0, len(pairs), 200):
-        batch = pairs[start:start + 200]
-        requested = {(str(key), sid) for key, sid in batch}
-        for row in await reader(character_id, scope, claim_sources=batch):
-            pair = (str(row["memory_id"]), str(row["source_message_id"]))
-            if pair not in requested or pair in versions:
-                raise RuntimeError("Memory source reader returned a duplicate or unrequested pair")
-            versions[pair] = version(row)
-    return versions
+    rows = await read_claim_sources(repository, method, character_id, scope, pairs)
+    return {pair: version(row) for pair, row in rows.items()}
 
 
 def without_memories(context, removed, *, preferred_address="", max_chars=None):

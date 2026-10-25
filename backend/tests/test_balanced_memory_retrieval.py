@@ -336,7 +336,7 @@ def test_evidence_decode_canonical_fields_do_not_merge_stale_raw_columns(empty):
     sources = [] if empty else ["current"]
     row = dict(evidence=evidence, evidence_json='["旧摘要"]', source_message_ids=sources,
                source_message_ids_json='["stale"]')
-    assert _row_evidence(row, {}, complete=True) == tuple(evidence)
+    assert _row_evidence(row, {}) == tuple(evidence)
     assert _source_ids(row) == tuple(sources)
 
 

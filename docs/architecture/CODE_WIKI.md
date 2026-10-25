@@ -1,6 +1,6 @@
 # 代码知识库
 
-核心生成、来源定位与错误行为核对：2026-10-18；其他章节保留 2026-09-11 的核对范围。本文说明当前源码的模块职责和调用边界。实验结论见[实验总览](../research/KISAKI_EXPERIMENT_INDEX.md)，运行验证见[发布清单](../RELEASE_CHECKLIST.md)，工作区与已部署版本的区别见[当前状态](../CURRENT_STATE.md)。
+核心生成、来源定位与错误行为增量核对：2026-10-25；其他章节保留 2026-09-11 的核对范围。本文说明当前源码的模块职责和调用边界。实验结论见[实验总览](../research/KISAKI_EXPERIMENT_INDEX.md)，运行验证见[发布清单](../RELEASE_CHECKLIST.md)，工作区与已部署版本的区别见[当前状态](../CURRENT_STATE.md)。
 
 ## 总体结构
 
@@ -105,7 +105,7 @@ memory_extractor提取规则候选，memory_llm进行后台版本判断和本地
 
 角色作品知识按story、scene、fact/relation/event和evidence组织，知识卡命中可回填父场景。通用知识库通过knowledge_base_id隔离，不应静默混用角色作品索引。
 
-聊天低置信时生成自然的角色化弃答，仍返回abstained=true、answerMode=abstention和空引用；模型表达生成失败才使用固定兜底。独立证据问答接口保持自己的澄清/拒答策略。归档P6不参与运行时降级。
+聊天低置信时由当前提供商生成人物化的不确定表达，仍返回abstained=true、answerMode=abstention和空引用；检索或生成故障明确报错，不返回固定回复冒充成功。独立证据问答接口保持自己的澄清/拒答策略。归档P6不参与运行时降级。
 
 ## 训练与评测
 
@@ -125,10 +125,7 @@ evaluation中的persona、generation、retrieval、safety指标与人工审核�
 
 repositories/messages.py、character_memory.py、user_data.py封装业务持久化需求；db/database.py是SQLite实现，pg_database.py是PostgreSQL实现，adapter.py负责选择与兼容。
 
-迁移链尾部为：
-- 006_character_memory：人物关系与记忆。
-- 007_memory_claims：版本关系、有效时间、证据与作用域。
-- 008_integration_receipts：平台生成及发送回执，当前head。
+迁移链覆盖人物关系与记忆、平台回执、假想分支及调用计量；当前唯一head为016_invocation_purpose。旧008_integration_receipts不是当前head。
 
 在backend目录执行python -m alembic upgrade head；完整结构结合db/models.py、db/integration_receipts.py与迁移检查。
 
@@ -149,3 +146,8 @@ src/components保存UI和业务组件；hooks封装数据获取与状态；conte
 脚本逐项用途见[scripts索引](../../scripts/README.md)和[后端脚本索引](../../backend/scripts/README.md)。数据目录见[角色数据说明](../../backend/data/character_dialogues/README.md)。
 
 代码检查、冻结数据门禁、真实模型评测和生产部署是不同验证层级。完整命令及历史记录见[发布清单](../RELEASE_CHECKLIST.md)，扩展模块时遵循[扩展指南](EXTENSIBILITY_GUIDE.md)。
+
+
+### 精确来源读取归属（2026-10-25）
+
+character/memory_read_authority.read_claim_sources统一初次召回和生成前复核的精确claim/source读取。只读取请求中的授权配对，每批最多200对，重复或越界返回明确失败。memory_service负责读取视图、排序及证据对象；structured_context_authority负责在实际发送前比较新版本。共享的是批量读取契约，刷新时仍重新读取，不能拿初次快照替代发送前核验。证据始终完整保留，参考预算不足另行明确报错。

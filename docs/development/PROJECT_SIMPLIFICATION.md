@@ -239,3 +239,33 @@ This checks writer success, not final-answer accuracy. Backend restart readiness
 and login are 200; unauthenticated protected access is 401 with nosniff. Frontend
 process and configuration are unchanged. Current-source whole-CI results, browser,
 external-platform, sustained-load and remaining architecture work stay separate.
+
+
+## One exact claim/source read contract (2026-10-25)
+
+Initial recall and pre-send revalidation now share `read_claim_sources` in
+`character/memory_read_authority.py`. It deduplicates requested pairs, reads at
+most 200 per batch, and rejects duplicate or unrequested returned pairs. Initial
+recall previously silently overwrote duplicate source responses while revalidation
+rejected them. Source availability remains distinct from an adapter failure;
+the shared path does not authorize broad source scans. Three repeated batch-read
+implementations were consolidated. An unused four-snippet truncation option was
+removed; production callers already required complete evidence. Net production
+change across three files: minus three lines, no semantic rules or model stage.
+
+All 198 checks in 11 affected files passed, including actual SQLite scopes,
+cross-conversation grants, erasure, malformed returned pairs, 201-pair batching
+and second-batch failure. Six changed Python files passed syntax/Ruff checks and
+repository integrity. With one frozen clock, actual isolated-storage recall
+produced identical complete MemoryItem fields and compiled reference text before
+and after. A duplicate initial source response now explicitly fails. No paid
+model calls or manual full-backend repeat were made; historical native responses
+were not counted as new model verification.
+
+Previous exact-head CI 40188703955 at `7eb72a9` completed successfully: 10,879
+backend passes, one applicability skip, eight warnings; frontend and both Docker
+builds passed. This resolves the preceding 33 old observation-layout assertions,
+not a claim about later source. Only backend was restarted; readiness/login are
+200 and protected unauthenticated access is 401 with nosniff. Frontend process
+and configuration are unchanged. Browser, external-platform and sustained-load
+acceptance remain separate work.

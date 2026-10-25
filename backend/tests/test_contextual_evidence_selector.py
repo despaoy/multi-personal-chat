@@ -427,4 +427,4 @@ def test_source_event_link_cannot_resurrect_unusable_record(status):
     from character.memory_service import _row_evidence
 
     row = {"evidence": [], "source_message_ids": [], "source_event_ids": ["event"]}
-    assert _row_evidence(row, {"event": {"content": "不应泄漏", "status": status}}, complete=True) == ()
+    assert _row_evidence(row, {"event": {"content": "不应泄漏", "status": status}}) == ()
