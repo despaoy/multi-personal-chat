@@ -281,9 +281,9 @@ def _trim_history_to_budget(
 
 
 def _system_prompt(request: GenerationRequest) -> str:
+    context = request.character_context
     if request.apply_prompt_policy:
         persona = request.persona_prompt.strip()
-        context = request.character_context
         dynamic_context = ""
         if context is not None:
             # 人物已有现成提示词（如月社妃 Prompt v3）时不再拼接
@@ -292,12 +292,10 @@ def _system_prompt(request: GenerationRequest) -> str:
             if not persona:
                 persona = context.profile_context
             dynamic_context = context.dynamic_context
-            if getattr(context, "memory_status", "not_checked") in {"available", "no_match", "retrieval_error"}:
+            if context.memory_status in {"available", "no_match", "retrieval_error"}:
                 dynamic_context = "\n\n".join(filter(None, (dynamic_context, MEMORY_VISIBILITY_POLICY)))
-            has_memory_reference = bool(context.reference_context or getattr(context, "episodic_reference_context", ""))
-            if getattr(context, "memory_source_status", "not_checked") == "available" and getattr(
-                context, "episodic_reference_context", ""
-            ):
+            has_memory_reference = bool(context.reference_context or context.episodic_reference_context)
+            if context.memory_source_status == "available" and context.episodic_reference_context:
                 # Trusted application receipt, not raw speech or a current-fact grant.
                 # The final canonical source budget settles availability first.
                 dynamic_context = "\n\n".join(
@@ -309,7 +307,7 @@ def _system_prompt(request: GenerationRequest) -> str:
             # Fact-lane absence is not evidence-lane absence. Original speech
             # remains unclassified evidence: do not attach the active-fact
             # policy (which also discourages necessary clarification) to it.
-            if getattr(context, "memory_status", "not_checked") == "no_match" and not has_memory_reference:
+            if context.memory_status == "no_match" and not has_memory_reference:
                 dynamic_context += (
                     "\n【用户历史依据】本轮已查询记忆，但没有找到可用于回答的相关记录。"
                     "若用户询问自己的过往信息，只能依据本轮明确陈述或可见历史回答；"
@@ -321,20 +319,19 @@ def _system_prompt(request: GenerationRequest) -> str:
             include_rag=request.retrieval.has_evidence,
             dynamic_context=dynamic_context,
         )
-    else:
-        prompt = request.persona_prompt.strip()
-    if request.apply_prompt_policy:
         prompt = "\n\n".join(filter(None, (prompt, RUNTIME_CAPABILITY_POLICY)))
         if request.memory_write_enabled is not None:
             prompt += "\n\n" + (MEMORY_WRITE_CAPABILITY_POLICY if request.memory_write_enabled
                                   else MEMORY_WRITE_DISABLED_POLICY)
-        if getattr(request.character_context, "memory_operation_deferred", False):
+        if context is not None and context.memory_operation_deferred:
             prompt += "\n\n" + DEFERRED_MEMORY_OPERATION_POLICY
+    else:
+        prompt = request.persona_prompt.strip()
     # 对话者昵称（senderName，用户可控）不进入系统提示词：
     # 净化只能删除结构字符，语义级注入内容仍会以系统区权威出现。
     # 3.3.0 起改由 build_grounded_user_message 放入用户消息的
     # <speaker_label> 不可信参考区。
-    if getattr(request.character_context, "branch_context", ""):
+    if context is not None and context.branch_context:
         prompt += (
             "\n当前处于反事实分支。人物画像与原作引用描述原作背景；当前分支显式改变的事实仅在本分支成立。"
             "保持人物风格，区分原作证据、当前假设、已确认分支事实和未确认推演。"

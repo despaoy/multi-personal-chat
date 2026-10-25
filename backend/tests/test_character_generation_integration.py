@@ -12,6 +12,8 @@
 from __future__ import annotations
 
 import dataclasses
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -320,3 +322,22 @@ def test_character_context_field_is_typed_on_request():
     assert request.character_context is context
     with pytest.raises(dataclasses.FrozenInstanceError):
         request.character_context = None  # type: ignore[misc]
+
+
+@pytest.mark.asyncio
+async def test_missing_source_receipt_status_stops_before_generation():
+    from inference.generation_request import generate_character_response
+
+    context = dataclasses.replace(
+        _character_context(), memory_source_status="available",
+        episodic_reference_context="合成原话：周四14点取书，尚未付款，下雨取消。",
+    )
+    fields = dict(vars(context))
+    del fields["memory_source_status"]
+    model = AsyncMock(return_value="不应生成")
+    with pytest.raises(AttributeError, match="memory_source_status"):
+        await generate_character_response(GenerationRequest(
+            message="按可见资料核对取书安排，保留付款状态和天气条件。",
+            character_context=SimpleNamespace(**fields),
+        ), model)
+    model.assert_not_awaited()
