@@ -296,3 +296,32 @@ async def test_manual_review_fixture_supports_current_preparation_contract():
     prepared = await service.prepare_turn(_turn("你好"), "tsukiyashiro_kisaki")
     assert prepared.history == () and prepared.compiled.memory_packets == ()
     assert prepared.memory_recall["status"] == "no_records_returned"
+
+
+
+@pytest.mark.parametrize("diagnostic", ["increment", "log_event"])
+async def test_review_diagnostic_failure_reaches_api_with_original_cause(monkeypatch, diagnostic):
+    from api import generate
+    from db.schemas import MessageRequest
+    from fastapi import HTTPException
+    from infra import observability
+
+    failure = OSError("synthetic review diagnostic failure")
+    original = getattr(observability, diagnostic)
+
+    def broken(*args, **kwargs):
+        raise failure
+
+    reviewer = _Reviewer(_review_payload())
+    service = _service(SemanticStateEstimator(reviewer))
+    request = MessageRequest(
+        message="我当然开心，毕竟又被放鸽子了", senderId="review-diagnostic", conversationId="review-diagnostic"
+    )
+    monkeypatch.setattr(observability, diagnostic, broken)
+    with pytest.raises(HTTPException) as caught:
+        await generate._prepare_character_turn(request, "tsukiyashiro_kisaki", character_service=service)
+    assert caught.value.status_code == 503 and caught.value.__cause__ is failure
+    assert len(reviewer.calls) == 1
+    monkeypatch.setattr(observability, diagnostic, original)
+    prepared = await generate._prepare_character_turn(request, "tsukiyashiro_kisaki", character_service=service)
+    assert prepared.semantic_review_status == "applied" and len(reviewer.calls) == 2

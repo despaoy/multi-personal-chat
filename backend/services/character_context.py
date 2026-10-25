@@ -619,26 +619,21 @@ def build_character_context_service(
 
 
 def _observe_semantic_review(outcome: SemanticReviewOutcome) -> None:
-    """Record text-free semantic-review metrics without risking the turn."""
+    """Record text-free semantic-review metrics; failures reach the caller."""
 
     if outcome.status != "applied":
         return
-    try:
-        from infra.observability import increment, log_event
-
-        increment(f"dynamic_context_semantic_review_{outcome.status}")
-        log_event(
-            "dynamic_context_semantic_review",
-            status=outcome.status,
-            reasons=list(outcome.reasons),
-            latencyMs=round(outcome.latency_ms, 3),
-            historyCount=outcome.history_count,
-            ruleConfidence=outcome.rule_confidence,
-            reviewConfidence=outcome.review_confidence,
-        )
-    except Exception:
-        # Diagnostics must never turn an optional review into a request failure.
-        logger.debug("语义复核诊断记录失败", exc_info=True)
+    from infra.observability import increment, log_event
+    increment(f"dynamic_context_semantic_review_{outcome.status}")
+    log_event(
+        "dynamic_context_semantic_review",
+        status=outcome.status,
+        reasons=list(outcome.reasons),
+        latencyMs=round(outcome.latency_ms, 3),
+        historyCount=outcome.history_count,
+        ruleConfidence=outcome.rule_confidence,
+        reviewConfidence=outcome.review_confidence,
+    )
 
 
 _default_service: tuple[ProviderContextBudget, CharacterContextService] | None = None
