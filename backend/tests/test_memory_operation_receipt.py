@@ -165,11 +165,13 @@ async def test_closed_scheduler_does_not_return_old_success():
     (['saved', 'no_change'], 'saved'),
 ])
 async def test_receipt_does_not_hide_partial_or_conflicted_operations(monkeypatch, outcomes, expected):
-    from character.memory_llm import ValidatedMemoryProposal
+    from character.memory_llm import MemoryOperationPlan, ValidatedMemoryProposal
 
     worker = scheduler()
-    monkeypatch.setattr('character.memory_llm._proposals_from_payload',
-                        lambda *a, **kw: [ValidatedMemoryProposal(operation='ADD') for _ in outcomes])
+    monkeypatch.setattr(
+        "character.memory_llm._memory_plan_from_payload",
+        lambda *a, **kw: MemoryOperationPlan(tuple(ValidatedMemoryProposal(operation="ADD") for _ in outcomes), ()),
+    )
     pending = iter(outcomes)
 
     async def persist(*args):
@@ -206,11 +208,13 @@ async def test_shutdown_resolves_active_and_queued_receipts():
 
 
 async def test_cancellation_preserves_already_confirmed_commits(monkeypatch):
-    from character.memory_llm import ValidatedMemoryProposal
+    from character.memory_llm import MemoryOperationPlan, ValidatedMemoryProposal
 
     worker = scheduler()
-    monkeypatch.setattr('character.memory_llm._proposals_from_payload',
-                        lambda *a, **kw: [ValidatedMemoryProposal(operation='ADD')] * 2)
+    monkeypatch.setattr(
+        "character.memory_llm._memory_plan_from_payload",
+        lambda *a, **kw: MemoryOperationPlan((ValidatedMemoryProposal(operation="ADD"),) * 2, ()),
+    )
     second_started = asyncio.Event()
     calls = 0
 

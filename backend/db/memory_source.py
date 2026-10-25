@@ -282,7 +282,7 @@ def revoke_plan(scope, memory_ids, *, clear=False):
         yield (f"DELETE FROM memory_source_links WHERE memory_id IN ({placeholders})", bound)
 
 
-def read_plan(scope, *, source_message_ids=None, limit=100):
+def read_plan(scope, *, source_message_ids=None, limit=100, unlinked_only=False):
     if type(limit) is not int or not 1 <= limit <= 200:
         raise ValueError("Source read limit must be 1..200")
     params = dict(scope, limit=limit)
@@ -309,6 +309,8 @@ def read_plan(scope, *, source_message_ids=None, limit=100):
     # in the same statement/snapshot as the source read, not an in-memory check.
     where += (" AND observed_at > COALESCE((SELECT revoked_before FROM memory_source_fences "
               "WHERE owner_key = :owner_key), '')")
+    if unlinked_only:
+        where += " AND NOT EXISTS (SELECT 1 FROM memory_source_links l WHERE l.source_key=memory_sources.source_key)"
     rows = yield ("SELECT source_message_id, observed_at, body FROM memory_sources WHERE "
                   + where + " ORDER BY observed_at DESC, source_key DESC LIMIT :limit", params)
     return rows

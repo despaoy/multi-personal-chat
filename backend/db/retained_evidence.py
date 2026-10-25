@@ -161,7 +161,7 @@ def _source_cuts(body, erased_records):
     return intervals, tuple(needles)
 
 
-def project_retained(record, source, erased_records):
+def project_retained(record, source, erased_records, *, linked_source=True):
     """Return a precise evidence patch, or None; never choose deleted targets."""
     body = source.get("body")
     erased_evidence = tuple(dict.fromkeys(x for r in erased_records for x in _evidence(r)))
@@ -169,7 +169,7 @@ def project_retained(record, source, erased_records):
     metadata = _metadata(record)
     # A full quote used to erase one topic cannot authorize removing other
     # independent facts from that same quote. Such overlap requires resolution.
-    narrow = tuple(x for x in erased_evidence if isinstance(body, str) and x != body)
+    narrow = tuple(x for x in erased_evidence if isinstance(body, str) and (x != body or not linked_source))
     objects = tuple(
         value
         for r in erased_records
@@ -188,7 +188,8 @@ def project_retained(record, source, erased_records):
             raise MemoryClaimConflict("copied retained text has no separable evidence")
         return None
     affected = copied_content or any(
-        (isinstance(body, str) and body in item) or _contains(item, (*narrow, *objects)) for item in evidence
+        (linked_source and isinstance(body, str) and body in item) or _contains(item, (*narrow, *objects))
+        for item in evidence
     )
     if not affected:
         if not isinstance(body, str) and (_contains(evidence, erased_evidence) or _contains(content, erased_evidence)):

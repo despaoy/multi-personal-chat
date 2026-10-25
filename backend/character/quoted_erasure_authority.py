@@ -178,7 +178,7 @@ def quoted_erasure_plan(message, records=None):
         not invalid,
         tuple(affirmative),
         tuple(protected),
-        () if unresolved else allowed_ids,
+        allowed_ids,
         kept_ids,
         tuple(dict.fromkeys(str(row.get("memory_key") or "") for row in kept)),
         tuple(dict.fromkeys(_object(row) for row in kept)),

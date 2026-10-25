@@ -3250,6 +3250,7 @@ class SQLiteDB:
         memory_key: Optional[str] = None,
         scope_level: Optional[str] = None,
         protected_memory_keys: tuple[str, ...] = (),
+        protected_source_message_ids: tuple[str, ...] = (),
     ) -> int:
         """Physically erase a claim/key and every derived descendant.
 
@@ -3334,6 +3335,11 @@ class SQLiteDB:
                     placeholders = ",".join("?" for _ in batch)
                     cursor.execute(f"SELECT * FROM character_memories WHERE id IN ({placeholders})", batch)
                     erased_records.extend(dict(row) for row in cursor.fetchall())
+                from db.retained_source_observation import preserve_plan
+
+                memory_source.run_sqlite(
+                    cursor, preserve_plan(source_scope, protected_source_message_ids, erased_records)
+                )
                 memory_source.run_sqlite(cursor, purge_plan(source_scope, erased_records))
                 memory_source.run_sqlite(cursor, memory_source.revoke_plan(source_scope, erase_ids))
                 placeholders = ",".join("?" for _ in erase_ids)
@@ -3435,12 +3441,28 @@ class SQLiteDB:
         identity = memory_source.source_identity(scope, source_message_id)
         return memory_source.run_sqlite(self._get_connection().cursor(), memory_source.admission_plan(identity, body))
 
-    def list_memory_sources(self, character_id, platform, adapter, sender_id,
-                            conversation_type, conversation_id, *, source_message_ids=None, limit=100):
+    def list_memory_sources(
+        self,
+        character_id,
+        platform,
+        adapter,
+        sender_id,
+        conversation_type,
+        conversation_id,
+        *,
+        source_message_ids=None,
+        limit=100,
+        unlinked_only=False,
+    ):
         scope = memory_source.source_scope(
-            character_id, platform, adapter, sender_id, conversation_type, conversation_id)
-        return memory_source.run_sqlite(self._get_connection().cursor(), memory_source.read_plan(
-            scope, source_message_ids=source_message_ids, limit=limit))
+            character_id, platform, adapter, sender_id, conversation_type, conversation_id
+        )
+        return memory_source.run_sqlite(
+            self._get_connection().cursor(),
+            memory_source.read_plan(
+                scope, source_message_ids=source_message_ids, limit=limit, unlinked_only=unlinked_only
+            ),
+        )
 
     def linked_memory_sources(self, character_id, platform, adapter, sender_id,
                               conversation_type, conversation_id, *, memory_ids, limit=100):
@@ -3472,13 +3494,26 @@ class SQLiteDB:
         return memory_source.run_sqlite(self._get_connection().cursor(),
                                         window_plan(scope, source_message_ids, radius=radius))
 
-    def search_memory_sources(self, character_id, platform, adapter, sender_id,
-                              conversation_type, conversation_id, *, query, limit=32):
+    def search_memory_sources(
+        self,
+        character_id,
+        platform,
+        adapter,
+        sender_id,
+        conversation_type,
+        conversation_id,
+        *,
+        query,
+        limit=32,
+        unlinked_only=False,
+    ):
         from db.memory_source_search import search_plan
 
         scope = memory_source.source_scope(
             character_id, platform, adapter, sender_id, conversation_type, conversation_id)
-        return memory_source.run_sqlite(self._get_connection().cursor(), search_plan(scope, query, limit=limit))
+        return memory_source.run_sqlite(
+            self._get_connection().cursor(), search_plan(scope, query, limit=limit, unlinked_only=unlinked_only)
+        )
 
     def list_scoped_conversation_turns(self, user_scope, character_id, *, limit=200, before=None):
         from db.conversation_source import assemble_turn_page, turn_source_query

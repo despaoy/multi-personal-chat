@@ -11,7 +11,7 @@ import re
 from datetime import datetime, timezone
 
 from db.memory_claim_guard import MemoryClaimConflict
-from db.memory_source import source_scope, utc_stamp
+from db.memory_source import source_identity, source_scope, utc_stamp
 
 _INTRO = re.compile(
     r"(?:逐字)?(?:引用|复述|转述)我(?:本人|自己)?(?:以前|此前|先前|过去|之前)的(?:一句话|原话|发言)\s*[:：]\s*"
@@ -95,9 +95,6 @@ def observation_plan(scope, erased, linked_sources, preference_cuts, outside_quo
             values.add(record["memory_key"].removeprefix("preference_"))
     if not values:
         return []
-    fields = json.loads(scope["scope_key"])
-    if not isinstance(fields, list) or len(fields) != 6 or source_scope(*fields) != scope:
-        raise MemoryClaimConflict("source fragment requires an exact original scope")
     candidates = {}
     for value in sorted(values):
         needle = "%" + value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
@@ -118,46 +115,7 @@ def observation_plan(scope, erased, linked_sources, preference_cuts, outside_quo
     now = utc_stamp(datetime.now(timezone.utc))
     for source in candidates.values():
         fragments, spans = historical_fragments(source["body"], values, outside_quotes)
-        try:
-            # Preserve the exact actual timestamp, never substitute erasure time.
-            utc_stamp(datetime.fromisoformat(source["observed_at"]))
-        except (ValueError, TypeError) as exc:
-            raise MemoryClaimConflict("source fragment clock is unavailable") from exc
-        metadata = dict(
-            content_semantics="quoted_source",
-            speaker_role="user",
-            described_subject="not_resolved",
-            attributed_to="user",
-            qualifiers={},
-            temporal_provenance=dict(version=1, producer="source_erasure_projection", validity_authority="unspecified"),
-            erasure_evidence_projection=dict(
-                version=1,
-                kind="original_source_fragments",
-                sources=[dict(source_message_id=source["source_message_id"], spans=spans)],
-                complete_original_source=False,
-            ),
-        )
-        digest = hashlib.sha256(
-            json.dumps([source["source_key"], sorted(erased)], ensure_ascii=False).encode()
-        ).hexdigest()
-        plans.append(
-            dict(
-                zip(
-                    ["character_id", "platform", "adapter", "sender_id", "conversation_type", "conversation_id"],
-                    fields,
-                    strict=True,
-                ),
-                memory_key="source_fragment_" + digest,
-                content="用户原话保留片段（仅保留内容见证据）",
-                source_message_id=source["source_message_id"],
-                source_key=source["source_key"],
-                source_message_ids_json=json.dumps([source["source_message_id"]], ensure_ascii=False),
-                evidence_json=json.dumps(fragments, ensure_ascii=False),
-                metadata_json=json.dumps(metadata, ensure_ascii=False),
-                observed_at=source["observed_at"],
-                now=now,
-            )
-        )
+        plans.append(_observation_parameters(scope, source, erased, fragments, spans, now))
     return plans
 
 
@@ -178,3 +136,84 @@ def apply_observations(plans):
             "INSERT INTO memory_source_links (memory_id,source_key) VALUES (:memory_id,:source_key)",
             dict(memory_id=rows[0]["id"], source_key=params["source_key"]),
         )
+
+
+def _observation_parameters(scope, source, erased, fragments, spans, now):
+    fields = json.loads(scope["scope_key"])
+    if not isinstance(fields, list) or len(fields) != 6 or source_scope(*fields) != scope:
+        raise MemoryClaimConflict("source fragment requires an exact original scope")
+    try:
+        utc_stamp(datetime.fromisoformat(source["observed_at"]))
+    except (ValueError, TypeError) as exc:
+        raise MemoryClaimConflict("source fragment clock is unavailable") from exc
+    metadata = dict(
+        content_semantics="quoted_source",
+        speaker_role="user",
+        described_subject="not_resolved",
+        attributed_to="user",
+        qualifiers={},
+        temporal_provenance=dict(version=1, producer="source_erasure_projection", validity_authority="unspecified"),
+        erasure_evidence_projection=dict(
+            version=1,
+            kind="original_source_fragments",
+            sources=[dict(source_message_id=source["source_message_id"], spans=spans)],
+            complete_original_source=False,
+        ),
+    )
+    digest = hashlib.sha256(json.dumps([source["source_key"], sorted(erased)], ensure_ascii=False).encode()).hexdigest()
+    return dict(
+        zip(
+            ["character_id", "platform", "adapter", "sender_id", "conversation_type", "conversation_id"],
+            fields,
+            strict=True,
+        ),
+        memory_key="source_fragment_" + digest,
+        content="用户原话保留片段（仅保留内容见证据）",
+        source_message_id=source["source_message_id"],
+        source_key=source["source_key"],
+        source_message_ids_json=json.dumps([source["source_message_id"]], ensure_ascii=False),
+        evidence_json=json.dumps(fragments, ensure_ascii=False),
+        metadata_json=json.dumps(metadata, ensure_ascii=False),
+        observed_at=source["observed_at"],
+        now=now,
+    )
+
+
+def preserve_plan(scope, source_message_ids, erased_records):
+    """Preserve explicitly retained speech before this transaction fences old raw sources."""
+    if not source_message_ids:
+        return
+    if not isinstance(source_message_ids, (tuple, list)) or len(source_message_ids) > 200:
+        raise ValueError("Expected a bounded retained source batch")
+    ids = tuple(dict.fromkeys(source_message_ids))
+    bound = {f"keep{i}": source_identity(scope, identity)["source_key"] for i, identity in enumerate(ids)}
+    placeholders = ",".join(":" + key for key in bound)
+    rows = yield (
+        "SELECT s.source_key,s.source_message_id,s.observed_at,s.body,s.state FROM memory_sources s "
+        f"WHERE s.source_key IN ({placeholders}) AND s.scope_key=:scope_key AND s.owner_key=:owner_key "
+        "AND s.state='recorded' AND s.observed_at > COALESCE((SELECT revoked_before FROM memory_source_fences "
+        "WHERE owner_key=:owner_key),'') AND NOT EXISTS (SELECT 1 FROM memory_source_links l WHERE l.source_key=s.source_key)",
+        dict(scope, **bound),
+    )
+    if len(rows) != len(ids):
+        raise MemoryClaimConflict("retained source is missing, stale or already linked")
+    from db.retained_evidence import project_retained
+
+    plans = []
+    erased = {int(record["id"]): record for record in erased_records}
+    now = utc_stamp(datetime.now(timezone.utc))
+    for source in rows:
+        virtual = dict(
+            content="用户原话保留片段",
+            evidence_json=json.dumps([source["body"]], ensure_ascii=False),
+            metadata_json=json.dumps(dict(content_semantics="quoted_source")),
+        )
+        patch = project_retained(virtual, source, erased_records, linked_source=False)
+        fragments = json.loads(patch["evidence_json"]) if patch else [source["body"]]
+        spans = (
+            json.loads(patch["metadata_json"])["erasure_evidence_projection"]["sources"][-1]["spans"]
+            if patch
+            else [[0, len(source["body"])]]
+        )
+        plans.append(_observation_parameters(scope, source, erased, fragments, spans, now))
+    yield from apply_observations(plans)

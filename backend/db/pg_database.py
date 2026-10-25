@@ -1709,6 +1709,7 @@ class PgDatabase:
         memory_key: Optional[str] = None,
         scope_level: Optional[str] = None,
         protected_memory_keys: tuple[str, ...] = (),
+        protected_source_message_ids: tuple[str, ...] = (),
     ) -> int:
         from db.erasure_protection import protected_keys
 
@@ -1757,6 +1758,11 @@ class PgDatabase:
                 from db.retained_evidence import purge_plan
 
                 erased_records = [dict(row._mapping) for row in rows]
+                from db.retained_source_observation import preserve_plan
+
+                await memory_source.run_postgres(
+                    session, preserve_plan(source_scope, protected_source_message_ids, erased_records)
+                )
                 await memory_source.run_postgres(session, purge_plan(source_scope, erased_records))
                 await memory_source.run_postgres(session, memory_source.revoke_plan(source_scope, ids))
             deleted = len(ids)
@@ -1835,13 +1841,28 @@ class PgDatabase:
         async with self.async_session() as session:
             return await memory_source.run_postgres(session, memory_source.admission_plan(identity, body))
 
-    async def list_memory_sources(self, character_id, platform, adapter, sender_id,
-                                  conversation_type, conversation_id, *, source_message_ids=None, limit=100):
+    async def list_memory_sources(
+        self,
+        character_id,
+        platform,
+        adapter,
+        sender_id,
+        conversation_type,
+        conversation_id,
+        *,
+        source_message_ids=None,
+        limit=100,
+        unlinked_only=False,
+    ):
         scope = memory_source.source_scope(
             character_id, platform, adapter, sender_id, conversation_type, conversation_id)
         async with self.async_session() as session:
-            return await memory_source.run_postgres(session, memory_source.read_plan(
-                scope, source_message_ids=source_message_ids, limit=limit))
+            return await memory_source.run_postgres(
+                session,
+                memory_source.read_plan(
+                    scope, source_message_ids=source_message_ids, limit=limit, unlinked_only=unlinked_only
+                ),
+            )
 
     async def linked_memory_sources(self, character_id, platform, adapter, sender_id,
                                     conversation_type, conversation_id, *, memory_ids, limit=100):
@@ -1875,14 +1896,27 @@ class PgDatabase:
         async with self.async_session() as session:
             return await memory_source.run_postgres(session, window_plan(scope, source_message_ids, radius=radius))
 
-    async def search_memory_sources(self, character_id, platform, adapter, sender_id,
-                                    conversation_type, conversation_id, *, query, limit=32):
+    async def search_memory_sources(
+        self,
+        character_id,
+        platform,
+        adapter,
+        sender_id,
+        conversation_type,
+        conversation_id,
+        *,
+        query,
+        limit=32,
+        unlinked_only=False,
+    ):
         from db.memory_source_search import search_plan
 
         scope = memory_source.source_scope(
             character_id, platform, adapter, sender_id, conversation_type, conversation_id)
         async with self.async_session() as session:
-            return await memory_source.run_postgres(session, search_plan(scope, query, limit=limit, dialect='postgres'))
+            return await memory_source.run_postgres(
+                session, search_plan(scope, query, limit=limit, dialect="postgres", unlinked_only=unlinked_only)
+            )
 
     async def list_scoped_conversation_turns(self, user_scope, character_id, *, limit=200, before=None):
         from db.conversation_source import assemble_turn_page, turn_source_query

@@ -104,7 +104,7 @@ def resolve_source_read_plan(query):
     return source_read_plan(query, terms, unresolved_source_read_tail)
 
 
-def search_plan(scope, query, *, limit=32, dialect='sqlite'):
+def search_plan(scope, query, *, limit=32, dialect="sqlite", unlinked_only=False):
     # None is the internal complete-search contract for serving-budget callers.
     # Explicit bounded callers keep their existing validation and SQL limit.
     if limit is not None and (type(limit) is not int or not 1 <= limit <= 100):
@@ -155,23 +155,30 @@ def search_plan(scope, query, *, limit=32, dialect='sqlite'):
         fragment_filter = "AND (" + " OR ".join(
             "(" + " AND ".join(expression(fragment) for fragment in group) + ")"
             for group in groups) + ") "
+    unlinked_filter = (
+        "AND NOT EXISTS (SELECT 1 FROM memory_source_links l WHERE l.source_key=eligible.source_key) "
+        if unlinked_only
+        else ""
+    )
     # Inverse posting frequency is a retrieval weight, not semantic confidence.
     # Full source rows are reached through scoped postings, not latest-N scans.
     # Erasure watermark is checked in this same SQL snapshot; no text cache.
-    rows = yield ("WITH hits AS (SELECT t.source_key, t.term FROM memory_source_terms t "
-                  f"{project_filter}"
-                  "JOIN memory_sources eligible ON eligible.source_key = t.source_key "
-                  f"WHERE t.scope_key = :scope_key AND t.term IN ({bound}) "
-                  f"{fragment_filter}"
-                  "AND eligible.state = 'recorded' AND eligible.observed_at > "
-                  "COALESCE((SELECT revoked_before FROM memory_source_fences WHERE owner_key = :owner_key), '')), "
-                  "df AS (SELECT term, COUNT(*) AS n FROM hits GROUP BY term), "
-                  "ranked AS (SELECT h.source_key, SUM(CAST(1 AS DOUBLE PRECISION) / df.n) AS score, COUNT(*) AS matched_terms "
-                  "FROM hits h JOIN df ON h.term = df.term GROUP BY h.source_key) "
-                  "SELECT s.source_message_id, s.observed_at, s.body, r.score, r.matched_terms "
-                  "FROM ranked r JOIN memory_sources s ON s.source_key = r.source_key "
-                  "WHERE s.scope_key = :scope_key AND s.state = 'recorded' AND s.observed_at > "
-                  "COALESCE((SELECT revoked_before FROM memory_source_fences WHERE owner_key = :owner_key), '') "
-                  "ORDER BY r.score DESC, s.observed_at DESC, s.source_key DESC"
-                  + (" LIMIT :limit" if limit is not None else ""), params)
+    rows = yield (
+        "WITH hits AS (SELECT t.source_key, t.term FROM memory_source_terms t "
+        f"{project_filter}"
+        "JOIN memory_sources eligible ON eligible.source_key = t.source_key "
+        f"WHERE t.scope_key = :scope_key AND t.term IN ({bound}) "
+        f"{fragment_filter}{unlinked_filter}"
+        "AND eligible.state = 'recorded' AND eligible.observed_at > "
+        "COALESCE((SELECT revoked_before FROM memory_source_fences WHERE owner_key = :owner_key), '')), "
+        "df AS (SELECT term, COUNT(*) AS n FROM hits GROUP BY term), "
+        "ranked AS (SELECT h.source_key, SUM(CAST(1 AS DOUBLE PRECISION) / df.n) AS score, COUNT(*) AS matched_terms "
+        "FROM hits h JOIN df ON h.term = df.term GROUP BY h.source_key) "
+        "SELECT s.source_message_id, s.observed_at, s.body, r.score, r.matched_terms "
+        "FROM ranked r JOIN memory_sources s ON s.source_key = r.source_key "
+        "WHERE s.scope_key = :scope_key AND s.state = 'recorded' AND s.observed_at > "
+        "COALESCE((SELECT revoked_before FROM memory_source_fences WHERE owner_key = :owner_key), '') "
+        "ORDER BY r.score DESC, s.observed_at DESC, s.source_key DESC" + (" LIMIT :limit" if limit is not None else ""),
+        params,
+    )
     return rows

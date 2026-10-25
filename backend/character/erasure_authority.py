@@ -5,7 +5,7 @@ unresolved retained object denies mixed mutations; a model cannot authorize it.
 """
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 _NEGATIVE = re.compile(r"(?:不要|别|不许|不能|不用|无需|不必|不想|不希望).{0,16}(?:删掉|删除|清除|移除|忘掉|忘记)")
 _CONNECTORS = r"(?:(?:请|也|但|但是|同时|另外|而|务必|另一方面)\s*)*"
@@ -65,14 +65,19 @@ class PartialErasurePlan:
     valid: bool
     affirmative_clauses: tuple[str, ...]
     protected_clauses: tuple[str, ...]
-    allowed_ids: tuple[str, ...] = ()
+    candidate_ids: tuple[str, ...] = ()
     protected_ids: tuple[str, ...] = ()
     protected_keys: tuple[str, ...] = ()
     protected_objects: tuple[str, ...] = ()
     unresolved_protection: bool = False
+    protected_source_ids: tuple[str, ...] = ()
+
+    @property
+    def allowed_ids(self):
+        return self.candidate_ids if self.valid and not self.unresolved_protection else ()
 
     def accepts_erasure(self, proposal):
-        if not self.valid or self.unresolved_protection or proposal.target_memory_id not in self.allowed_ids:
+        if proposal.target_memory_id not in self.allowed_ids:
             return False
         evidence = _normalized(proposal.evidence)
         # Positive target matching above is independent of a model's chosen
@@ -96,18 +101,21 @@ class PartialErasurePlan:
         content = _normalized(memory.content)
         return any(value in content for value in self.protected_objects)
 
-    def model_constraints(self):
-        return dict(
+    def model_constraints(self, *, source_candidates_available=False):
+        result = dict(
             allowed_erase_memory_ids=list(self.allowed_ids),
             protected_memory_ids=list(self.protected_ids),
             affirmative_clauses=list(self.affirmative_clauses),
             protected_clauses=list(self.protected_clauses),
             unresolved_protection=self.unresolved_protection,
-            erase_source_ids_allowed=False,
+            erase_source_ids_allowed=bool(self.valid and source_candidates_available),
         )
+        if self.unresolved_protection and source_candidates_available:
+            result["source_binding_erase_candidates"] = list(self.candidate_ids)
+        return result
 
 
-def partial_erasure_plan(message, records=None):
+def partial_erasure_plan(message, records=None, *, source_bindings=None):
     """Resolve named logical objects only; never use scores or model IDs.
 
     No plan means an ordinary request retains its existing admission. A plan
@@ -117,9 +125,13 @@ def partial_erasure_plan(message, records=None):
     from character.memory_llm import _ARCHIVE_ONLY_ERASURE_NEGATION, _ERASE_REQUEST_PATTERN
     from character.quoted_erasure_authority import quoted_erasure_plan
 
+    bindings = {} if source_bindings is None else source_bindings
     quoted = quoted_erasure_plan(message, records)
     if quoted is not None:
-        return quoted
+        protected_sources = tuple(
+            dict.fromkeys(identity for clause in quoted.protected_clauses for identity in bindings.get(clause, ()))
+        )
+        return replace(quoted, protected_source_ids=protected_sources)
     text = re.sub(r'“[^”]*”|「[^」]*」|『[^』]*』|"[^"\n]*"', "", message or "").strip()
     if re.search(r"^(?:如果|假如|假设|要是)|(?:他说|她说|朋友说|你说过)", text):
         return None
@@ -166,7 +178,7 @@ def partial_erasure_plan(message, records=None):
     unresolved_clauses = []
     for clause in protected:
         matched = [record for record in records if matches(record, clause)]
-        if not matched:
+        if not matched and not bindings.get(clause):
             unresolved_clauses.append(clause)
         kept.extend(matched)
     # A repeated named preference reference can point only to an already
@@ -199,9 +211,10 @@ def partial_erasure_plan(message, records=None):
         True,
         tuple(affirmative),
         tuple(protected),
-        () if unresolved else allowed,
+        allowed,
         protected_ids,
         tuple(dict.fromkeys(str(record.get("memory_key") or "") for record in kept)),
         tuple(sorted({name for record in kept for name in objects[_identity(record)]})),
         unresolved,
+        tuple(dict.fromkeys(identity for clause in protected for identity in bindings.get(clause, ()))),
     )

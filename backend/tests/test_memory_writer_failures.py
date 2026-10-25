@@ -35,7 +35,9 @@ def test_empty_active_collection_does_not_require_embedding():
 
 async def test_missing_source_reader_cannot_report_empty_coverage():
     with pytest.raises(AttributeError, match="search_sources"):
-        await candidates(object(), "role", UserScope("web", "test", "a", "a", "private"), "删除", (), context_window_tokens=8192)
+        await candidates(
+            object(), "role", UserScope("web", "test", "a", "a", "private"), "删除", context_window_tokens=8192
+        )
 
 
 @pytest.mark.parametrize("stage", ["memory_read", "memory_search", "source_candidates"])

@@ -60,8 +60,15 @@ class CharacterMemoryRepository(Protocol):
     async def source_windows(self, character_id: str, user_scope: UserScope, *,
                              source_message_ids: tuple[str, ...], radius: int = 1) -> list[dict[str, Any]]: ...
 
-    async def search_sources(self, character_id: str, user_scope: UserScope, *, query: str,
-                             limit: int | None = 32) -> list[dict[str, Any]]: ...
+    async def search_sources(
+        self,
+        character_id: str,
+        user_scope: UserScope,
+        *,
+        query: str,
+        limit: int | None = 32,
+        unlinked_only: bool = False,
+    ) -> list[dict[str, Any]]: ...
 
     async def linked_source_revisions(self, character_id: str, user_scope: UserScope, *,
                                       claim_sources: tuple[tuple[int, str], ...]) -> list[dict[str, Any]]: ...
@@ -72,9 +79,15 @@ class CharacterMemoryRepository(Protocol):
     async def linked_sources(self, character_id: str, user_scope: UserScope, *,
                              memory_ids: tuple[int, ...]) -> list[dict[str, Any]]: ...
 
-    async def list_sources(self, character_id: str, user_scope: UserScope, *,
-                           source_message_ids: tuple[str, ...] | None = None,
-                           limit: int = 100) -> list[dict[str, Any]]: ...
+    async def list_sources(
+        self,
+        character_id: str,
+        user_scope: UserScope,
+        *,
+        source_message_ids: tuple[str, ...] | None = None,
+        limit: int = 100,
+        unlinked_only: bool = False,
+    ) -> list[dict[str, Any]]: ...
 
     async def list_relationship_notes(self, character_id: str, user_scope: UserScope) -> list[dict[str, Any]]: ...
 
@@ -148,6 +161,7 @@ class CharacterMemoryRepository(Protocol):
         memory_key: Optional[str] = None,
         scope_level: Optional[str] = None,
         protected_memory_keys: tuple[str, ...] = (),
+        protected_source_message_ids: tuple[str, ...] = (),
     ) -> int: ...
 
 
@@ -287,12 +301,28 @@ class DatabaseCharacterMemoryRepository:
             reader, character_id, user_scope.platform, user_scope.adapter, user_scope.sender_id,
             user_scope.conversation_type, user_scope.conversation_id, memory_ids=memory_ids)
 
-    async def search_sources(self, character_id: str, user_scope: UserScope, *, query: str,
-                             limit: int | None = 32) -> list[dict[str, Any]]:
+    async def search_sources(
+        self,
+        character_id: str,
+        user_scope: UserScope,
+        *,
+        query: str,
+        limit: int | None = 32,
+        unlinked_only: bool = False,
+    ) -> list[dict[str, Any]]:
         reader = self._database.search_memory_sources
         return await asyncio.to_thread(
-            reader, character_id, user_scope.platform, user_scope.adapter, user_scope.sender_id,
-            user_scope.conversation_type, user_scope.conversation_id, query=query, limit=limit)
+            reader,
+            character_id,
+            user_scope.platform,
+            user_scope.adapter,
+            user_scope.sender_id,
+            user_scope.conversation_type,
+            user_scope.conversation_id,
+            query=query,
+            limit=limit,
+            unlinked_only=unlinked_only,
+        )
 
     async def capture_source(self, character_id: str, user_scope: UserScope, *,
                              source_message_id: str, body: str, observed_at: datetime) -> str:
@@ -301,14 +331,28 @@ class DatabaseCharacterMemoryRepository:
             user_scope.sender_id, user_scope.conversation_type, user_scope.conversation_id,
             source_message_id=source_message_id, body=body, observed_at=observed_at)
 
-    async def list_sources(self, character_id: str, user_scope: UserScope, *,
-                           source_message_ids: tuple[str, ...] | None = None,
-                           limit: int = 100) -> list[dict[str, Any]]:
+    async def list_sources(
+        self,
+        character_id: str,
+        user_scope: UserScope,
+        *,
+        source_message_ids: tuple[str, ...] | None = None,
+        limit: int = 100,
+        unlinked_only: bool = False,
+    ) -> list[dict[str, Any]]:
         reader = self._database.list_memory_sources
         return await asyncio.to_thread(
-            reader, character_id, user_scope.platform, user_scope.adapter, user_scope.sender_id,
-            user_scope.conversation_type, user_scope.conversation_id,
-            source_message_ids=source_message_ids, limit=limit)
+            reader,
+            character_id,
+            user_scope.platform,
+            user_scope.adapter,
+            user_scope.sender_id,
+            user_scope.conversation_type,
+            user_scope.conversation_id,
+            source_message_ids=source_message_ids,
+            limit=limit,
+            unlinked_only=unlinked_only,
+        )
 
     async def erase_unlinked_sources(self, character_id: str, user_scope: UserScope, *,
                                      source_message_ids: tuple[str, ...]) -> int:
@@ -548,6 +592,7 @@ class DatabaseCharacterMemoryRepository:
         memory_key: Optional[str] = None,
         scope_level: Optional[str] = None,
         protected_memory_keys: tuple[str, ...] = (),
+        protected_source_message_ids: tuple[str, ...] = (),
     ) -> int:
         """Physically erase a claim or complete logical key version chain."""
         if scope_level is not None and scope_level not in _VALID_SCOPE_LEVELS:
@@ -565,6 +610,11 @@ class DatabaseCharacterMemoryRepository:
                 memory_key=memory_key,
                 scope_level=scope_level,
                 **({"protected_memory_keys": protected_memory_keys} if protected_memory_keys else {}),
+                **(
+                    {"protected_source_message_ids": protected_source_message_ids}
+                    if protected_source_message_ids
+                    else {}
+                ),
             )
         )
 

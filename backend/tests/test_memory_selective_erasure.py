@@ -290,6 +290,10 @@ async def test_actual_scheduler_guards_unlinked_sources_and_passes_kept_keys_to_
             self.payload = json.loads(messages[-1]["content"])
             raw = json.loads(response())
             raw["erase_source_ids"] = source_ids
+            raw["source_retention_bindings"] = [
+                dict(clause=clause, source_ids=["mixed-source"])
+                for clause in self.payload["partial_erasure_authorization"]["protected_clauses"]
+            ]
             return json.dumps(raw)
 
         async def close(self):
@@ -324,8 +328,9 @@ async def test_actual_scheduler_guards_unlinked_sources_and_passes_kept_keys_to_
         assert result["status"] == "erased" and result["persisted"] == 1 and result["source_capture"] == "erase_request"
         assert not repo.captured and not repo.raw_erased
         assert repo.erased[0]["memory_key"] == COURSE and repo.erased[0]["protected_memory_keys"] == (INK,)
+        assert repo.erased[0]["protected_source_message_ids"] == ("mixed-source",)
         assert completion.payload["current_user_message"] == source()
-        assert result["source_erasure_policy"] == "claim_targets_only_for_partial_retention"
+        assert result["source_erasure_policy"] == "bound_scoped_claim_and_source_targets"
     finally:
         await worker.shutdown(timeout=1)
 
