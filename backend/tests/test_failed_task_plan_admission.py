@@ -167,7 +167,8 @@ async def exercise(tmp_path, monkeypatch, mode):
             assert database.list_memory_sources(**fields) == before
             assert database.get_knowledge_document(document["id"])["content"] == PUBLIC
             return seen, error
-        _, used, metadata = await pending
+        answer = await pending
+        used, metadata = answer.used_rag, answer.metadata
         assert database.list_memory_sources(**fields) == before
         assert database.get_knowledge_document(document["id"])["content"] == PUBLIC
         assert used and seen["model"] == 1 and seen["private_complete"] and not seen["public_visible"]
