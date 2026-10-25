@@ -23,6 +23,9 @@ interfaces.
 
 ### Changed
 
+- Select a sufficient evidence set for the complete task while retaining required
+  facts and condition companions instead of injecting all interchangeable candidates.
+
 - Rank contextual memory candidates using actual query and history relevance; remove
   duplicate keyword-intent boosts that crowd out evidence for independent subtasks.
 
