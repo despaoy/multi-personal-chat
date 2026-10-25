@@ -50,7 +50,6 @@ jobs:
           --health-retries 10
     env:
       CHARACTER_ENCODER_REVISION: e8f8c211226b894fcb81acc59f3b34ba3efd5f42
-      CHARACTER_ENCODER_CACHE: ${{ runner.temp }}/character-encoder
       HF_HUB_DISABLE_IMPLICIT_TOKEN: "1"
       ALLOW_REMOTE_EMBEDDING_MODEL: "false"
       OMP_NUM_THREADS: "2"
@@ -64,6 +63,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - name: Set character encoder cache path
+        run: echo "CHARACTER_ENCODER_CACHE=$RUNNER_TEMP/character-encoder" >> "$GITHUB_ENV"
       - name: Install CPU-only dependencies
         run: |
           python -m pip install --upgrade pip
