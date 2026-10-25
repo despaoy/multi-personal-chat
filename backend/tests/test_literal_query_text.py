@@ -18,6 +18,8 @@ SQL_TEXTS = (
 COURSE_TEXTS = (*SQL_TEXTS,
     "数据库课程：请解释下面的代码，不执行。\n```sql\nSELECT name FROM students UNION SELECT name FROM teachers;\n```",
     "网络课程：请解释 curl https://example.invalid/notes 的用途，不访问网址或执行命令。",
+    pytest.param('网页课程：解释原样代码，不渲染或执行：<button onclick="showNote()">课程说明</button>。', id="literal-html"),
+    pytest.param('脚本课程：解释字符串 eval("2 + 3") 的求值含义，只说明结果，不执行代码。', id="literal-javascript"),
 )
 
 

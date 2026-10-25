@@ -114,11 +114,12 @@ def _check_script_indexes(errors: list[str]) -> None:
 
 def _check_readme_links(errors: list[str]) -> None:
     pattern = re.compile(r"!?(?:\[[^\]]*\])\(([^)]+)\)")
-    for readme in ROOT.rglob("README.md"):
-        if any(
-            part in {"node_modules", ".git", "local-notes"} for part in readme.parts
-        ):
-            continue
+    paths = subprocess.check_output(
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", "README.md", "**/README.md"],
+        cwd=ROOT,
+    ).decode("utf-8").split("\0")
+    for name in filter(None, paths):
+        readme = ROOT / name
         text = readme.read_text(encoding="utf-8")
         for raw_target in pattern.findall(text):
             target = raw_target.strip().strip("<>").split("#", 1)[0]

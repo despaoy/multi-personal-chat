@@ -118,7 +118,6 @@ MESSAGE_SCHEMA = Schema(
             required=True,
             min_length=1,
             max_length=10000,
-            check_xss=True,
             sanitize=True,
         ),
     },
