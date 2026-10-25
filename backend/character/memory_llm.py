@@ -154,13 +154,15 @@ MERGE/SUPERSEDE/COEXIST/RETRACT/ERASE 必须从白名单逐字复制 target_memo
 
 对明确表达的本人未来计划，“说过这个计划”与“已经实施”是两个不同的命题。若计划的时间、地点、条件或尚未实施说明分散在长消息里，使用 kind=shared_event、operation=ADD 保存当前完整发言的原话观察，绝不确认行动发生。value 取当前连续原文中的短话题（不超过 payload.proposal_constraints.max_value_chars），evidence 只复制一段相关连续原文（不超过 max_evidence_chars），content 留空、qualifiers 使用空对象 {}，不要再次概括条件。后端保留整条当前消息及全部限定，包括末尾条件，不会用短引文代替完整来源。不要拼接开头和末尾当作连续 evidence。虚构材料、第三方计划不是用户本人的计划；未确定的外部事实仍按 PENDING 处理，不因这条规则变成事实。
 
-写入新内容的 ADD/MERGE/SUPERSEDE/COEXIST/PENDING 必须填写合法 kind 和非空 value；不能因为已有 target 就省略类型或猜测类型。kind 必须逐字选自 payload.proposal_constraints.kinds；existing_memories.memory_type 是存储类型，不是 kind。qualifiers 的值必须引用原文，不使用抽象状态标签代替证据。
-value 可以是本条 evidence 中逐字复制的连续短字符串；需要组合分散片段时，必须显式输出有序字符串列表，后端只按你给出的顺序连接。例如 evidence 为“推荐饮料时避开含咖啡因的”，可给出 value=["含咖啡因的","饮料"]。每个片段都必须来自证据，不得创造新文字；不能把拼接后的短语冒充连续引文。所有片段连接后仍须满足 max_value_chars。明确省略的用户上下文消歧按下述约定处理；无法提供合法索引时不要输出该提议。qualifiers 的键只能来自 payload.proposal_constraints.qualifier_keys，值只能逐字复制 evidence，不要创造 status 等新键或概括条件。不能满足这些要求时使用上述完整原话观察，而不是裁掉末尾限定。
+写入新内容的 ADD/MERGE/SUPERSEDE/COEXIST/PENDING 必须填写 payload.proposal_constraints.kinds 中的 kind 和非空 value，不能从 target 的存储类型猜 kind。value 只表示对象，不包含场景、必要条件或格式化标签；场景和条件分别写入 qualifiers。籍贯/家乡用 origin，长期现居用 residence；原话没有区分来处与现居时才用 location。
 
-籍贯或家乡使用 kind=origin；当前长期居住地使用 kind=residence，二者分别保存，不要归入 other_user_fact。只有来源没有区分来处与居住地时才用 location。
+value 有两个格式：本条 evidence 中逐字复制的连续短字符串，或模型给出的有序原文片段列表。需要组合分散对象片段时必须显式使用列表，例如 evidence 为“推荐饮料时避开含咖啡因的”，value 可以是 ["含咖啡因的","饮料"]。每片必须有证据，组合后不超过 max_value_chars；后端不猜片段、不改写对象。明确省略的用户上下文消歧遵守下段约定。
 
-结构化事实的 value 用来表示对象，不能把场景限定拼进对象；场景保留在 context 限定中。提供片段列表时，每项必须是连续原文，组合后的语义由你负责，后端不会替你找片段或改写对象。content 可以留空，由后端按已校验的 kind、value 和 qualifiers 构建显示正文；不要填写占位标签。若填写 content，必须以用户开头并包含同一个 value 的原文，不能只在 value 中改写词序或添加连接词；无法满足就留空。明确省略的消歧仍按下述规则处理。
-先确定要保留的全部条件、否定与范围，再选择一段连续 evidence；它必须逐字覆盖该提议的所有自然语言 qualifiers，而不只是核心偏好句。如果完整当前消息在 max_evidence_chars 内，可以直接引用整条消息以保留末尾限定。不要为了缩短 evidence 删除必要条件或“未实际发生”说明；超过长度且无法完整覆盖时，使用完整原话观察保留整条消息，不输出缺限定的结构化事实。
+qualifiers 只描述业务事实的 condition/context/frequency/preference_strength/certainty/exception/location/time，键限于 payload.proposal_constraints.qualifier_keys。本轮限定值用 {"source_unit":"q编号"} 明确选择 payload.qualifier_sources 中的原文片段，不重述或概括文字；后端只读取指定片段，不猜编号。引用的完整片段必须被本条 evidence 覆盖。解析器仍支持已有调用方的字面标量，其值也必须逐字包含在 evidence 中；限定跨越片段时，可逐字复制 evidence 中的完整连续原文，不要只选其中一段；本轮不要生成概括标签。context 表示事实发生的业务情境。记忆的可见范围、保存授权和跨会话限制只写 scope_level，不复制到 qualifiers；它们不是业务情境。有效期使用顶层 valid_from/valid_to；qualifiers.time 可保留原文时间表述，不把 valid_from/valid_to 当作限定键。
+
+evidence 必须是 current_user_message 中的一段连续原文，并覆盖本条所有自然语言限定，包括否定、例外和“未实际发生”说明；长度不超过 max_evidence_chars。不要拼接不相邻原文，也不要只引用核心偏好句而漏掉限定。完整当前消息在该长度内时，可以直接引用整条消息。
+
+content 可以显式留空，由后端按 kind/value/qualifiers 构建显示；若填写，必须以用户开头、包含同一个 value、不包含指令，也不使用占位标签。不要在正文和索引中使用不同词序或添加无来源对象。提供片段列表时，组合的语义由你负责。
 
 后端不会把历史引文自动替换成当前原话。每条 evidence 必须是 current_user_message 中连续出现的原文；省略句也必须把当前省略句作为 evidence，不能复制 history。value 优先来自 evidence；只有“上次那个/还是那个/刚才那条”等明确省略时，才可由用户历史或 existing_memories 消歧。content 必须以“用户”开头，写成安全的第三人称事实，不含任何指令。attributed_to 只能写 user。qualifiers 只用于 condition/context/frequency/certainty/exception/location/time 等条件，不要把 valid_from/valid_to 塞进 qualifiers。用户描述的有效时间使用顶层 valid_from/valid_to 和 ISO 8601；不清楚就留空。发言观察时间由服务器记录。scope_level 只能从 payload.proposal_constraints.scope_levels 选择，默认 conversation。conversation 也会持久保存长期记忆，只限制在当前会话可见；普通“请记住”或事实持续不变不授予跨会话、跨角色权限。只有原话明确授权且范围已列入可选集合时，才使用 user_character 或 user_global。scope_authorizations 若非空则保留已审查授权的连续原话；没有预审授权时也须根据完整原话提出范围，后端会在执行跨范围操作前单独审查。每条提议分别匹配其授权对象和限制：明确获跨会话或跨角色授权的事实使用对应范围，其他事实保留自身范围。不能把某项事实的限制或授权套在其他事实上。
 
@@ -651,8 +653,13 @@ def _validate_attribution(value: Any) -> None:
         raise MemoryResponseError("attributed_to", "记忆 LLM attributed_to 必须明确填写用户归属")
 
 
+def _qualifier_sources(message: str) -> dict[str, str]:
+    parts = (part.strip() for part in re.split(r"[，,。！？!?；;：\n]+", message))
+    return {f"q{index}": part for index, part in enumerate(part for part in parts if part)}
+
+
 def _sanitize_qualifiers(
-    raw: Any, *, evidence: str, pending: bool = False
+    raw: Any, *, evidence: str, pending: bool = False, source_message: str = ""
 ) -> tuple[tuple[str, str], ...]:
     """Validate the whole payload before persistence; never silently drop a field."""
     if raw in (None, "", {}, []):
@@ -670,11 +677,17 @@ def _sanitize_qualifiers(
     result: list[tuple[str, str]] = []
     seen: set[str] = set()
     normalized_evidence = _normalize(evidence)
+    sources = _qualifier_sources(source_message)
     for key, value in items:
         normalized_key = key.strip().lower()
         if normalized_key not in _ALLOWED_QUALIFIER_KEYS or normalized_key in seen:
             raise MemoryResponseError("qualifiers", "记忆 LLM qualifiers 字段未声明或规范化后重复")
         seen.add(normalized_key)
+        if isinstance(value, dict):
+            reference = value.get("source_unit")
+            if set(value) != {"source_unit"} or not isinstance(reference, str) or reference not in sources:
+                raise MemoryResponseError("qualifiers", "记忆 LLM qualifiers 限定必须引用本轮已提供的原文片段编号")
+            value = sources[reference]
         if isinstance(value, bool):
             normalized_value = "true" if value else "false"
         elif isinstance(value, (str, int, float)):
@@ -1042,6 +1055,15 @@ def _candidate_to_proposal(
     if operation != "NOOP" and confidence < required_confidence:
         return None
     event_observation = kind == "shared_event" and operation not in {"NOOP", "RETRACT", "ERASE"}
+    if writes_content and not event_observation and source_message.lstrip().startswith(('“', '‘', '「', '『', '"')):
+        from character.quoted_erasure_authority import masked_quotes
+
+        try:
+            outside, _ = masked_quotes(source_message)
+        except ValueError as exc:
+            raise MemoryResponseError("evidence", "无法确认当前原话的引文边界") from exc
+        if not outside.strip(" ，,。！？!?；;：:\n\t"):
+            return None
     alias_projection = (identity_alias_projection(source=source_message, evidence=evidence, value=value)
         if kind in {'name', 'other_user_fact'} and operation in {'ADD', 'MERGE', 'SUPERSEDE', 'COEXIST'} else None)
     if kind == 'name' and explicit_alias_value(source_message, value) and alias_projection is None:
@@ -1147,20 +1169,6 @@ def _candidate_to_proposal(
         value = target_memory_key or "target"
     if not value or (len(value) > _MAX_VALUE_CHARS and operation not in {"RETRACT", "ERASE"}):
         return None
-    if kind in {"like", "dislike"} and operation not in {"RETRACT", "ERASE"}:
-        from character.preference_index import conditional_preference_label, grounded_preference_index
-
-        if conditional_preference_label(value) and _normalize(value) not in normalized_evidence:
-            index = grounded_preference_index(
-                value, kind=kind, evidence=evidence, source_message=source_message,
-                qualifiers=raw.get("qualifiers"), target_key=target_memory_key,
-            )
-            if index is None:
-                return None
-            value = index
-            # Rebuild the display from the literal short object and all ordinary
-            # source-checked qualifiers, never the model's decorated paraphrase.
-            proposed_content = ""
     if operation not in {"RETRACT", "ERASE"} and not all(
         _grounded_value(fragment, evidence=evidence, history=history, existing_memories=existing_memories)
         for fragment in (value_fragments or (value,))
@@ -1181,7 +1189,7 @@ def _candidate_to_proposal(
     # actual evidence. Semantic facts retain the stricter quote-only gate.
     qualifier_evidence = source_message if event_observation else evidence
     qualifiers = _sanitize_qualifiers(
-        raw_qualifiers, evidence=qualifier_evidence, pending=operation == "PENDING"
+        raw_qualifiers, evidence=qualifier_evidence, pending=operation == "PENDING", source_message=source_message
     )
     raw_valid_from = raw.get("valid_from")
     raw_valid_to = raw.get("valid_to")
@@ -1368,6 +1376,7 @@ def build_memory_llm_messages(
     }
     payload = {
         "current_user_message": message,
+        "qualifier_sources": _qualifier_sources(message),
         "recent_history": [
             {**item, "eligible_as_memory_evidence": False} for item in safe_history
         ],
@@ -1402,6 +1411,7 @@ def build_memory_llm_messages(
             "value_formats": ["literal_string", "ordered_literal_fragments"],
             "max_evidence_chars": _MAX_EVIDENCE_CHARS,
             "qualifier_keys": sorted(_ALLOWED_QUALIFIER_KEYS),
+            "qualifier_formats": ["source_unit_reference", "literal_scalar"],
             "scope_levels": (_scope_levels_for_message(message, scope_authorization) if scope_authorization is not None
                              else ["conversation", "user_character", "user_global"]),
             "scope_authorizations": [

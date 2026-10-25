@@ -6,6 +6,8 @@
 
 近期已同步服务器、本地和 GitHub 的主要链路：
 
+- 删除偏好条件标签的规则修补，模型用显式来源片段保存限定；真实写入、检索、参考编译和读回保留条件与否定，见[偏好对象与限定来源](reports/backend-memory-preference-owner-20261025.md)。
+
 - 已执行记忆操作直接沿用回执；运行时区分等待期限和任务自身超时，非法完成结果及终止失败明确返回503并保留实际存档状态，见[完成回执与失败归属](reports/backend-completion-result-owner-20261025.md)。
 
 - 记忆关联必须提供匹配的ID和key，删除按首条记录猜选与无效目标静默漏条；318项相关检查及一次新DeepSeek同key目标写入通过，见[记忆目标身份](reports/backend-memory-target-owner-20261025.md)。

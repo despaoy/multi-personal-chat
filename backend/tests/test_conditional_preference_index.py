@@ -1,4 +1,4 @@
-"""Independent full synthetic unit fixtures, not native model outputs or seeds."""
+"""Conditional preferences use explicit literal objects and source-bound qualifiers."""
 
 import json
 from types import SimpleNamespace
@@ -21,7 +21,7 @@ SOURCE = "请记住我本人的完整未来条件。\n" + EVIDENCE + "该日期�
 def candidate(operation="ADD", **changes):
     raw = dict(
         kind="like",
-        value="测试紫茶（仅表格已提交且预约确认通过时）",
+        value=HEAD,
         content="用户未来喜欢测试紫茶且" + CONDITION + "，不表示已经实际饮用。",
         evidence=EVIDENCE,
         confidence=0.95,
@@ -40,7 +40,7 @@ def parse(raw, source=SOURCE, existing=()):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("operation", ["ADD", "SUPERSEDE", "COEXIST", "MERGE"])
-async def test_complete_conditional_label_preserves_short_index_full_condition_and_current_target(tmp_path, operation):
+async def test_literal_object_preserves_full_condition_and_current_target(tmp_path, operation):
     repo = DatabaseCharacterMemoryRepository(SQLiteDB(tmp_path / "conditional-index.sqlite"))
     old = await repo.append_claim(
         "unit-character",
@@ -91,38 +91,27 @@ async def test_complete_conditional_label_preserves_short_index_full_condition_a
         assert new["relation_type"] == "COEXIST" and new["parent_memory_id"] == old["id"]
 
 
-@pytest.mark.parametrize(
-    "changes,source",
-    [
-        ({"value": "测试紫茶（仅表格已提交或预约确认通过时）"}, SOURCE),
-        ({"value": "测试紫茶（仅表格已提交时）"}, SOURCE),
-        ({"value": "测试紫茶（仅表格已提交且预约确认通过且身份核验通过时）"}, SOURCE),
-        ({"value": "测试紫茶（仅表格未提交且预约确认通过时）"}, SOURCE),
-        ({"qualifiers": {}}, SOURCE),
-        ({"qualifiers": {"condition": "表格已提交和预约确认通过"}}, SOURCE),
-        ({"qualifiers": {"condition": "只有表格已提交和身份核验通过才饮用测试紫茶"}}, SOURCE),
-        ({"evidence": EVIDENCE.replace("我喜欢", "朋友喜欢")}, SOURCE.replace("我喜欢", "朋友喜欢")),
-        (
-            {"evidence": "我喜欢测试红茶。测试紫茶且" + CONDITION + "。"},
-            "我喜欢测试红茶。测试紫茶且" + CONDITION + "。",
-        ),
-        ({"evidence": "“" + EVIDENCE + "”"}, "“" + EVIDENCE + "”"),
-        ({"kind": "dislike"}, SOURCE),
-    ],
-)
-def test_condition_or_actor_mismatch_does_not_shorten_an_unproven_label(changes, source):
-    assert parse(candidate(**changes), source=source) == []
-
-
-def test_malformed_condition_index_is_an_explicit_value_error():
+@pytest.mark.parametrize("value", [
+    "测试紫茶（仅表格已提交且预约确认通过时）",
+    "测试紫茶（仅表格已提交或预约确认通过时）",
+])
+def test_nonliteral_condition_labels_are_errors_instead_of_repaired_objects(value):
     with pytest.raises(MemoryResponseError) as caught:
-        parse(candidate(value="测试紫茶(仅表格已提交且预约确认通过时）"), source=SOURCE)
+        parse(candidate(value=value))
     assert caught.value.field == "value"
 
 
-def test_already_literal_short_index_retains_ordinary_admission():
-    proposals = parse(candidate(value=HEAD))
-    assert len(proposals) == 1 and dict(proposals[0].qualifiers)["condition"] == CONDITION
+@pytest.mark.parametrize("source", [SOURCE.replace("我喜欢", "朋友喜欢"), "“" + EVIDENCE + "”"])
+def test_other_speakers_and_quoted_preferences_are_not_promoted(source):
+    raw = candidate(evidence=source)
+    assert parse(raw, source=source) == []
+
+
+def test_condition_must_still_be_present_in_the_original_evidence():
+    raw = candidate(qualifiers={"condition": "只有身份核验通过才饮用测试紫茶"})
+    with pytest.raises(MemoryResponseError) as caught:
+        parse(raw)
+    assert caught.value.field == "qualifiers"
 
 
 def test_unqualified_literal_parenthesized_object_is_not_a_condition_label():
@@ -131,13 +120,6 @@ def test_unqualified_literal_parenthesized_object_is_not_a_condition_label():
     assert len(proposals) == 1 and "紫茶（无咖啡因）" in proposals[0].memory.content
 
 
-def test_wrong_preference_target_cannot_be_recovered_by_a_literal_other_head():
-    old = dict(
-        id=1, memory_key="preference_测试红茶", memory_type="user_fact", content="用户喜欢测试红茶", status="active"
-    )
-    assert (
-        parse(candidate("SUPERSEDE", target_memory_id="1", target_memory_key=old["memory_key"]), existing=(old,)) == []
-    )
 
 
 @pytest.mark.parametrize(
@@ -148,7 +130,7 @@ def test_wrong_preference_target_cannot_be_recovered_by_a_literal_other_head():
         ("like", "紫茶（仅表格已提交或预约确认通过时）", "只有表格已提交或预约确认通过才饮用紫茶"),
     ],
 )
-def test_additional_literal_kind_bracket_and_disjunction_variants(kind, value, condition):
+def test_literal_polarity_and_disjunction_preserve_the_full_source(kind, value, condition):
     predicate = "我不喜欢" if kind == "dislike" else "我喜欢"
     source = "从2027年6月1日起，" + predicate + "紫茶且" + condition + "。这不是实际饮用。"
     raw = candidate(
@@ -158,7 +140,10 @@ def test_additional_literal_kind_bracket_and_disjunction_variants(kind, value, c
         evidence=source,
         qualifiers={"condition": condition, "time": "2027年6月1日", "certainty": "这不是实际饮用"},
     )
-    proposals = parse(raw, source=source)
+    with pytest.raises(MemoryResponseError) as caught:
+        parse(raw, source=source)
+    assert caught.value.field == "value"
+    proposals = parse(raw | {"value": "紫茶"}, source=source)
     assert len(proposals) == 1 and proposals[0].memory.memory_key == "preference_紫茶"
     assert dict(proposals[0].qualifiers)["condition"] == condition
     assert ("不喜欢" in proposals[0].memory.content) == (kind == "dislike")
@@ -173,4 +158,74 @@ def test_sufficient_condition_does_not_authorize_a_necessary_condition_label():
         evidence=source,
         qualifiers={"condition": "只要表格已提交和预约确认通过就饮用紫茶"},
     )
-    assert parse(raw, source=source) == []
+    with pytest.raises(MemoryResponseError) as caught:
+        parse(raw, source=source)
+    assert caught.value.field == "value"
+    (proposal,) = parse(raw | {"value": "紫茶"}, source=source)
+    assert dict(proposal.qualifiers)["condition"] == "只要表格已提交和预约确认通过就饮用紫茶"
+
+
+@pytest.mark.parametrize("kind,value,source", [
+    ("name", "冬青", "“我叫冬青。”"),
+    ("other_user_fact", "自行车", "「我的自行车是蓝色的。」"),
+])
+def test_complete_quotation_is_not_promoted_to_another_personal_field(kind, value, source):
+    assert parse(candidate(kind=kind, value=value, content="", evidence=source, qualifiers={}), source=source) == []
+
+
+def test_quoted_object_name_inside_a_personal_statement_remains_supported():
+    source = "我喜欢“测试紫茶”。"
+    (proposal,) = parse(candidate(value=HEAD, content="", evidence=source, qualifiers={}), source=source)
+    assert proposal.memory.memory_key == "preference_测试紫茶" and proposal.evidence == source
+
+
+def source_reference_candidate(**changes):
+    from character.memory_llm import build_memory_llm_messages
+
+    messages = build_memory_llm_messages(SOURCE, (), (), (), 2000, .85)
+    payload = json.loads(messages[-1]["content"])
+    assert payload["current_user_message"] == SOURCE
+    references = {body: key for key, body in payload["qualifier_sources"].items()}
+    raw = candidate(qualifiers={"condition": {"source_unit": references[next(body for body in references if CONDITION in body)]},
+        "certainty": {"source_unit": references["这不是已经实际饮用"]}})
+    return raw | changes
+
+
+def test_declared_source_references_preserve_condition_and_negation_verbatim():
+    (proposal,) = parse(source_reference_candidate())
+    assert dict(proposal.qualifiers) == {"condition": "我喜欢 测试紫茶且" + CONDITION, "certainty": "这不是已经实际饮用"}
+    assert CONDITION in proposal.memory.content and proposal.evidence == " ".join(EVIDENCE.split())
+
+
+@pytest.mark.parametrize("reference", [{"source_unit": "q999"}, {"source_unit": True},
+    {"source_unit": "q0", "text": "虚构限定"}])
+def test_unknown_or_ambiguous_source_references_are_not_guessed(reference):
+    with pytest.raises(MemoryResponseError) as caught:
+        parse(candidate(qualifiers={"condition": reference}))
+    assert caught.value.field == "qualifiers"
+
+
+def test_source_reference_cannot_extend_the_declared_evidence():
+    raw = source_reference_candidate(evidence="我喜欢测试紫茶")
+    with pytest.raises(MemoryResponseError) as caught:
+        parse(raw)
+    assert caught.value.field == "qualifiers"
+
+
+def test_paraphrase_still_fails_instead_of_guessing_a_source_reference():
+    with pytest.raises(MemoryResponseError) as caught:
+        parse(candidate(qualifiers={"certainty": "尚未实际饮用"}))
+    assert caught.value.field == "qualifiers"
+
+
+def test_source_units_preserve_complete_clock_times():
+    from character.memory_llm import build_memory_llm_messages
+
+    source = "每天09:30以后，我喜欢紫茶，但只在课程10:00开始前饮用。"
+    payload = json.loads(build_memory_llm_messages(source, (), (), (), 2000, .85)[-1]["content"])
+    references = {body: key for key, body in payload["qualifier_sources"].items()}
+    raw = candidate(value="紫茶", content="", evidence=source, qualifiers={
+        "time": {"source_unit": references["每天09:30以后"]},
+        "condition": {"source_unit": references["但只在课程10:00开始前饮用"]}})
+    (proposal,) = parse(raw, source=source)
+    assert dict(proposal.qualifiers) == {"time": "每天09:30以后", "condition": "但只在课程10:00开始前饮用"}
