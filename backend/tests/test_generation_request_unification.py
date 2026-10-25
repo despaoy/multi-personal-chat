@@ -81,7 +81,14 @@ async def test_generation_failure_is_reported_and_recorded(monkeypatch, provider
     save = AsyncMock()
     monkeypatch.setattr(generate, "_save_message", save)
 
-    async def failed_expression(*args, **kwargs):
+    connection.async_complete.side_effect = failure
+    client = await generate.get_vllm_client()
+    client.generate.side_effect = failure
+
+    async def failed_expression(*args, model_generate, **kwargs):
+        if failure_kind == "provider":
+            await model_generate(messages=[{"role": "user", "content": "完整合成资料：旧版已撤销，以当前版本回答。"}],
+                temperature=0, max_tokens=100, top_p=1.0)
         raise failure
 
     async def record(*args, **kwargs):
@@ -105,8 +112,12 @@ async def test_generation_failure_is_reported_and_recorded(monkeypatch, provider
     assert len(records) == 1 and records[0]["error_type"] == type(failure).__name__
     save.assert_not_awaited()
     switch.assert_not_called()
-    assert ("model_failure", False) in counters
-    assert ("model_failure", True) not in counters
+    assert counters == ([("model_failure", False)] if failure_kind == "provider" else [])
+    if failure_kind == "provider":
+        (client.generate if provider == "vllm" else connection.async_complete).assert_awaited_once()
+    else:
+        client.generate.assert_not_awaited()
+        connection.async_complete.assert_not_awaited()
 
 
 @pytest.mark.asyncio

@@ -233,6 +233,20 @@ async def _generate_reply_impl(
             slot.release()
 
 
+async def _invoke_model(generate, **kwargs):
+    """Count actual generation outcomes independently of later turn processing."""
+    try:
+        result = await generate(**kwargs)
+    except CircuitOpenError:
+        raise
+    except Exception:
+        increment("model_failures")
+        set_consecutive("model_failure", False)
+        raise
+    set_consecutive("model_failure", True)
+    return result
+
+
 async def _generate_reply_body(
     request: MessageRequest,
     current_user: dict | None = None,
@@ -515,7 +529,7 @@ async def _generate_reply_body(
             reply, used_rag, rag_meta = await generate_answer(
                 vllm_effective_lora,
                 prompt_lora_name=vllm_lora_name,
-                model_generate=client.generate,
+                model_generate=functools.partial(_invoke_model, client.generate),
             )
             model_label = model_name
             stored_model_name = "vllm"
@@ -551,7 +565,7 @@ async def _generate_reply_body(
                             if request_provider == "transformers_peft":
                                 # The local adapter was bound above under this same lock.
                                 kwargs["lora_name"] = None
-                            text, _cost = await provider.async_complete(messages, **kwargs)
+                            text, _cost = await _invoke_model(provider.async_complete, messages=messages, **kwargs)
                         return text
 
                     reply, used_rag, rag_meta = await asyncio.wait_for(
@@ -613,8 +627,6 @@ async def _generate_reply_body(
                 database=message_db,
                 purpose=invocation_purpose,
             )
-        if model_invoked:
-            set_consecutive("model_failure", True)
         archive_receipt = {}
         if persist_message:
             await _save_message(
@@ -702,11 +714,8 @@ async def _generate_reply_body(
     except Exception as e:
         failed_cost = round(time.time() - start_time, 2)
         budget_failure = isinstance(e, InputBudgetError)
-        if not budget_failure:
-            increment("model_failures")
-            set_consecutive("model_failure", False)
         log_event(
-            "generation_rejected" if budget_failure else "model_invocation_failed",
+            "generation_rejected" if budget_failure else "generation_failed",
             level="warning" if budget_failure else "error",
             traceId=request.traceId,
             platform=request.platform,

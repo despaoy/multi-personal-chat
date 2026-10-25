@@ -85,7 +85,14 @@ async def test_record_failure_after_generation_stops_before_archive(generation, 
 @pytest.mark.parametrize("record_fault", [False, True])
 async def test_model_failure_keeps_primary_cause_and_reports_recording_failure(generation, database, monkeypatch, caplog, record_fault):
     primary = RuntimeError("fiction-private-model-error")
-    generation.side_effect = primary
+    connection = model_manager.get_model_manager().get_current_provider()
+    connection.async_complete.side_effect = primary
+
+    async def failed_model(*args, model_generate, **kwargs):
+        await model_generate(messages=[{"role": "user", "content": FACTS}],
+            temperature=0, max_tokens=100, top_p=1.0)
+
+    generation.side_effect = failed_model
     storage = OSError("fiction-private-accounting-error")
     original = database.add_model_invocation
     writer = Mock(side_effect=storage if record_fault else original)

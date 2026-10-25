@@ -131,7 +131,10 @@ async def test_healthy_native_success_records_and_archives_real_reply(circuit_ri
 
 
 @pytest.mark.asyncio
-async def test_five_real_failures_then_open_rejection_has_actual_cause_and_recovers(circuit_rig):
+async def test_five_real_failures_then_open_rejection_has_actual_cause_and_recovers(circuit_rig, monkeypatch):
+    counts, consecutive = [], []
+    monkeypatch.setattr(generate, "increment", counts.append)
+    monkeypatch.setattr(generate, "set_consecutive", lambda *args: consecutive.append(args))
     rig = circuit_rig
     failure = RuntimeError("synthetic controlled provider failure")
     rig.fault = failure
@@ -160,6 +163,8 @@ async def test_five_real_failures_then_open_rejection_has_actual_cause_and_recov
     assert [row["errorType"] for row in rows] == ["RuntimeError"] * 5 + ["CircuitOpenError"]
     assert all(row["completionTokens"] is None for row in rows)
     assert breaker.get_stats()["failure_calls"] == 5  # Rejection never executes the provider.
+    assert counts == ["model_failures"] * 5
+    assert consecutive == [("model_failure", False)] * 5
 
     expire_open_interval(breaker)
     rig.fault = None
@@ -171,6 +176,8 @@ async def test_five_real_failures_then_open_rejection_has_actual_cause_and_recov
     assert len(rows) == 7 and rows[-1]["errorType"] == "" and rows[-1]["completionTokens"] is None
     assert len(saved) == 1 and saved[0]["reply"] == REPLY
     assert saved[0]["traceId"] == request("recovered").traceId
+    assert counts == ["model_failures"] * 5
+    assert consecutive == [("model_failure", False)] * 5 + [("model_failure", True)]
     assert rig.active == 0 and rig.semaphore._value == 4
 
 
@@ -211,7 +218,10 @@ async def test_real_half_open_admission_rejects_concurrent_extra_probe():
 
 
 @pytest.mark.asyncio
-async def test_cancelled_half_open_native_probe_releases_admission_and_can_recover(circuit_rig):
+async def test_cancelled_half_open_native_probe_releases_admission_and_can_recover(circuit_rig, monkeypatch):
+    counts, consecutive = [], []
+    monkeypatch.setattr(generate, "increment", counts.append)
+    monkeypatch.setattr(generate, "set_consecutive", lambda *args: consecutive.append(args))
     rig = circuit_rig
     breaker = await rig.registry.get_or_create(
         rig.circuit_name, failure_threshold=1, recovery_timeout=30,
@@ -228,6 +238,7 @@ async def test_cancelled_half_open_native_probe_releases_admission_and_can_recov
             await pending
         assert rig.cancelled.is_set() and rig.active == 0 and rig.semaphore._value == 4
         assert len(rig.calls) == 1 and records(rig) == [] and archives(rig) == []
+        assert counts == consecutive == []
         assert breaker.get_stats()["failure_calls"] == 1 and breaker.get_stats()["success_calls"] == 0
         rig.hold = None
         # This fails if cancellation consumed the only half-open slot forever.
@@ -236,6 +247,7 @@ async def test_cancelled_half_open_native_probe_releases_admission_and_can_recov
         assert len(rig.calls) == 2 and breaker.state == CircuitState.CLOSED
         assert len(records(rig)) == len(archives(rig)) == 1
         assert records(rig)[0]["errorType"] == "" and archives(rig)[0]["traceId"] == request("after-cancel").traceId
+        assert counts == [] and consecutive == [("model_failure", True)]
     finally:
         if not pending.done():
             pending.cancel()
