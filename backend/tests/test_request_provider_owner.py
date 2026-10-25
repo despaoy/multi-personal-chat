@@ -36,9 +36,13 @@ class LocalResource(model_manager.BaseProvider):
     def generate(self, *_args, **_kwargs):
         raise AssertionError("This fixture owns an explicit async transport")
 
-    async def async_generate(self, prompt, session_history=None, max_tokens_override=None):
-        assert FACTS in prompt and max_tokens_override == 128
-        assert any(message["role"] == "system" for message in session_history)
+    async def async_complete(self, messages, *, temperature, max_tokens, top_p,
+                             frequency_penalty, repetition_penalty, enable_thinking, lora_name):
+        assert FACTS in messages[-1]["content"] and max_tokens == 128
+        assert any(message["role"] == "system" for message in messages)
+        assert temperature == .2 and top_p == 1.0
+        assert frequency_penalty == 0.0 and repetition_penalty == 1.0
+        assert enable_thinking is False and lora_name is None
         self.calls.append(self.name)
         return ANSWER, 0.0
 

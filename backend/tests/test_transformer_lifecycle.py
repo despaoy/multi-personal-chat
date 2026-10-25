@@ -48,6 +48,8 @@ def arrange_transformer_lifecycle(tmp_path, monkeypatch):
         adapter_calls=[],
         evaluations=[],
         generations=[],
+        generation_options=[],
+        template_options=[],
         bases=[],
         cuda_available=False,
         cache_clear_calls=0,
@@ -68,6 +70,7 @@ def arrange_transformer_lifecycle(tmp_path, monkeypatch):
         eos_token_id = 0
 
         def apply_chat_template(self, messages, **kwargs):
+            rig.template_options.append(dict(kwargs))
             assert messages[-1]["role"] == "user" and messages[-1]["content"] == "Complete isolated request."
             return SimpleNamespace(input_ids=Tensor())
 
@@ -88,6 +91,7 @@ def arrange_transformer_lifecycle(tmp_path, monkeypatch):
 
         def generate(self, input_ids, **kwargs):
             rig.generations.append(self.adapter)
+            rig.generation_options.append(dict(kwargs))
             return [[1, 2, TOKENS[self.adapter]]]
 
     class AdapterModel:
@@ -288,3 +292,13 @@ def test_failed_adapter_switch_does_not_publish_requested_adapter_as_loaded(tmp_
     rig.provider.set_lora_adapter(new_path)
     assert generate(rig) == REPLIES["adapter-b"]
     assert rig.provider.get_status()["loraAdapter"] == new_path
+
+
+
+@pytest.mark.asyncio
+async def test_unsupported_frequency_penalty_fails_before_local_model_loading(tmp_path, monkeypatch):
+    rig = arrange_transformer_lifecycle(tmp_path, monkeypatch)
+    with pytest.raises(ValueError, match="frequency_penalty"):
+        await rig.provider.async_complete([{"role": "user", "content": "Complete isolated request."}],
+            temperature=.17, max_tokens=733, top_p=.23, frequency_penalty=.31)
+    assert not rig.base_calls and not rig.tokenizer_calls and not rig.generations

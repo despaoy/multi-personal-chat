@@ -546,13 +546,10 @@ async def _generate_reply_body(
                         async with breaker() if breaker is not None else nullcontext():
                             if request_provider == "openai_compat":
                                 model_name = provider.get_status()["modelName"]
-                                text, _cost = await provider.async_complete(messages, **kwargs)
-                            else:
-                                text, _cost = await provider.async_generate(
-                                    prompt=messages[-1]["content"],
-                                    session_history=messages[:-1],
-                                    max_tokens_override=kwargs["max_tokens"],
-                                )
+                            if request_provider == "transformers_peft":
+                                # The local adapter was bound above under this same lock.
+                                kwargs['lora_name'] = None
+                            text, _cost = await provider.async_complete(messages, **kwargs)
                         return text
 
                     reply, used_rag, rag_meta = await asyncio.wait_for(

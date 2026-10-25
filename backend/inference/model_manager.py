@@ -322,28 +322,30 @@ class OllamaProvider(_AsyncProvider):
         # R-1 fix: 不再自建 httpx.Client，统一通过 _acquire_http_client() 获取共享 AsyncClient
 
     async def async_generate(self, prompt: str, session_history: List[Dict] = None,
-                              max_tokens_override: int = None) -> Tuple[str, float]:
-        """异步生成实现（R-1 fix: 使用共享 HttpClientPool）"""
+                             max_tokens_override: int = None) -> Tuple[str, float]:
         config = _get_db_config()
+        messages = [*(session_history or []), {"role": "user", "content": prompt}]
+        return await self.async_complete(
+            messages, temperature=float(config.get('temperature', 0.8)),
+            max_tokens=read_provider_max_tokens(config, max_tokens_override), top_p=0.9,
+        )
+
+    async def async_complete(
+        self, messages, *, temperature, max_tokens, top_p=None,
+        frequency_penalty=0.0, repetition_penalty=1.0, enable_thinking=False, lora_name=None,
+    ):
+        validate_completion_options(self.base_url, enable_thinking=enable_thinking, lora_name=lora_name)
         start = time.time()
-        messages = []
-
-        if session_history:
-            messages.extend(session_history)
-
-        messages.append({"role": "user", "content": prompt})
-
-        max_tokens = read_provider_max_tokens(config, max_tokens_override)
-
         async with self._acquire_http_client(timeout=120.0) as client:
-            # P1-M4 fix: 请求级 timeout 覆盖 pool 默认值
             response = await client.post(
                 f"{self.base_url}/api/chat",
                 json={
-                    "model": self.model,
-                    "messages": messages,
-                    "stream": False,
-                    "options": {"temperature": float(config.get('temperature', 0.8)), "top_p": 0.9, "num_predict": max_tokens}
+                    "model": self.model, "messages": messages, "stream": False, "think": False,
+                    "options": {
+                        "temperature": temperature, "num_predict": max_tokens,
+                        "repeat_penalty": repetition_penalty, "frequency_penalty": frequency_penalty,
+                        **({"top_p": top_p} if top_p is not None else {}),
+                    },
                 },
                 timeout=120.0,
             )
@@ -369,25 +371,29 @@ class LlamaCppProvider(_AsyncProvider):
         # R-1 fix: 不再自建 httpx.Client，统一通过 _acquire_http_client() 获取共享 AsyncClient
 
     async def async_generate(self, prompt: str, session_history: List[Dict] = None,
-                              max_tokens_override: int = None) -> Tuple[str, float]:
-        """Let the server apply its model's chat template to complete messages."""
+                             max_tokens_override: int = None) -> Tuple[str, float]:
         config = _get_db_config()
-        start = time.time()
-        messages = [{"role": msg["role"], "content": msg["content"]} for msg in session_history] if session_history else []
-        messages.append({"role": "user", "content": prompt})
-        max_tokens = read_provider_max_tokens(config, max_tokens_override)
+        messages = [*(session_history or []), {"role": "user", "content": prompt}]
+        return await self.async_complete(
+            messages, temperature=float(config.get('temperature', 0.8)),
+            max_tokens=read_provider_max_tokens(config, max_tokens_override), top_p=0.9,
+        )
 
+    async def async_complete(
+        self, messages, *, temperature, max_tokens, top_p=None,
+        frequency_penalty=0.0, repetition_penalty=1.0, enable_thinking=False, lora_name=None,
+    ):
+        validate_completion_options(self.base_url, enable_thinking=enable_thinking, lora_name=lora_name)
+        start = time.time()
         async with self._acquire_http_client(timeout=120.0) as client:
             response = await client.post(
                 chat_completions_endpoint(self.base_url),
                 json={
-                    "messages": messages,
-                    "max_tokens": max_tokens,
-                    "temperature": float(config.get('temperature', 0.8)),
-                    "top_p": 0.9,
-                    "stream": False,
-                    "verbose": True,
-                    "response_fields": ["truncated"],
+                    "messages": messages, "max_tokens": max_tokens, "temperature": temperature,
+                    "repeat_penalty": repetition_penalty, "frequency_penalty": frequency_penalty,
+                    **({"top_p": top_p} if top_p is not None else {}),
+                    **nonthinking_parameters(self.base_url),
+                    "stream": False, "verbose": True, "response_fields": ["truncated"],
                 },
                 timeout=120.0,
             )
@@ -478,21 +484,38 @@ class TransformersPeftProvider(BaseProvider):
     def generate(self, prompt: str, session_history: List[Dict] = None,
                  max_tokens_override: int = None) -> Tuple[str, float]:
         config = _get_db_config()
-        max_tokens = read_provider_max_tokens(config, max_tokens_override)
+        return self._complete(
+            [*(session_history or []), {"role": "user", "content": prompt}],
+            temperature=float(config.get('temperature', 0.85)),
+            max_tokens=read_provider_max_tokens(config, max_tokens_override),
+            top_p=0.92, repetition_penalty=1.15,
+        )
+
+    async def async_complete(
+        self, messages, *, temperature, max_tokens, top_p=None,
+        frequency_penalty=0.0, repetition_penalty=1.0, enable_thinking=False, lora_name=None,
+    ):
+        import asyncio
+
+        return await asyncio.to_thread(
+            self._complete, messages, temperature=temperature, max_tokens=max_tokens, top_p=top_p,
+            frequency_penalty=frequency_penalty, repetition_penalty=repetition_penalty,
+            enable_thinking=enable_thinking, lora_name=lora_name,
+        )
+
+    def _complete(
+        self, messages, *, temperature, max_tokens, top_p=None,
+        frequency_penalty=0.0, repetition_penalty=1.0, enable_thinking=False, lora_name=None,
+    ):
+        validate_completion_options("transformers_peft", enable_thinking=enable_thinking, lora_name=lora_name)
+        if frequency_penalty != 0.0:
+            raise ValueError("Transformers provider does not support frequency_penalty")
         import torch
 
         self._ensure_loaded()
         start = time.time()
-
-        messages = []
-
-        if session_history:
-            messages.extend(session_history)
-
-        messages.append({"role": "user", "content": prompt})
-
         encoded = self._tokenizer.apply_chat_template(
-            messages, return_tensors="pt", add_generation_prompt=True
+            messages, return_tensors="pt", add_generation_prompt=True, enable_thinking=False
         )
 
         if hasattr(encoded, 'input_ids'):
@@ -502,16 +525,14 @@ class TransformersPeftProvider(BaseProvider):
         else:
             input_ids = torch.tensor(encoded, dtype=torch.long, device=self._model.device)
 
+        options = dict(max_new_tokens=max_tokens, do_sample=temperature > 0,
+                       repetition_penalty=repetition_penalty, pad_token_id=self._tokenizer.eos_token_id)
+        if temperature > 0:
+            options['temperature'] = temperature
+            if top_p is not None:
+                options['top_p'] = top_p
         with torch.no_grad():
-            output = self._model.generate(
-                input_ids,
-                max_new_tokens=max_tokens,
-                temperature=float(config.get('temperature', 0.85)),
-                top_p=0.92,
-                do_sample=True,
-                repetition_penalty=1.15,
-                pad_token_id=self._tokenizer.eos_token_id,
-            )
+            output = self._model.generate(input_ids, **options)
 
         reply = self._tokenizer.decode(output[0][input_ids.shape[1]:], skip_special_tokens=True).strip()
         cost = round(time.time() - start, 2)

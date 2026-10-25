@@ -23,6 +23,9 @@ interfaces.
 
 ### Changed
 
+- Send complete compiled chat requests and explicit generation settings to native
+  providers without rereading unrelated global settings; retain bound LoRA state.
+
 - Select a sufficient evidence set for the complete task while retaining required
   facts and condition companions instead of injecting all interchangeable candidates.
 

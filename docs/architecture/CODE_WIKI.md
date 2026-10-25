@@ -75,6 +75,8 @@ AstrBot使用持久化integration_receipts记录生成与发送状态：
 
 inference/vllm_client.py通过OpenAI兼容接口调用vLLM；model_manager.py管理模型提供商，generation_request.py与prompt_policy.py组织请求和可信边界。lora_registry.py、lora_utils.py、adapter_checker.py负责登记、名称路径处理与兼容性检查。
 
+主聊天的非vLLM提供商接收完整async_complete请求，参数取自该次已验证的请求配置；Ollama、llama.cpp和Transformers不再在主路径重复读取全局生成配置。旧async_generate只服务仍在使用文本接口的调用方。Transformers的LoRA由入口在同一资源锁内绑定，完整请求方法不另按名称换模型。参数映射依据[Ollama API](https://github.com/ollama/ollama/blob/main/docs/api.md)、[llama.cpp服务协议](https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md)、[Transformers生成接口](https://huggingface.co/docs/transformers/main_classes/text_generation)及[Qwen非思考模式](https://huggingface.co/Qwen/Qwen3-8B)核对。
+
 api/generate.py中的选择顺序：
 - 请求显式指定loraName时按名称选择，不调用自动路由；不存在时报错。
 - 未指定时先使用已激活的adapter。
