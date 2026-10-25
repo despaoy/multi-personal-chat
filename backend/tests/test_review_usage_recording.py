@@ -78,7 +78,7 @@ async def test_review_only_answer_is_accounted_without_claiming_main_generation(
     rig = review_usage
     async def prepare(turn, role):
         await rig.consume()
-        return SimpleNamespace(character_id=role)
+        return SimpleNamespace(character_id=role, memory_operation_receipt=None)
     rig.service.prepare_turn = prepare
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', AsyncMock(return_value=(
         "The currently stored synthetic facts were read.", False,
@@ -97,7 +97,7 @@ async def test_main_failure_does_not_record_completed_reviews_twice(review_usage
     async def prepare(turn, role):
         await rig.consume()
         rig.installed.state.finish = "length"
-        return SimpleNamespace(character_id=role)
+        return SimpleNamespace(character_id=role, memory_operation_receipt=None)
     rig.service.prepare_turn = prepare
     with pytest.raises(HTTPException) as caught:
         await rig.run()
@@ -177,7 +177,7 @@ async def test_cancellation_after_review_keeps_its_semantics_and_does_not_retry_
 @pytest.mark.asyncio
 async def test_rag_review_http_failure_keeps_its_error_and_usage(review_usage, monkeypatch):
     rig = review_usage
-    rig.service.prepare_turn = AsyncMock(return_value=SimpleNamespace(character_id="tsukiyashiro_kisaki"))
+    rig.service.prepare_turn = AsyncMock(return_value=SimpleNamespace(character_id="tsukiyashiro_kisaki", memory_operation_receipt=None))
     detail = {"stage": "synthetic_rag_review", "message": "Evidence review failed"}
     failure = ValueError("Synthetic evidence review failure")
     async def retrieve(*args, **kwargs):
@@ -207,7 +207,7 @@ async def test_review_only_record_failure_does_not_claim_main_generation(review_
     rig = review_usage
     async def prepare(turn, role):
         await rig.consume()
-        return SimpleNamespace(character_id=role)
+        return SimpleNamespace(character_id=role, memory_operation_receipt=None)
     rig.service.prepare_turn = prepare
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', AsyncMock(return_value=(
         "The currently stored synthetic facts were read.", False,
@@ -229,7 +229,7 @@ async def test_unknown_result_after_review_keeps_only_actual_usage_and_does_not_
 
     async def prepare(turn, role):
         await rig.consume()
-        return SimpleNamespace(character_id=role)
+        return SimpleNamespace(character_id=role, memory_operation_receipt=None)
 
     rig.service.prepare_turn = prepare
     monkeypatch.setattr(chat_answer, "generate_chat_answer", AsyncMock(return_value=(
