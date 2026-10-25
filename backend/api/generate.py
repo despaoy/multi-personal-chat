@@ -537,56 +537,54 @@ async def _generate_reply_body(
     message_saved = False
     model_invoked = None
     try:
-        if is_vllm:
-            client = await get_vllm_client()
-            if client is None:
-                raise HTTPException(503, "所选 vLLM 服务不可用，请恢复服务后重试")
-            answer = await generate_answer(
-                vllm_effective_lora,
-                prompt_lora_name=vllm_lora_name,
-                model_generate=functools.partial(_invoke_model, client.generate),
-            )
-        else:
-            semaphore = get_llm_semaphore()
-            try:
-                await asyncio.wait_for(semaphore.acquire(), timeout=30.0)
-            except TimeoutError as exc:
-                raise HTTPException(503, "服务繁忙，请稍后再试") from exc
-            try:
-                async with nullcontext() if request_provider == "openai_compat" else _get_local_model_lock():
-                    try:
-                        lora_path = get_lora_path_by_id(selected_lora["id"], loras=loras) if selected_lora else None
-                    except OSError as exc:
-                        raise HTTPException(503, "所选 LoRA 目录读取失败，请检查适配器存储后重试") from exc
-                    if selected_lora and lora_path is None:
-                        raise HTTPException(409, "所选 LoRA 没有可用本地目录，请先重新激活")
-                    if request_provider != "openai_compat":
-                        provider.set_lora_adapter(lora_path)
+        async with asyncio.timeout(_MODEL_INFERENCE_TIMEOUT) as deadline:
+            if is_vllm:
+                client = await get_vllm_client()
+                if client is None:
+                    raise HTTPException(503, "所选 vLLM 服务不可用，请恢复服务后重试")
+                answer = await generate_answer(
+                    vllm_effective_lora,
+                    prompt_lora_name=vllm_lora_name,
+                    model_generate=functools.partial(_invoke_model, client.generate),
+                )
+            else:
+                semaphore = get_llm_semaphore()
+                try:
+                    await asyncio.wait_for(semaphore.acquire(), timeout=30.0)
+                except TimeoutError as exc:
+                    raise HTTPException(503, "服务繁忙，请稍后再试") from exc
+                try:
+                    async with nullcontext() if request_provider == "openai_compat" else _get_local_model_lock():
+                        try:
+                            lora_path = get_lora_path_by_id(selected_lora["id"], loras=loras) if selected_lora else None
+                        except OSError as exc:
+                            raise HTTPException(503, "所选 LoRA 目录读取失败，请检查适配器存储后重试") from exc
+                        if selected_lora and lora_path is None:
+                            raise HTTPException(409, "所选 LoRA 没有可用本地目录，请先重新激活")
+                        if request_provider != "openai_compat":
+                            provider.set_lora_adapter(lora_path)
 
-                    async def adapter(*, messages, **kwargs):
-                        nonlocal model_name
-                        breaker = (
-                            await circuit_breaker_registry.get_or_create(
-                                f"model_generate:{request_context.connection_id}"
+                        async def adapter(*, messages, **kwargs):
+                            nonlocal model_name
+                            breaker = (
+                                await circuit_breaker_registry.get_or_create(
+                                    f"model_generate:{request_context.connection_id}"
+                                )
+                                if circuit_breaker_registry
+                                else None
                             )
-                            if circuit_breaker_registry
-                            else None
-                        )
-                        async with breaker() if breaker is not None else nullcontext():
-                            if request_provider == "openai_compat":
-                                model_name = provider.get_status()["modelName"]
-                            if request_provider == "transformers_peft":
-                                # The local adapter was bound above under this same lock.
-                                kwargs["lora_name"] = None
-                            text, _cost = await _invoke_model(provider.async_complete, messages=messages, **kwargs)
-                        return text
+                            async with breaker() if breaker is not None else nullcontext():
+                                if request_provider == "openai_compat":
+                                    model_name = provider.get_status()["modelName"]
+                                if request_provider == "transformers_peft":
+                                    # The local adapter was bound above under this same lock.
+                                    kwargs["lora_name"] = None
+                                text, _cost = await _invoke_model(provider.async_complete, messages=messages, **kwargs)
+                            return text
 
-                    answer = await asyncio.wait_for(
-                        generate_answer(lora_name, model_generate=adapter),
-                        timeout=_MODEL_INFERENCE_TIMEOUT,
-                    )
-            finally:
-                semaphore.release()
+                        answer = await generate_answer(lora_name, model_generate=adapter)
+                finally:
+                    semaphore.release()
         model_invoked = answer.model_invoked
         reply, used_rag, rag_meta = answer.reply, answer.used_rag, answer.metadata
         if is_vllm:
@@ -759,6 +757,17 @@ async def _generate_reply_body(
             except HTTPException as record_error:
                 # Keep the model cause and recording error on separate chains.
                 raise HTTPException(503, detail=with_provider_error(record_error.detail, e)) from e
+        if isinstance(e, TimeoutError) and deadline.expired():
+            raise HTTPException(
+                503,
+                detail={
+                    "stage": "generation",
+                    "reason": "deadline_exceeded",
+                    "modelInvoked": model_invoked,
+                    "messageSaved": False,
+                    "message": "聊天生成等待超时，本轮回复未保存。请检查所选模型及检索服务后重试。",
+                },
+            ) from e
         if isinstance(e, ValidationError):
             raise HTTPException(
                 503,

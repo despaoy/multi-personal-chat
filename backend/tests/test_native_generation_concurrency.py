@@ -160,3 +160,20 @@ async def test_provider_change_during_dispatch_does_not_relabel_the_completed_re
     assert result.model == "fixture-cloud (openai_compat)" and FACTS in result.reply
     assert len(state.calls) == 1 and state.active == 0 and semaphore._value == 2
     manager.set_lora_adapter.assert_not_called()
+
+
+
+@pytest.mark.asyncio
+async def test_local_adapter_lock_wait_obeys_generation_deadline(installed, monkeypatch):
+    state, manager, _, semaphore = installed
+    manager._current_provider.value = "transformers_peft"
+    monkeypatch.setattr(generate, "_MODEL_INFERENCE_TIMEOUT", .03)
+    lock = generate._get_local_model_lock()
+    async with lock:
+        with pytest.raises(HTTPException) as caught:
+            await asyncio.wait_for(receive(), 1)
+        assert caught.value.status_code == 503 and caught.value.detail["reason"] == "deadline_exceeded"
+        assert lock.locked() and semaphore._value == 2 and state.calls == []
+    result = await receive()
+    assert FACTS in result.reply and not lock.locked() and semaphore._value == 2
+    assert len(state.calls) == 1 and state.active == 0
