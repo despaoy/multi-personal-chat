@@ -156,7 +156,6 @@ async def get_stats(request: Request, current_user: dict = Depends(get_current_a
         p95ResponseTime=metrics["p95ResponseTime"],
         p99ResponseTime=metrics["p99ResponseTime"],
         chatGenerationFailureRate=metrics["chatGenerationFailureRate"],
-        ragFailureRate=metrics["ragFailureRate"],
         activeSessions=metrics["activeSessions"],
         modelLoad=round(100 * metrics["queue"]["active"] / metrics["queue"]["workers"]),
         cpuUsage=sys_stats["cpu_usage"],

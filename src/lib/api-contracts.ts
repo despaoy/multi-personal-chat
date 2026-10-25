@@ -316,8 +316,6 @@ export interface StatsMetricsResponse {
   chatGenerationFailureRate: number;
   chatGenerationFailures: number;
   chatGenerations: number;
-  ragFailureRate: number;
-  ragFailures: number;
   activeSessions: number;
   queueLength: number;
   queueMaxSize: number;

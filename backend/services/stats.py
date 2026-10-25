@@ -162,7 +162,6 @@ class StatsService:
         (invocations,) = self._query(
             "SELECT COUNT(*) AS total, "
             "COALESCE(SUM(CASE WHEN TRIM(COALESCE(\"errorType\", '')) <> '' THEN 1 ELSE 0 END), 0) AS failures, "
-            'COALESCE(SUM(CASE WHEN "usedRag" = 1 THEN 1 ELSE 0 END), 0) AS used_rag, '
             'COALESCE(MIN("costTime"), 0) AS minimum, COALESCE(MAX("costTime"), 0) AS maximum '
             'FROM model_invocations WHERE purpose = \'chat\' AND "createdAt" >= :start AND "createdAt" < :end',
             bounds,
@@ -189,8 +188,6 @@ class StatsService:
         if not isinstance(config, dict):
             raise TypeError("Statistics configuration must be a dictionary")
         gateway = self._gateway(config)
-        rag_failures = count_recent("rag_failures", 86400.0)
-        rag_total = int(invocations["used_rag"]) + rag_failures
         metrics = {
             "todayMessages": int(messages["total"]),
             "todayReplies": int(messages["replies"]),
@@ -200,8 +197,6 @@ class StatsService:
             "chatGenerationFailureRate": round(int(invocations["failures"]) / invocation_count, 4) if invocation_count else 0.0,
             "chatGenerationFailures": int(invocations["failures"]),
             "chatGenerations": invocation_count,
-            "ragFailureRate": round(rag_failures / rag_total, 4) if rag_total else 0.0,
-            "ragFailures": rag_failures,
             "activeSessions": int(messages["sessions"]),
             "queue": self._runtime.stats(),
             "astrBotGateway": gateway,
@@ -218,22 +213,24 @@ class StatsService:
         queue_length = int(metrics["queueLength"])
         queue_max = int(metrics["queueMaxSize"])
         queue_ratio = queue_length / queue_max
-        if get_consecutive("model_failure") >= self._consecutive_threshold:
+        model_failures = get_consecutive("model_failure")
+        if model_failures >= self._consecutive_threshold:
             alerts.append(
                 {
                     "severity": "critical",
                     "type": "model_consecutive_failures",
                     "message": "Model has failed consecutively",
-                    "value": get_consecutive("model_failure"),
+                    "value": model_failures,
                 }
             )
-        if count_recent("db_write_failures", 300.0) >= self._db_threshold:
+        db_failures = count_recent("db_write_failures")
+        if db_failures >= self._db_threshold:
             alerts.append(
                 {
                     "severity": "warning",
                     "type": "database_write_failures",
                     "message": "Database write failures detected",
-                    "value": count_recent("db_write_failures", 300.0),
+                    "value": db_failures,
                 }
             )
         if metrics["astrBotGateway"]["status"] == "degraded":
@@ -263,7 +260,7 @@ class StatsService:
                     "value": metrics["p95ResponseTime"],
                 }
             )
-        auth_failures = count_recent("integration_auth_failures", 300.0)
+        auth_failures = count_recent("integration_auth_failures")
         if auth_failures >= self._auth_threshold:
             alerts.append(
                 {

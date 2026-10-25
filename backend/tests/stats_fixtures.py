@@ -5,12 +5,24 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import httpx
+import pytest
 from fastapi import FastAPI
 
 from api import stats
 from app.dependencies import get_current_admin
 from app.runtime import RuntimeContainer
 from db.database import SQLiteDB
+
+
+@pytest.fixture
+def fresh_observability(monkeypatch):
+    from collections import defaultdict
+    from infra import observability
+
+    for name in ("_COUNTERS", "_RECENT", "_CONSECUTIVE"):
+        current = getattr(observability, name)
+        monkeypatch.setattr(observability, name, defaultdict(current.default_factory))
+    return observability
 
 
 class CountingStatsDB:

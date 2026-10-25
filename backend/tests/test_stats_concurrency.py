@@ -5,6 +5,7 @@ import threading
 import time
 
 import pytest
+from stats_fixtures import fresh_observability as fresh_observability
 
 
 @pytest.mark.asyncio
@@ -104,3 +105,26 @@ def test_metrics_snapshot_refreshes_on_a_fresh_event_loop(monkeypatch):
 
     assert first == {"generation": 1}
     assert second == {"generation": 2}
+
+
+
+def test_auth_alert_counts_all_recent_events_and_expires_by_time(fresh_observability, monkeypatch):
+    from services.stats import StatsService
+
+    observed = fresh_observability
+    clock = [1000.0]
+    monkeypatch.setattr(observed, "_now", lambda: clock[0])
+    service = StatsService(database=object(), inference_runtime=object(),
+        env={"ALERT_AUTH_FAILURES_5M": "1500"})
+    metrics = {"queueLength": 0, "queueMaxSize": 10, "p95ResponseTime": 0,
+        "astrBotGateway": {"status": "stopped"}}
+    for _ in range(1501):
+        observed.increment("integration_auth_failures")
+    assert [(a["type"], a["value"]) for a in service.alerts(metrics)] == [("frequent_auth_failures", 1501)]
+    assert observed.snapshot()["recent5m"]["integration_auth_failures"] == 1501
+    clock[0] += 300.1
+    assert service.alerts(metrics) == []
+    assert observed.snapshot()["recent5m"]["integration_auth_failures"] == 0
+    observed.increment("integration_auth_failures")
+    assert observed.count_recent("integration_auth_failures") == 1
+    assert observed.get_counter("integration_auth_failures") == 1502

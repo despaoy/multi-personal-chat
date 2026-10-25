@@ -12,6 +12,7 @@ from test_compiled_cloud_transport import installed as installed
 from inference.model_manager import OpenAICompatProvider
 from inference.usage import begin_completion, collect_usage, invocation_usage
 from services.chat_answer import ChatAnswer
+from stats_fixtures import fresh_observability as fresh_observability
 
 
 def payload(prompt=1000, completion=100):
@@ -216,7 +217,7 @@ async def test_invalid_result_stops_before_archive_and_accounts_once(installed, 
 
 
 @pytest.mark.asyncio
-async def test_post_archive_error_does_not_count_usage_again(installed, publication_database, monkeypatch, isolated_model_metrics):
+async def test_post_archive_error_does_not_count_usage_again(installed, publication_database, monkeypatch, fresh_observability):
     from fastapi import HTTPException
     from api import generate
     from db.schemas import MessageRequest
@@ -245,8 +246,8 @@ async def test_post_archive_error_does_not_count_usage_again(installed, publicat
     assert rows[0]["totalTokens"] == 120 and rows[0]["errorType"] == ""
     assert messages[0]["message"] == QUERY and messages[0]["reply"] == ANSWER
     assert "synthetic-private" not in str(caught.value.detail)
-    assert isolated_model_metrics.get_counter("model_failures") == 0
-    assert isolated_model_metrics.get_consecutive("model_failure") == 0
+    assert fresh_observability.get_counter("model_failures") == 0
+    assert fresh_observability.get_consecutive("model_failure") == 0
 
 
 @pytest.mark.asyncio
@@ -297,21 +298,10 @@ async def test_invalid_review_only_result_accounts_for_actual_provider(installed
     assert publication_database.execute_sql('SELECT id FROM messages') == []
 
 
-@pytest.fixture
-def isolated_model_metrics(monkeypatch):
-    from collections import defaultdict, deque
-    from infra import observability
-
-    monkeypatch.setattr(observability, "_COUNTERS", defaultdict(int))
-    monkeypatch.setattr(observability, "_CONSECUTIVE", defaultdict(int))
-    monkeypatch.setattr(observability, "_RECENT", defaultdict(lambda: deque(maxlen=1000)))
-    return observability
-
-
 @pytest.mark.asyncio
 @pytest.mark.parametrize("last_failure", ["provider", "metadata"])
 async def test_model_alert_tracks_actual_generation_failure(
-    installed, publication_database, monkeypatch, isolated_model_metrics, last_failure,
+    installed, publication_database, monkeypatch, fresh_observability, last_failure,
 ):
     from api import generate
     from db.schemas import MessageRequest
@@ -348,8 +338,8 @@ async def test_model_alert_tracks_actual_generation_failure(
     model_alerts = [alert for alert in alerts if alert["type"] == "model_consecutive_failures"]
     expected_failures = 3 if last_failure == "provider" else 2
     expected_consecutive = 3 if last_failure == "provider" else 0
-    assert isolated_model_metrics.get_counter("model_failures") == expected_failures
-    assert isolated_model_metrics.get_consecutive("model_failure") == expected_consecutive
+    assert fresh_observability.get_counter("model_failures") == expected_failures
+    assert fresh_observability.get_consecutive("model_failure") == expected_consecutive
     assert [alert["value"] for alert in model_alerts] == ([3] if last_failure == "provider" else [])
     assert len(installed.calls) == len(publication_database.execute_sql('SELECT id FROM model_invocations')) == 3
     assert publication_database.execute_sql('SELECT id FROM messages') == []
@@ -364,7 +354,7 @@ async def test_model_alert_tracks_actual_generation_failure(
 
 @pytest.mark.asyncio
 async def test_incomplete_chat_result_cannot_publish_assumed_model_success(
-    installed, publication_database, monkeypatch, isolated_model_metrics,
+    installed, publication_database, monkeypatch, fresh_observability,
 ):
     from api import generate
     from db.schemas import MessageRequest
@@ -382,4 +372,4 @@ async def test_incomplete_chat_result_cannot_publish_assumed_model_success(
     assert isinstance(caught.value.__cause__, AttributeError)
     assert caught.value.detail["messageSaved"] is False
     assert not installed.calls and publication_database.execute_sql('SELECT id FROM messages') == []
-    assert isolated_model_metrics.get_counter("model_failures") == 0
+    assert fresh_observability.get_counter("model_failures") == 0

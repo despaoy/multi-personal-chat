@@ -10,7 +10,7 @@ import pytest
 from api import stats
 from app import dependencies
 from services import stats as statistics
-from stats_fixtures import StatsRig
+from stats_fixtures import StatsRig, fresh_observability as fresh_observability
 
 PATHS = ["", "/metrics", "/alerts", "/activity", "/services"]
 
@@ -235,3 +235,25 @@ async def test_generation_percentiles_never_substitute_message_history(rig_facto
     assert data["chatGenerations"] == 2 and data["chatGenerationFailures"] == 0
     assert data["chatGenerationFailureRate"] == basic.json()["chatGenerationFailureRate"] == 0.0
     assert not {"modelFailureRate", "modelFailures", "modelInvocations"} & data.keys()
+
+
+
+async def test_rag_counters_keep_process_scope_without_derived_daily_rate(rig_factory, fresh_observability, monkeypatch):
+    observed = fresh_observability
+    clock = [1000.0]
+    monkeypatch.setattr(observed, "_now", lambda: clock[0])
+    observed.increment("rag_failures")
+    clock[0] += 360.0
+    observed.increment("rag_failures")
+    rig = rig_factory(env={"STATS_CACHE_TTL_SECONDS": "0", "ASTRBOT_ENABLED": "false"})
+    rig.database.add_model_invocation({"purpose": "chat", "usedRag": True, "costTime": 2.0})
+    async with rig.client() as client:
+        metrics = await client.get("/api/stats/metrics")
+        basic = await client.get("/api/stats")
+    assert metrics.status_code == basic.status_code == 200
+    data = metrics.json()
+    assert data["observability"]["counters"]["rag_failures"] == 2
+    assert data["observability"]["recent5m"]["rag_failures"] == 1
+    assert data["chatGenerations"] == 1
+    assert not {"ragFailureRate", "ragFailures"} & data.keys()
+    assert "ragFailureRate" not in basic.json()

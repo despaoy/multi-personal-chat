@@ -32,18 +32,28 @@ def _redact_fields(value: Any) -> Any:
         return tuple(_redact_fields(item) for item in value)
     return value
 
-_RECENT: dict[str, deque[float]] = defaultdict(lambda: deque(maxlen=1000))
+_RECENT: dict[str, deque[float]] = defaultdict(deque)
+_RECENT_WINDOW_SECONDS = 300.0
 _CONSECUTIVE: dict[str, int] = defaultdict(int)
 
 
 def _now() -> float:
-    return time.time()
+    return time.monotonic()
+
+
+def _prune_recent(records: deque[float], now: float) -> None:
+    cutoff = now - _RECENT_WINDOW_SECONDS
+    while records and records[0] < cutoff:
+        records.popleft()
 
 
 def increment(name: str, amount: int = 1) -> int:
     with _STATE_LOCK:
+        now = _now()
         _COUNTERS[name] += amount
-        _RECENT[name].append(_now())
+        records = _RECENT[name]
+        _prune_recent(records, now)
+        records.append(now)
         return _COUNTERS[name]
 
 
@@ -66,14 +76,13 @@ def get_consecutive(name: str) -> int:
         return _CONSECUTIVE.get(name, 0)
 
 
-def count_recent(name: str, window_seconds: float = 300.0) -> int:
+def count_recent(name: str) -> int:
+    """Count events in this process's last five minutes."""
     with _STATE_LOCK:
-        cutoff = _now() - window_seconds
         records = _RECENT.get(name)
         if not records:
             return 0
-        while records and records[0] < cutoff:
-            records.popleft()
+        _prune_recent(records, _now())
         return len(records)
 
 
@@ -82,7 +91,7 @@ def snapshot() -> dict[str, Any]:
         return {
             "counters": dict(_COUNTERS),
             "consecutive": dict(_CONSECUTIVE),
-            "recent5m": {key: count_recent(key, 300.0) for key in list(_RECENT.keys())},
+            "recent5m": {key: count_recent(key) for key in list(_RECENT.keys())},
         }
 
 
