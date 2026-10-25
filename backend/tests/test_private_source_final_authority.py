@@ -434,7 +434,7 @@ async def test_source_reader_success_preserves_scope_and_exact_records():
                 scope.conversation_type,
                 scope.conversation_id,
             ),
-            dict(source_message_ids=("source-1",), limit=7),
+            dict(source_message_ids=("source-1",), limit=7, unlinked_only=False),
         )
     ]
 
