@@ -21,6 +21,7 @@ from inference import model_manager, token_counting, vllm_client
 from inference.generation_request import GenerationRequest, generate_character_response
 from inference.request_context import get_request_context, resolve_request_context, use_request_context
 from inference.review_client import get_context_review_client
+from services.chat_answer import ChatAnswer
 
 FACTS = "完整虚构题设：周四14点预约三张票，每张两元，共六元；尚未付款，下雨取消。请复述金额、时间及全部条件。"
 ANSWER = "周四14点预约三张票，每张两元，共六元；尚未付款，下雨取消。"
@@ -96,7 +97,7 @@ def owned(monkeypatch):
             persona_prompt="保留完整虚构题设的金额、时间、否定和条件。", apply_prompt_policy=False,
             temperature=runtime_config["temperature"], max_tokens=runtime_config["maxTokens"],
             top_p=runtime_config["topP"], context_window_tokens=8192), model_generate)
-        return result.reply, False, {"modelInvoked": True}
+        return ChatAnswer(reply=result.reply, used_rag=False, model_invoked=True, metadata={})
 
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', compiled)
     return SimpleNamespace(manager=manager, resources=resources, reads=reads, snapshots=snapshots,

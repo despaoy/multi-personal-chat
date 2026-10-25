@@ -182,7 +182,7 @@ async def run(args):
         )
         return reply
 
-    reply, rag_used, meta = await chat_answer.generate_chat_answer(
+    answer = await chat_answer.generate_chat_answer(
         MessageRequest(
             message=question,
             characterId=fields["character_id"],
@@ -200,9 +200,10 @@ async def run(args):
         model_generate=model_generate,
     )
     proof.update(
-        reply=reply,
-        rag_used=rag_used,
-        meta=meta,
+        reply=answer.reply,
+        rag_used=answer.used_rag,
+        meta=answer.metadata,
+        model_invoked=answer.model_invoked,
         original_sources_unchanged=db.list_memory_sources(**fields, limit=100) == initial,
         claims_remain_empty=db.list_character_memory_claims(**fields, include_inactive=True) == [],
         cloud_calls=len(calls),
@@ -215,7 +216,7 @@ async def run(args):
                 "actual_cloud_calls": len(calls),
                 "primary_calls": proof["primary_calls"],
                 "result_saved": True,
-                "rag_used": rag_used,
+                "rag_used": answer.used_rag,
             }
         )
     )

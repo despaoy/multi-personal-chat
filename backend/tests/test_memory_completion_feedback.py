@@ -12,6 +12,7 @@ from provider_fixtures import cloud_connection
 
 from db.schemas import MessageRequest
 from services.character_context import _TurnOutcome
+from services.chat_answer import ChatAnswer
 
 
 def request():
@@ -119,7 +120,7 @@ async def test_generation_preserves_answer_and_existing_warnings(monkeypatch, pr
     monkeypatch.setattr(gen, "get_llm_semaphore", lambda: asyncio.Semaphore(1))
     monkeypatch.setattr(gen, "get_vllm_client", AsyncMock(return_value=SimpleNamespace(generate=AsyncMock()) if provider == 'vllm' else None))
     meta = dict(warnings=["原有检索提示"], answerMode="unit", confidence=0.3, citations=[])
-    monkeypatch.setattr(chat_answer, 'generate_chat_answer', AsyncMock(return_value=("模型原始内容", False, meta)))
+    monkeypatch.setattr(chat_answer, 'generate_chat_answer', AsyncMock(return_value=ChatAnswer(reply='模型原始内容', used_rag=False, model_invoked=True, metadata=meta)))
     failure = OSError("fiction-archive-write-error")
     if mode == "archive_failure":
         def fail(record):

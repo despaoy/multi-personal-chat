@@ -130,12 +130,13 @@ async def test_shared_api_preserves_missing_title_status_without_extra_model_cal
     monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieve)
     planning = semantic_plan("读取《A》《B》", dict(public_knowledge=[0]))
     monkeypatch.setenv("RAG_CITATIONS_ENABLED", "false")
-    reply, used, metadata = await chat_answer.generate_chat_answer(
+    _chat_result_metadata = await chat_answer.generate_chat_answer(
         MessageRequest(message="读取《A》《B》"),
         "default",
         runtime_config={"useKnowledgeBase": True, "maxTokens": 512},
         model_generate=model,
     )
+    reply, used, metadata = _chat_result_metadata.reply, _chat_result_metadata.used_rag, _chat_result_metadata.metadata
     assert len(planning) == len(observed) == 1 and used and "partial_source_context" in metadata["warnings"]
     actual = coverage(SimpleNamespace(messages=observed[0]))["requested_sources"]
     assert actual[1]["lookup_status"] == "not_found_in_index_scope"

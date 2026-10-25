@@ -116,10 +116,11 @@ async def test_citations_off_reaches_model_once_with_complete_evidence(monkeypat
     monkeypatch.setattr(chat_answer, 'get_provider_context_budget', lambda: SimpleNamespace(
         review=ReviewContextBudget(65536), window_tokens=65536, evidence_max_chars=0,
     ))
-    reply, used, meta = await chat_answer.generate_chat_answer(
+    _chat_result_meta = await chat_answer.generate_chat_answer(
         MessageRequest(message=fixture["question"]), None,
         runtime_config=dict(maxTokens=1024, useKnowledgeBase=True), model_generate=model,
     )
+    reply, used, meta = _chat_result_meta.reply, _chat_result_meta.used_rag, _chat_result_meta.metadata
     assert len(planning) == 1 and used and not meta["abstained"] and meta["citations"] == []
     assert len(calls) == 1 and "XL-936-N" in reply
 

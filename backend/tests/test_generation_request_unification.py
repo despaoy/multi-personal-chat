@@ -269,11 +269,12 @@ async def test_production_rag_uses_shared_grounded_request(monkeypatch, semantic
     monkeypatch.setattr(chat_answer, 'get_provider_context_budget', lambda: SimpleNamespace(
         review=ReviewContextBudget(65536), window_tokens=65536, evidence_max_chars=0,
     ))
-    reply, _, meta = await chat_answer.generate_chat_answer(
+    _chat_result_meta = await chat_answer.generate_chat_answer(
         MessageRequest(message=query, senderName="虚构读者"), None,
         runtime_config=dict(useKnowledgeBase=True, temperature=0.7, maxTokens=256),
         model_generate=Client().generate,
     )
+    reply, _, meta = _chat_result_meta.reply, _chat_result_meta.used_rag, _chat_result_meta.metadata
     packets = document_evidence_packets([document])
     expected = build_generation_request(GenerationRequest(
         message=query, persona_prompt="persona", interlocutor="虚构读者",

@@ -17,6 +17,7 @@ from db.database import SQLiteDB
 from db.schemas import MessageRequest
 from inference.request_context import get_request_context
 from inference.usage import has_pending_usage
+from services.chat_answer import ChatAnswer
 
 
 @pytest.fixture
@@ -80,10 +81,7 @@ async def test_review_only_answer_is_accounted_without_claiming_main_generation(
         await rig.consume()
         return SimpleNamespace(character_id=role, memory_operation_receipt=None)
     rig.service.prepare_turn = prepare
-    monkeypatch.setattr(chat_answer, 'generate_chat_answer', AsyncMock(return_value=(
-        "The currently stored synthetic facts were read.", False,
-        {"modelInvoked": False, "answerMode": "memory_lookup"},
-    )))
+    monkeypatch.setattr(chat_answer, 'generate_chat_answer', AsyncMock(return_value=ChatAnswer(reply='The currently stored synthetic facts were read.', used_rag=False, model_invoked=False, metadata={'answerMode': 'memory_lookup'})))
     result = await rig.run()
     assert not result.modelInvoked and result.model == "memory/lookup"
     assert len(rig.installed.calls) == rig.writer.call_count == 1
@@ -209,10 +207,7 @@ async def test_review_only_record_failure_does_not_claim_main_generation(review_
         await rig.consume()
         return SimpleNamespace(character_id=role, memory_operation_receipt=None)
     rig.service.prepare_turn = prepare
-    monkeypatch.setattr(chat_answer, 'generate_chat_answer', AsyncMock(return_value=(
-        "The currently stored synthetic facts were read.", False,
-        {"modelInvoked": False, "answerMode": "memory_lookup"},
-    )))
+    monkeypatch.setattr(chat_answer, 'generate_chat_answer', AsyncMock(return_value=ChatAnswer(reply='The currently stored synthetic facts were read.', used_rag=False, model_invoked=False, metadata={'answerMode': 'memory_lookup'})))
     rig.writer.side_effect = OSError("synthetic-review-only-storage-error")
     with pytest.raises(HTTPException) as caught:
         await rig.run()
@@ -232,10 +227,7 @@ async def test_unknown_result_after_review_keeps_only_actual_usage_and_does_not_
         return SimpleNamespace(character_id=role, memory_operation_receipt=None)
 
     rig.service.prepare_turn = prepare
-    monkeypatch.setattr(chat_answer, "generate_chat_answer", AsyncMock(return_value=(
-        "Synthetic undeclared result.", False,
-        {"modelInvoked": False, "answerMode": "synthetic-unknown-mode"},
-    )))
+    monkeypatch.setattr(chat_answer, "generate_chat_answer", AsyncMock(return_value=ChatAnswer(reply='Synthetic undeclared result.', used_rag=False, model_invoked=False, metadata={'answerMode': 'synthetic-unknown-mode'})))
     with pytest.raises(HTTPException) as caught:
         await rig.run(record)
     assert caught.value.status_code == 503 and caught.value.detail["stage"] == "generation_result"

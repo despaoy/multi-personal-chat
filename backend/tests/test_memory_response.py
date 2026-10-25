@@ -134,11 +134,12 @@ async def test_api_reports_memory_read_as_zero_model_calls_not_rag_source(monkey
     monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', model)
     planning = semantic_plan('我现在住哪里？', dict(private_memory=[0]))
     prepared = SimpleNamespace(history=(), compiled=context(packets('我住在银川。')))
-    reply, used_rag, meta = await chat_answer.generate_chat_answer(
+    _chat_result_meta = await chat_answer.generate_chat_answer(
         MessageRequest(message='我现在住哪里？'), None, runtime_config={'useKnowledgeBase': use_kb},
         prepared_character_turn=prepared, model_generate=model)
+    reply, used_rag, meta = _chat_result_meta.reply, _chat_result_meta.used_rag, _chat_result_meta.metadata
     assert '银川' in reply and not used_rag
-    assert meta['modelInvoked'] is False and meta['answerMode'] == 'memory_lookup'
+    assert _chat_result_meta.model_invoked is False and meta['answerMode'] == 'memory_lookup'
     assert meta['abstained'] is False and meta['citations'] == []
     assert len(planning) == int(use_kb)
 
@@ -163,10 +164,11 @@ async def test_partial_or_mixed_read_routes_by_dependency(monkeypatch, message, 
     monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieve)
     groups = dict(private_memory=[0], public_knowledge=[0] if external else [])
     planning = semantic_plan(message, groups)
-    reply, _, _ = await chat_answer.generate_chat_answer(
+    _chat_result__ = await chat_answer.generate_chat_answer(
         MessageRequest(message=message), None, runtime_config={'useKnowledgeBase': True},
         prepared_character_turn=SimpleNamespace(history=(), compiled=context(packets('我住在银川。'))),
         model_generate=model)
+    reply, _, _ = _chat_result__.reply, _chat_result__.used_rag, _chat_result__.metadata
     # A missing private field still needs generation, not external knowledge.
     assert len(planning) == 1
     assert bool(routed) is external and reply == '普通生成路径'

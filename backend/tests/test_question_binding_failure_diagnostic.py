@@ -222,13 +222,14 @@ async def run_api(tmp_path, monkeypatch, defect=None, *, provider_budget, privat
     monkeypatch.setattr(public_fact_coverage, "_review_facts", facts)
     monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "独立测试人物规则")
     monkeypatch.setattr(chat_answer, 'generate_character_response', capture)
-    _, used, meta = await chat_answer.generate_chat_answer(
+    _chat_result_meta = await chat_answer.generate_chat_answer(
         MessageRequest(message=QUERY),
         None,
         prepared_character_turn=SimpleNamespace(compiled=context, history=()),
         runtime_config=dict(maxTokens=2048, useKnowledgeBase=True),
         model_generate=model,
     )
+    _, used, meta = _chat_result_meta.reply, _chat_result_meta.used_rag, _chat_result_meta.metadata
     assert used and observed["model_calls"] == 1 and len(observed["binding"]) == 1
     assert MARKER not in json.dumps(meta)
     return observed, meta

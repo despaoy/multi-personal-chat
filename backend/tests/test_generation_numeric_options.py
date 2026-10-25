@@ -157,12 +157,13 @@ async def test_cloud_absent_top_p_keeps_one_while_other_missing_values_use_envir
 @pytest.mark.asyncio
 async def test_shared_options_reach_the_actual_generation_request(control):
 
-    reply, used, _ = await chat_answer.generate_chat_answer(
+    _chat_result__ = await chat_answer.generate_chat_answer(
         control.request,
         None,
         runtime_config={"temperature": "0.25", "maxTokens": "384", "topP": "0.9", "useKnowledgeBase": False},
         model_generate=control.model,
     )
+    reply, used, _ = _chat_result__.reply, _chat_result__.used_rag, _chat_result__.metadata
     assert reply == "你好，很高兴见到你。" and not used
     control.model.assert_awaited_once()
     passed = control.model.await_args.kwargs

@@ -68,13 +68,14 @@ async def test_add_read_repeat_correct_across_sessions(tmp_path, monkeypatch, se
         monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', forbidden)
         monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: 'persona')
         semantic_plan(query, {"private_memory": [0]})
-        delivered, _, meta = await chat_answer.generate_chat_answer(
+        _chat_result_meta = await chat_answer.generate_chat_answer(
             MessageRequest(message=query), None, runtime_config={'useKnowledgeBase': True},
             model_generate=controlled_answer, prepared_character_turn=prepared, message_db=db)
+        delivered, _, meta = _chat_result_meta.reply, _chat_result_meta.used_rag, _chat_result_meta.metadata
         # Verified conditional recall is deterministic; invoking a model here
         # would re-infer facts that the stored constraint already settles.
         assert delivered == reply
-        assert meta['modelInvoked'] is False and meta['answerMode'] == 'memory_lookup'
+        assert _chat_result_meta.model_invoked is False and meta['answerMode'] == 'memory_lookup'
         assert calls == []
     correction_text = f'更正一下，我只有取得新许可才{action}。之前说的{first}、{second}这两项条件全部作废，不再适用。'
     correction, = extract_memories(correction_text)

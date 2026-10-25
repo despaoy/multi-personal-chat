@@ -74,10 +74,11 @@ async def test_complete_semantic_plan_alone_controls_public_dispatch(monkeypatch
     monkeypatch.setattr(chat_answer, 'get_provider_context_budget', lambda: SimpleNamespace(
         review=budget, window_tokens=65536, evidence_max_chars=0,
     ))
-    _, used, metadata = await chat_answer.generate_chat_answer(
+    _chat_result_metadata = await chat_answer.generate_chat_answer(
         MessageRequest(message=query, history=list(history)), None,
         runtime_config=dict(useKnowledgeBase=True, maxTokens=256), model_generate=model,
     )
+    _, used, metadata = _chat_result_metadata.reply, _chat_result_metadata.used_rag, _chat_result_metadata.metadata
     assert seen == (["plan", "retrieve", "answer"] if expected else ["plan", "answer"])
     assert used is expected and bool(metadata.get("abstained")) is expected
 
@@ -135,7 +136,8 @@ async def test_explicit_retrieval_off_does_not_pay_for_planning(monkeypatch):
     monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', forbidden)
     monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "只根据完整题设计算。")
     monkeypatch.setattr(chat_answer, 'get_provider_context_budget', lambda: SimpleNamespace(window_tokens=65536, evidence_max_chars=0))
-    _, used, _ = await chat_answer.generate_chat_answer(
+    _chat_result__ = await chat_answer.generate_chat_answer(
         MessageRequest(message=query), None, runtime_config=dict(useKnowledgeBase=False), model_generate=model,
     )
+    _, used, _ = _chat_result__.reply, _chat_result__.used_rag, _chat_result__.metadata
     assert not used

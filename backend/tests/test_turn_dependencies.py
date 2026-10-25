@@ -151,13 +151,14 @@ async def test_actual_route_uses_dependencies_not_presence_of_one_memory(monkeyp
             )
         assert error.value.http_status == 503 and not calls
         return
-    reply, used, meta = await chat_answer.generate_chat_answer(
+    _chat_result_meta = await chat_answer.generate_chat_answer(
         MessageRequest(message=QUERY),
         None,
         prepared_character_turn=prepared,
         runtime_config={"maxTokens": 2048, "useKnowledgeBase": True},
         model_generate=model,
     )
+    reply, used, meta = _chat_result_meta.reply, _chat_result_meta.used_rag, _chat_result_meta.metadata
     assert "没有找到" in reply and calls.count("main") == 1
     public_expected = mode in {"mixed", "unknown"}
     assert ("public" in calls) is public_expected

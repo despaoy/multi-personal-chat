@@ -47,7 +47,7 @@ async def test_vllm_generation_receives_request_history(monkeypatch):
 
     context = InferenceRequestContext("vllm", None, text_token_counter("vllm", "", ""))
     with use_request_context(context):
-        reply, used_rag, rag_meta = await chat_answer.generate_chat_answer(
+        _chat_result_rag_meta = await chat_answer.generate_chat_answer(
             request,
             None,
             None,
@@ -55,6 +55,7 @@ async def test_vllm_generation_receives_request_history(monkeypatch):
             enable_rag=False,
             model_generate=fake_generate,
         )
+        reply, used_rag, rag_meta = _chat_result_rag_meta.reply, _chat_result_rag_meta.used_rag, _chat_result_rag_meta.metadata
 
     assert reply == "second-reply"
     assert isinstance(captured["request"], GenerationRequest)

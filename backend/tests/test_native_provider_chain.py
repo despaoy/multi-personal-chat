@@ -14,6 +14,7 @@ from provider_fixtures import completed_provider_response
 import pytest
 
 from db.schemas import MessageRequest
+from services.chat_answer import ChatAnswer
 
 
 @pytest.mark.asyncio
@@ -73,7 +74,7 @@ async def test_selected_provider_receives_messages_and_budget_without_local_over
             temperature=0.17, max_tokens=733, top_p=1.0, frequency_penalty=0.0,
             repetition_penalty=1.0, enable_thinking=False, lora_name=None,
         )
-        return reply, False, {}
+        return ChatAnswer(reply=reply, used_rag=False, model_invoked=True, metadata={})
 
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', compiled_retrieval)
     if provider == "vllm" and not available:
@@ -201,7 +202,7 @@ async def test_transformer_main_keeps_explicit_options_and_the_actual_bound_adap
             max_tokens=runtime_config["maxTokens"], top_p=runtime_config["topP"],
             repetition_penalty=1.07, frequency_penalty=0.0, enable_thinking=False,
             lora_name=lora_name if lora_name != "default" else None)
-        return reply, False, {}
+        return ChatAnswer(reply=reply, used_rag=False, model_invoked=True, metadata={})
 
     monkeypatch.setattr(chat_answer, "generate_chat_answer", compiled)
     database = SimpleNamespace(config=dict(useKnowledgeBase=False, temperature=temperature, topP=.23, maxTokens=733),

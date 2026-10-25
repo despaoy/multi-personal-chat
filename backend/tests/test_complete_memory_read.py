@@ -68,12 +68,13 @@ async def test_api_private_plan_keeps_zero_answer_calls(monkeypatch, semantic_pl
 
     monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: 'persona')
     planning = semantic_plan('我的专业是什么？', dict(private_memory=[0]))
-    reply, rag, meta = await chat_answer.generate_chat_answer(
+    _chat_result_meta = await chat_answer.generate_chat_answer(
         MessageRequest(message='我的专业是什么？'), None, runtime_config={'useKnowledgeBase': use_kb},
         prepared_character_turn=SimpleNamespace(history=(), compiled=missing_context()), model_generate=model)
+    reply, rag, meta = _chat_result_meta.reply, _chat_result_meta.used_rag, _chat_result_meta.metadata
     assert len(planning) == int(use_kb)
     assert not rag and '你的专业' in reply
-    assert meta['modelInvoked'] is False and meta['answerMode'] == 'memory_field_result'
+    assert _chat_result_meta.model_invoked is False and meta['answerMode'] == 'memory_field_result'
     assert generate._DETERMINISTIC_MODEL_LABELS[meta['answerMode']] == 'memory/field_result'
 
 
@@ -92,10 +93,11 @@ async def test_personal_read_with_history_never_requires_external_knowledge(monk
     monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: 'persona')
     planning = semantic_plan(query, dict(private_memory=[0]))
     history = ({'role': 'user', 'content': '说回我本人，我来自贵阳。'},)
-    _, rag, meta = await chat_answer.generate_chat_answer(
+    _chat_result_meta = await chat_answer.generate_chat_answer(
         MessageRequest(message=query), None, runtime_config={'useKnowledgeBase': True},
         prepared_character_turn=SimpleNamespace(history=history, compiled=replace(missing_context(), memory_status=status)),
         model_generate=model)
+    _, rag, meta = _chat_result_meta.reply, _chat_result_meta.used_rag, _chat_result_meta.metadata
     assert len(planning) == 1 and planning[0]["history"] == list(history)
     assert len(calls) == 1 and not rag
     assert any(m['content'] == history[0]['content'] for m in calls[0]['messages'])

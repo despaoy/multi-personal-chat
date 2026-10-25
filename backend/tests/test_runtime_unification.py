@@ -381,12 +381,13 @@ async def test_vllm_generation_reuses_one_rag_result(monkeypatch, semantic_plan,
 
     semantic_plan("question", {"public_knowledge": [0]})
     request = MessageRequest(message="question", sessionId="session")
-    reply, used_rag, meta = await chat_answer.generate_chat_answer(
+    _chat_result_meta = await chat_answer.generate_chat_answer(
         request,
         None,
         runtime_config={"useKnowledgeBase": True},
         model_generate=Client().generate,
     )
+    reply, used_rag, meta = _chat_result_meta.reply, _chat_result_meta.used_rag, _chat_result_meta.metadata
 
     assert reply == "answer"
     assert used_rag is True
@@ -415,12 +416,13 @@ async def test_vllm_generation_omits_rag_policy_without_evidence(monkeypatch):
 
     monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "persona")
 
-    reply, used_rag, meta = await chat_answer.generate_chat_answer(
+    _chat_result_meta = await chat_answer.generate_chat_answer(
         MessageRequest(message="ordinary chat", sessionId="session"),
         None,
         runtime_config={"useKnowledgeBase": False},
         model_generate=Client().generate,
     )
+    reply, used_rag, meta = _chat_result_meta.reply, _chat_result_meta.used_rag, _chat_result_meta.metadata
 
     assert reply == "answer"
     assert used_rag is False
@@ -473,17 +475,18 @@ async def test_vllm_rag_abstention_generates_character_uncertainty(monkeypatch, 
         assert captured
         return
 
-    reply, used_rag, meta = await chat_answer.generate_chat_answer(
+    _chat_result_meta = await chat_answer.generate_chat_answer(
         MessageRequest(message="unknown question", sessionId="session"),
         "character-adapter",
         runtime_config={"useKnowledgeBase": True},
         model_generate=Client().generate,
     )
+    reply, used_rag, meta = _chat_result_meta.reply, _chat_result_meta.used_rag, _chat_result_meta.metadata
 
     assert reply == "character reply"
     assert used_rag is True
     assert meta["abstained"] is True
-    assert meta["modelInvoked"] is True
+    assert _chat_result_meta.model_invoked is True
     assert meta["answerMode"] == "abstention"
     assert meta["citations"] == []
     assert captured["lora_name"] == "character-adapter"

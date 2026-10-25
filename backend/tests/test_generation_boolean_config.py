@@ -65,9 +65,10 @@ async def test_invalid_knowledge_base_setting_stops_before_retrieval(control):
 
 @pytest.mark.parametrize("setting", [False, "false"])
 async def test_disabled_knowledge_base_reaches_model_without_retrieval(control, setting):
-    reply, used, _meta = await chat_answer.generate_chat_answer(
+    _chat_result__meta = await chat_answer.generate_chat_answer(
         control.request, None, runtime_config=config(setting), model_generate=control.model
     )
+    reply, used, _meta = _chat_result__meta.reply, _chat_result__meta.used_rag, _chat_result__meta.metadata
     assert reply == "你好，很高兴见到你。" and used is False
     control.model.assert_awaited_once()
     control.rag.assert_not_awaited()
@@ -75,9 +76,10 @@ async def test_disabled_knowledge_base_reaches_model_without_retrieval(control, 
 
 
 async def test_explicit_rag_disable_keeps_precedence(control):
-    reply, used, _meta = await chat_answer.generate_chat_answer(
+    _chat_result__meta = await chat_answer.generate_chat_answer(
         control.request, None, runtime_config=config(True), enable_rag=False, model_generate=control.model
     )
+    reply, used, _meta = _chat_result__meta.reply, _chat_result__meta.used_rag, _chat_result__meta.metadata
     assert reply == "你好，很高兴见到你。" and used is False
     control.model.assert_awaited_once()
     control.rag.assert_not_awaited()
@@ -123,8 +125,9 @@ async def test_falsey_explicit_mapping_keeps_disabled_retrieval_and_parameters(c
         def __bool__(self):
             return False
 
-    reply, used, _meta = await chat_answer.generate_chat_answer(
+    _chat_result__meta = await chat_answer.generate_chat_answer(
         control.request, None, runtime_config=FalsyMapping(config()), model_generate=control.model)
+    reply, used, _meta = _chat_result__meta.reply, _chat_result__meta.used_rag, _chat_result__meta.metadata
     assert reply == "你好，很高兴见到你。" and used is False
     control.model.assert_awaited_once()
     assert control.model.await_args.kwargs["max_tokens"] == 256

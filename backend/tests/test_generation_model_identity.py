@@ -9,6 +9,7 @@ from fastapi import HTTPException
 from db.schemas import MessageRequest
 from inference.model_manager import ModelManager, ModelProvider
 from test_lora_provider_selection import install_api
+from services.chat_answer import ChatAnswer
 
 pytestmark = pytest.mark.usefixtures("no_live_context_review")
 
@@ -98,11 +99,7 @@ async def test_selected_status_read_failure_preserves_original_cause_and_failure
 async def test_result_without_model_invocation_does_not_need_model_status(monkeypatch, provider):
     state = rig(monkeypatch, provider)
     state.selected.get_status.side_effect = OSError("Status is irrelevant to a deterministic result")
-    state.generation.return_value = (
-        "已依据当前存储记录完成查询。",
-        False,
-        {"modelInvoked": False, "answerMode": "memory_lookup"},
-    )
+    state.generation.return_value = ChatAnswer(reply='已依据当前存储记录完成查询。', used_rag=False, model_invoked=False, metadata={'answerMode': 'memory_lookup'})
     result = await state.api._generate_reply_impl(request(), message_db=state.api.db)
     assert result.model == "memory/lookup" and not result.modelInvoked
     state.selected.get_status.assert_not_called()
@@ -117,7 +114,7 @@ async def test_local_identity_uses_request_provider_even_if_selection_changes_af
 
     async def generated(*args, **kwargs):
         state.manager._current_provider = SimpleNamespace(value="llama_cpp")
-        return "根据完整当前输入回答。", False, {}
+        return ChatAnswer(reply='根据完整当前输入回答。', used_rag=False, model_invoked=True, metadata={})
 
     state.generation.side_effect = generated
     result = await state.api._generate_reply_impl(request(), message_db=state.api.db)
@@ -131,7 +128,7 @@ async def test_cloud_identity_uses_bound_snapshot_after_runtime_selection_change
 
     async def generated(*args, **kwargs):
         state.manager._current_provider = SimpleNamespace(value="llama_cpp")
-        return "根据完整当前输入回答。", False, {}
+        return ChatAnswer(reply='根据完整当前输入回答。', used_rag=False, model_invoked=True, metadata={})
 
     state.generation.side_effect = generated
     result = await state.api._generate_reply_impl(request(), message_db=state.api.db)
@@ -146,10 +143,10 @@ async def test_cloud_identity_uses_bound_snapshot_after_runtime_selection_change
 @pytest.mark.parametrize("mode", [None, "synthetic-private-unknown-mode", []])
 async def test_undeclared_no_model_result_fails_before_archive_without_invented_usage(monkeypatch, caplog, provider, mode):
     state = rig(monkeypatch, provider)
-    meta = {"modelInvoked": False}
+    meta = {}
     if mode is not None:
         meta["answerMode"] = mode
-    state.generation.return_value = ("隔离合成结果。", False, meta)
+    state.generation.return_value = ChatAnswer(reply='隔离合成结果。', used_rag=False, model_invoked=False, metadata=meta)
     with pytest.raises(HTTPException) as caught:
         await state.api._generate_reply_impl(request(), message_db=state.api.db)
     assert caught.value.status_code == 503

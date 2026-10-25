@@ -205,11 +205,12 @@ async def test_shared_api_exports_partial_source_warning_without_extra_model_cal
     monkeypatch.setattr(chat_answer, 'get_provider_context_budget', lambda: SimpleNamespace(
         review=ReviewContextBudget(8192), window_tokens=8192, evidence_max_chars=0))
     monkeypatch.setenv("RAG_CITATIONS_ENABLED", "false")
-    reply, used, metadata = await chat_answer.generate_chat_answer(
+    _chat_result_metadata = await chat_answer.generate_chat_answer(
         MessageRequest(message="核对整份规程"),
         "default",
         runtime_config={"useKnowledgeBase": True, "maxTokens": 512},
         model_generate=model,
     )
+    reply, used, metadata = _chat_result_metadata.reply, _chat_result_metadata.used_rag, _chat_result_metadata.metadata
     assert len(planning) == len(observed) == 1 and used and "partial_source_context" in metadata["warnings"]
     assert "部分资料" in reply and metadata["citations"] == []

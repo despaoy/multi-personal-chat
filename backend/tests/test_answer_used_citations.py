@@ -139,8 +139,9 @@ async def test_api_propagates_budget_abstention_instead_of_claiming_grounded_ans
     monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "persona")
     monkeypatch.setattr(chat_answer, 'get_provider_context_budget', lambda: ProviderContextBudget(8192))
     semantic_plan("课程编号", {"public_knowledge": [0]})
-    _, _, meta = await chat_answer.generate_chat_answer(MessageRequest(message="课程编号"), None,
+    _chat_result_meta = await chat_answer.generate_chat_answer(MessageRequest(message="课程编号"), None,
         runtime_config={"useKnowledgeBase": True, "maxTokens": 128}, model_generate=Client().generate)
+    _, _, meta = _chat_result_meta.reply, _chat_result_meta.used_rag, _chat_result_meta.metadata
     assert meta["abstained"] is True
     assert meta["answerMode"] == "abstention"
     assert meta["citations"] == []

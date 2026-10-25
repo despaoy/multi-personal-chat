@@ -111,16 +111,17 @@ async def test_production_retrieval_preserves_source_packet_and_reports_actual_m
 
     monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieve)
     monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: 'persona')
-    reply, used_rag, meta = await chat_answer.generate_chat_answer(
+    _chat_result_meta = await chat_answer.generate_chat_answer(
         MessageRequest(message=message), None, runtime_config={'useKnowledgeBase': True}, model_generate=model)
+    reply, used_rag, meta = _chat_result_meta.reply, _chat_result_meta.used_rag, _chat_result_meta.metadata
     assert len(planning) == 1
     assert used_rag is (dependency == "public_knowledge")
     if direct:
-        assert not calls and meta['modelInvoked'] is False
+        assert not calls and _chat_result_meta.model_invoked is False
         assert meta['answerMode'] == 'source_excerpt'
         assert [c['id'] for c in meta['citations']] == ['card-a']
         assert packet()['text'] in reply
     else:
         assert len(calls) == 1
-        assert meta['modelInvoked'] is True
+        assert _chat_result_meta.model_invoked is True
         assert reply == '模型对复合任务的回答'

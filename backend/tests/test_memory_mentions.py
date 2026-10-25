@@ -94,11 +94,12 @@ async def test_provenance_display_uses_no_external_rag_or_model(monkeypatch, use
     monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: 'persona')
     monkeypatch.setattr(intent_detector, 'predict_rag_intent', lambda _: pytest.fail('Not external knowledge'))
     semantic_plan(message, {"private_memory": [0]})
-    reply, used_rag, meta = await chat_answer.generate_chat_answer(MessageRequest(message=message), None,
+    _chat_result_meta = await chat_answer.generate_chat_answer(MessageRequest(message=message), None,
         runtime_config={'useKnowledgeBase': use_kb}, prepared_character_turn=SimpleNamespace(history=(), compiled=context),
         model_generate=model)
+    reply, used_rag, meta = _chat_result_meta.reply, _chat_result_meta.used_rag, _chat_result_meta.metadata
     assert '待确认' in reply and not used_rag
-    assert meta['modelInvoked'] is False and meta['answerMode'] == 'memory_mentions'
+    assert _chat_result_meta.model_invoked is False and meta['answerMode'] == 'memory_mentions'
 
 
 @pytest.mark.asyncio

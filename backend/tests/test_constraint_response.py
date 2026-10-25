@@ -98,11 +98,12 @@ async def test_condition_read_uses_no_external_retrieval(monkeypatch, semantic_p
     monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: 'persona')
     monkeypatch.setattr(intent_detector, 'predict_rag_intent', lambda _: pytest.fail('No external RAG needed'))
     semantic_plan("如果休息好，我就一定开长途车吗？", {"private_memory": [0]})
-    reply, rag, meta = await chat_answer.generate_chat_answer(
+    _chat_result_meta = await chat_answer.generate_chat_answer(
         MessageRequest(message='如果休息好，我就一定开长途车吗？'), None,
         runtime_config={'useKnowledgeBase': True}, model_generate=model,
         prepared_character_turn=SimpleNamespace(history=(), compiled=context()))
-    assert reply.startswith('不能仅凭') and not rag and meta['modelInvoked'] is False
+    reply, rag, meta = _chat_result_meta.reply, _chat_result_meta.used_rag, _chat_result_meta.metadata
+    assert reply.startswith('不能仅凭') and not rag and _chat_result_meta.model_invoked is False
 
 
 @pytest.mark.asyncio

@@ -16,6 +16,7 @@ from api import router as compatibility
 from db.database import SQLiteDB
 from db.schemas import MessageRequest
 from inference import model_manager
+from services.chat_answer import ChatAnswer
 
 
 @pytest.mark.asyncio
@@ -166,7 +167,7 @@ async def test_legacy_rule_config_cannot_choose_a_persona_from_a_name(monkeypatc
     monkeypatch.setattr(generate, "response_cache", None)
     monkeypatch.setattr(generate, "circuit_breaker_registry", None)
     monkeypatch.setattr(generate, "get_llm_semaphore", lambda: asyncio.Semaphore(1))
-    operation = AsyncMock(return_value=("3张票，每张2元，总额6元。", False, {"modelInvoked": True}))
+    operation = AsyncMock(return_value=ChatAnswer(reply='3张票，每张2元，总额6元。', used_rag=False, model_invoked=True, metadata={}))
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', operation)
     req = MessageRequest(message="只是讨论胡桃这个名字，不要求切换角色。完整题设：3张票，每张2元，计算总额。",
         loraName="hutao" if selection == "explicit_adapter" else "")

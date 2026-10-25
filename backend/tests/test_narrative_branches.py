@@ -14,6 +14,7 @@ from db.database import SQLiteDB
 from db.schemas import GenerateResponse, MessageRequest
 from repositories.narrative import NarrativeRepository, Proposal
 from services.narrative import generate_branch_reply, parse_proposals, prepare_branch
+from services.chat_answer import ChatAnswer
 
 
 @pytest.fixture
@@ -348,7 +349,7 @@ def test_full_web_generation_and_canonical_return(repo, monkeypatch):
 
     async def model(request, *args, **kwargs):
         seen.append(kwargs["prepared_character_turn"])
-        return "独立回答", False, {}
+        return ChatAnswer(reply='独立回答', used_rag=False, model_invoked=True, metadata={})
 
     monkeypatch.setenv("NARRATIVE_BRANCHES_ENABLED", "true")
     monkeypatch.setenv("MEMORY_LLM_ENABLED", "false")

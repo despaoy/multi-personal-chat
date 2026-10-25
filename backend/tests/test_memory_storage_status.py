@@ -136,7 +136,8 @@ async def test_api_status_task_skips_public_retrieval_and_answer_generation(monk
     prepared = SimpleNamespace(history=(), compiled=CompiledCharacterContext('', '', '',
                                 memory_field_presence=presence))
     semantic_plan('你保存了我的姓名吗？', dict(private_memory=[0]))
-    _, used_rag, meta = await chat_answer.generate_chat_answer(MessageRequest(message='你保存了我的姓名吗？'),
+    _chat_result_meta = await chat_answer.generate_chat_answer(MessageRequest(message='你保存了我的姓名吗？'),
         None, prepared_character_turn=prepared, runtime_config={'useKnowledgeBase': True}, model_generate=model)
+    _, used_rag, meta = _chat_result_meta.reply, _chat_result_meta.used_rag, _chat_result_meta.metadata
     assert not used_rag and meta['answerMode'] == 'memory_storage_status'
-    assert meta['modelInvoked'] is False
+    assert _chat_result_meta.model_invoked is False

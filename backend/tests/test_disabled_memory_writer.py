@@ -29,6 +29,7 @@ from character.memory_llm import MemoryEnrichmentScheduler, MemoryLlmConfig
 from character.models import CompiledCharacterContext, RelationshipState
 from db.database import SQLiteDB
 from db.schemas import MessageRequest
+from services.chat_answer import ChatAnswer
 
 BODY = "我喜欢咖啡。"  # A real rule-extractor match, so the former fallback would try to write.
 REPLY = "这是一条预先提供的合成回复。"
@@ -133,8 +134,7 @@ async def test_real_disabled_completion_is_visible_in_web_reply_and_exact_archiv
     monkeypatch.setattr(generate, "_prepare_character_turn", AsyncMock(return_value=prepared))
     # This is the existing generation boundary fixture, not a real provider
     # response or a model-quality test. Completion, archive and feedback stay real.
-    synthetic_reply = AsyncMock(return_value=(REPLY, False, dict(modelInvoked=False,
-        answerMode="current_constraint", warnings=["合成生成夹具提示"])))
+    synthetic_reply = AsyncMock(return_value=ChatAnswer(reply=REPLY, used_rag=False, model_invoked=False, metadata=dict(answerMode='current_constraint', warnings=['合成生成夹具提示'])))
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', synthetic_reply)
     monkeypatch.setattr(generate, "response_cache", None)
     monkeypatch.setattr(generate, "circuit_breaker_registry", None)

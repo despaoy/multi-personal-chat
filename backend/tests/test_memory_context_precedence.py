@@ -97,10 +97,11 @@ async def test_api_passes_the_same_effective_history_to_shortcut_and_generation(
         return '我会依据最新对话。'
 
     history = ({'role': 'user', 'content': '我现在住在西宁。'},)
-    reply, used_rag, meta = await chat_answer.generate_chat_answer(
+    _chat_result_meta = await chat_answer.generate_chat_answer(
         MessageRequest(message='我住哪里？'), None, runtime_config={'useKnowledgeBase': True},
         prepared_character_turn=SimpleNamespace(compiled=saved(), history=history), model_generate=model)
+    reply, used_rag, meta = _chat_result_meta.reply, _chat_result_meta.used_rag, _chat_result_meta.metadata
     # Ordinary generation need not emit RAG metadata; actual calls are the evidence.
-    assert len(calls) == 1 and meta.get('modelInvoked') is not False and not used_rag
+    assert len(calls) == 1 and _chat_result_meta.model_invoked is not False and not used_rag
     assert len(planning) == 1
     assert reply == '我会依据最新对话。'

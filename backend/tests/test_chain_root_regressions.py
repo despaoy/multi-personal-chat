@@ -12,6 +12,7 @@ from character.models import CharacterProfile, CompiledCharacterContext, Decisio
 from character.output_guard import ReplyGuard, build_reply_guard, retryable_violations, validate_reply
 from db.schemas import MessageRequest
 from inference.generation_request import GenerationRequest, _estimated_tokens, build_generation_request
+from services.chat_answer import ChatAnswer
 
 
 def test_recalling_a_fact_is_not_a_bid_for_affection():
@@ -115,7 +116,7 @@ async def test_character_entry_does_not_require_or_auto_select_lora(monkeypatch)
     monkeypatch.setattr(gen, "get_vllm_client", AsyncMock(return_value=SimpleNamespace(generate=AsyncMock())))
     prepare = AsyncMock(return_value=SimpleNamespace(character_id='tsukiyashiro_kisaki'))
     monkeypatch.setattr(gen, '_prepare_character_turn', prepare)
-    generate = AsyncMock(return_value=('reply', False, {}))
+    generate = AsyncMock(return_value=ChatAnswer(reply='reply', used_rag=False, model_invoked=True, metadata={}))
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', generate)
     database = SimpleNamespace(config={}, loras=[{'name': 'hutao', 'status': 'active'}])
     req = MessageRequest(message='你好', characterId='tsukiyashiro_kisaki', userId='alice', sessionId='a')

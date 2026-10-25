@@ -11,6 +11,7 @@ from fastapi import HTTPException
 from provider_fixtures import cloud_connection
 
 from db.schemas import MessageRequest
+from services.chat_answer import ChatAnswer
 
 pytestmark = pytest.mark.usefixtures("no_live_context_review")
 
@@ -82,7 +83,7 @@ def install_api(monkeypatch, provider):
     monkeypatch.setattr(generate, "circuit_breaker_registry", None)
     monkeypatch.setattr(generate, "get_lora_character_id", lambda _: None)
     monkeypatch.setattr(generate, "get_llm_semaphore", lambda: asyncio.Semaphore(1))
-    generation = AsyncMock(return_value=("根据完整当前输入回答。", False, {}))
+    generation = AsyncMock(return_value=ChatAnswer(reply='根据完整当前输入回答。', used_rag=False, model_invoked=True, metadata={}))
     save = AsyncMock(return_value=True)
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', generation)
     monkeypatch.setattr(generate, "_save_message", save)

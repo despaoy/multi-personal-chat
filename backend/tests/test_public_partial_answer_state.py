@@ -45,10 +45,11 @@ async def test_unprepared_public_state_uses_final_fact_coverage(monkeypatch, mod
     monkeypatch.setattr("knowledge.public_question_binding.resolve_question_binding", no_binding)
     monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieved_or_reviewed)
     monkeypatch.setattr(public_task_evidence, "review_public_candidates", retrieved_or_reviewed)
-    _, used, meta = await chat_answer.generate_chat_answer(
+    _chat_result_meta = await chat_answer.generate_chat_answer(
         MessageRequest(message=QUERY), None,
         runtime_config=dict(maxTokens=2048, useKnowledgeBase=True), model_generate=model,
     )
+    _, used, meta = _chat_result_meta.reply, _chat_result_meta.used_rag, _chat_result_meta.metadata
     assert len(inputs) == 1 and used and meta["answerMode"] == expected
     assert meta["abstained"] is (expected != "grounded_answer")
     assert ("partial_public_evidence" in (meta.get("warnings") or [])) is (expected != "grounded_answer")

@@ -89,7 +89,7 @@ async def test_native_api_compiler_keeps_complete_cloud_message_and_three_large_
         model_generate=object(),
     )
     request, plan = observed[0]
-    assert result[0] == "保留完整内容" and request.context_window_tokens == 65536
+    assert result.reply == "保留完整内容" and request.context_window_tokens == 65536
     assert query in plan.messages[-1]["content"]
     assert all(item in plan.messages for item in history)
 

@@ -84,9 +84,10 @@ async def test_successful_preparation_preserves_legitimate_empty_retrieval(monke
     monkeypatch.setattr(chat_answer, 'get_provider_context_budget', lambda: SimpleNamespace(
         review=ReviewContextBudget(65536), window_tokens=65536, evidence_max_chars=0,
     ))
-    reply, used, metadata = await chat_answer.generate_chat_answer(MessageRequest(message=QUERY), None,
+    _chat_result_metadata = await chat_answer.generate_chat_answer(MessageRequest(message=QUERY), None,
         runtime_config={"useKnowledgeBase": True, "maxTokens": 256}, model_generate=answer)
-    assert planned and reply and used and metadata["abstained"] and metadata["modelInvoked"]
+    reply, used, metadata = _chat_result_metadata.reply, _chat_result_metadata.used_rag, _chat_result_metadata.metadata
+    assert planned and reply and used and metadata["abstained"] and _chat_result_metadata.model_invoked
     assert events == ["timeout", "create_retrieval", "retrieve", "answer"]
 
 
@@ -97,9 +98,10 @@ async def test_explicit_retrieval_off_does_not_prepare_a_runtime(monkeypatch):
     monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "根据完整题设计算。")
     monkeypatch.setattr(chat_answer, 'get_provider_context_budget', lambda: SimpleNamespace(window_tokens=65536, evidence_max_chars=0))
     answer = AsyncMock(return_value="单元控制：3张票，每张2.25元，总计6.75元。")
-    _, used, _ = await chat_answer.generate_chat_answer(
+    _chat_result__ = await chat_answer.generate_chat_answer(
         MessageRequest(message="共3张票，每张2.25元，没有其他费用；请计算总额。"), None,
         runtime_config={"useKnowledgeBase": False, "maxTokens": 256}, model_generate=answer)
+    _, used, _ = _chat_result__.reply, _chat_result__.used_rag, _chat_result__.metadata
     assert not used
     forbidden.assert_not_called()
     answer.assert_awaited_once()

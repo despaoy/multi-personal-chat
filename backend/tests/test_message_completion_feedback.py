@@ -14,6 +14,7 @@ from provider_fixtures import cloud_connection
 from character.models import build_user_scope
 from db.database import SQLiteDB
 from db.schemas import MessageRequest
+from services.chat_answer import ChatAnswer
 
 WARNING = "这条信息的长期记忆保存失败；本次回复不代表已保存，请稍后重试。"
 BODY = "合成测试：朋友陆溪收到北岚青石工作室纸浆浮雕课确认，私人回执YP-406-R，仍有效，未参加、未出发。这是朋友的记录，不是我本人的预约。"
@@ -188,7 +189,7 @@ async def test_both_consumers_use_actual_saved_row_and_keep_visible_failure(monk
     monkeypatch.setattr(gen, "get_llm_semaphore", lambda: asyncio.Semaphore(1))
     monkeypatch.setattr(gen, "get_vllm_client", AsyncMock(return_value=SimpleNamespace(generate=AsyncMock()) if provider == 'vllm' else None))
     meta = dict(warnings=["原有检索提示"], answerMode="unit", confidence=0.3, citations=[])
-    monkeypatch.setattr(chat_answer, 'generate_chat_answer', AsyncMock(return_value=("原始模型内容", False, meta)))
+    monkeypatch.setattr(chat_answer, 'generate_chat_answer', AsyncMock(return_value=ChatAnswer(reply='原始模型内容', used_rag=False, model_invoked=True, metadata=meta)))
     prepared = SimpleNamespace(
         memory_operation_receipt=None, character_id=request.characterId,
         compiled=SimpleNamespace(profile_context="", dynamic_context="", reference_context=""),

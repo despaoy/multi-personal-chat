@@ -285,13 +285,14 @@ async def test_actual_api_marks_partial_answer_only_for_visible_private_context(
     for reference, expected in [(PRIVATE, "partial_answer"), ("", "abstention")]:
         context = CompiledCharacterContext("", "", reference, used_memory_ids=("private-a",))
         prepared = SimpleNamespace(compiled=context, history=())
-        _, used, meta = await chat_answer.generate_chat_answer(
+        _chat_result_meta = await chat_answer.generate_chat_answer(
             MessageRequest(message=QUERY),
             None,
             prepared_character_turn=prepared,
             runtime_config=dict(maxTokens=2048, useKnowledgeBase=True),
             model_generate=model,
         )
+        _, used, meta = _chat_result_meta.reply, _chat_result_meta.used_rag, _chat_result_meta.metadata
         assert used and meta["abstained"] and meta["answerMode"] == expected
         assert "partial_public_evidence" in meta["warnings"]
 

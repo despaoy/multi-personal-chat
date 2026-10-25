@@ -11,6 +11,7 @@ import pytest
 from fastapi import HTTPException
 
 from services.turn_completion import CompletionUnavailable, TurnCompletionRuntime
+from services.chat_answer import ChatAnswer
 
 
 @pytest.mark.asyncio
@@ -122,11 +123,7 @@ def generation_environment(monkeypatch, provider):
     preparation = AsyncMock(return_value=prepared)
     storage = AsyncMock(return_value=True)
     generation = AsyncMock(
-        return_value=(
-            "真实单元输出",
-            False,
-            dict(warnings=["检索提示"], answerMode="unit", confidence=0.3, citations=[]),
-        )
+        return_value=ChatAnswer(reply='真实单元输出', used_rag=False, model_invoked=True, metadata=dict(warnings=['检索提示'], answerMode='unit', confidence=0.3, citations=[]))
     )
     monkeypatch.setattr(gen, "_prepare_character_turn", preparation)
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', generation)

@@ -93,7 +93,7 @@ async def exercise(tmp_path, monkeypatch, *, erase_during_review):
     monkeypatch.setattr(public_question_binding, "resolve_question_binding", binding)
     monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', empty_public_result)
     monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "虚构评测角色规则")
-    _, used, meta = await chat_answer.generate_chat_answer(
+    _chat_result_meta = await chat_answer.generate_chat_answer(
         MessageRequest(message=QUERY, characterId="fiction-role"),
         None,
         prepared_character_turn=PreparedCharacterTurn(
@@ -110,6 +110,7 @@ async def exercise(tmp_path, monkeypatch, *, erase_during_review):
         model_generate=model,
         message_db=db,
     )
+    _, used, meta = _chat_result_meta.reply, _chat_result_meta.used_rag, _chat_result_meta.metadata
     assert used and observed["model_calls"] == 1
     assert not meta.get("generationError")
     assert (BODY in observed["wire"]) is (not erase_during_review)

@@ -541,13 +541,11 @@ async def _generate_reply_body(
             client = await get_vllm_client()
             if client is None:
                 raise HTTPException(503, "所选 vLLM 服务不可用，请恢复服务后重试")
-            reply, used_rag, rag_meta = await generate_answer(
+            answer = await generate_answer(
                 vllm_effective_lora,
                 prompt_lora_name=vllm_lora_name,
                 model_generate=functools.partial(_invoke_model, client.generate),
             )
-            model_label = model_name
-            stored_model_name = "vllm"
         else:
             semaphore = get_llm_semaphore()
             try:
@@ -583,13 +581,19 @@ async def _generate_reply_body(
                             text, _cost = await _invoke_model(provider.async_complete, messages=messages, **kwargs)
                         return text
 
-                    reply, used_rag, rag_meta = await asyncio.wait_for(
+                    answer = await asyncio.wait_for(
                         generate_answer(lora_name, model_generate=adapter),
                         timeout=_MODEL_INFERENCE_TIMEOUT,
                     )
             finally:
                 semaphore.release()
-            if rag_meta.get("modelInvoked", True) is not False:
+        model_invoked = answer.model_invoked
+        reply, used_rag, rag_meta = answer.reply, answer.used_rag, answer.metadata
+        if is_vllm:
+            model_label = model_name
+            stored_model_name = "vllm"
+        else:
+            if model_invoked:
                 try:
                     name = provider.get_status()["modelName"]
                     if not isinstance(name, str) or not name.strip():
@@ -601,7 +605,6 @@ async def _generate_reply_body(
             stored_model_name = model_name
 
         cost_time = round(time.time() - start_time, 2)
-        model_invoked = rag_meta.get("modelInvoked", True) is not False
         if not model_invoked:
             try:
                 model_name = _DETERMINISTIC_MODEL_LABELS[rag_meta.get("answerMode")]

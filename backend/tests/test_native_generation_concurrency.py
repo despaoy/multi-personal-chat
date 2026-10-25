@@ -12,6 +12,7 @@ from fastapi import HTTPException
 from api import generate
 from db.schemas import MessageRequest
 from inference import model_manager
+from services.chat_answer import ChatAnswer
 
 FACTS = "虚构题设：3张票，每张2元，共6元；尚未付款，下雨取消。请保留金额、否定和条件。"
 
@@ -74,7 +75,7 @@ def installed(monkeypatch):
     async def compiled(request, lora_name, *, model_generate, **kwargs):
         text = await model_generate(messages=[{"role": "system", "content": "保留完整题设。"},
             {"role": "user", "content": request.message}], temperature=0.1, max_tokens=128, top_p=1)
-        return text, False, {"modelInvoked": True}
+        return ChatAnswer(reply=text, used_rag=False, model_invoked=True, metadata={})
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', compiled)
     return state, manager, database, semaphore
 

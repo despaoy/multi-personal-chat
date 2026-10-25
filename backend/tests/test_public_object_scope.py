@@ -295,13 +295,14 @@ async def test_actual_api_uses_verified_object_links_and_retains_private_answer(
     monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "人物规则")
     context = CompiledCharacterContext("", "", PRIVATE, used_memory_ids=("fiction-private",))
     prepared = SimpleNamespace(compiled=context, history=())
-    _, used, meta = await chat_answer.generate_chat_answer(
+    _chat_result_meta = await chat_answer.generate_chat_answer(
         MessageRequest(message=QUERY),
         None,
         prepared_character_turn=prepared,
         runtime_config=dict(maxTokens=2048, useKnowledgeBase=True),
         model_generate=model,
     )
+    _, used, meta = _chat_result_meta.reply, _chat_result_meta.used_rag, _chat_result_meta.metadata
     assert (
         calls == ["scope", "fact_scope", "source", "fact_evidence"]
         and used

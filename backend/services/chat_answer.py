@@ -2,6 +2,7 @@
 
 import asyncio
 import os
+from dataclasses import dataclass
 from typing import Any
 
 from db.adapter import db as public_knowledge_db
@@ -21,6 +22,14 @@ from knowledge.retrieval_core.errors import RetrievalIndexError
 
 _RAG_TIMEOUT = float(os.getenv("RAG_TIMEOUT", "8"))
 _RAG_COLD_START_TIMEOUT = float(os.getenv("RAG_COLD_START_TIMEOUT", "60"))
+
+
+@dataclass(frozen=True)
+class ChatAnswer:
+    reply: str
+    used_rag: bool
+    model_invoked: bool
+    metadata: dict[str, Any]
 
 
 class ChatRetrievalError(RuntimeError):
@@ -55,7 +64,7 @@ async def generate_chat_answer(
     prepared_character_turn=None,
     message_db=None,
     memory_write_enabled: bool | None = None,
-) -> tuple[str, bool, dict[str, Any]]:
+) -> ChatAnswer:
     """Shared retrieval, abstention and character policy for either transport."""
     # 使用请求开始时读取的配置快照，避免同一次生成多次同步访问数据库。
     _cfg = runtime_config
@@ -86,9 +95,12 @@ async def generate_chat_answer(
             dependency_groups = dict(query_plan.dependencies.groups)
             if not query_plan.needs_public_retrieval:
                 retrieval = RetrievalResult(reason="local_context_dependencies")
-                rag_meta = {"citations": [], "confidence": None, "abstained": False,
-                            "answerMode": "personal_context" if query_plan.private_context_only else "direct_answer",
-                            "modelInvoked": True}
+                rag_meta = {
+                    "citations": [],
+                    "confidence": None,
+                    "abstained": False,
+                    "answerMode": "personal_context" if query_plan.private_context_only else "direct_answer",
+                }
             else:
                 retrieval_query = rag_message
                 from knowledge.public_question_binding import bound_retrieval_query, resolve_question_binding
@@ -126,7 +138,6 @@ async def generate_chat_answer(
                     "answerMode": ("abstention" if bundle.get("abstained", False) else "grounded_answer"),
                     "domainId": next(iter(bundle.get("domains") or []), None),
                     "warnings": bundle.get("warnings") or None,
-                    "modelInvoked": True,
                 }
                 from inference.evidence_coverage import requested_source_lookups
                 from knowledge.query_tasks import requests_only_source_excerpt
@@ -255,7 +266,6 @@ async def generate_chat_answer(
     if generation.authority_refreshed:
         rag_meta["warnings"] = list(dict.fromkeys([*(rag_meta.get("warnings") or []), "context_authority_refreshed"]))
     if not generation.model_invoked:
-        rag_meta["modelInvoked"] = False
         rag_meta["answerMode"] = generation.response_mode
         rag_meta["abstained"] = generation.response_mode == "source_unavailable"
         rag_meta["citations"] = list(generation.response_citations) if citations_enabled else []
@@ -292,4 +302,9 @@ async def generate_chat_answer(
             rag_meta["answerMode"] = "partial_answer"
         elif rag_meta.get("answerMode") == "grounded_answer":
             rag_meta["answerMode"] = "abstention"
-    return generation.reply, generation.plan.retrieval.has_evidence or bool(rag_meta.get("abstained")), rag_meta
+    return ChatAnswer(
+        reply=generation.reply,
+        used_rag=generation.plan.retrieval.has_evidence or bool(rag_meta.get("abstained")),
+        model_invoked=generation.model_invoked,
+        metadata=rag_meta,
+    )

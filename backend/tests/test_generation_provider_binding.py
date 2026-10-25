@@ -7,6 +7,7 @@ import pytest
 from test_lora_provider_selection import install_api
 
 from db.schemas import MessageRequest
+from services.chat_answer import ChatAnswer
 
 
 @pytest.mark.asyncio
@@ -27,7 +28,7 @@ async def test_each_provider_receives_same_bound_request_context(monkeypatch, pr
 
     async def generated(*args, model_generate, **kwargs):
         answer = await model_generate(messages=messages, **options)
-        return answer, False, {"modelInvoked": True}
+        return ChatAnswer(reply=answer, used_rag=False, model_invoked=True, metadata={})
 
     state.generation.side_effect = generated
 

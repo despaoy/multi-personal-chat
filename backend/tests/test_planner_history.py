@@ -126,11 +126,12 @@ async def test_actual_generation_route_passes_the_same_effective_history(monkeyp
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", unit_planner)
     monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', forbidden_public)
     monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "单元角色规则")
-    _, _, meta = await chat_answer.generate_chat_answer(
+    _chat_result_meta = await chat_answer.generate_chat_answer(
         MessageRequest(message=QUERY, history=request_history if history_source == "request_override" else []),
         None,
         prepared_character_turn=prepared,
         runtime_config={"useKnowledgeBase": True},
         model_generate=unit_main,
     )
+    _, _, meta = _chat_result_meta.reply, _chat_result_meta.used_rag, _chat_result_meta.metadata
     assert observed == ["planner", "main"] and meta["answerMode"] == "personal_context"

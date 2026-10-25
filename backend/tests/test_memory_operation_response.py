@@ -57,9 +57,10 @@ async def test_api_operation_receipt_has_no_external_retrieval_dependency(monkey
     async def must_not_call(**kwargs):
         pytest.fail('Operation receipt must not invoke answer model')
 
-    _, used_rag, meta = await chat_answer.generate_chat_answer(
+    _chat_result_meta = await chat_answer.generate_chat_answer(
         MessageRequest(message='请把我的宠物名字从记忆里删除。'), None,
         prepared_character_turn=prepared, runtime_config={'useKnowledgeBase': True}, model_generate=must_not_call)
+    _, used_rag, meta = _chat_result_meta.reply, _chat_result_meta.used_rag, _chat_result_meta.metadata
     assert len(planning) == 1 and planning[0]["query"] == query
     assert not used_rag and meta['answerMode'] == 'memory_operation'
 

@@ -194,11 +194,12 @@ async def test_production_api_carries_reference_receipt_and_warning_once(monkeyp
     monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieve)
     planning = semantic_plan("说明主体条款及引用范围", dict(public_knowledge=[0]))
     monkeypatch.setenv("RAG_CITATIONS_ENABLED", "false")
-    _, used, metadata = await chat_answer.generate_chat_answer(
+    _chat_result_metadata = await chat_answer.generate_chat_answer(
         MessageRequest(message="说明主体条款及引用范围"),
         "default",
         runtime_config={"useKnowledgeBase": True, "maxTokens": 512},
         model_generate=model,
     )
+    _, used, metadata = _chat_result_metadata.reply, _chat_result_metadata.used_rag, _chat_result_metadata.metadata
     assert len(planning) == len(observed) == 1 and used and "partial_source_context" in metadata["warnings"]
     assert actual_coverage(observed[0])["source_references"] == [reference()]

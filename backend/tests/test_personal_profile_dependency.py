@@ -63,8 +63,9 @@ async def test_profile_routes_to_actual_generation_with_or_without_saved_records
         memory_packets=(item,) if saved else (), memory_field_presence=tuple((f, saved) for f in ('name', 'residence', 'major')))
     prepared = SimpleNamespace(compiled=ctx, history=({'role':'user','content':'今天整理了资料。'},), reply_guard=None)
     semantic_plan(QUERY, {"private_memory": [0], "control": [1]})
-    reply, used_rag, meta = await chat_answer.generate_chat_answer(MessageRequest(message=QUERY), None,
+    _chat_result_meta = await chat_answer.generate_chat_answer(MessageRequest(message=QUERY), None,
         runtime_config={'useKnowledgeBase':True}, prepared_character_turn=prepared, model_generate=model)
+    reply, used_rag, meta = _chat_result_meta.reply, _chat_result_meta.used_rag, _chat_result_meta.metadata
     assert reply and len(calls) == 1 and used_rag is False
     assert not meta.get('abstained') and meta.get('answerMode') != 'abstention'
     assert QUERY in calls[0]['messages'][-1]['content']
@@ -87,8 +88,9 @@ async def test_mixed_profile_keeps_actual_external_retrieval_and_uncertainty(mon
     monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: 'persona')
     query=QUERY+'月社妃和琉璃是什么关系？'
     semantic_plan(query, {"private_memory": [0], "control": [1], "public_knowledge": [2]})
-    _, used_rag, meta=await chat_answer.generate_chat_answer(MessageRequest(message=query),None,
+    _chat_result_meta = await chat_answer.generate_chat_answer(MessageRequest(message=query),None,
         runtime_config={'useKnowledgeBase':True},model_generate=model)
+    _, used_rag, meta = _chat_result_meta.reply, _chat_result_meta.used_rag, _chat_result_meta.metadata
     assert len(retrieved)==len(calls)==1 and used_rag and meta['abstained']
     assert meta['answerMode']=='abstention' and not meta['citations']
     assert query in calls[0]['messages'][-1]['content'] and 'untrusted candidate' not in str(calls)

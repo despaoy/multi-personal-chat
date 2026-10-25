@@ -14,6 +14,7 @@ from db.database import SQLiteDB
 from repositories.character_memory import DatabaseCharacterMemoryRepository
 from repositories.messages import DatabaseMessageRepository
 from services.character_context import CharacterContextService, TurnInput
+from services.chat_answer import ChatAnswer
 
 
 @pytest.mark.asyncio
@@ -49,7 +50,7 @@ async def test_http_web_receipt_survives_real_save_and_completion_without_client
 
 
     async def model_reply(*args, **kwargs):
-        return "知道了。", False, {}
+        return ChatAnswer(reply='知道了。', used_rag=False, model_invoked=True, metadata={})
 
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', model_reply)
     requests = []

@@ -17,6 +17,7 @@ from cache.response_cache import ResponseCache
 from db.schemas import AskRequest, GenerateResponse, MessageRequest
 from inference import model_manager
 from inference.generation_request import GenerationRequest, RetrievalResult, generate_character_response
+from services.chat_answer import ChatAnswer
 
 QUERY = "虚构档案馆周二09:00开门、17:00闭馆，暴雨暂停开放。请保留时间和暴雨例外，不能把暴雨改成小雨。"
 ANSWER = "单元控制：周二09:00开门、17:00闭馆，暴雨暂停开放。"
@@ -85,7 +86,7 @@ def installed(monkeypatch):
             temperature=runtime_config["temperature"], max_tokens=runtime_config["maxTokens"],
             top_p=runtime_config["topP"], context_window_tokens=65536,
         ), model_generate)
-        return result.reply, result.plan.retrieval.has_evidence, {}
+        return ChatAnswer(reply=result.reply, used_rag=result.plan.retrieval.has_evidence, model_invoked=result.model_invoked, metadata={})
 
     state.evidence = False
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', compiled)
@@ -264,7 +265,7 @@ async def test_response_cache_failures_are_explicit_and_never_become_success(ins
 @pytest.mark.asyncio
 async def test_normal_no_model_result_keeps_false_invocation_provenance(installed, monkeypatch):
     async def abstain(*args, **kwargs):
-        return "当前资料未找到足够依据。", False, {"modelInvoked": False, "abstained": True, "answerMode": "abstention"}
+        return ChatAnswer(reply='当前资料未找到足够依据。', used_rag=False, model_invoked=False, metadata={'abstained': True, 'answerMode': 'abstention'})
 
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', abstain)
     result = await receive()

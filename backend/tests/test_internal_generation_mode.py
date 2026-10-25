@@ -14,6 +14,7 @@ from fastapi import HTTPException
 from provider_fixtures import cloud_connection
 
 from db.schemas import MessageRequest
+from services.chat_answer import ChatAnswer
 
 
 @pytest.fixture
@@ -69,7 +70,7 @@ async def test_deterministic_response_has_no_model_invocation(monkeypatch, mode,
             pytest.fail('No model invocation expected')
 
     async def deterministic(*args, **kwargs):
-        return '当前声明的回应', False, {'modelInvoked': False, 'answerMode': mode}
+        return ChatAnswer(reply='当前声明的回应', used_rag=False, model_invoked=False, metadata={'answerMode': mode})
 
     monkeypatch.setattr(mm, 'get_model_manager', lambda: Manager())
     monkeypatch.setattr(gen, "get_vllm_client", AsyncMock(return_value=SimpleNamespace(generate=AsyncMock())))
@@ -121,7 +122,7 @@ async def test_internal_mode_success_does_not_persist(monkeypatch):
     monkeypatch.setattr(gen, "get_vllm_client", AsyncMock(return_value=SimpleNamespace(generate=AsyncMock())))
 
     async def fake_vllm(*args, **kwargs):
-        return "tool-reply", False, {}
+        return ChatAnswer(reply='tool-reply', used_rag=False, model_invoked=True, metadata={})
 
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', fake_vllm)
 
@@ -241,7 +242,7 @@ async def test_explicit_memory_operations_respect_internal_and_delivery_modes(mo
             compiled=SimpleNamespace(used_memory_ids=()), memory_operation_receipt=None)
 
     async def generate(*args, **kwargs):
-        return 'reply', False, {}
+        return ChatAnswer(reply='reply', used_rag=False, model_invoked=True, metadata={})
 
     monkeypatch.setattr(gen, '_prepare_character_turn', prepare)
     monkeypatch.setattr(gen, '_complete_character_turn', AsyncMock(return_value=None))
@@ -290,7 +291,7 @@ async def test_message_db_reaches_save_and_invocation_record(monkeypatch, provid
     monkeypatch.setattr(gen, "get_vllm_client", AsyncMock(return_value=SimpleNamespace(generate=AsyncMock())))
 
     async def fake_vllm(*args, **kwargs):
-        return "reply", False, {}
+        return ChatAnswer(reply='reply', used_rag=False, model_invoked=True, metadata={})
 
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', fake_vllm)
 
@@ -453,7 +454,7 @@ async def test_injected_character_service_reaches_prepare_and_complete(monkeypat
     monkeypatch.setattr(mm, "get_model_manager", lambda: FakeManager())
 
     async def fake_vllm(*args, **kwargs):
-        return "reply", False, {}
+        return ChatAnswer(reply='reply', used_rag=False, model_invoked=True, metadata={})
 
     monkeypatch.setattr(gen, "get_vllm_client", AsyncMock(return_value=SimpleNamespace(generate=AsyncMock())))
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', fake_vllm)

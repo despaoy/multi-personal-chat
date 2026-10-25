@@ -18,6 +18,7 @@ from api import generate
 from db.database import SQLiteDB
 from db.schemas import MessageRequest
 from inference import model_manager
+from services.chat_answer import ChatAnswer
 
 FACTS = "虚构资料：陶弈的课程在周二09:00开始、11:00结束；尚未出发、尚未参加，暴雨时停课。请保留所有时间和否定。"
 REPLY = "陶弈周二09:00上课、11:00结束；尚未出发和参加，暴雨时停课。"
@@ -128,7 +129,7 @@ async def generation(monkeypatch):
     monkeypatch.setattr(turn_completion, "get_turn_completion_runtime", lambda: runtime)
     service = SimpleNamespace(complete_turn=AsyncMock(return_value=_TurnOutcome(
         source_capture="recorded", memory_enrichment_status="skipped")))
-    model = AsyncMock(return_value=(REPLY, False, {"modelInvoked": True}))
+    model = AsyncMock(return_value=ChatAnswer(reply=REPLY, used_rag=False, model_invoked=True, metadata={}))
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', model)
     yield SimpleNamespace(runtime=runtime, service=service, model=model)
     await runtime.shutdown(timeout=1)
@@ -145,7 +146,7 @@ async def test_archive_failure_stops_fresh_generation_memory_and_delivery(genera
     monkeypatch.setattr(generate, "db", store)
     counts = []
     monkeypatch.setattr(generate, "increment", counts.append)
-    generation.model.return_value = (REPLY, False, {"modelInvoked": invoked, "answerMode": "generated" if invoked else "abstention"})
+    generation.model.return_value = ChatAnswer(reply=REPLY, used_rag=False, model_invoked=invoked, metadata={"answerMode": "generated" if invoked else "abstention"})
     context = {} if delivery else None
     with pytest.raises(HTTPException) as error:
         await generate._generate_reply_impl(request(), persist_message=True, record_invocation=False,

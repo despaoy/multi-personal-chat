@@ -320,11 +320,12 @@ async def test_actual_api_production_identity_stage_keeps_registry_rules_and_pri
     prepared = SimpleNamespace(
         compiled=CompiledCharacterContext("", "", PRIVATE, used_memory_ids=("fiction-private",)), history=()
     )
-    _, used, meta = await chat_answer.generate_chat_answer(
+    _chat_result_meta = await chat_answer.generate_chat_answer(
         MessageRequest(message=QUERY),
         None,
         prepared_character_turn=prepared,
         runtime_config=dict(maxTokens=2048, useKnowledgeBase=True),
         model_generate=model,
     )
+    _, used, meta = _chat_result_meta.reply, _chat_result_meta.used_rag, _chat_result_meta.metadata
     assert used and not meta["abstained"] and "partial_public_evidence" not in (meta["warnings"] or [])

@@ -11,6 +11,7 @@ from test_compiled_cloud_transport import installed as installed
 
 from inference.model_manager import OpenAICompatProvider
 from inference.usage import begin_completion, collect_usage, invocation_usage
+from services.chat_answer import ChatAnswer
 
 
 def payload(prompt=1000, completion=100):
@@ -190,8 +191,9 @@ async def test_invalid_result_stops_before_archive_and_accounts_once(installed, 
     compiled = chat_answer.generate_chat_answer
 
     async def malformed(*args, **kwargs):
-        reply, used_rag, metadata = await compiled(*args, **kwargs)
-        return reply, used_rag, dict(metadata, confidence=confidence)
+        _chat_result_metadata = await compiled(*args, **kwargs)
+        reply, used_rag, metadata = _chat_result_metadata.reply, _chat_result_metadata.used_rag, _chat_result_metadata.metadata
+        return ChatAnswer(reply=reply, used_rag=used_rag, model_invoked=_chat_result_metadata.model_invoked, metadata=dict(metadata, confidence=confidence))
 
     monkeypatch.setattr(chat_answer, "generate_chat_answer", malformed)
     request = MessageRequest(message=QUERY, loraName="default", platform="web", adapter="result-fixture",
@@ -254,9 +256,7 @@ async def test_invalid_no_model_result_does_not_invent_an_invocation(installed, 
     from db.schemas import MessageRequest
 
     async def unavailable(*args, **kwargs):
-        return "当前没有可核对的第五条公告原文。", False, {
-            "modelInvoked": False, "answerMode": "source_unavailable", "confidence": {"invalid": True},
-        }
+        return ChatAnswer(reply='当前没有可核对的第五条公告原文。', used_rag=False, model_invoked=False, metadata={'answerMode': 'source_unavailable', 'confidence': {'invalid': True}})
 
     monkeypatch.setattr(chat_answer, "generate_chat_answer", unavailable)
     request = MessageRequest(message="当前只提供了两条公告，未提供第五条。请读取第五条原文；没有原文就明确说明。",
@@ -283,9 +283,7 @@ async def test_invalid_review_only_result_accounts_for_actual_provider(installed
             [{"role": "user", "content": "合成审核：只核对已提供的公告资料，不生成给用户的最终回答。" + QUERY}],
             temperature=0, max_tokens=173, top_p=1.0,
         )
-        return "没有第五条公告原文。", False, {
-            "modelInvoked": False, "answerMode": "source_unavailable", "confidence": {"invalid": True},
-        }
+        return ChatAnswer(reply='没有第五条公告原文。', used_rag=False, model_invoked=False, metadata={'answerMode': 'source_unavailable', 'confidence': {'invalid': True}})
 
     monkeypatch.setattr(chat_answer, "generate_chat_answer", reviewed)
     with pytest.raises(HTTPException) as caught:
@@ -324,8 +322,9 @@ async def test_model_alert_tracks_actual_generation_failure(
     compiled = chat_answer.generate_chat_answer
 
     async def malformed(*args, **kwargs):
-        reply, used_rag, metadata = await compiled(*args, **kwargs)
-        return reply, used_rag, dict(metadata, confidence={"invalid": True})
+        _chat_result_metadata = await compiled(*args, **kwargs)
+        reply, used_rag, metadata = _chat_result_metadata.reply, _chat_result_metadata.used_rag, _chat_result_metadata.metadata
+        return ChatAnswer(reply=reply, used_rag=used_rag, model_invoked=_chat_result_metadata.model_invoked, metadata=dict(metadata, confidence={'invalid': True}))
 
     # Two real adapter failures establish a pending outage; the third request
     # distinguishes a continued outage from invalid metadata after recovery.
@@ -360,3 +359,27 @@ async def test_model_alert_tracks_actual_generation_failure(
     assert recorded["chatGenerations"] == recorded["chatGenerationFailures"] == 3
     assert recorded["chatGenerationFailureRate"] == 1.0
     assert not {"modelFailureRate", "modelFailures", "modelInvocations"} & recorded.keys()
+
+
+
+@pytest.mark.asyncio
+async def test_incomplete_chat_result_cannot_publish_assumed_model_success(
+    installed, publication_database, monkeypatch, isolated_model_metrics,
+):
+    from api import generate
+    from db.schemas import MessageRequest
+    from fastapi import HTTPException
+    from test_compiled_cloud_transport import ANSWER, QUERY
+
+    async def incomplete(*args, **kwargs):
+        # Deliberately omit the required invocation provenance at the service boundary.
+        return ANSWER, False, {}
+
+    monkeypatch.setattr(chat_answer, "generate_chat_answer", incomplete)
+    with pytest.raises(HTTPException) as caught:
+        await generate._generate_reply_impl(MessageRequest(message=QUERY, loraName="default"),
+            enable_rag=False, message_db=publication_database)
+    assert isinstance(caught.value.__cause__, AttributeError)
+    assert caught.value.detail["messageSaved"] is False
+    assert not installed.calls and publication_database.execute_sql('SELECT id FROM messages') == []
+    assert isolated_model_metrics.get_counter("model_failures") == 0
