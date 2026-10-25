@@ -9,7 +9,7 @@ from collections import Counter
 from dataclasses import asdict
 from pathlib import Path
 
-from character.memory_llm import _extract_json, parse_llm_proposals
+from character.memory_llm import MemoryResponseError, _extract_json, parse_llm_proposals
 
 
 def audit_call(call):
@@ -17,16 +17,17 @@ def audit_call(call):
     result = dict(source=payload['current_user_message'], candidates=[], accepted=[])
     try:
         candidates = _extract_json(call['output'])['memories']
-        if not isinstance(candidates, list):
-            raise ValueError('memories is not an array')
-        result['candidates'] = candidates
-    except (ValueError, TypeError, KeyError) as exc:
-        return dict(result, status='format_failed', error=str(exc))
-    proposals = parse_llm_proposals(call['output'], source_message=result['source'],
-        history=tuple(payload.get('recent_history', ())),
-        existing_memories=tuple(payload.get('existing_memories', ())),
-        feedback_target_ids=tuple(payload.get('feedback_target_ids', ())),
-        confidence_threshold=payload.get('confidence_threshold', 0.85))
+    except MemoryResponseError as exc:
+        return dict(result, status='format_failed', field=exc.field, error=str(exc))
+    result['candidates'] = candidates
+    try:
+        proposals = parse_llm_proposals(call['output'], source_message=result['source'],
+            history=tuple(payload.get('recent_history', ())),
+            existing_memories=tuple(payload.get('existing_memories', ())),
+            feedback_target_ids=tuple(payload.get('feedback_target_ids', ())),
+            confidence_threshold=payload.get('confidence_threshold', 0.85))
+    except MemoryResponseError as exc:
+        return dict(result, status='proposal_failed', field=exc.field, error=str(exc))
     result['accepted'] = [asdict(item) for item in proposals]
     return dict(result, status=('empty_candidates' if not candidates else
                                'admitted' if proposals else 'none_admitted'))

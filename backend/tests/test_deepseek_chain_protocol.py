@@ -23,37 +23,44 @@ def merge(changes=None, targets=None):
                               existing_memories=tuple(data["existing_memories"] if targets is None else targets),
                               history=tuple(data["history"]))
 
-def test_cumulative_generic_paraphrase_retains_source_and_original_claim():
-    proposal, = merge()
+def test_frozen_paraphrase_errors_and_literal_coexist_keeps_source_and_target():
+    with pytest.raises(MemoryResponseError) as caught:
+        merge()
+    assert caught.value.field == "value"
     data = fixture("deepseek_merge_admission.json")
-    assert proposal.operation == "COEXIST"
-    assert proposal.source_observation
+    proposal, = merge(dict(operation="COEXIST", value="芝麻", content="", evidence=data["source_message"]))
+    assert proposal.operation == "COEXIST" and proposal.fact_kind == "other_user_fact"
     assert proposal.target_memory_id == "13"
     assert proposal.memory.memory_key == data["existing_memories"][0]["memory_key"]
     assert proposal.evidence == data["source_message"]
     assert "麦芽" in proposal.memory.content and "芝麻" in proposal.memory.content
 
-def test_observation_does_not_promote_free_form_summary_to_a_fact():
-    proposal, = merge({"value": "养了三只猫：麦芽、芝麻、雪饼", "content": "用户又养了雪饼，共三只猫"})
-    assert proposal.source_observation
-    assert "雪饼" not in proposal.memory.content and "三只" not in proposal.memory.content
-    assert proposal.evidence == fixture("deepseek_merge_admission.json")["source_message"]
 
-@pytest.mark.parametrize("changes,error", [
-    ({"target_memory_id": "999"}, False), ({"target_memory_key": "user_name"}, False),
-    ({"confidence": .1}, False), ({"attributed_to": "assistant"}, True),
-    ({"evidence": "我新养的猫叫雪饼。"}, False),
+def test_unverified_free_form_summary_is_error_instead_of_quote_recovery():
+    with pytest.raises(MemoryResponseError) as caught:
+        merge({"value": "养了三只猫：麦芽、芝麻、雪饼", "content": "用户又养了雪饼，共三只猫"})
+    assert caught.value.field == "value"
+
+
+@pytest.mark.parametrize("changes,field", [
+    ({"target_memory_id": "999"}, "target_memory_id"), ({"target_memory_key": "user_name"}, "target_memory_key"),
+    ({"confidence": .1}, None), ({"attributed_to": "assistant"}, "attributed_to"),
+    ({"evidence": "我新养的猫叫雪饼。"}, None),
 ])
-def test_quote_fallback_preserves_existing_admission_boundaries(changes, error):
-    if error:
+def test_recorded_candidate_preserves_specific_admission_boundaries(changes, field):
+    if field:
         with pytest.raises(MemoryResponseError) as caught:
             merge(changes)
-        assert caught.value.field == "attributed_to"
+        assert caught.value.field == field
     else:
         assert not merge(changes)
 
-def test_no_target_is_not_a_new_paraphrased_fact():
-    assert not merge(targets=())
+
+def test_missing_target_is_protocol_failure_not_new_paraphrased_fact():
+    with pytest.raises(MemoryResponseError) as caught:
+        merge(targets=())
+    assert caught.value.field == "target_memory_id"
+
 
 @pytest.mark.asyncio
 async def test_sqlite_keeps_both_records_when_original_source_recall_is_disabled(tmp_path):
@@ -75,7 +82,8 @@ async def test_sqlite_keeps_both_records_when_original_source_recall_is_disabled
         memory_key=old["memory_key"], source_message_id="original-source")
     records = await repo.list_memory_records("role", scope, limit=None, include_inactive=True)
     target = next(record for record in records if record["status"] == "active")
-    candidate = dict(data["writer_output"]["memories"][0], target_memory_id=str(target["id"]))
+    candidate = dict(data["writer_output"]["memories"][0], operation="COEXIST", value="芝麻", content="",
+                     evidence=data["source_message"], target_memory_id=str(target["id"]))
     class Completion:
         async def complete(self, messages):
             return json.dumps({"memories": [candidate]}, ensure_ascii=False)
@@ -95,11 +103,13 @@ async def test_sqlite_keeps_both_records_when_original_source_recall_is_disabled
     records = await repo.list_memory_records("role", scope, limit=None, include_inactive=True)
     assert len([r for r in records if r["status"] == "active"]) == 2
     added = next(r for r in records if r["relation_type"] == "COEXIST")
-    assert added["metadata"]["content_semantics"] == "quoted_source"
+    assert added["metadata"]["fact_kind"] == "other_user_fact"
+    assert added["evidence"] == [data["source_message"]]
     service = CharacterMemoryService(repo, semantic_enabled=False)
     packets, _, _ = await service.recall_with_diagnostics("role", scope, "我养了几只猫，分别叫什么？")
     reference = compile_reference_context(packets, complete_evidence=True)[0]
     assert "麦芽" in reference and "芝麻" in reference
+    assert next(item for item in packets if item.memory_id == str(added["id"])).temporal_mode == "observation"
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("language", ["json", ""])
@@ -136,19 +146,20 @@ def test_partial_visibility_does_not_prove_never_saved_or_never_told(status):
     assert "不能" in prompt
 
 
-@pytest.mark.parametrize("value", ["养了一只名叫荔枝的猫", "养了两只猫：荔枝和乌梅"])
-def test_new_generic_paraphrase_keeps_full_source_without_summary_key(value):
+@pytest.mark.parametrize("value,literal", [("养了一只名叫荔枝的猫", "荔枝"), ("养了两只猫：荔枝和乌梅", ["荔枝", "乌梅"])])
+def test_generic_paraphrase_errors_and_explicit_literals_keep_full_source(value, literal):
     source = "我养了一只猫，名叫荔枝。现在又养了一只猫叫乌梅，两只猫都在。"
     candidate = dict(kind="other_user_fact", value=value, evidence=source,
                      confidence=.98, operation="ADD", attributed_to="user")
+    with pytest.raises(MemoryResponseError) as caught:
+        parse_llm_proposals(json.dumps({"memories": [candidate]}, ensure_ascii=False), source_message=source)
+    assert caught.value.field == "value"
+    # Explicit corrected protocol example, not a fresh model result or repair.
+    candidate["value"] = literal
     proposal, = parse_llm_proposals(json.dumps({"memories": [candidate]}, ensure_ascii=False), source_message=source)
-    assert proposal.source_observation
-    assert proposal.operation == "ADD"
-    assert proposal.evidence == source
-    assert proposal.memory.memory_key.startswith("fact_source_")
-    assert "荔枝" in proposal.memory.content
-    if "乌梅" in source:
-        assert "乌梅" in proposal.memory.content
+    assert proposal.fact_kind == "other_user_fact" and proposal.operation == "ADD"
+    assert proposal.evidence == source and proposal.memory.memory_key == "fact_" + (literal if isinstance(literal, str) else "".join(literal))
+    assert "荔枝" in proposal.memory.content and "乌梅" in proposal.memory.content
 
 
 @pytest.mark.asyncio
@@ -221,4 +232,4 @@ async def test_erase_latest_claim_removes_older_key_versions_and_preserves_other
 
 def test_unknown_model_qualifier_is_error_without_quote_recovery():
     with pytest.raises(ValueError, match="qualifiers"):
-        merge({"qualifiers": {"unknown": "x"}})
+        merge({"value": "芝麻", "content": "", "qualifiers": {"unknown": "x"}})

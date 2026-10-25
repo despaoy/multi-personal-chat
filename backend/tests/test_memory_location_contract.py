@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from character.memory_llm import parse_llm_proposals
+from character.memory_llm import MemoryResponseError, parse_llm_proposals
 from character.memory_query import plan_memory_query
 
 
@@ -20,7 +20,7 @@ def proposal(source, value, **changes):
     ("我住在青岛。", "青岛", "user_residence", "我的住址是什么？"),
 ])
 def test_explicit_locations_are_retrievable_by_their_actual_field(source, value, key, query):
-    parsed, = parse_llm_proposals(proposal(source, value), source_message=source)
+    parsed, = parse_llm_proposals(proposal(source, value, kind="origin" if key == "user_origin" else "residence"), source_message=source)
     assert parsed.memory.memory_key == key
     plan = plan_memory_query(query)
     assert plan.matched_fields({"memory_key": parsed.memory.memory_key})
@@ -33,11 +33,17 @@ def test_explicit_locations_are_retrievable_by_their_actual_field(source, value,
     ("user_residence", "我来自襄阳。", "襄阳", False),
 ])
 def test_location_update_respects_predicate_not_only_kind(target_key, source, value, accepted):
-    parsed = parse_llm_proposals(proposal(source, value, operation="SUPERSEDE", target_memory_id="7",
-                                         target_memory_key=target_key), source_message=source,
-                                existing_memories=({"id": "7", "memory_key": target_key,
-                                                    "content": "用户旧地理信息", "status": "active"},))
-    assert bool(parsed) is accepted
+    kind = "origin" if source == "我来自襄阳。" else "residence"
+    raw = proposal(source, value, kind=kind, operation="SUPERSEDE", target_memory_id="7", target_memory_key=target_key)
+    records = ({"id": "7", "memory_key": target_key, "content": "用户旧地理信息", "status": "active"},)
+    if accepted:
+        parsed = parse_llm_proposals(raw, source_message=source, existing_memories=records)
+        assert len(parsed) == 1 and parsed[0].memory.memory_key == target_key
+    else:
+        with pytest.raises(MemoryResponseError) as caught:
+            parse_llm_proposals(raw, source_message=source, existing_memories=records)
+        assert caught.value.field == "kind"
+
 
 
 def test_same_place_origin_and_residence_is_not_arbitrarily_assigned():
@@ -49,7 +55,7 @@ def test_same_place_origin_and_residence_is_not_arbitrarily_assigned():
 @pytest.mark.parametrize("value,key", [("延安", "user_origin"), ("北海", "user_residence")])
 def test_two_predicates_in_one_evidence_are_matched_by_exact_value(value, key):
     source = "我来自延安，我现在住在北海。"
-    parsed, = parse_llm_proposals(proposal(source, value), source_message=source)
+    parsed, = parse_llm_proposals(proposal(source, value, kind="origin" if key == "user_origin" else "residence"), source_message=source)
     assert parsed.memory.memory_key == key
 
 
@@ -71,16 +77,16 @@ async def test_semantic_write_sqlite_recall_and_closed_read_agree(tmp_path):
     from inference.memory_response import read_memory_fields, render_memory_response
     from repositories.character_memory import DatabaseCharacterMemoryRepository
 
-    statements = [("我来自赣州。", "赣州"), ("我现在住在宜昌。", "宜昌")]
+    statements = [("我来自赣州。", "赣州", "origin"), ("我现在住在宜昌。", "宜昌", "residence")]
 
     class Completion:
         def __init__(self):
             self.index = 0
 
         async def complete(self, messages):
-            source, value = statements[self.index]
+            source, value, kind = statements[self.index]
             self.index += 1
-            return proposal(source, value)
+            return proposal(source, value, kind=kind)
 
         async def close(self):
             pass
@@ -94,7 +100,7 @@ async def test_semantic_write_sqlite_recall_and_closed_read_agree(tmp_path):
     scheduler = MemoryEnrichmentScheduler(
         config=MemoryLlmConfig(enabled=True, base_url="http://unused", model="stub"),
         completion=Completion(), embedding_provider=Embedding())
-    for index, (source, _) in enumerate(statements):
+    for index, (source, _, _) in enumerate(statements):
         assert scheduler.schedule(repository=repo, character_id="role", user_scope=scope,
                                   message=source, rule_hints=[], source_message_id=f"source-{index}")
     await scheduler.shutdown(timeout=3)

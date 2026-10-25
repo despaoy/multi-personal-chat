@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from character.memory_llm import parse_llm_proposals
+from character.memory_llm import MemoryResponseError, parse_llm_proposals
 
 
 def candidate(value="物理学"):
@@ -21,7 +21,9 @@ def test_bare_candidate_array_matches_envelope(prefix, suffix):
 
 
 def test_bare_array_does_not_bypass_evidence_validation():
-    assert parse_llm_proposals(json.dumps([candidate("考古学")]), source_message="我的专业是物理学。") == []
+    with pytest.raises(MemoryResponseError) as caught:
+        parse_llm_proposals(json.dumps([candidate("考古学")]), source_message="我的专业是物理学。")
+    assert caught.value.field == "value"
 
 
 @pytest.mark.parametrize("raw", ["{}", '{"result": []}', '{"kind":"major"}',

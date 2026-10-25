@@ -18,7 +18,7 @@ def test_complete_self_relocation_in_a_clause_updates_residence(source, value):
     residence, = [item for item in items if item.memory_key == 'user_residence']
     assert residence.content == '用户说自己居住在' + value
     assert residence.evidence in source
-    raw = dict(attributed_to='user', kind='location', value=value, content='用户已经搬到' + value + '了', evidence=source,
+    raw = dict(attributed_to='user', kind='residence', value=value, content='用户已经搬到' + value + '了', evidence=source,
         confidence=.98, operation='SUPERSEDE', target_memory_id='7', target_memory_key='user_residence')
     proposals = parse_llm_proposals(json.dumps({'memories': [raw]}, ensure_ascii=False), source_message=source,
         existing_memories=({'id': 7, 'memory_key': 'user_residence', 'content': '用户说自己居住在原住处',

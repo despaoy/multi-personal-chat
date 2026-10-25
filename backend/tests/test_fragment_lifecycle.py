@@ -7,6 +7,7 @@ import pytest
 
 from character.erasure_authority import partial_erasure_plan
 from character.memory_llm import (
+    MemoryResponseError,
     MemoryEnrichmentScheduler,
     MemoryLlmConfig,
     _search_existing_memories,
@@ -217,7 +218,9 @@ def test_unknown_retained_object_keeps_literal_delete_selector_unresolved():
 def test_model_cannot_redirect_a_valid_id_using_its_truncated_key():
     raw = json.loads(response())
     raw["memories"][0]["target_memory_key"] = FIXTURE["erased_memory_key"][:60]
-    assert not parse_llm_proposals(json.dumps(raw), source_message=SOURCE, existing_memories=records())
+    with pytest.raises(MemoryResponseError) as caught:
+        parse_llm_proposals(json.dumps(raw), source_message=SOURCE, existing_memories=records())
+    assert caught.value.field == "target_memory_key"
 
 
 def test_nested_quoted_delete_instruction_is_not_current_authorization():

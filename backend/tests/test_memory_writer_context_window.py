@@ -12,7 +12,11 @@ def build(message, history=(), window=8192):
 
 def test_complete_long_message_uses_spare_context_instead_of_fixed_prefix_cap():
     message = '我的专业是档案学。' + '整理资料。' * 430 + '最后的限定也必须保留。'
-    messages = build(message)
+    from inference.context_budget import CONTEXT_SAFETY_MARGIN_TOKENS, estimated_tokens
+
+    complete = build_memory_llm_messages(message, (), (), (), len(message), .85)
+    required = sum(estimated_tokens(item['content']) + 4 for item in complete) + 768 + CONTEXT_SAFETY_MARGIN_TOKENS
+    messages = build(message, window=required + 128)
     assert json.loads(messages[1]['content'])['current_user_message'] == message
 
 
