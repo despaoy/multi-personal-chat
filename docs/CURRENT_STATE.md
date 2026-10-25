@@ -6,6 +6,8 @@
 
 近期已同步服务器、本地和 GitHub 的主要链路：
 
+- 别名及否定归属由模型明确声明，删除别名和location的自动类型/正文改写；282项相关检查和十组合成真实模型抽查通过，见[别名与位置类别](reports/backend-memory-predicate-owner-20261025.md)。
+
 - 普通通用事实不再由个人字段规则改写；已验证类别贯穿写入和读取，旧资料继续兼容查询，见[类别读写归属](reports/backend-memory-kind-owner-20261025.md)。
 
 - 三类记忆目标冲突明确报错，非法提议在整批事实写入前失败；合法更新和来源保留经168项相关检查，见[目标冲突与批次失败](reports/backend-memory-target-contract-20261025.md)。

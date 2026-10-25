@@ -29,13 +29,11 @@ import httpx
 from character.event_memory import EVENT_TZ
 from inference.history import review_history
 from inference.context_budget import InputBudgetError
-from character.identity_alias_evidence import explicit_alias_value, identity_alias_projection
 from character.memory_clock import observation_clock
 from character.memory_extractor import (
     MAX_EXTRACTED_MEMORIES,
     MAX_MEMORY_CONTENT_CHARS,
     ExtractedMemory,
-    extract_memories,
     fictional_memory_context,
     memory_evidence_allowed,
     memory_name_allowed,
@@ -67,6 +65,8 @@ logger = logging.getLogger(__name__)
 
 _ALLOWED_KINDS = {
     "name",
+    "alias",
+    "alias_exclusion",
     "like",
     "dislike",
     "major",
@@ -153,7 +153,7 @@ MERGE/SUPERSEDE/COEXIST/RETRACT/ERASE 必须从白名单逐字复制 target_memo
 
 对明确表达的本人未来计划，“说过这个计划”与“已经实施”是两个不同的命题。若计划的时间、地点、条件或尚未实施说明分散在长消息里，使用 kind=shared_event、operation=ADD 保存当前完整发言的原话观察，绝不确认行动发生。value 取当前连续原文中的短话题（不超过 payload.proposal_constraints.max_value_chars），evidence 只复制一段相关连续原文（不超过 max_evidence_chars），content 留空、qualifiers 使用空对象 {}，不要再次概括条件。后端保留整条当前消息及全部限定，包括末尾条件，不会用短引文代替完整来源。不要拼接开头和末尾当作连续 evidence。虚构材料、第三方计划不是用户本人的计划；未确定的外部事实仍按 PENDING 处理，不因这条规则变成事实。
 
-写入新内容的 ADD/MERGE/SUPERSEDE/COEXIST/PENDING 必须填写 payload.proposal_constraints.kinds 中的 kind 和非空 value，不能从 target 的存储类型猜 kind。value 只表示对象，不包含场景、必要条件或格式化标签；场景和条件分别写入 qualifiers。籍贯/家乡用 origin，长期现居用 residence；原话没有区分来处与现居时才用 location。 已列出的个人字段使用对应 kind，other_user_fact 仅用于未列出的个人事实；请直接给出正确 kind，不要依赖后端从通用类别补出个人字段。
+写入新内容的 ADD/MERGE/SUPERSEDE/COEXIST/PENDING 必须填写 payload.proposal_constraints.kinds 中的 kind 和非空 value，不能从 target 的存储类型猜 kind。value 只表示对象，不包含场景、必要条件或格式化标签；场景和条件分别写入 qualifiers。籍贯/家乡用 origin，长期现居用 residence；原话没有区分来处与现居时才用 location。 规范姓名用 name，常用别名或昵称用 alias；明确否认某个名称属于本人别名或拒绝被这样称呼用 alias_exclusion。两种别名类别的 value 只复制名称本身，朋友说明保留在 evidence 中，不能并入或改写为另一个索引。称呼只在特定场合、时间适用，或存在例外时，必须在 evidence 和 qualifiers 中完整保留，不能写成无条件事实。 已列出的个人字段使用对应 kind，other_user_fact 仅用于未列出的个人事实；请直接给出正确 kind，不要依赖后端从通用类别补出个人字段。
 
 value 有两个格式：本条 evidence 中逐字复制的连续短字符串，或模型给出的有序原文片段列表。需要组合分散对象片段时必须显式使用列表，例如 evidence 为“推荐饮料时避开含咖啡因的”，value 可以是 ["含咖啡因的","饮料"]。每片必须有证据，组合后不超过 max_value_chars；后端不猜片段、不改写对象。明确省略的用户上下文消歧遵守下段约定。
 
@@ -168,7 +168,7 @@ content 可以显式留空，由后端按 kind/value/qualifiers 构建显示；�
 明确且稳定的信息可直接 ADD；不确定陈述不要丢弃，应使用 PENDING。confidence 表示“是否准确读懂证据和关系”的把握，不是事实发生概率；因此用户清楚表达“可能/不确定”时，PENDING 的 confidence 仍应较高。低于 payload.confidence_threshold 时用 NOOP 或不返回。最多返回 4 条。
 
 只输出严格 JSON，不要 Markdown、解释或思考过程：
-{"memories":[{"kind":"name|like|dislike|major|study_stage|origin|residence|location|workplace|goal|promise|shared_event|other_user_fact","value":"连续短原文","content":"","evidence":{"source_units":["q编号"]},"confidence":0.0,"operation":"ADD|MERGE|SUPERSEDE|COEXIST|PENDING|RETRACT|NOOP|ERASE","target_memory_id":"","target_memory_key":"","attributed_to":"user","qualifiers":{},"valid_from":"","valid_to":"","scope_level":"conversation"}]}
+{"memories":[{"kind":"name|alias|alias_exclusion|like|dislike|major|study_stage|origin|residence|location|workplace|goal|promise|shared_event|other_user_fact","value":"连续短原文","content":"","evidence":{"source_units":["q编号"]},"confidence":0.0,"operation":"ADD|MERGE|SUPERSEDE|COEXIST|PENDING|RETRACT|NOOP|ERASE","target_memory_id":"","target_memory_key":"","attributed_to":"user","qualifiers":{},"valid_from":"","valid_to":"","scope_level":"conversation"}]}
 顶层只允许 memories 和本轮明确提供的 erase_source_ids，候选只能包含以上声明字段。
 没有合格记忆时输出 {"memories":[]}。"""
 
@@ -782,10 +782,11 @@ def _grounded_value(
 
 
 def _target_key_matches_kind(kind: str, target_memory_key: str) -> bool:
-    if kind == "location":
-        return target_memory_key in {"user_location", "user_origin", "user_residence"}
+    if kind == "alias":
+        return target_memory_key == "user_alias"
     expected_prefix = {
         "name": "user_name",
+        "alias_exclusion": "user_alias_exclusion_",
         "like": "preference_",
         "dislike": "preference_",
         "major": "user_major",
@@ -807,6 +808,10 @@ def _infer_kind_from_target(record: dict[str, Any]) -> str:
     content = str(record.get("content") or "")
     if key == "user_name":
         return "name"
+    if key == "user_alias":
+        return "alias"
+    if key.startswith("user_alias_exclusion_"):
+        return "alias_exclusion"
     if key.startswith("preference_"):
         return "dislike" if "不喜欢" in content else "like"
     if key == "user_major":
@@ -912,37 +917,15 @@ def _scope_level_for_message(raw: str, source_message: str, authorization: Memor
     raise MemoryResponseError("scope_level", "记忆 LLM 请求的记忆范围缺少用户授权")
 
 
-def _explicit_location_field(value: str, evidence: str) -> str:
-    """Resolve only an explicit source predicate, never a model's field label."""
-    place = re.escape(value)
-    boundary = r"(?=$|[，。！？,!?；;])"
-    origin = re.search(
-        rf"(?:我来自|(?:我(?:的)?)?(?:老家|故乡|家乡)(?:在|是)){place}{boundary}", evidence)
-    residence = re.search(
-        rf"(?:我(?:目前|现在)?|目前|现在)住在{place}{boundary}", evidence)
-    if bool(origin) == bool(residence):
-        return ""
-    return "user_origin" if origin else "user_residence"
-
-
 def _canonical_memory_fields(kind: str, value: str, evidence: str) -> tuple[str, str, str, float] | None:
-    if kind == "location":
-        # Reuse the same evidence interpretation as rule writes and field
-        # reads; never promote the ambiguous legacy location slot to both.
-        prefixes = {"user_origin": "用户说自己来自", "user_residence": "用户说自己居住在"}
-        matches = [item for item in extract_memories(evidence)
-                   if item.memory_key in prefixes and not item.qualifiers
-                   and item.content == prefixes[item.memory_key] + value]
-        if len(matches) == 1:
-            item = matches[0]
-            return item.memory_type, item.memory_key, item.content, item.importance
-        explicit_key = _explicit_location_field(value, evidence)
-        if not matches and explicit_key:
-            return "user_fact", explicit_key, prefixes[explicit_key] + value, 0.6
     if kind == "name":
         if not memory_name_allowed(value):
             return None
         return "user_fact", "user_name", f"用户说自己叫{value}", 0.9
+    if kind == "alias":
+        return "user_fact", "user_alias", f"用户明确说自己的常用别名是{value}", 0.7
+    if kind == "alias_exclusion":
+        return "user_fact", f"user_alias_exclusion_{value[:24]}", f"用户明确说{value}不是本人的别名", 0.6
     if kind in {"like", "dislike"}:
         return (
             "user_fact",
@@ -970,19 +953,6 @@ def _canonical_memory_fields(kind: str, value: str, evidence: str) -> tuple[str,
     if kind == "other_user_fact":
         return "user_fact", f"fact_{value[:24]}", f"用户明确提到：{evidence}", 0.6
     return None
-
-
-def _supported_generic_fact(value: str, evidence: str) -> tuple[str, ExtractedMemory] | None:
-    """Resolve one literal source field for evidence and target consistency."""
-    matches = []
-    for item in extract_memories(evidence):
-        if item.memory_type != "user_fact" or item.qualifiers:
-            continue
-        kind = _infer_kind_from_target({"memory_key": item.memory_key, "content": item.content})
-        canonical = _canonical_memory_fields(kind, value, evidence)
-        if canonical is not None and canonical[:3] == (item.memory_type, item.memory_key, item.content):
-            matches.append((kind, item))
-    return matches[0] if len(matches) == 1 else None
 
 
 def _proposal_value(raw: dict[str, Any]) -> tuple[str, tuple[str, ...]]:
@@ -1084,19 +1054,11 @@ def _candidate_to_proposal(
             raise MemoryResponseError("evidence", "无法确认当前原话的引文边界") from exc
         if not outside.strip(" ，,。！？!?；;：:\n\t"):
             return None
-    alias_projection = (identity_alias_projection(source=source_message, evidence=evidence, value=value)
-        if kind in {'name', 'other_user_fact'} and operation in {'ADD', 'MERGE', 'SUPERSEDE', 'COEXIST'} else None)
-    if kind == 'name' and explicit_alias_value(source_message, value) and alias_projection is None:
-        supported_name = _supported_generic_fact(value, evidence)
-        if supported_name is None or supported_name[0] != 'name':
-            return None
-    self_alias_exclusion = alias_projection is not None and alias_projection[1].startswith('user_alias_exclusion_')
-    if self_alias_exclusion:
-        value = alias_projection[1].removeprefix('user_alias_exclusion_')
+    self_alias_exclusion = kind == "alias_exclusion"
     if (not event_observation and not self_alias_exclusion
             and (_THIRD_PARTY_FACT_PATTERN.search(evidence) or _NAMED_THIRD_PARTY_PATTERN.search(evidence))):
         return None
-    if (kind in {'name', 'like', 'dislike', 'major', 'study_stage', 'origin', 'residence', 'location', 'workplace'}
+    if (kind in {'name', 'alias', 'alias_exclusion', 'like', 'dislike', 'major', 'study_stage', 'origin', 'residence', 'location', 'workplace'}
             and operation not in {'NOOP', 'RETRACT', 'ERASE'}
             and explicitly_other_subject(source=source_message, evidence=evidence, value=value)):
         return None
@@ -1136,8 +1098,6 @@ def _candidate_to_proposal(
     if not normalized_evidence or normalized_evidence not in normalized_source:
         return None
 
-    if alias_projection is not None and target_record is not None and target_memory_key != alias_projection[1]:
-        raise MemoryResponseError("target_memory_key", "记忆 LLM 别名只能更新同一别名字段，不能修改规范姓名或其他身份字段")
     if operation == "ERASE" and not is_memory_erasure_request(source_message):
         return None
     if operation == "RETRACT" and not _CORRECTION_PATTERN.search(source_message):
@@ -1173,7 +1133,6 @@ def _candidate_to_proposal(
     if (
         target_record is not None
         and operation not in {"RETRACT", "ERASE"}
-        and alias_projection is None
         and not _target_key_matches_kind(kind, target_memory_key)
     ):
         raise MemoryResponseError("kind", "记忆 LLM kind 与目标字段不匹配，不能将其他类别的事实写入该目标")
@@ -1199,17 +1158,12 @@ def _candidate_to_proposal(
         canonical_content = str(target_record.get("content") or f"用户撤回记忆：{target_memory_key}")
         importance = float(target_record.get("importance", 0.5))
     else:
-        canonical = alias_projection or _canonical_memory_fields(kind, value, evidence)
+        canonical = _canonical_memory_fields(kind, value, evidence)
         if canonical is None:
             return None
         memory_type, key, canonical_content, importance = canonical
-        if (kind == "location" and target_record is not None
-                and target_memory_key in {"user_origin", "user_residence"}
-                and key != target_memory_key):
-            raise MemoryResponseError("kind", "记忆 LLM location 的证据字段与目标不一致，来源地和居住地不能相互覆盖")
-
-    if alias_projection is not None:
-        proposed_content = ''  # Keep only the independently grounded alias predicate.
+        if kind == "alias_exclusion" and target_record is not None and key != target_memory_key:
+            raise MemoryResponseError("target_memory_key", "记忆 LLM 否定别名只能更新同一个名称的归属记录")
 
     if proposed_content and kind != "shared_event":
         if (

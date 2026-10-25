@@ -20,7 +20,7 @@ def parse(*, certainty=None, context=CONDITION):
             {
                 "memories": [
                     dict(
-                        kind="name",
+                        kind="alias",
                         value="澄羽",
                         evidence=QUOTE,
                         operation="ADD",

@@ -132,8 +132,8 @@ async def test_actual_worker_rejects_a_bad_target_before_any_fact_write(tmp_path
 @pytest.mark.parametrize("kind,value,source,right_key,wrong_key", [
     ("major", "考古学", "我的专业是考古学。", "user_major", "user_name"),
     ("like", "红茶", "我喜欢红茶。", "preference_咖啡", "user_major"),
-    ("location", "丽水", "我目前住在丽水。", "user_residence", "user_origin"),
-    ("location", "宣城", "我的老家在宣城。", "user_origin", "user_residence"),
+    ("residence", "丽水", "我目前住在丽水。", "user_residence", "user_origin"),
+    ("origin", "宣城", "我的老家在宣城。", "user_origin", "user_residence"),
 ])
 @pytest.mark.parametrize("wrong", [False, True])
 def test_target_predicate_must_match_the_declared_fact(kind, value, source, right_key, wrong_key, wrong):

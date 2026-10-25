@@ -15,13 +15,13 @@ AUTHORIZATION = MemoryScopeAuthorization(SOURCE, (("user_character", SCOPE_GRANT
 
 
 def parse(
-    evidence, *, value="芷露", kind="name", source=SOURCE, operation="ADD", target="", existing=(), qualifiers=None, scope_level="user_character", scope_authorization=None
+    evidence, *, value="芷露", kind="alias", source=SOURCE, operation="ADD", target="", existing=(), qualifiers=None, scope_level="conversation", scope_authorization=None, content=None
 ):
     raw = dict(
         kind=kind,
         value=value,
         evidence=evidence,
-        content="用户明确声明" + evidence,
+        content="用户明确声明" + evidence if content is None else content,
         operation=operation,
         target_memory_id="1" if target else "",
         target_memory_key=target,
@@ -39,18 +39,18 @@ def parse(
     )
 
 
-def test_alias_name_label_projects_separate_predicate_without_losing_negation():
-    (proposal,) = parse(POSITIVE, scope_authorization=AUTHORIZATION)
+def test_declared_alias_preserves_its_predicate_and_provided_body():
+    (proposal,) = parse(POSITIVE, scope_level="user_character", scope_authorization=AUTHORIZATION)
     assert proposal.memory.memory_key == "user_alias"
-    assert proposal.memory.content == "用户明确说自己的常用别名是芷露"
+    assert proposal.memory.content == "用户明确声明" + POSITIVE
     assert proposal.evidence == POSITIVE and not proposal.qualifiers
     assert proposal.scope_level == "user_character"
 
 
 def test_complete_self_alias_exclusion_keeps_named_friend_explanation():
-    (proposal,) = parse(NEGATIVE, value="小岚", kind="other_user_fact", scope_authorization=AUTHORIZATION)
+    (proposal,) = parse(NEGATIVE, value="小岚", kind="alias_exclusion", scope_authorization=AUTHORIZATION)
     assert proposal.memory.memory_key == "user_alias_exclusion_小岚"
-    assert proposal.memory.content == "用户明确说小岚不是本人的别名"
+    assert proposal.memory.content == "用户明确声明" + NEGATIVE
     assert proposal.evidence == NEGATIVE and not proposal.qualifiers
 
 
@@ -63,8 +63,44 @@ def test_complete_self_alias_exclusion_keeps_named_friend_explanation():
         ("我的常用别名是芷露", "朋友说“我的常用别名是芷露”。"),
     ],
 )
-def test_clipped_conditional_or_quoted_alias_cannot_become_primary_name(evidence, source):
-    assert not parse(evidence, source=source, qualifiers={})
+@pytest.mark.asyncio
+async def test_alias_reference_never_becomes_a_primary_fact_or_hides_complete_source(tmp_path, evidence, source):
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    from character.memory_llm import MemoryEnrichmentScheduler, MemoryLlmConfig
+    from character.memory_service import CharacterMemoryService
+    from character.models import UserScope
+    from db.database import SQLiteDB
+    from repositories.character_memory import DatabaseCharacterMemoryRepository
+
+    database = SQLiteDB(tmp_path / "alias-source.sqlite")
+    repository = DatabaseCharacterMemoryRepository(database)
+    scope = UserScope("test", "alias-source", "owner", "owner", "private")
+    raw = dict(kind="alias", value="芷露", evidence=evidence, content="用户明确声明" + evidence,
+               operation="ADD", confidence=.99, attributed_to="user")
+    completion = SimpleNamespace(complete=AsyncMock(return_value=json.dumps({"memories": [raw]}, ensure_ascii=False)), close=AsyncMock())
+    worker = MemoryEnrichmentScheduler(config=MemoryLlmConfig(True, "unused", "fixture"), completion=completion,
+        embedding_provider=SimpleNamespace(embed_texts=lambda texts: [[1., 0.] for _ in texts]))
+    try:
+        receipt = await worker.schedule_and_wait(repository=repository, character_id="role", user_scope=scope,
+            message=source, rule_hints=(), source_message_id="alias-source")
+        rows = await repository.list_memory_records("role", scope)
+        assert receipt["source_capture"] == "recorded"
+        assert (await repository.list_sources("role", scope))[0]["body"] == source
+        assert all(row["memory_key"] != "user_name" for row in rows)
+        if rows:
+            assert receipt["status"] == "saved" and len(rows) == 1
+            assert rows[0]["memory_key"] == "user_alias" and rows[0]["evidence"] == [evidence]
+            packets, _ = await CharacterMemoryService(repository, semantic_enabled=False).load_relevant_memories(
+                "role", scope, "芷露", for_contextual_selection=True)
+            packet, = packets
+            assert packet.temporal_mode == "observation" and source in packet.evidence
+            assert source in packet.content and packet.memory_key != "user_name"
+        else:
+            assert receipt["status"] == "no_change"
+    finally:
+        await worker.shutdown(timeout=1)
+        database.close_connection()
 
 
 def test_alias_cannot_supersede_primary_name_target():
@@ -73,7 +109,7 @@ def test_alias_cannot_supersede_primary_name_target():
     )
     with pytest.raises(MemoryResponseError) as caught:
         parse(POSITIVE, operation="SUPERSEDE", target="user_name", existing=(current,))
-    assert caught.value.field == "target_memory_key"
+    assert caught.value.field == "kind"
 
 
 def test_explicit_alias_update_can_only_target_its_own_predicate():
@@ -103,7 +139,7 @@ def test_positive_friend_name_is_not_a_negative_self_alias_predicate():
 def test_ordinary_self_primary_name_keeps_existing_slot():
     source = "我叫青岑。请记住，以后这个角色记住。"
     authorization = MemoryScopeAuthorization(source, (("user_character", "请记住，以后这个角色记住。"),))
-    (proposal,) = parse("我叫青岑。", value="青岑", source=source, qualifiers={}, scope_authorization=authorization)
+    (proposal,) = parse("我叫青岑。", value="青岑", kind="name", source=source, qualifiers={}, scope_authorization=authorization)
     assert proposal.memory.memory_key == "user_name"
 
 
@@ -162,7 +198,7 @@ async def test_normal_scheduler_storage_keeps_primary_and_alias_separate(tmp_pat
                 {
                     "memories": [
                         dict(
-                            kind="name",
+                            kind="alias",
                             value="芷露",
                             evidence=POSITIVE,
                             confidence=0.97,
@@ -206,16 +242,16 @@ async def test_normal_scheduler_storage_keeps_primary_and_alias_separate(tmp_pat
         await scheduler.shutdown(timeout=5)
 
 
-def test_exclusion_index_can_include_its_own_contiguous_friend_explanation():
+def test_explicit_exclusion_does_not_silently_shorten_model_index_or_replace_body():
     with pytest.raises(MemoryResponseError) as caught:
-        parse(NEGATIVE, value="小岚是朋友兰溪的别名", kind="other_user_fact",
+        parse(NEGATIVE, value="小岚是朋友兰溪的别名", kind="alias_exclusion",
               qualifiers={"certainty": "明确"}, scope_authorization=AUTHORIZATION)
     assert caught.value.field == "qualifiers"
     (proposal,) = parse(
-        NEGATIVE, value="小岚是朋友兰溪的别名", kind="other_user_fact", qualifiers={}, scope_authorization=AUTHORIZATION
+        NEGATIVE, value="小岚是朋友兰溪的别名", kind="alias_exclusion", qualifiers={}, scope_authorization=AUTHORIZATION
     )
-    assert proposal.memory.memory_key == "user_alias_exclusion_小岚"
-    assert proposal.memory.content == "用户明确说小岚不是本人的别名"
+    assert proposal.memory.memory_key == "user_alias_exclusion_小岚是朋友兰溪的别名"
+    assert proposal.memory.content == "用户明确声明" + NEGATIVE
     assert proposal.evidence == NEGATIVE
 
 
@@ -226,7 +262,10 @@ def test_unrelated_friend_index_cannot_supply_self_alias_ownership():
 @pytest.mark.parametrize('suffix', ['，不要这样叫我', ',别这么叫我', '，请不要再这样叫我'])
 def test_alias_denial_with_reinforcing_address_boundary_is_preserved(suffix):
     source = '小岚不是我的昵称' + suffix + '。'
-    proposal, = parse(source, value='不被称呼为小岚', kind='other_user_fact', source=source, qualifiers={}, scope_level='conversation')
+    with pytest.raises(MemoryResponseError) as caught:
+        parse(source, value='不被称呼为小岚', kind='alias_exclusion', source=source, qualifiers={}, scope_level='conversation')
+    assert caught.value.field == 'value'
+    proposal, = parse(source, value='小岚', kind='alias_exclusion', source=source, qualifiers={}, scope_level='conversation', content='')
     assert proposal.memory.memory_key == 'user_alias_exclusion_小岚'
     assert proposal.memory.content == '用户明确说小岚不是本人的别名'
     assert proposal.evidence == source
@@ -242,3 +281,26 @@ def test_conditional_or_quoted_denial_does_not_become_unconditional_alias_exclus
     proposals = parse(source, value='小岚', kind='other_user_fact', source=source, qualifiers={}, scope_level='conversation')
     assert all(not item.memory.memory_key.startswith('user_alias_exclusion_') for item in proposals)
     assert all(source in item.memory.content and item.evidence == source for item in proposals)
+
+
+def test_alias_cannot_expand_scope_without_authorization():
+    with pytest.raises(MemoryResponseError) as caught:
+        parse(POSITIVE, scope_level="user_character")
+    assert caught.value.field == "scope_level"
+
+
+@pytest.mark.parametrize("target_name", ["小岚", "若翎"])
+def test_exclusion_update_preserves_the_target_name(target_name):
+    target = dict(id="1", memory_type="user_fact", memory_key="user_alias_exclusion_" + target_name,
+                  content="用户明确说" + target_name + "不是本人的别名", status="active")
+    if target_name != "小岚":
+        with pytest.raises(MemoryResponseError) as caught:
+            parse(NEGATIVE, value="小岚", kind="alias_exclusion", operation="SUPERSEDE",
+                  target=target["memory_key"], existing=(target,))
+        assert caught.value.field == "target_memory_key"
+    else:
+        proposal, = parse(NEGATIVE, value="小岚", kind="alias_exclusion", operation="SUPERSEDE",
+                          target=target["memory_key"], existing=(target,))
+        assert proposal.operation == "SUPERSEDE" and proposal.target_memory_id == "1"
+        assert proposal.memory.memory_key == proposal.target_memory_key == target["memory_key"]
+        assert proposal.evidence == NEGATIVE

@@ -39,8 +39,10 @@ def test_location_label_is_redundant_only_when_evidence_proves_field(source, evi
         ("我目前住在丽水。", "丽水", "user_residence"),
     ],
 )
-def test_field_does_not_depend_on_model_metadata(source, value, key):
-    (proposal,) = parse(source, value)
+def test_field_uses_declared_kind_without_location_reclassification(source, value, key):
+    (ambiguous,) = parse(source, value)
+    assert ambiguous.memory.memory_key == "user_location" and ambiguous.fact_kind == "location"
+    (proposal,) = parse(source, value, kind="origin" if key == "user_origin" else "residence")
     assert proposal.memory.memory_key == key
 
 
@@ -115,6 +117,7 @@ def test_frozen_real_deepseek_output_preserves_complete_structured_facts(case_id
         corrected["memories"][1].update(kind="origin", qualifiers={})
         corrected["memories"][2].update(kind="residence", qualifiers={})
     else:
+        corrected["memories"][0]["kind"] = "residence"
         corrected["memories"][1]["qualifiers"] = {"certainty": "计划"}
     # This is an explicitly corrected protocol example, not a new model result.
     proposals = parse_llm_proposals(json.dumps(corrected, ensure_ascii=False),
