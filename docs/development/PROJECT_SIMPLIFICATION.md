@@ -99,9 +99,10 @@ Unused `shadcn` and `only-allow` development dependencies were removed, preservi
 component source and documented on-demand generation. Compatible Next.js, sharp
 and js-yaml updates address the checked dependency advisories.
 
-No test files were deleted: exact-file and normalized-body checks found no safe
-redundant-test deletion. Formatting in the 34-file CI retrieval scope was verified
-AST-identical. Separate subsystem audit notes were consolidated into this document.
+The initial pass retained all test files. A subsequent input-aware review found
+limited exact duplication and fragmented guard contracts; the changes below
+supersede that initial assessment. Formatting in the 34-file CI retrieval scope
+was verified AST-identical. Separate subsystem audit notes were consolidated here.
 
 ## Test integrity and reproducibility
 
@@ -141,3 +142,34 @@ index rebuilding is not a production promotion or proof of chat-answer quality.
 No paid provider validation or production deployment was performed. Browser smoke
 still requires a functioning browser sandbox; successful HTTP smoke is not a
 browser test. GitHub-hosted workflow execution must be verified after publication.
+
+
+## Follow-up: test value and shared evaluation probes
+
+This pass starts from PR commit `2e0a212` rather than assuming that earlier
+completion notes prove every part of the repository is already minimal.
+
+- Removed four redundant executed cases: one identical task-dependency input,
+  one enum-membership assertion already implied by the exact enum list, and two
+  erasure-selection input/assertion pairs repeated in the same module. Retained
+  the invalid-type, foreign-source, and unauthorized-source security boundaries.
+- Consolidated `test_nominal_preference_guard.py`,
+  `test_preference_assertion_boundary.py`, `test_polar_question_guard.py`, and
+  `test_advisory_preference_guard.py` into `test_user_fact_guard.py` plus
+  `test_reply_guard_replay.py`. All 90 executed cases and distinct linguistic
+  boundaries remain. The shared generation harness retains all five original
+  message/reply pairs and their assertions. Old files are recoverable at the
+  starting commit; their deletion is relocation, not loss of coverage.
+- The two 455-line document-import evaluation probes differed only in seed-call
+  expectation and session identity. They now use `document_import_probe.py`,
+  retaining both documented module entrypoints and their distinct defaults.
+  Normalized AST comparison confirms that the shared runner preserves each
+  original body. Four new contract cases protect stage binding, CLI behavior,
+  and invalid-phase rejection before creating output.
+
+A broad static scan did not justify mass deletion: identical assertion bodies
+often cover different semantic inputs. Test count is not a quality target.
+Baseline collection contained 10,901 executed cases; four duplicate removals
+and four new probe contracts leave that total unchanged. Collection equivalence
+is not a claim of runtime success; aggregate test results are recorded separately.
+The live provider/PostgreSQL evaluator scenarios themselves remain unexecuted.

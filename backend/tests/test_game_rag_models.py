@@ -67,9 +67,6 @@ class TestEnums:
         with pytest.raises(ValueError):
             RouteType("flashback")
 
-    def test_route_type_members_have_no_flashback(self):
-        assert "flashback" not in {member.value for member in RouteType}
-
 
 class TestStoryContext:
     def test_route_and_continuity_can_be_none(self, story):

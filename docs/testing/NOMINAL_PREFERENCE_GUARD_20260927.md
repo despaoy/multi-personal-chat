@@ -10,7 +10,7 @@ r111 中“现在口味变了，我不吃香菜了”得到的原始回答包含
 
 ## 验证
 
-- 新增 `test_nominal_preference_guard.py`：无具体值的名词提及、多分句夹带事实、明确偏好值、既有历史披露边界，以及共享生成管线不再错误触发 no_match 回退。
+- 当时新增 `test_nominal_preference_guard.py`（现整合于 `backend/tests/test_user_fact_guard.py`）：无具体值的名词提及、多分句夹带事实、明确偏好值、既有历史披露边界，以及共享生成管线不再错误触发 no_match 回退。
 - 聚焦169项通过；广回归489项通过、3项跳过、3403项未选中、4个既有警告，`.tmp/mechanism-r115-regression.xml`。聚焦与广回归重叠，不相加。3项是缺少本地asyncpg导致的PostgreSQL历史契约测试，不代表PG验证通过。
 - 复用真实首轮模型输出重放，59条trace中55条可重放；其余4条没有可重放模型调用。只有上述名词误判一项结果变化，其他54条guard结果保持。证据 `.tmp/mechanism-r115-guard-replay.jsonl`，0新模型调用。
 - 重放检查的是同一模型输出的拦截行为，不等于55项回答质量通过，也不证明新的生成始终会输出同一句。

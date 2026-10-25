@@ -111,7 +111,7 @@ def test_desired_information_is_not_mislabeled_as_self_report(message):
 
 
 @pytest.mark.parametrize('message', [
-    '我问你月社妃和琉璃的关系。', '我给你个任务：说说数据库索引的作用。',
+    '我给你个任务：说说数据库索引的作用。',
     '今天请谈谈量子纠缠。', '我对量子力学的原理很好奇。',
     '我等你讲讲这段历史。', '现在麻烦推荐几本书。',
     '我喜欢历史并请推荐一些入门书。', '我喜欢烘焙也麻烦你推荐几本书。',
