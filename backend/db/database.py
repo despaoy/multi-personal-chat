@@ -12,6 +12,8 @@ from cache.ttl_value_cache import BoundedTTLCache
 from db import memory_source
 from db.conversation_indexes import SOURCE_INDEX_STATEMENTS
 from db.errors import RegistrationClosedError
+from db.lora_metadata import read_lora_metadata
+from db.training_tasks import training_config_json, training_config_update, training_task_record
 from db.memory_claim_guard import (
     MEMORY_RELATION_TYPES as _MEMORY_RELATION_TYPES,
     MEMORY_SCOPE_LEVELS as _MEMORY_SCOPE_LEVELS,
@@ -232,24 +234,9 @@ class SQLiteDB:
             )
         ''')
 
-        # 迁移：为旧表添加 category 字段（如果不存在）
-        try:
-            cursor.execute("SELECT category FROM knowledge_documents LIMIT 1")
-        except sqlite3.OperationalError:
-            cursor.execute("ALTER TABLE knowledge_documents ADD COLUMN category TEXT NOT NULL DEFAULT '未分类'")
-            logger.info("已为 knowledge_documents 表添加 category 字段")
-
-        # 迁移：为旧表添加 knowledge_base_id 和 folder_id 字段
-        try:
-            cursor.execute("SELECT knowledge_base_id FROM knowledge_documents LIMIT 1")
-        except sqlite3.OperationalError:
-            cursor.execute("ALTER TABLE knowledge_documents ADD COLUMN knowledge_base_id INTEGER REFERENCES knowledge_bases(id) ON DELETE SET NULL")
-            logger.info("已为 knowledge_documents 表添加 knowledge_base_id 字段")
-        try:
-            cursor.execute("SELECT folder_id FROM knowledge_documents LIMIT 1")
-        except sqlite3.OperationalError:
-            cursor.execute("ALTER TABLE knowledge_documents ADD COLUMN folder_id INTEGER REFERENCES knowledge_folders(id) ON DELETE SET NULL")
-            logger.info("已为 knowledge_documents 表添加 folder_id 字段")
+        self._ensure_column(cursor, "knowledge_documents", "category", "TEXT NOT NULL DEFAULT '未分类'")
+        self._ensure_column(cursor, "knowledge_documents", "knowledge_base_id", "INTEGER REFERENCES knowledge_bases(id) ON DELETE SET NULL")
+        self._ensure_column(cursor, "knowledge_documents", "folder_id", "INTEGER REFERENCES knowledge_folders(id) ON DELETE SET NULL")
 
         # 创建知识库向量表（用于RAG）
         cursor.execute('''
@@ -280,58 +267,51 @@ class SQLiteDB:
         #
         # 异常处理：用 SAVEPOINT 包裹表重建，失败时回滚到保存点，避免留下
         # 新空表和 knowledge_chunks_old 残留导致旧数据不可见。
-        try:
-            cursor.execute("PRAGMA table_info(knowledge_chunks)")
-            columns = cursor.fetchall()
-            # columns: (cid, name, type, notnull, dflt_value, pk)
-            embedding_decl_type = ""
-            for col in columns:
-                if col[1] == "embedding":
-                    embedding_decl_type = (col[2] or "").upper()
-                    break
+        cursor.execute("PRAGMA table_info(knowledge_chunks)")
+        columns = cursor.fetchall()
+        # columns: (cid, name, type, notnull, dflt_value, pk)
+        embedding_decl_type = ""
+        for col in columns:
+            if col[1] == "embedding":
+                embedding_decl_type = (col[2] or "").upper()
+                break
 
-            needs_migration = embedding_decl_type in ("", "BLOB")
-            if needs_migration:
-                cursor.execute("SAVEPOINT embed_migration")
-                try:
-                    cursor.execute("ALTER TABLE knowledge_chunks RENAME TO knowledge_chunks_old")
-                    cursor.execute('''
-                        CREATE TABLE knowledge_chunks (
-                            id INTEGER PRIMARY KEY AUTOINCREMENT,
-                            documentId INTEGER NOT NULL,
-                            chunkIndex INTEGER NOT NULL,
-                            content TEXT NOT NULL,
-                            embedding INTEGER,
-                            createdAt TEXT NOT NULL,
-                            FOREIGN KEY (documentId) REFERENCES knowledge_documents(id) ON DELETE CASCADE
-                        )
-                    ''')
-                    # 行级判断：仅保留 typeof()='integer' 的值，BLOB/NULL 置 NULL。
-                    # 这避免了"把向量字节流当作 FAISS ID 复制"的数据损坏，
-                    # 同时不丢失已经正确存储为整数的有效 FAISS ID。
-                    cursor.execute('''
-                        INSERT INTO knowledge_chunks (id, documentId, chunkIndex, content, embedding, createdAt)
-                        SELECT id, documentId, chunkIndex, content,
-                               CASE WHEN typeof(embedding) = 'integer' THEN embedding ELSE NULL END,
-                               createdAt
-                        FROM knowledge_chunks_old
-                    ''')
-                    cursor.execute("DROP TABLE knowledge_chunks_old")
-                    cursor.execute("RELEASE SAVEPOINT embed_migration")
-                    logger.info(
-                        "已将 knowledge_chunks.embedding 从 %s 重建为 INTEGER（保留有效整数，BLOB/NULL 置 NULL）",
-                        embedding_decl_type or "未声明",
+        needs_migration = embedding_decl_type in ("", "BLOB")
+        if needs_migration:
+            cursor.execute("SAVEPOINT embed_migration")
+            try:
+                cursor.execute("ALTER TABLE knowledge_chunks RENAME TO knowledge_chunks_old")
+                cursor.execute('''
+                    CREATE TABLE knowledge_chunks (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        documentId INTEGER NOT NULL,
+                        chunkIndex INTEGER NOT NULL,
+                        content TEXT NOT NULL,
+                        embedding INTEGER,
+                        createdAt TEXT NOT NULL,
+                        FOREIGN KEY (documentId) REFERENCES knowledge_documents(id) ON DELETE CASCADE
                     )
-                except Exception as migrate_exc:
-                    cursor.execute("ROLLBACK TO SAVEPOINT embed_migration")
-                    cursor.execute("RELEASE SAVEPOINT embed_migration")
-                    logger.error(
-                        "knowledge_chunks.embedding 迁移失败，已回滚到保存点: %s",
-                        migrate_exc,
-                        exc_info=True,
-                    )
-        except sqlite3.OperationalError:
-            pass  # 表不存在（新库），_init_database 会创建
+                ''')
+                # 行级判断：仅保留 typeof()='integer' 的值，BLOB/NULL 置 NULL。
+                # 这避免了"把向量字节流当作 FAISS ID 复制"的数据损坏，
+                # 同时不丢失已经正确存储为整数的有效 FAISS ID。
+                cursor.execute('''
+                    INSERT INTO knowledge_chunks (id, documentId, chunkIndex, content, embedding, createdAt)
+                    SELECT id, documentId, chunkIndex, content,
+                           CASE WHEN typeof(embedding) = 'integer' THEN embedding ELSE NULL END,
+                           createdAt
+                    FROM knowledge_chunks_old
+                ''')
+                cursor.execute("DROP TABLE knowledge_chunks_old")
+                cursor.execute("RELEASE SAVEPOINT embed_migration")
+                logger.info(
+                    "已将 knowledge_chunks.embedding 从 %s 重建为 INTEGER（保留有效整数，BLOB/NULL 置 NULL）",
+                    embedding_decl_type or "未声明",
+                )
+            except BaseException:
+                cursor.execute("ROLLBACK TO SAVEPOINT embed_migration")
+                cursor.execute("RELEASE SAVEPOINT embed_migration")
+                raise
 
         # 创建用户表
         cursor.execute('''
@@ -405,52 +385,19 @@ class SQLiteDB:
                 updated_at TEXT DEFAULT ''
             )
         ''')
-        # 老库迁移：如果 training_tasks 表缺少 id 列（旧 schema 用 task_id 作 PK），补齐
-        # 此前仅 ADD COLUMN id TEXT，但旧表的主键仍是 task_id，id 列既非主键也非非空，
-        # 导致与 ORM/Alembic 的 schema 不一致。现通过表重建将 id 设为主键。
-        try:
-            cursor.execute("SELECT id FROM training_tasks LIMIT 1")
-            # 检查 id 列是否为主键（通过 PRAGMA table_info）
-            cursor.execute("PRAGMA table_info(training_tasks)")
-            cols = {row[1]: row for row in cursor.fetchall()}
-            id_col = cols.get("id")
-            task_id_col = cols.get("task_id")
-            # 旧库情况：task_id 为主键 (pk=1)，id 为普通列 (pk=0)
-            # 新库情况：id 为主键 (pk=1)，task_id 为 UNIQUE 列 (pk=0)
-            if task_id_col and task_id_col[5] == 1 and id_col and id_col[5] == 0:
-                # 重建表，将 id 设为主键，task_id 改为 UNIQUE
-                cursor.execute("ALTER TABLE training_tasks RENAME TO training_tasks_old")
-                cursor.execute('''
-                    CREATE TABLE training_tasks (
-                        id TEXT PRIMARY KEY,
-                        task_id TEXT UNIQUE,
-                        lora_name TEXT NOT NULL,
-                        status TEXT NOT NULL DEFAULT 'pending',
-                        progress REAL DEFAULT 0,
-                        error_message TEXT DEFAULT '',
-                        config_json TEXT DEFAULT '{}',
-                        created_at TEXT DEFAULT '',
-                        updated_at TEXT DEFAULT ''
-                    )
-                ''')
-                cursor.execute('''
-                    INSERT INTO training_tasks (id, task_id, lora_name, status, progress, error_message, config_json, created_at, updated_at)
-                    SELECT id, task_id, lora_name, status, progress, error_message, config_json, created_at, updated_at
-                    FROM training_tasks_old
-                ''')
-                cursor.execute("DROP TABLE training_tasks_old")
-                logger.info("已将 training_tasks.id 重建为主键（旧库 task_id 主键 → 新库 id 主键）")
-        except sqlite3.OperationalError:
-            # 旧表完全无 id 列，先添加 id 列并从 task_id 回填，再走主键重建路径
+        # Legacy tables used task_id as the primary key, sometimes with an
+        # additional non-primary id column. Inspect once, then migrate atomically.
+        columns = {row[1]: row for row in cursor.execute("PRAGMA table_info(training_tasks)")}
+        if columns["task_id"][5] == 1 and ("id" not in columns or columns["id"][5] == 0):
+            source_id = "id" if "id" in columns else "task_id"
+            cursor.execute("SAVEPOINT training_task_migration")
             try:
-                cursor.execute("SELECT task_id FROM training_tasks LIMIT 1")
-                # 旧表存在但无 id 列
                 cursor.execute("ALTER TABLE training_tasks RENAME TO training_tasks_old")
-                cursor.execute('''
+                cursor.execute("""
                     CREATE TABLE training_tasks (
                         id TEXT PRIMARY KEY,
                         task_id TEXT UNIQUE,
-                        lora_name TEXT NOT NULL,
+                        lora_name TEXT NOT NULL DEFAULT '',
                         status TEXT NOT NULL DEFAULT 'pending',
                         progress REAL DEFAULT 0,
                         error_message TEXT DEFAULT '',
@@ -458,16 +405,18 @@ class SQLiteDB:
                         created_at TEXT DEFAULT '',
                         updated_at TEXT DEFAULT ''
                     )
-                ''')
-                cursor.execute('''
+                """)
+                cursor.execute(f"""
                     INSERT INTO training_tasks (id, task_id, lora_name, status, progress, error_message, config_json, created_at, updated_at)
-                    SELECT task_id, task_id, lora_name, status, progress, error_message, config_json, created_at, updated_at
+                    SELECT {source_id}, task_id, lora_name, status, progress, error_message, config_json, created_at, updated_at
                     FROM training_tasks_old
-                ''')
+                """)
                 cursor.execute("DROP TABLE training_tasks_old")
-                logger.info("已重建 training_tasks 表（task_id 主键 → id 主键，并从 task_id 回填 id）")
-            except sqlite3.OperationalError:
-                pass  # 新库，表已正确创建
+                cursor.execute("RELEASE SAVEPOINT training_task_migration")
+            except BaseException:
+                cursor.execute("ROLLBACK TO SAVEPOINT training_task_migration")
+                cursor.execute("RELEASE SAVEPOINT training_task_migration")
+                raise
 
         # 创建 Claw 自定义工具表
         cursor.execute('''
@@ -761,6 +710,7 @@ class SQLiteDB:
         self._ensure_column(cursor, "messages", "characterId", "TEXT")
         # One-way compatibility migration: legacy session_settings is folded into
         # conversations and then removed. Fresh databases never create this table.
+        cursor.execute("SAVEPOINT session_settings_migration")
         try:
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='session_settings'")
             if cursor.fetchone():
@@ -826,8 +776,11 @@ class SQLiteDB:
                 ''')
                 cursor.execute("DROP TABLE session_settings")
                 logger.info("已迁移并删除旧的 session_settings 表")
-        except sqlite3.OperationalError:
-            pass
+        except BaseException:
+            cursor.execute("ROLLBACK TO SAVEPOINT session_settings_migration")
+            cursor.execute("RELEASE SAVEPOINT session_settings_migration")
+            raise
+        cursor.execute("RELEASE SAVEPOINT session_settings_migration")
 
         conn.commit()
 
@@ -839,44 +792,41 @@ class SQLiteDB:
         cursor.execute('PRAGMA temp_store=MEMORY')
 
         # 为高频查询建索引
-        try:
-            # 删除旧命名和与 UNIQUE 约束重复的索引，避免重复维护。
-            cursor.execute('DROP INDEX IF EXISTS idx_messages_sessionId_createdAt')
-            cursor.execute('DROP INDEX IF EXISTS idx_messages_createdAt')
-            cursor.execute('DROP INDEX IF EXISTS idx_conversations_platform_conversation')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_messages_session_created ON messages(sessionId, createdAt)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_messages_platform_conversation ON messages(platform, conversationId, createdAt)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_messages_source_dedup ON messages(platform, adapter, sourceMessageId)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(createdAt)')
-            # UNIQUE(platform, conversationId, conversationType) 已自动创建索引。
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_integration_events_trace ON integration_events(traceId)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_integration_events_platform_created ON integration_events(platform, createdAt)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_model_invocations_trace ON model_invocations(traceId)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_model_invocations_created ON model_invocations(createdAt)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_experiment_runs_type ON experiment_runs(experiment_type)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_preference_pairs_status ON preference_pairs(review_status)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_feedback_created ON feedback(created_at)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_adapter_compat_name ON adapter_compatibility(adapter_name)')
-            # 补充此前缺失的高频外键/过滤列索引
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_documentId ON knowledge_chunks(documentId)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_knowledge_documents_kb_id ON knowledge_documents(knowledge_base_id)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_knowledge_documents_folder_id ON knowledge_documents(folder_id)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_training_tasks_lora_name ON training_tasks(lora_name)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_training_tasks_status ON training_tasks(status)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_intent_samples_kbName ON intent_samples(kbName)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_feedback_trace_id ON feedback(trace_id)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_feedback_message_id ON feedback(message_id)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_character_memories_scope ON character_memories(character_id, platform, adapter, sender_id, conversation_type, conversation_id)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_character_memories_active_lookup ON character_memories(platform, adapter, sender_id, scope_level, status, updated_at)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_character_memories_parent ON character_memories(parent_memory_id)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_character_memories_supersedes ON character_memories(supersedes_memory_id)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_narrative_branches_owner ON narrative_branches(owner_user_id, status, updated_at)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_narrative_branches_character ON narrative_branches(character_id)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_branch_assertions_branch_status ON branch_assertions(branch_id, status, updated_at)')
-            cursor.execute('CREATE INDEX IF NOT EXISTS idx_messages_branch ON messages(branchId, createdAt)')
-        except Exception:
-            pass  # 索引已存在或 SQLite 版本不支，不影响功能
+        # 删除旧命名和与 UNIQUE 约束重复的索引，避免重复维护。
+        cursor.execute('DROP INDEX IF EXISTS idx_messages_sessionId_createdAt')
+        cursor.execute('DROP INDEX IF EXISTS idx_messages_createdAt')
+        cursor.execute('DROP INDEX IF EXISTS idx_conversations_platform_conversation')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_messages_session_created ON messages(sessionId, createdAt)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_messages_platform_conversation ON messages(platform, conversationId, createdAt)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_messages_source_dedup ON messages(platform, adapter, sourceMessageId)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(createdAt)')
+        # UNIQUE(platform, conversationId, conversationType) 已自动创建索引。
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_integration_events_trace ON integration_events(traceId)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_integration_events_platform_created ON integration_events(platform, createdAt)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_model_invocations_trace ON model_invocations(traceId)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_model_invocations_created ON model_invocations(createdAt)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_experiment_runs_type ON experiment_runs(experiment_type)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_preference_pairs_status ON preference_pairs(review_status)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_feedback_created ON feedback(created_at)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_adapter_compat_name ON adapter_compatibility(adapter_name)')
+        # 补充此前缺失的高频外键/过滤列索引
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_documentId ON knowledge_chunks(documentId)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_knowledge_documents_kb_id ON knowledge_documents(knowledge_base_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_knowledge_documents_folder_id ON knowledge_documents(folder_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_training_tasks_lora_name ON training_tasks(lora_name)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_training_tasks_status ON training_tasks(status)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_intent_samples_kbName ON intent_samples(kbName)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_feedback_trace_id ON feedback(trace_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_feedback_message_id ON feedback(message_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_character_memories_scope ON character_memories(character_id, platform, adapter, sender_id, conversation_type, conversation_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_character_memories_active_lookup ON character_memories(platform, adapter, sender_id, scope_level, status, updated_at)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_character_memories_parent ON character_memories(parent_memory_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_character_memories_supersedes ON character_memories(supersedes_memory_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_narrative_branches_owner ON narrative_branches(owner_user_id, status, updated_at)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_narrative_branches_character ON narrative_branches(character_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_branch_assertions_branch_status ON branch_assertions(branch_id, status, updated_at)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_messages_branch ON messages(branchId, createdAt)')
 
         # Do not silently leave source reads without their scope-first indexes.
         for statement in SOURCE_INDEX_STATEMENTS:
@@ -1040,7 +990,7 @@ class SQLiteDB:
                     continue
 
                 # 读取元信息
-                meta = self._read_lora_metadata(adapter_path)
+                meta = read_lora_metadata(adapter_path)
 
                 # 计算 adapter_model 大小
                 adapter_file = adapter_path / "adapter_model.safetensors"
@@ -1063,7 +1013,7 @@ class SQLiteDB:
                 description = base_desc + rank_info
 
                 trained_steps = meta["trained_steps"]
-                total_steps = meta["total_steps"] if meta["total_steps"] > 0 else trained_steps
+                total_steps = meta["total_steps"]
 
                 default_loras.append({
                     "id": str(idx),
@@ -1111,55 +1061,6 @@ class SQLiteDB:
                 cursor.execute('DELETE FROM loras WHERE id = ?', (row[0],))
                 logger.info(f"清理无效 LoRA 记录: {name} (无对应文件)")
 
-    def _read_lora_metadata(self, adapter_path: Path) -> dict:
-        """从 adapter_config.json 和 trainer_state.json 读取 LoRA 元信息"""
-        import json as _json
-        meta = {"rank": 0, "alpha": 0, "trained_steps": 0, "total_steps": 0, "train_completed": False}
-
-        config_path = adapter_path / "adapter_config.json"
-        if config_path.exists():
-            try:
-                with open(config_path, 'r', encoding='utf-8') as f:
-                    cfg = _json.load(f)
-                meta["rank"] = cfg.get("r", 0)
-                meta["alpha"] = cfg.get("lora_alpha", 0)
-            except Exception:
-                pass
-
-        # 尝试读取训练状态
-        state_path = adapter_path / "trainer_state.json"
-        if not state_path.exists() and adapter_path.name == "final":
-            # 查找 checkpoint 目录中的 trainer_state.json
-            try:
-                checkpoint_dirs = [d for d in adapter_path.parent.iterdir()
-                                   if d.is_dir() and d.name.startswith("checkpoint-")]
-                if checkpoint_dirs:
-                    max_ckpt = max(checkpoint_dirs, key=lambda d: int(d.name.split("-")[-1]))
-                    candidate = max_ckpt / "trainer_state.json"
-                    if candidate.exists():
-                        state_path = candidate
-            except Exception:
-                pass
-
-        if state_path and state_path.exists():
-            try:
-                with open(state_path, 'r', encoding='utf-8') as f:
-                    state = _json.load(f)
-                meta["trained_steps"] = state.get("global_step", 0)
-                meta["total_steps"] = state.get("max_steps", 0)
-                meta["train_completed"] = state.get("best_metric") is not None or meta["trained_steps"] > 0
-            except Exception:
-                pass
-
-        # 如果没有 trainer_state，但有 adapter_model，说明训练已完成
-        adapter_file = adapter_path / "adapter_model.safetensors"
-        if adapter_file.exists() and meta["trained_steps"] == 0:
-            meta["train_completed"] = True
-            meta["trained_steps"] = 1
-            meta["total_steps"] = 1
-
-        return meta
-
     def _sync_loras_from_disk(self, cursor):
         """同步：扫描 loras/ 目录，注册新增 LoRA 并更新已有记录的元信息"""
         lora_base = LORA_ROOT
@@ -1190,7 +1091,7 @@ class SQLiteDB:
                 continue
 
             # 读取元信息
-            meta = self._read_lora_metadata(adapter_path)
+            meta = read_lora_metadata(adapter_path)
 
             # 计算 adapter 大小
             adapter_file = adapter_path / "adapter_model.safetensors"
@@ -1209,7 +1110,7 @@ class SQLiteDB:
             description = base_desc + rank_info
 
             trained_steps = meta["trained_steps"]
-            total_steps = meta["total_steps"] if meta["total_steps"] > 0 else trained_steps
+            total_steps = meta["total_steps"]
 
             if d.name in existing_loras:
                 # 更新已有记录的元信息
@@ -3682,7 +3583,6 @@ class SQLiteDB:
             raise ValueError("task_id 不能为空")
         conn = self._get_connection()
         cursor = conn.cursor()
-        import json
         cursor.execute('''
             INSERT OR REPLACE INTO training_tasks (id, task_id, lora_name, status, progress,
             error_message, config_json, created_at, updated_at)
@@ -3694,7 +3594,7 @@ class SQLiteDB:
             task_data.get('status', 'pending'),
             task_data.get('progress', 0),
             task_data.get('error_message', ''),
-            json.dumps(task_data.get('config', {}), ensure_ascii=False),
+            training_config_json(task_data.get('config', {})),
             task_data.get('created_at', ''),
             task_data.get('updated_at', '')
         ))
@@ -3711,55 +3611,14 @@ class SQLiteDB:
         cursor = conn.cursor()
         cursor.execute('SELECT * FROM training_tasks WHERE task_id = ?', (task_id,))
         row = cursor.fetchone()
-        if row:
-            import json
-            columns = [desc[0] for desc in cursor.description]
-            raw = dict(zip(columns, row))
-            try:
-                config = json.loads(raw.get('config_json', '{}') or '{}')
-            except (TypeError, json.JSONDecodeError):
-                config = {}
-            return {
-                "task_id": raw.get("task_id"),
-                "lora_name": raw.get("lora_name", ""),
-                "status": raw.get("status", "pending"),
-                "progress": float(raw.get("progress", 0) or 0),
-                "error_message": raw.get("error_message", ""),
-                "config": config,
-                "created_at": raw.get("created_at", ""),
-                "updated_at": raw.get("updated_at", ""),
-            }
-        return None
+        return training_task_record(dict(row)) if row is not None else None
 
     def get_all_training_tasks(self) -> list:
         """获取所有训练任务。
 
         P1-M2 fix: 返回统一 DTO，与 PG _normalize_training_task 一致。
         """
-        conn = self._get_connection()
-        cursor = conn.cursor()
-        cursor.execute('SELECT * FROM training_tasks ORDER BY created_at DESC')
-        rows = cursor.fetchall()
-        columns = [desc[0] for desc in cursor.description]
-        import json
-        results = []
-        for row in rows:
-            raw = dict(zip(columns, row))
-            try:
-                config = json.loads(raw.get('config_json', '{}') or '{}')
-            except (TypeError, json.JSONDecodeError):
-                config = {}
-            results.append({
-                "task_id": raw.get("task_id"),
-                "lora_name": raw.get("lora_name", ""),
-                "status": raw.get("status", "pending"),
-                "progress": float(raw.get("progress", 0) or 0),
-                "error_message": raw.get("error_message", ""),
-                "config": config,
-                "created_at": raw.get("created_at", ""),
-                "updated_at": raw.get("updated_at", ""),
-            })
-        return results
+        return self.get_training_tasks()
 
     def add_training_task(self, task: dict) -> dict:
         """添加训练任务并返回任务记录。
@@ -3792,27 +3651,7 @@ class SQLiteDB:
             )
         else:
             cursor.execute('SELECT * FROM training_tasks ORDER BY created_at DESC')
-        rows = cursor.fetchall()
-        columns = [desc[0] for desc in cursor.description]
-        import json
-        results = []
-        for row in rows:
-            raw = dict(zip(columns, row))
-            try:
-                config = json.loads(raw.get('config_json', '{}') or '{}')
-            except (TypeError, json.JSONDecodeError):
-                config = {}
-            results.append({
-                "task_id": raw.get("task_id"),
-                "lora_name": raw.get("lora_name", ""),
-                "status": raw.get("status", "pending"),
-                "progress": float(raw.get("progress", 0) or 0),
-                "error_message": raw.get("error_message", ""),
-                "config": config,
-                "created_at": raw.get("created_at", ""),
-                "updated_at": raw.get("updated_at", ""),
-            })
-        return results
+        return [training_task_record(dict(row)) for row in cursor.fetchall()]
 
     def update_training_task(self, task_id: str, data: dict):
         """更新训练任务字段。
@@ -3820,7 +3659,6 @@ class SQLiteDB:
         P1-M2 fix: 与 PG 侧对齐，支持 config (dict) 自动序列化为 config_json；
         返回统一 DTO。
         """
-        import json
         conn = self._get_connection()
         cursor = conn.cursor()
         allowed = {
@@ -3830,14 +3668,7 @@ class SQLiteDB:
         updates = {k: v for k, v in data.items() if k in allowed}
         # The storage layer owns updated_at for consistent SQLite/PostgreSQL behavior.
         updates["updated_at"] = datetime.now().isoformat()
-        # config (dict) → config_json (str)，与 PG 侧一致
-        if "config" in data and "config_json" not in data:
-            try:
-                updates["config_json"] = json.dumps(data["config"], ensure_ascii=False)
-            except (TypeError, ValueError):
-                pass
-        if not updates:
-            return self.get_training_task(task_id)
+        updates.update(training_config_update(data))
         set_clause = ", ".join(f"{k} = ?" for k in updates)
         params = list(updates.values()) + [task_id]
         cursor.execute(
@@ -3869,27 +3700,7 @@ class SQLiteDB:
             "SELECT * FROM training_tasks WHERE lora_name = ? AND status IN ('pending', 'running', 'training')",
             (lora_name,)
         )
-        rows = cursor.fetchall()
-        columns = [desc[0] for desc in cursor.description]
-        import json
-        results = []
-        for row in rows:
-            raw = dict(zip(columns, row))
-            try:
-                config = json.loads(raw.get('config_json', '{}') or '{}')
-            except (TypeError, json.JSONDecodeError):
-                config = {}
-            results.append({
-                "task_id": raw.get("task_id"),
-                "lora_name": raw.get("lora_name", ""),
-                "status": raw.get("status", "pending"),
-                "progress": float(raw.get("progress", 0) or 0),
-                "error_message": raw.get("error_message", ""),
-                "config": config,
-                "created_at": raw.get("created_at", ""),
-                "updated_at": raw.get("updated_at", ""),
-            })
-        return results
+        return [training_task_record(dict(row)) for row in cursor.fetchall()]
 
 # 全局数据库实例
 db = SQLiteDB()

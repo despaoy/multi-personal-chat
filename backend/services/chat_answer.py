@@ -254,7 +254,7 @@ async def generate_chat_answer(
         rag_meta["citations"] = list(generation.response_citations) if citations_enabled else []
     if generation.authority_refreshed:
         rag_meta["warnings"] = list(dict.fromkeys([*(rag_meta.get("warnings") or []), "context_authority_refreshed"]))
-    if not getattr(generation, "model_invoked", True):
+    if not generation.model_invoked:
         rag_meta["modelInvoked"] = False
         rag_meta["answerMode"] = generation.response_mode
         rag_meta["abstained"] = generation.response_mode == "source_unavailable"

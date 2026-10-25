@@ -140,6 +140,8 @@ src/app目录对应characters、training、lora、knowledge、history、evaluati
 
 src/components保存UI和业务组件；hooks封装数据获取与状态；contexts保存认证与设置。lib/api.ts封装HTTP调用，api-contracts.ts维护共享契约，lib/proxy.ts和app/api的Route Handler实现后端代理。具体入口策略同时查看src/proxy.ts。
 
+认证上下文统一调用lib/api.ts的登录、注册与当前用户接口，不再维护无人读取的localStorage用户副本。认证失败保持未登录，页面数据缓存仍按用户隔离；认证接口的401交由表单或初始化处理，不触发通用接口的自动登出跳转。评估页面的反馈读取失败会显示加载错误，不伪装成空反馈列表。
+
 前端执行pnpm install --frozen-lockfile、pnpm ts-check、pnpm lint、pnpm build。端口与命令以package.json为准，当前dev/start使用5000。
 
 ## 工具与验证入口

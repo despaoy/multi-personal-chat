@@ -13,11 +13,12 @@ from knowledge.query_tasks import requests_source_text
 from knowledge.retrieval_core.query import QueryAnalysis, QueryAnalyzer
 from knowledge.retrieval_core.rerank import PipelineReranker
 from knowledge.retrieval_core.retrieval import HybridRetriever, RetrievalCandidate
-from knowledge.retrieval_scope import QueryScope
 
 from .visibility import KnowledgeBoundary, visible_to
 
 if TYPE_CHECKING:
+    from knowledge.retrieval_scope import QueryScope
+
     from .source_text import OriginalTextExtractor
 
 RETRIEVAL_TYPES = frozenset({"fact", "relation", "event", "scene", "story"})
@@ -34,9 +35,7 @@ def rerank_with_title_frames(
     quoted = [match.strip() for match in re.findall(r"《([^》]{1,80})》", analysis.original_query) if match.strip()]
     # Scope alignment must see recalled candidates before intermediate top-k
     # drops them. The deterministic reranker already scores the same pool.
-    ranked = reranker.rerank(
-        analysis, candidates, top_k=max(top_k * 4, 20, len(candidates) if quoted else 0)
-    )
+    ranked = reranker.rerank(analysis, candidates, top_k=max(top_k * 4, 20, len(candidates) if quoted else 0))
     if ranked and all(candidate.rerank_method == "cross_encoder" for candidate in ranked):
         return ranked[:top_k]
     query_cn = "".join(re.findall(r"[\u4e00-\u9fff]", analysis.normalized_query or analysis.original_query))
@@ -56,7 +55,6 @@ def rerank_with_title_frames(
         candidate.rerank_score = round(base + quote_bonus + lexical_bonus, 4)
     ranked.sort(key=lambda candidate: (-(candidate.rerank_score or 0.0), -candidate.fused_score, candidate.row))
     return ranked[:top_k]
-
 
 
 class RoutedMultiScaleService:
@@ -116,11 +114,27 @@ class RoutedMultiScaleService:
         elif analysis.original_query != query or analysis.matched_domains != [self.config.domain_id]:
             raise ValueError("Query analysis does not belong to the current request and domain")
         if object_names is not None:
-            if not isinstance(object_names, tuple) or not object_names or any(not isinstance(name, str) or name not in query or self.config.canonical_entity(name) is None and name not in self.config.story_titles for name in object_names):
+            if (
+                not isinstance(object_names, tuple)
+                or not object_names
+                or any(
+                    not isinstance(name, str)
+                    or name not in query
+                    or self.config.canonical_entity(name) is None
+                    and name not in self.config.story_titles
+                    for name in object_names
+                )
+            ):
                 raise ValueError("Curated scope requires literal registered whole question objects")
             analysis = replace(
                 analysis,
-                entities=list(dict.fromkeys(self.config.canonical_entity(name) for name in object_names if self.config.canonical_entity(name) is not None)),
+                entities=list(
+                    dict.fromkeys(
+                        self.config.canonical_entity(name)
+                        for name in object_names
+                        if self.config.canonical_entity(name) is not None
+                    )
+                ),
                 story_hits=[name for name in object_names if name in self.config.story_titles],
             )
         retriever = self.retriever
@@ -152,7 +166,7 @@ class RoutedMultiScaleService:
         for candidate in selected:
             doc = candidate.document
             evidence = self.evidence_by_parent.get(doc.id)
-            evidence_text = getattr(evidence, "content", "") if evidence is not None else ""
+            evidence_text = evidence.content if evidence is not None else ""
             if evidence_text and visible_to(evidence, knowledge_boundary):
                 # Stored claim-specific evidence is already in the index. Do
                 # not replace it with the beginning of a much broader scene.
@@ -163,10 +177,7 @@ class RoutedMultiScaleService:
                             "title": doc.title,
                             "metadata": doc.metadata,
                             "source": doc.source.to_dict(),
-                            **{
-                                key: getattr(doc, key, "")
-                                for key in ("reality_status", "temporal_scope", "content_scope")
-                            },
+                            **{key: getattr(doc, key) for key in ("reality_status", "temporal_scope", "content_scope")},
                         },
                         evidence_text,
                     )
@@ -184,10 +195,7 @@ class RoutedMultiScaleService:
                     emitted_scenes.add(scene.id)
 
         timeline: list[dict[str, Any]] = []
-        if (
-            len(analysis.entities) >= 2
-            and any(c.document.document_type == "relation" for c in selected)
-        ):
+        if len(analysis.entities) >= 2 and any(c.document.document_type == "relation" for c in selected):
             wanted = set(analysis.entities)
             relation_docs = [
                 doc
@@ -267,11 +275,15 @@ class RoutedMultiScaleService:
             "curated_source_catalog": source_catalog,
             "retrieval_strategy": "multi_scale_character",
             "candidate_types": sorted(RETRIEVAL_TYPES),
-            "query_scope": query_scope.describe(before_scope - len(recalled)) if query_scope is not None else dict(status="unscoped", rules=[], excluded_candidates=0),
+            "query_scope": query_scope.describe(before_scope - len(recalled))
+            if query_scope is not None
+            else dict(status="unscoped", rules=[], excluded_candidates=0),
             "identity_task": {"query": query, "subject": identity_subject}
-            if query_scope is not None and query_scope.independent_identity else {},
+            if query_scope is not None and query_scope.independent_identity
+            else {},
             "identity_subtask": {"query": query, "subject": identity_subject}
-            if identity_subject and not query_scope.independent_identity else {},
+            if identity_subject and not query_scope.independent_identity
+            else {},
             "results": [candidate.to_dict() for candidate in selected],
             "relation_timeline": timeline,
             "context_text": "\n\n".join(admitted),

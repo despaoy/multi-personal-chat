@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 
-from evaluation.gold_set_schema import GoldPrompt, GoldSet, RubricCriterion
+from evaluation.gold_set_schema import GoldPrompt
 
 _DEFAULT_PATH = Path(__file__).resolve().parent / "gold_prompts.json"
 
@@ -18,14 +18,12 @@ class GoldSetManager:
 
     def load_set(self) -> List[Dict[str, Any]]:
         """加载 Gold 评估集为原始 dict 列表（兼容 JSON 存储）。"""
-        if not self.path.exists():
-            return []
-        try:
-            with open(self.path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            return data.get("prompts", [])
-        except Exception:
-            return []
+        data = json.loads(self.path.read_text(encoding="utf-8"))
+        if not isinstance(data, dict) or not isinstance(data.get("prompts"), list):
+            raise ValueError(f"Gold set must contain a prompts list: {self.path}")
+        if any(not isinstance(prompt, dict) for prompt in data["prompts"]):
+            raise ValueError(f"Gold set prompts must be objects: {self.path}")
+        return data["prompts"]
 
     def load_validated(self) -> List[GoldPrompt]:
         """加载并校验为 GoldPrompt 对象列表。"""

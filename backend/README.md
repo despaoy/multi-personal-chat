@@ -50,6 +50,12 @@ ZIP 与目录导入返回 complete/partial/failed/unconfirmed 状态，只有 co
 
 运行时数据库、模型、LoRA、日志、索引和密钥不属于源码目录，边界见 [`../docs/operations/SERVER_LAYOUT.md`](../docs/operations/SERVER_LAYOUT.md)。
 
+## 精简后的错误与数据边界
+
+配置了数据库、分词器或必要校验器时，其故障明确失败，不改用内存、估算值或默认通过。JWT 必须含非空字符串主体；无效训练配置在写入前拒绝。SQLite 必要迁移失败回滚并终止启动。LoRA 元数据缺失保持未知进度，损坏元数据报错，不根据权重文件虚构训练完成。
+
+评测只统计成功且非空的回复，通过 `scored_responses` 和 `generation_errors` 暴露实际分母与失败；非空拒答仍是合法回复。模型或数据故障不计作成功样本。完整保留／移除决策见[项目精简审计](../docs/development/PROJECT_SIMPLIFICATION.md)。
+
 ## 知识检索边界
 
 - `knowledge/multiscale_rag/` 是经过审核的作品知识生产入口。
@@ -70,6 +76,9 @@ ZIP 与目录导入返回 complete/partial/failed/unconfirmed 状态，只有 co
 
 检索或证据审核异常返回 HTTP 503，并保留异常原因供内部定位，不再进入回答生成。
 模型管理器与 vLLM 共用这套策略；生成失败不自动切换模型提供商。
+vLLM 非流式请求仅对既有的超时、连接失败及 5xx 故障执行有限重试，保持相同请求与模型/LoRA；
+退避等待不占用实例的活动连接计数。不可重试的 HTTP/协议错误及重试耗尽直接报错，
+取消不重试，流式请求也不重放。
 
 ## 平台发送与重试
 

@@ -3,7 +3,16 @@ from __future__ import annotations
 
 import re
 from collections import Counter
-from typing import List, Dict, Any, Callable, Optional
+from typing import List, Dict, Any, Callable
+
+
+def validate_generation_response(response: Any) -> str:
+    """Require usable output without changing valid refusal/abstention text."""
+    if not isinstance(response, str):
+        raise TypeError("generation response must be a string")
+    if not response.strip():
+        raise ValueError("generation response must not be empty or whitespace")
+    return response
 
 
 def _ngrams(tokens: List[str], n: int) -> List[tuple]:
@@ -12,10 +21,7 @@ def _ngrams(tokens: List[str], n: int) -> List[tuple]:
 
 def _tokenize(text: str) -> List[str]:
     """简易中文分词：按字符切分 + 英文按空格。"""
-    tokens = []
-    for chunk in re.findall(r'[\u4e00-\u9fff]|[a-zA-Z0-9]+', text):
-        tokens.append(chunk)
-    return tokens
+    return re.findall(r'[\u4e00-\u9fff]|[a-zA-Z0-9]+', text)
 
 
 class GenerationMetrics:
@@ -62,55 +68,52 @@ class GenerationMetrics:
                 current_run = 1
         return round(max_run / len(tokens), 4)
 
-    def evaluate(self, prompts: List[str], generate_fn: Callable[[str], str],
-                 max_tokens: int = 256) -> Dict[str, Any]:
-        """对 gold set 的 prompt 批量生成，计算所有指标。
-
-        Args:
-            prompts: 提示词列表
-            generate_fn: 生成函数，签名 (prompt: str) -> str
-            max_tokens: 最大生成 token 数（传递给 generate_fn 的参考值）
-
-        Returns:
-            {"distinct_1": float, "distinct_2": float,
-             "repetition_rate": float, "avg_length": float, "samples": [...]}
-        """
-        samples: List[Dict[str, str]] = []
-        responses: List[str] = []
-        for prompt in prompts:
-            try:
-                resp = generate_fn(prompt)
-            except Exception as e:
-                resp = f"[GENERATION_ERROR] {e}"
-            responses.append(resp)
-            samples.append({"prompt": prompt, "response": resp})
-
+    def summarize(self, responses: List[str]) -> Dict[str, Any]:
+        """Aggregate successful responses only; callers retain failure receipts."""
+        for response in responses:
+            validate_generation_response(response)
+        count = len(responses)
         return {
-            "total_prompts": len(prompts),
+            "scored_responses": count,
             "distinct_1": self.distinct_n(responses, 1),
             "distinct_2": self.distinct_n(responses, 2),
             "avg_repetition_rate": round(
-                sum(self.repetition_rate(r) for r in responses) / max(len(responses), 1), 4
+                sum(self.repetition_rate(r) for r in responses) / max(count, 1), 4
             ),
             "avg_length": self.avg_length(responses),
             "max_repetition_ratio": round(
-                sum(self.max_repetition_ratio(r) for r in responses) / max(len(responses), 1), 4
+                sum(self.max_repetition_ratio(r) for r in responses) / max(count, 1), 4
             ),
+        }
+
+    def evaluate(self, prompts: List[str], generate_fn: Callable[[str], str],
+                 max_tokens: int = 256) -> Dict[str, Any]:
+        """Evaluate responses, retaining failures separately from quality metrics.
+
+        ``max_tokens`` is retained for compatibility; configure the supplied
+        one-argument generation function with its own token budget.
+        """
+        samples: List[Dict[str, Any]] = []
+        responses: List[str] = []
+        for prompt in prompts:
+            try:
+                response = validate_generation_response(generate_fn(prompt))
+            except Exception as exc:
+                samples.append({"prompt": prompt, "response": "", "error": str(exc),
+                                "error_type": type(exc).__name__})
+            else:
+                responses.append(response)
+                samples.append({"prompt": prompt, "response": response})
+        return {
+            "total_prompts": len(prompts),
+            **self.summarize(responses),
+            "generation_errors": len(prompts) - len(responses),
             "samples": samples,
         }
 
     def evaluate_mock(self, prompts: List[str]) -> Dict[str, Any]:
-        """Mock 模式：用固定文本验证脚本逻辑。"""
-        mock_responses = [
-            f"这是对「{p[:20]}」的模拟回复。保持角色风格很重要。" for p in prompts
-        ]
+        """Explicit mock mode, using the same aggregation as real responses."""
         return {
-            "total_prompts": len(prompts),
-            "distinct_1": self.distinct_n(mock_responses, 1),
-            "distinct_2": self.distinct_n(mock_responses, 2),
-            "avg_repetition_rate": 0.0,
-            "avg_length": self.avg_length(mock_responses),
-            "max_repetition_ratio": 0.0,
+            **self.evaluate(prompts, lambda p: f"这是对「{p[:20]}」的模拟回复。保持角色风格很重要。"),
             "mock": True,
-            "samples": [{"prompt": p, "response": r} for p, r in zip(prompts, mock_responses)],
         }

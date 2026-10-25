@@ -83,8 +83,7 @@ class AnswerModeDecider:
         warnings: list[str] = []
         results = list(bundle["results"])
         evidence_count = (
-            len(curated_source_receipts(bundle))
-            if "curated_source_catalog" in bundle else len(bundle["citations"])
+            len(curated_source_receipts(bundle)) if "curated_source_catalog" in bundle else len(bundle["citations"])
         )
         confidence = float(bundle["confidence"])
         if isinstance(bundle["confidence"], bool) or not isfinite(confidence):

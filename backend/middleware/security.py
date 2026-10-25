@@ -18,6 +18,7 @@ from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 from typing import Any, Callable
 
+from fastapi import HTTPException
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
@@ -579,10 +580,9 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         # 优先尝试 JWT 验证（前端主要使用 JWT）
         if bearer_token:
             try:
-                import jwt as pyjwt
-                from app.config import JWT_SECRET, JWT_ALGORITHM
+                from app.config import verify_token
 
-                payload = pyjwt.decode(bearer_token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+                payload = verify_token(bearer_token)
                 # C-S2 fix: 原先中间件解码 JWT 后直接放行，不检查 Token 黑名单。
                 # 导致未使用 Depends(get_current_user) 的路由（如 /api/stats、
                 # /api/model/status）在 Token 注销后仍可访问 24 小时。
@@ -594,13 +594,13 @@ class SecurityMiddleware(BaseHTTPMiddleware):
                         content={"detail": "Token 已注销，请重新登录"},
                         headers={"WWW-Authenticate": "Bearer"},
                     )
-                request.state.user = payload.get("sub", "unknown")
+                request.state.user = payload["sub"]
                 request.state.auth_type = "jwt"
                 request.state.jwt_payload = payload
-            except ImportError:
-                logger.warning("jwt 库未安装，无法验证 JWT Token")
-            except Exception as e:
-                logger.debug(f"JWT 验证失败: {type(e).__name__}: {e}")
+            except HTTPException as exc:
+                if exc.status_code != 401:
+                    raise
+                logger.debug("JWT 验证失败: %s", exc.detail)
 
             # JWT 验证成功，放行请求（call_next 的异常不应被认证逻辑捕获）
             if hasattr(request.state, "jwt_payload") and request.state.jwt_payload:

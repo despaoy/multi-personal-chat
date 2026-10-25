@@ -15,6 +15,12 @@ python -m pip install -r backend/requirements-dev.txt
 pnpm install --frozen-lockfile
 ```
 
+UI component source is maintained in `src/components/ui`; `components.json`
+retains the generator configuration. The unused `shadcn` and `only-allow` CLI
+packages are not installed as project dependencies. If a new component needs
+generation, use `pnpm dlx shadcn@<reviewed-version> add <component>` explicitly
+and review its source and dependency changes. Builds do not require the CLI.
+
 Copy `.env.example` to the location documented for the selected deployment
 mode. Never commit secrets, model weights, databases, generated indexes or
 private experiment output.

@@ -45,17 +45,17 @@ export function useEvaluation(enabled = true) {
       const [gold, runsResp, fbResp] = await Promise.all([
         api.getGoldSet(),
         api.getEvaluationRuns(),
-        api.getFeedback().catch(() => ({ feedbacks: [], total: 0 })),
+        api.getFeedback(),
       ]);
       setGoldSet({
         total: gold.total,
-        category_breakdown: gold.category_breakdown || {},
-        prompts: gold.prompts || [],
+        category_breakdown: gold.category_breakdown,
+        prompts: gold.prompts,
       });
-      setRuns(runsResp.runs || []);
-      setRunsTotal(runsResp.total ?? runsResp.runs?.length ?? 0);
-      setFeedbacks(fbResp.feedbacks || []);
-      setFeedbackTotal(fbResp.total ?? fbResp.feedbacks?.length ?? 0);
+      setRuns(runsResp.runs);
+      setRunsTotal(runsResp.total);
+      setFeedbacks(fbResp.feedbacks);
+      setFeedbackTotal(fbResp.total);
     } catch (err) {
       setError(err instanceof Error ? err.message : '加载评估数据失败');
       console.error('Failed to fetch evaluation data:', err);

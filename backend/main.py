@@ -13,24 +13,6 @@ if str(_BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(_BACKEND_ROOT))
 
 if __name__ == "__main__":
-    import uvicorn
-    from app.env import load_backend_env
-    from infra.environment import read_positive_int
+    from run import main
 
-    load_backend_env()
-    import os
-
-    worker_count = int(os.getenv("BACKEND_WORKERS", "1"))
-    if worker_count != 1:
-        raise RuntimeError("当前架构要求 BACKEND_WORKERS=1，以保证幂等、会话锁和 nonce 状态一致")
-    uvicorn.run(
-        "app.main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=False,
-        workers=worker_count,
-        limit_concurrency=read_positive_int(os.environ, "BACKEND_LIMIT_CONCURRENCY", 256),
-        backlog=read_positive_int(os.environ, "BACKEND_BACKLOG", 512),
-        timeout_keep_alive=read_positive_int(os.environ, "BACKEND_KEEPALIVE_TIMEOUT", 10),
-        timeout_graceful_shutdown=30,
-    )
+    main()

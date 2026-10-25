@@ -1,9 +1,0 @@
-# Share strict configured-key decoding
-
-Both the encryption constructor and deployment validator previously used permissive URL-safe Base64 decoding. Two synthetic corrupt representations, one with an inserted `!` and one with excess padding, passed both entry points and decoded to the original key. This accepted damaged mandatory configuration as valid.
-
-One decoder in the existing lightweight deployment module now validates the full Base64 representation and the 32-byte length. It accepts valid standard and URL-safe alphabets and discards no extra characters. Deployment validation passes the supplied value unchanged instead of trimming it and uses the shared safe error. The encryption manager only adds source information and translates ValueError into its existing KeyManagementError. The duplicated permissive decoder and broad catch were removed. No encryption algorithm, nonce, ciphertext format or key was changed.
-
-Five focused checks passed in 0.21 seconds: four new combined constructor/deployment cases and the existing invalid-persisted-key case. Valid samples contain actual distinguishing alphabet characters, and public decryption proves that both representations retain the same key for pre-existing synthetic ciphertext. Corrupt samples fail both entry points without exposing the supplied value or creating configuration files. Other key-configuration and JWT matrices were not rerun. Syntax, incremental lint and whitespace checks passed.
-
-Before source changes, the effective existing server key's strict-format compatibility was checked inside the server process. Only a boolean result was recorded; the key, decoded bytes and configuration contents were not returned or persisted in the report. The actual configuration file hash remains unchanged. The baseline and focused functional tests used synthetic keys, and no real model call was made.

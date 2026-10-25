@@ -38,31 +38,16 @@ async def list_questions(
         # 统一分页边界校验：limit 上限 500，offset 非负
         limit = max(1, min(int(limit), 500))
         offset = max(0, int(offset))
-        # 使用命名参数 :name，SQLite 与 PostgreSQL 均支持
-        if category:
-            rows = await asyncio.to_thread(
-                database.execute_sql,
-                "SELECT * FROM retrieval_eval_questions WHERE category=:cat "
-                "ORDER BY created_at DESC LIMIT :lim OFFSET :off",
-                {"cat": category, "lim": limit, "off": offset},
-            )
-            count_rows = await asyncio.to_thread(
-                database.execute_sql,
-                "SELECT COUNT(*) AS cnt FROM retrieval_eval_questions WHERE category=:cat",
-                {"cat": category},
-            )
-        else:
-            rows = await asyncio.to_thread(
-                database.execute_sql,
-                "SELECT * FROM retrieval_eval_questions ORDER BY created_at DESC "
-                "LIMIT :lim OFFSET :off",
-                {"lim": limit, "off": offset},
-            )
-            count_rows = await asyncio.to_thread(
-                database.execute_sql,
-                "SELECT COUNT(*) AS cnt FROM retrieval_eval_questions",
-                {},
-            )
+        where = " WHERE category=:cat" if category else ""
+        filters = {"cat": category} if category else {}
+        rows = await asyncio.to_thread(
+            database.execute_sql,
+            f"SELECT * FROM retrieval_eval_questions{where} ORDER BY created_at DESC LIMIT :lim OFFSET :off",
+            {**filters, "lim": limit, "off": offset},
+        )
+        count_rows = await asyncio.to_thread(
+            database.execute_sql, f"SELECT COUNT(*) AS cnt FROM retrieval_eval_questions{where}", filters,
+        )
         questions = []
         for r in rows:
             doc_ids, doc_titles = _expected_labels(r)

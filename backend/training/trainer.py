@@ -25,6 +25,7 @@ from transformers import (
     AutoTokenizer,
     DataCollatorForSeq2Seq,
     BitsAndBytesConfig,
+    EarlyStoppingCallback,
 )
 from peft import (
     LoraConfig,
@@ -52,11 +53,6 @@ from training.chat_dataset import (
 )
 from training.evaluator import write_training_evaluation_report
 
-try:
-    from transformers import EarlyStoppingCallback
-    HAS_EARLY_STOPPING = True
-except ImportError:
-    HAS_EARLY_STOPPING = False
 
 import time
 from transformers import TrainerCallback
@@ -540,7 +536,7 @@ class LoRATrainer:
             logger.info(f"训练配置已保存到: {config_save_path}")
 
             callbacks = []
-            if self.config.early_stopping_patience > 0 and HAS_EARLY_STOPPING:
+            if self.config.early_stopping_patience > 0:
                 early_stopping = EarlyStoppingCallback(
                     early_stopping_patience=self.config.early_stopping_patience,
                     early_stopping_threshold=self.config.early_stopping_threshold,

@@ -231,6 +231,20 @@ class SimpleLoRATrainer:
         logger.info(f"训练任务已创建: {task_id}, LoRA: {lora_name}")
         return task_id
 
+    def _finish_if_cancelled(self, task_id: str) -> bool:
+        """Keep cancellation and shutdown terminal across all training stages."""
+        with self._lock:
+            task = self.tasks[task_id]
+            event = self._cancel_events.get(task_id)
+            if task["status"] not in ("cancelled", "interrupted"):
+                if event is None or not event.is_set():
+                    return False
+                now = time.strftime("%Y-%m-%d %H:%M:%S")
+                task.update(status="cancelled", finished_at=now, updated_at=now)
+            self._persist_task(task_id)
+        logger.info("训练任务已取消或中断: %s", task_id)
+        return True
+
     async def _run_training(self, task_id: str, lora_name: str, dataset_path: Path, config: Dict[str, Any]):
         cancel_event = self._cancel_events.get(task_id)
 
@@ -251,15 +265,7 @@ class SimpleLoRATrainer:
             if errors:
                 raise ValueError(f"训练配置错误: {'; '.join(errors)}")
 
-            # 检查是否在配置阶段已被取消
-            if cancel_event and cancel_event.is_set():
-                with self._lock:
-                    if self.tasks[task_id]["status"] not in ("cancelled", "interrupted"):
-                        self.tasks[task_id]["status"] = "cancelled"
-                        self.tasks[task_id]["finished_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
-                        self.tasks[task_id]["updated_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
-                self._persist_task(task_id)
-                logger.info(f"训练任务在配置阶段被取消: {task_id}")
+            if self._finish_if_cancelled(task_id):
                 return
 
             config_path = Path(train_config.output_dir) / "training_config_auto.json"
@@ -269,13 +275,7 @@ class SimpleLoRATrainer:
             trainer = LoRATrainer(train_config)
 
             with self._lock:
-                if cancel_event and cancel_event.is_set():
-                    if self.tasks[task_id]["status"] not in ("cancelled", "interrupted"):
-                        self.tasks[task_id]["status"] = "cancelled"
-                        self.tasks[task_id]["finished_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
-                        self.tasks[task_id]["updated_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
-                    self._persist_task(task_id)
-                    logger.info(f"训练任务在启动前被取消: {task_id}")
+                if self._finish_if_cancelled(task_id):
                     return
                 self.tasks[task_id]["progress"] = 10
                 self.tasks[task_id]["updated_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -292,28 +292,14 @@ class SimpleLoRATrainer:
 
             # 在线程中执行阻塞的训练操作，传入取消事件和进度回调供训练循环检查
             def _train_with_cancel_check():
-                if cancel_event and hasattr(trainer, 'cancel_event'):
-                    trainer.cancel_event = cancel_event
+                trainer.cancel_event = cancel_event
                 trainer.progress_fn = _progress_callback
                 return trainer.train()
 
             output_path = await asyncio.to_thread(_train_with_cancel_check)
 
-            # 检查取消事件
-            if cancel_event and cancel_event.is_set():
-                with self._lock:
-                    if self.tasks[task_id]["status"] not in ("cancelled", "interrupted"):
-                        self.tasks[task_id]["status"] = "cancelled"
-                        self.tasks[task_id]["finished_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
-                        self.tasks[task_id]["updated_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
-                self._persist_task(task_id)
-                logger.info(f"训练任务完成后发现已被取消: {task_id}")
-                return
-
             with self._lock:
-                if self.tasks[task_id]["status"] in ("cancelled", "interrupted"):
-                    self._persist_task(task_id)
-                    logger.info(f"训练任务完成后发现已被取消: {task_id}")
+                if self._finish_if_cancelled(task_id):
                     return
                 self.tasks[task_id]["status"] = "completed"
                 self.tasks[task_id]["progress"] = 100
@@ -538,10 +524,7 @@ class SimpleLoRATrainer:
 
         # 优先从数据库读取（重启后也能恢复）
         if self.db:
-            try:
-                return self.db.get_all_training_tasks()
-            except Exception as e:
-                logger.warning(f"从数据库读取训练任务失败，回退到内存: {e}")
+            return self.db.get_all_training_tasks()
 
         with self._lock:
             return [dict(task) for task in self.tasks.values()]
@@ -594,22 +577,19 @@ class SimpleLoRATrainer:
         """从数据库恢复任务到内存（服务重启后调用）。"""
         if not self.db:
             return
-        try:
-            db_tasks = self.db.get_all_training_tasks()
-            for db_task in db_tasks:
-                task_id = db_task["task_id"]
-                status = db_task.get("status", "pending")
-                # 将重启前未完成的任务标记为中断状态
-                if status in ("pending", "training"):
-                    db_task["status"] = "interrupted"
-                    db_task["error_message"] = "服务重启，任务被中断"
-                    db_task["updated_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
-                    self.db.save_training_task(task_id, db_task)
-                self.tasks[task_id] = db_task
-            if db_tasks:
-                logger.info(f"从数据库恢复了 {len(db_tasks)} 个训练任务到内存")
-        except Exception as e:
-            logger.warning(f"从数据库恢复训练任务失败: {e}")
+        db_tasks = self.db.get_all_training_tasks()
+        for db_task in db_tasks:
+            task_id = db_task["task_id"]
+            status = db_task.get("status", "pending")
+            # 将重启前未完成的任务标记为中断状态
+            if status in ("pending", "training"):
+                db_task["status"] = "interrupted"
+                db_task["error_message"] = "服务重启，任务被中断"
+                db_task["updated_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
+                self.db.save_training_task(task_id, db_task)
+            self.tasks[task_id] = db_task
+        if db_tasks:
+            logger.info(f"从数据库恢复了 {len(db_tasks)} 个训练任务到内存")
 
 
 _simple_lora_trainer: Optional[SimpleLoRATrainer] = None

@@ -39,15 +39,9 @@ async def write_rule_memory(repo, character_id, scope, item: ExtractedMemory, so
 
         return await write_event_memory(repo, character_id, scope, item, source_message_id, observed_at=observation)
     from character.current_turn_memory import validated_constraint_replacement
+    keys = tuple(sorted(set(item.aliases) | {item.memory_key}))
     for attempt in range(3):
-        keys = set(item.aliases) | {item.memory_key}
-        reader = getattr(repo, "find_rule_memory_records", None)
-        if reader:
-            rows = await reader(character_id, scope, tuple(sorted(keys)))
-        else:
-            rows = await repo.list_memory_records(
-                character_id, scope, limit=None, scope_levels=("conversation",), include_inactive=True
-            )
+        rows = await repo.find_rule_memory_records(character_id, scope, keys)
         matches = [row for row in rows if row.get("memory_key") in keys and row.get("status", "active") == "active"]
         # Conflicting legacy aliases are not safe to silently merge by recency.
         pending_reason = "ambiguous_legacy_aliases" if len(matches) > 1 else ""

@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """下载基座模型到指定目录。
 
-支持 modelscope（国内首选）和 huggingface（通过 hf-mirror 镜像）。
+支持 modelscope（默认）和 huggingface（通过 hf-mirror 镜像）。
+下载失败直接报错；如需更换源，请显式指定 --source hf，不自动切换。
 
 用法:
   python scripts/download_model.py --model Qwen3-8B-Instruct
@@ -19,7 +20,6 @@ from __future__ import annotations
 
 import argparse
 import os
-import sys
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -30,7 +30,7 @@ MODELS_DIR = LAB_ROOT / "runtime" / "models"
 # - modelscope/HF 上均不存在独立的 `Qwen/Qwen3-8B-Instruct`，因为 Qwen3-8B 本身已是
 #   Post-training 完成的 Instruct 版本（支持 thinking/non-thinking 切换）。
 # - "Qwen3-8B-Instruct" 在本项目里仅用作目录名，下载时映射到 `Qwen/Qwen3-8B` 权重。
-MODEL_IDS: dict[str, dict[str, str | None]] = {
+MODEL_IDS: dict[str, dict[str, str]] = {
     "Qwen3-8B-Instruct": {
         "modelscope": "Qwen/Qwen3-8B",
         "huggingface": "Qwen/Qwen3-8B",
@@ -82,7 +82,7 @@ def download_hf(model_id: str, target: Path) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description="下载基座模型")
     parser.add_argument("--model", required=True, choices=list(MODEL_IDS.keys()))
-    parser.add_argument("--source", default="auto", choices=["auto", "modelscope", "hf"])
+    parser.add_argument("--source", default="modelscope", choices=["modelscope", "hf"])
     parser.add_argument("--output", type=Path, default=None)
     args = parser.parse_args()
 
@@ -94,33 +94,9 @@ def main() -> int:
         return 0
 
     ids = MODEL_IDS[args.model]
-    source = args.source
-
-    if source == "auto":
-        # 优先 modelscope，失败则 hf
-        if ids["modelscope"]:
-            try:
-                download_modelscope(ids["modelscope"], target)
-                return 0
-            except Exception as e:
-                print(f"[modelscope] 失败: {e}", file=sys.stderr)
-        if ids["huggingface"]:
-            try:
-                download_hf(ids["huggingface"], target)
-                return 0
-            except Exception as e:
-                print(f"[huggingface] 失败: {e}", file=sys.stderr)
-        print("所有下载源均失败", file=sys.stderr)
-        return 1
-    elif source == "modelscope":
-        if not ids["modelscope"]:
-            print(f"modelscope 上无 {args.model}", file=sys.stderr)
-            return 1
+    if args.source == "modelscope":
         download_modelscope(ids["modelscope"], target)
-    elif source == "hf":
-        if not ids["huggingface"]:
-            print(f"huggingface 上无 {args.model}", file=sys.stderr)
-            return 1
+    else:
         download_hf(ids["huggingface"], target)
 
     return 0

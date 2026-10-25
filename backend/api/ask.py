@@ -27,12 +27,12 @@ from fastapi.responses import StreamingResponse
 
 from app.dependencies import get_current_user, get_request_database
 from db.schemas import AskRequest, AskResponse
+from inference.context_budget import InputBudgetError
 from inference.openai_protocol import ProviderResponseError
 from inference.request_context import InferenceRequestContext, resolve_request_context, use_request_context
-from inference.context_budget import InputBudgetError
+from inference.usage import begin_completion
 from knowledge.grounded_answer.service import get_grounded_answer_service
 from knowledge.grounded_answer.validator import public_citation_view
-from inference.usage import begin_completion
 from services.model_usage import UsageRecordingError, account_usage
 
 logger = logging.getLogger(__name__)
@@ -58,10 +58,12 @@ async def _resolve_generate_adapters(context: InferenceRequestContext) -> tuple[
     model_id = f"{selected}/{status.get('modelName') or selected}"
     identity = {"provider": selected, "status": status}
     if selected == "openai_compat":
-        identity.update(endpoint=provider.base_url,
-                        credential_sha256=hashlib.sha256(provider.api_key.encode()).hexdigest())
+        identity.update(
+            endpoint=provider.base_url, credential_sha256=hashlib.sha256(provider.api_key.encode()).hexdigest()
+        )
     cache_identity = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
     if selected == "openai_compat":
+
         async def cloud_generate(*, messages, temperature, max_tokens, top_p):
             reply, _cost = await provider.async_complete(
                 messages, temperature=temperature, max_tokens=max_tokens, top_p=top_p
@@ -80,12 +82,16 @@ async def _resolve_generate_adapters(context: InferenceRequestContext) -> tuple[
             async with resolve_lock:
                 if client is None:
                     if selected != "vllm":
-                        raise ValueError(f"Knowledge answers require openai_compat or vllm; selected provider: {selected}")
+                        raise ValueError(
+                            f"Knowledge answers require openai_compat or vllm; selected provider: {selected}"
+                        )
                     from app.providers import get_vllm_client
 
                     client = await get_vllm_client()
                     if client is None:
-                        raise RuntimeError("Selected vLLM client is unavailable; check VLLM_ENABLED and vLLM configuration")
+                        raise RuntimeError(
+                            "Selected vLLM client is unavailable; check VLLM_ENABLED and vLLM configuration"
+                        )
         return client
 
     async def generate(**kwargs: Any) -> str:
@@ -108,20 +114,26 @@ async def _resolve_generate_adapters(context: InferenceRequestContext) -> tuple[
     return generate, generate_stream, model_id, cache_identity
 
 
-
 def _safe_citations(citations: list[dict[str, Any]], *, debug: bool) -> list[dict[str, Any]]:
     return [public_citation_view(c, debug=debug) for c in citations]
 
 
 def _usage_metadata(model_id, current_user):
     identity = current_user["user_id"] if current_user["user_id"] is not None else current_user["username"]
-    return {"traceId": "ask:" + uuid.uuid4().hex, "platform": "web", "sessionId": f"ask:{identity}",
-            "purpose": "knowledge_answer", "modelName": model_id, "usedRag": True}
+    return {
+        "traceId": "ask:" + uuid.uuid4().hex,
+        "platform": "web",
+        "sessionId": f"ask:{identity}",
+        "purpose": "knowledge_answer",
+        "modelName": model_id,
+        "usedRag": True,
+    }
 
 
 @router.post("/api/ask")
-async def ask(request: AskRequest, current_user: dict = Depends(get_current_user),
-              database=Depends(get_request_database)):
+async def ask(
+    request: AskRequest, current_user: dict = Depends(get_current_user), database=Depends(get_request_database)
+):
     """知识问答（非流式）。"""
     from inference.model_manager import get_model_manager
 
@@ -196,19 +208,21 @@ async def ask_stream(
                 terminal_event = None
                 async with account_usage(database, _usage_metadata(model_id, current_user)):
                     service = await get_grounded_answer_service()
-                    async with aclosing(service.answer_stream(
-                        request.message,
-                        generate=generate,
-                        generate_stream=generate_stream,
-                        domain_id=request.domainId,
-                        top_k=request.topK,
-                        history=request.history or None,
-                        model_id=model_id,
-                        temperature=request.temperature,
-                        max_tokens=request.maxTokens,
-                        top_p=request.topP,
-                        want_citations=request.wantCitations,
-                    )) as stream:
+                    async with aclosing(
+                        service.answer_stream(
+                            request.message,
+                            generate=generate,
+                            generate_stream=generate_stream,
+                            domain_id=request.domainId,
+                            top_k=request.topK,
+                            history=request.history or None,
+                            model_id=model_id,
+                            temperature=request.temperature,
+                            max_tokens=request.maxTokens,
+                            top_p=request.topP,
+                            want_citations=request.wantCitations,
+                        )
+                    ) as stream:
                         async for event in stream:
                             # 客户端断开：终止生成器（取消传播到底层 httpx 流）
                             if await http_request.is_disconnected():
@@ -217,7 +231,9 @@ async def ask_stream(
                             payload = dict(event.data)
                             if event.type == "citations":
                                 payload["citations"] = _safe_citations(payload.get("citations") or [], debug=debug)
-                            encoded = "data: {}\n\n".format(json.dumps({"type": event.type, **payload}, ensure_ascii=False)).encode("utf-8")
+                            encoded = "data: {}\n\n".format(
+                                json.dumps({"type": event.type, **payload}, ensure_ascii=False)
+                            ).encode("utf-8")
                             if event.type == "done":
                                 terminal_event = encoded
                             else:
@@ -225,10 +241,14 @@ async def ask_stream(
                 if terminal_event is not None:
                     yield terminal_event
             except Exception as e:  # noqa: BLE001 - SSE 中途异常以 error 事件收尾
-                detail = (e.public_detail() if isinstance(e, (ProviderResponseError, InputBudgetError, UsageRecordingError))
-                          else {"kind": "internal_error", "message": "服务内部错误"})
-                logger.warning("grounded_answer_stream failed: %s upstream_status=%s",
-                               detail["kind"], detail.get("upstreamStatus"))
+                detail = (
+                    e.public_detail()
+                    if isinstance(e, (ProviderResponseError, InputBudgetError, UsageRecordingError))
+                    else {"kind": "internal_error", "message": "服务内部错误"}
+                )
+                logger.warning(
+                    "grounded_answer_stream failed: %s upstream_status=%s", detail["kind"], detail.get("upstreamStatus")
+                )
                 yield "data: {}\n\n".format(
                     json.dumps(
                         {"type": "error", **detail},

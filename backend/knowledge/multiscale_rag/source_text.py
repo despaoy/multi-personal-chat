@@ -77,7 +77,7 @@ class OriginalTextExtractor:
         lines = snapshot.decode("utf-8-sig").splitlines()
         if end > len(lines):
             raise ValueError(f"来源行号超出文件范围: {start}-{end}>{len(lines)}")
-        text = "\n".join(lines[start - 1:end])
+        text = "\n".join(lines[start - 1 : end])
         if len(text) > self.max_chars:
             raise ValueError("Complete source span exceeds max_chars; narrow the declared span or increase the limit")
         return RawExcerpt(

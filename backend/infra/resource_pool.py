@@ -8,9 +8,11 @@ import asyncio
 import logging
 import sqlite3
 import time
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, ExitStack, asynccontextmanager
 from dataclasses import dataclass
 from typing import Any, AsyncIterator, Dict, List, Optional
+
+import httpx
 
 logger = logging.getLogger(__name__)
 
@@ -223,12 +225,12 @@ class ConnectionPool:
                 pass
 
         async with self._lock:
-            for pc in self._pool:
-                try:
-                    pc.conn.close()
-                except Exception:
-                    pass
-            self._pool.clear()
+            try:
+                with ExitStack() as cleanup:
+                    for pc in reversed(self._pool):
+                        cleanup.callback(pc.conn.close)
+            finally:
+                self._pool.clear()
         logger.info("SQLite连接池已关闭，共回收 %d 个连接", self._total_recycled)
 
     def get_pool_stats(self) -> Dict[str, Any]:
@@ -301,14 +303,6 @@ class HttpClientPool:
         self._total_released = 0
         self._total_recycled = 0
         self._health_task: Optional[asyncio.Task] = None
-        self._httpx_available = False
-
-        try:
-            import httpx  # noqa: F401
-            self._httpx_available = True
-        except ImportError:
-            logger.warning("httpx未安装，HttpClientPool将不可用")
-
         logger.info(
             "HTTP客户端池初始化: max_connections=%d, idle_timeout=%.1fs, request_timeout=%.1fs",
             max_connections,
@@ -322,8 +316,6 @@ class HttpClientPool:
         Returns:
             httpx.AsyncClient 实例。
         """
-        import httpx
-
         client = httpx.AsyncClient(
             timeout=httpx.Timeout(self._request_timeout),
             limits=httpx.Limits(
@@ -347,10 +339,8 @@ class HttpClientPool:
             httpx.AsyncClient 实例。
 
         Raises:
-            RuntimeError: 客户端池已关闭或httpx不可用。
+            RuntimeError: 客户端池已关闭。
         """
-        if not self._httpx_available:
-            raise RuntimeError("httpx未安装，无法使用HttpClientPool")
         if self._closed:
             raise RuntimeError("HTTP客户端池已关闭")
 
@@ -436,13 +426,13 @@ class HttpClientPool:
                 pass
 
         async with self._lock:
-            for c in self._clients:
-                try:
-                    await c.aclose()
-                except Exception:
-                    pass
-            self._clients.clear()
-            self._client_info.clear()
+            try:
+                async with AsyncExitStack() as cleanup:
+                    for client in reversed(self._clients):
+                        cleanup.push_async_callback(client.aclose)
+            finally:
+                self._clients.clear()
+                self._client_info.clear()
         logger.info("HTTP客户端池已关闭，共回收 %d 个客户端", self._total_recycled)
 
     def get_pool_stats(self) -> Dict[str, Any]:
@@ -466,7 +456,7 @@ class HttpClientPool:
             "total_acquired": self._total_acquired,
             "total_released": self._total_released,
             "total_recycled": self._total_recycled,
-            "httpx_available": self._httpx_available,
+            "httpx_available": True,
             "closed": self._closed,
         }
 

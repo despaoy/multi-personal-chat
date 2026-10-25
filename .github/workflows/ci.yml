@@ -7,6 +7,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   # Frontend checks
   frontend:
@@ -31,6 +34,28 @@ jobs:
   # Backend checks
   backend:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci-admin-only
+          POSTGRES_DB: postgres
+        ports:
+          - 25433:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      CHARACTER_ENCODER_REVISION: e8f8c211226b894fcb81acc59f3b34ba3efd5f42
+      CHARACTER_ENCODER_CACHE: ${{ runner.temp }}/character-encoder
+      HF_HUB_DISABLE_IMPLICIT_TOKEN: "1"
+      ALLOW_REMOTE_EMBEDDING_MODEL: "false"
+      OMP_NUM_THREADS: "2"
+      MKL_NUM_THREADS: "2"
+      OPENBLAS_NUM_THREADS: "1"
     defaults:
       run:
         working-directory: backend
@@ -45,9 +70,12 @@ jobs:
           # Install PyTorch CPU version first (CI has no GPU)
           pip install torch==2.8.0 torchvision==0.23.0 torchaudio==2.8.0 \
             --index-url https://download.pytorch.org/whl/cpu
-          # Install remaining deps (skip GPU-only vllm and torch variants)
-          grep -v -E "^(vllm|torch|torchvision|torchaudio)" requirements.txt > requirements-ci.txt
-          pip install -r requirements-ci.txt
+          # CPU integration uses the separately supported preference stack. In particular,
+          # its datasets==4.1.1 conflicts with production's datasets>=5; leave production intact.
+          # Replace only these exact package declarations, then resolve all CI requirements together.
+          replaced='vllm|torch|torchvision|torchaudio|trl|peft|transformers|accelerate|datasets'
+          grep -v -E "^($replaced)([[:space:]<=>!~]|\[|$)" requirements.txt > requirements-ci.txt
+          pip install -r requirements-ci.txt -r requirements-preference.txt
           pip install "ruff>=0.16.4,<0.17"
       - name: Lint character retrieval modules
         run: |
@@ -63,6 +91,98 @@ jobs:
       - name: Undefined and duplicate Python names
         working-directory: .
         run: python -m ruff check backend scripts astrbot_plugins --select F821,F822,F811 --exclude scripts/archive
+      - name: Cache pinned character encoder
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CHARACTER_ENCODER_CACHE }}
+          key: ${{ runner.os }}-character-encoder-${{ env.CHARACTER_ENCODER_REVISION }}
+      - name: Provision pinned character encoder
+        run: |
+          python - <<'PY'
+          import hashlib
+          import os
+          from pathlib import Path
+
+          from huggingface_hub import snapshot_download
+
+          expected_files = {
+              "config.json": (
+                  645, "6300193cb75e01cf80c96decef7187dfb33094d97cc1490b7ead6ff134476e4e",
+              ),
+              "model.safetensors": (
+                  470641600, "eaa086f0ffee582aeb45b36e34cdd1fe2d6de2bef61f8a559a1bbc9bd955917b",
+              ),
+              "tokenizer.json": (
+                  9081518, "2c3387be76557bd40970cec13153b3bbf80407865484b209e655e5e4729076b8",
+              ),
+              "tokenizer_config.json": (
+                  526, "5036ea374ffedd706e3bef33e2e0d6953cb868ef8a490e76e32ba0faa37a6b9b",
+              ),
+              "special_tokens_map.json": (
+                  239, "378eb3bf733eb16e65792d7e3fda5b8a4631387ca04d2015199c4d4f22ae554d",
+              ),
+          }
+          model_path = Path(snapshot_download(
+              repo_id="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+              revision=os.environ["CHARACTER_ENCODER_REVISION"],
+              cache_dir=os.environ["CHARACTER_ENCODER_CACHE"],
+              allow_patterns=list(expected_files),
+              token=False,
+          ))
+          for filename, (size, expected_hash) in expected_files.items():
+              path = model_path / filename
+              if path.stat().st_size != size:
+                  raise RuntimeError(f"Pinned encoder size mismatch: {filename}")
+              with path.open("rb") as stream:
+                  actual_hash = hashlib.file_digest(stream, "sha256").hexdigest()
+              if actual_hash != expected_hash:
+                  raise RuntimeError(f"Pinned encoder checksum mismatch: {filename}")
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as stream:
+              stream.write(f"EMBEDDING_MODEL_PATH={model_path}\n")
+              stream.write("HF_HUB_OFFLINE=1\nTRANSFORMERS_OFFLINE=1\n")
+          PY
+      - name: Build real character index from tracked corpus
+        run: python scripts/build_character_rag_index.py --embedding-model-path "$EMBEDDING_MODEL_PATH"
+      - name: Create isolated PostgreSQL test databases
+        run: |
+          python - <<'PY'
+          import asyncio
+          import os
+
+          import asyncpg
+
+          databases = {
+              "STAGE31_FEEDBACK_PG_URL": "stage3_stage31_feedback_guards",
+              "STAGE34_DELIVERY_PG_URL": "stage3_stage34_delivery_guards",
+              "STAGE35_ADDRESS_PG_URL": "stage3_stage35_address_guards",
+              "STAGE38_RETENTION_PG_URL": "stage3_stage38_retention_guards",
+              "STAGE39_EVIDENCE_PG_URL": "stage3_stage39_evidence_guards",
+              "STAGE40_CLAUSE_PG_URL": "stage3_stage40_clause_guards",
+              "STAGE42_FRAGMENTS_PG_URL": "stage3_stage42_fragment_guards",
+              # The source-inheritance fixture explicitly requires the address database.
+              "SOURCE_INHERIT_PG_URL": "stage3_stage35_address_guards",
+          }
+
+          async def provision():
+              connection = await asyncpg.connect(
+                  host="127.0.0.1", port=25433, database="postgres",
+                  user="postgres", password="ci-admin-only",
+              )
+              try:
+                  await connection.execute("CREATE ROLE fixture LOGIN PASSWORD 'ci-fixture-only'")
+                  for database in sorted(set(databases.values())):
+                      await connection.execute(f'CREATE DATABASE "{database}" OWNER fixture')
+              finally:
+                  await connection.close()
+
+          asyncio.run(provision())
+          with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as stream:
+              for variable, database in databases.items():
+                  stream.write(
+                      f"{variable}=postgresql+asyncpg://fixture:ci-fixture-only@127.0.0.1/"
+                      f"{database}?port=25433\n"
+                  )
+          PY
       - name: Run tests
         run: |
           set -o pipefail

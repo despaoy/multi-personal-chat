@@ -341,7 +341,6 @@ class DialogueGenerateRequest(BaseModel):
     style: str | None = None
     custom_prompt: str | None = None
 
-
     @field_validator("character_description")
     @classmethod
     def require_character_description(cls, value: str) -> str:

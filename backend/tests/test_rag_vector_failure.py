@@ -6,19 +6,55 @@ import pytest
 from test_multiscale_rag_runtime import FakeQueryEmbeddingProvider
 
 from knowledge.multiscale_rag.runtime import MultiScaleRagRuntime
-from knowledge.multiscale_rag.vector_runtime import LocalMeanPoolingEmbeddingProvider
+from knowledge.multiscale_rag.vector_runtime import LocalMeanPoolingEmbeddingProvider, write_vector_artifacts
+from knowledge.retrieval_core.documents import KnowledgeIndexDocument, SourceReference
 
 QUERY = '妃和琉璃是什么关系？'
 
 
 @pytest.fixture
-def runtime(monkeypatch):
+def runtime(monkeypatch, tmp_path):
+    """Exercise real index loading and retrieval without the promoted corpus."""
     monkeypatch.setenv('RERANKER_ENABLED', 'false')
+    monkeypatch.setenv('CHARACTER_RAG_RERANKER_ENABLED', 'false')
+    monkeypatch.delenv('CHARACTER_RAG_INDEX_ROOT', raising=False)
+    monkeypatch.delenv('MULTISCALE_RAG_INDEX_ROOT', raising=False)
     provider = LocalMeanPoolingEmbeddingProvider(model_path='synthetic-fixed-model')
     monkeypatch.setattr(provider, 'embed_query', FakeQueryEmbeddingProvider().embed_query)
     monkeypatch.setattr('knowledge.multiscale_rag.runtime.LocalMeanPoolingEmbeddingProvider',
                         lambda **kwargs: provider)
-    instance = MultiScaleRagRuntime()
+
+    # These records and vectors are declared synthetic controls, not replacements
+    # for the corpus integration tests. Keep the loader, manifest/provider
+    # compatibility checks, sparse index and vector validation on their real path.
+    source_text = '合成测试资料：妃和琉璃共同参加活动，记录两人的关系。'
+    (tmp_path / 'synthetic-source.txt').write_text(source_text, encoding='utf-8')
+    monkeypatch.setattr('knowledge.multiscale_rag.runtime._REPO_ROOT', tmp_path)
+    documents = {}
+    for kind in ('relation', 'scene', 'story', 'evidence'):
+        documents[kind] = KnowledgeIndexDocument(
+            id=f'synthetic-{kind}', domain_id='tsukiyashiro_kisaki', document_type=kind,
+            title=f'合成{kind}：妃和琉璃的关系', summary=source_text,
+            content=source_text, embedding_text=f'{kind} {source_text}',
+            keywords=['妃', '琉璃', '关系'], entities=['妃', '琉璃'],
+            source=SourceReference('synthetic-source.txt', 1, 1),
+            metadata={'parent_id': 'synthetic-relation'} if kind == 'evidence' else {},
+        )
+    index_root = tmp_path / 'synthetic-index'
+    for directory, kinds in (
+        ('card_index', ('relation',)),
+        ('scene_story_index', ('scene', 'story')),
+        ('evidence_index', ('evidence',)),
+    ):
+        records = [documents[kind] for kind in kinds]
+        vectors = np.vstack([provider.embed_query(document.embedding_text) for document in records])
+        write_vector_artifacts(index_root / directory, records, vectors, {
+            'document_count': len(records), 'vector_dimension': provider.dimension,
+            'normalized': True, 'embedding_model': provider.model_id,
+            'embedding_encoding': provider.encoding_contract,
+        })
+
+    instance = MultiScaleRagRuntime(index_root=index_root)
     assert instance.is_available()
     return instance
 

@@ -14,6 +14,8 @@ import pytest
 # Never let unit tests migrate or write the developer's local database. PostgreSQL
 # integration runs must opt in explicitly with USE_POSTGRESQL=true.
 _TEST_RUNTIME_ROOT = Path(tempfile.mkdtemp(prefix="qqchat-pytest-"))
+# Local synthetic dataset tests must not write into the developer's model cache.
+os.environ.setdefault("HF_HOME", str(_TEST_RUNTIME_ROOT / "huggingface"))
 os.environ.setdefault("USE_POSTGRESQL", "false")
 os.environ.setdefault("DATABASE_PATH", str(_TEST_RUNTIME_ROOT / "qq_assistant.db"))
 # Test configuration supplies an explicit process-local signing key before

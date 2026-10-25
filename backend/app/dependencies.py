@@ -20,43 +20,23 @@ async def get_current_user(request: Request) -> dict:
     返回 dict 包含：user_id, username, role。
     role 来自 JWT payload（旧 token 缺失时默认 "user"）；如需强一致请用 get_current_admin。
     """
-    # 1. 如果安全中间件已验证，直接使用
-    if hasattr(request.state, "jwt_payload") and request.state.jwt_payload:
-        payload = request.state.jwt_payload
-        # 检查 Token 是否已被注销
-        from infra.token_revocation import is_token_revoked
-        if is_token_revoked(payload.get("jti", "")):
-            raise HTTPException(status_code=401, detail="Token 已注销，请重新登录")
-        return {
-            "user_id": payload.get("user_id"),
-            "username": payload.get("sub", "unknown"),
-            "role": payload.get("role", "user"),
-        }
-
-    api_key_payload = getattr(request.state, "api_key_payload", None)
-    if isinstance(api_key_payload, dict):
-        return {
-            "user_id": None,
-            "username": getattr(request.state, "user", "api_key_user"),
-            "role": api_key_payload.get("role", "api_user"),
-            "permissions": api_key_payload.get("permissions"),
-            "auth_type": getattr(request.state, "auth_type", "api_key"),
-        }
-    token = None
-
-    # 2. 从 Authorization 头获取
-    auth_header = request.headers.get("Authorization", "")
-    if auth_header.startswith("Bearer "):
-        token = auth_header[7:]
-
-    # 3. 从 Cookie 获取
-    if not token:
-        token = request.cookies.get("access_token")
-
-    if not token:
-        raise HTTPException(status_code=401, detail="缺少认证 Token")
-
-    payload = verify_token(token)
+    payload = getattr(request.state, "jwt_payload", None)
+    if not payload:
+        api_key_payload = getattr(request.state, "api_key_payload", None)
+        if isinstance(api_key_payload, dict):
+            return {
+                "user_id": None,
+                "username": getattr(request.state, "user", "api_key_user"),
+                "role": api_key_payload.get("role", "api_user"),
+                "permissions": api_key_payload.get("permissions"),
+                "auth_type": getattr(request.state, "auth_type", "api_key"),
+            }
+        auth_header = request.headers.get("Authorization", "")
+        token = auth_header[7:] if auth_header.startswith("Bearer ") else None
+        token = token or request.cookies.get("access_token")
+        if not token:
+            raise HTTPException(status_code=401, detail="缺少认证 Token")
+        payload = verify_token(token)
 
     # 检查 Token 是否已被注销
     from infra.token_revocation import is_token_revoked
@@ -65,7 +45,7 @@ async def get_current_user(request: Request) -> dict:
 
     return {
         "user_id": payload.get("user_id"),
-        "username": payload.get("sub", "unknown"),
+        "username": payload["sub"],
         "role": payload.get("role", "user"),
     }
 

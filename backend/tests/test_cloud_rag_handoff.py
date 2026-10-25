@@ -131,14 +131,17 @@ def test_local_character_cap_still_omits_whole_source():
 
 def test_public_service_none_keeps_whole_packet(monkeypatch):
     from knowledge.multiscale_rag import service
-    from knowledge.retrieval_core.documents import SourceReference
+    from knowledge.retrieval_core.documents import KnowledgeIndexDocument, SourceReference
 
     text = "完整公开库存资料。" * 2500 + "最终资格限制：尚未获准。"
-    doc = SimpleNamespace(
+    doc = KnowledgeIndexDocument(
         id="public-card",
+        domain_id="test",
         document_type="fact",
         title="完整资料",
         summary="错误的片段摘要",
+        content=text,
+        embedding_text=text,
         metadata={},
         source=SourceReference("synthetic.txt", 1, 2510),
     )
@@ -149,7 +152,9 @@ def test_public_service_none_keeps_whole_packet(monkeypatch):
     instance.analyzer = instance.reranker = instance.extractor = None
     instance.by_id = {}
     instance.retriever = SimpleNamespace(search=lambda *a, **kw: [candidate])
-    instance.evidence_by_parent = {doc.id: SimpleNamespace(content=text)}
+    instance.evidence_by_parent = {
+        doc.id: replace(doc, id="public-evidence", document_type="evidence", metadata={"parent_id": doc.id})
+    }
     instance.analyzer = SimpleNamespace(analyze=lambda *a, **_scope: SimpleNamespace(entities=[]))
     monkeypatch.setattr(service, "rerank_with_title_frames", lambda *a, **kw: [candidate])
     result = instance.retrieve("资料")

@@ -192,10 +192,7 @@ class SessionHistory:
     @staticmethod
     def _count_tokens(text: str, tokenizer=None) -> int:
         if tokenizer is not None:
-            try:
-                return len(tokenizer.encode(text))
-            except Exception:
-                pass
+            return len(tokenizer.encode(text))
         return max(1, len(text) // 2)
 
 # 全局会话历史管理器

@@ -432,8 +432,6 @@ class VLLMClient:
             "chat_template_kwargs": {"enable_thinking": enable_thinking},
         }
 
-        last_error: Optional[Exception] = None
-
         for attempt in range(self._max_retries):
             instance = await self._select_instance()
             if instance is None:
@@ -452,50 +450,28 @@ class VLLMClient:
                     headers=self._build_headers(),
                 )
 
-                if resp.status_code == 200:
-                    text = _strip_think_tags(completed_chat_content(resp.json()))
-                    if not text.strip():
-                        raise ValueError("vLLM completion has no usable content")
-                    elapsed = time.monotonic() - start_time
-                    async with self._instance_lock:
-                        instance.record_success(elapsed)
-                    return text
+                if resp.status_code != 200:
+                    raise ProviderResponseError(resp.status_code)
+                text = _strip_think_tags(completed_chat_content(resp.json()))
+                if not text.strip():
+                    raise ValueError("vLLM completion has no usable content")
+                async with self._instance_lock:
+                    instance.record_success(time.monotonic() - start_time)
+                return text
 
-                # 5xx 服务器错误可重试
-                if resp.status_code >= 500:
-                    last_error = ProviderResponseError(resp.status_code)
-                    async with self._instance_lock:
-                        instance.record_failure()
-                    if attempt < self._max_retries - 1:
-                        delay = self._compute_backoff(attempt)
-                        logger.warning(
-                            "实例 %s 返回 %d (尝试 %d/%d)，%.1fs 后重试",
-                            instance.name, resp.status_code,
-                            attempt + 1, self._max_retries, delay,
-                        )
-                        await asyncio.sleep(delay)
-                    continue
-
-                # 4xx 客户端错误不重试
-                raise ProviderResponseError(resp.status_code)
-
-            except (httpx.TimeoutException, httpx.ConnectError) as exc:
-                last_error = exc
+            except Exception as exc:
                 async with self._instance_lock:
                     instance.record_failure()
-                if attempt < self._max_retries - 1:
-                    delay = self._compute_backoff(attempt)
-                    logger.warning(
-                        "实例 %s 传输失败 type=%s (尝试 %d/%d)，%.1fs 后重试",
-                        instance.name, type(exc).__name__, attempt + 1, self._max_retries, delay,
-                    )
-                    await asyncio.sleep(delay)
-                continue
-
-            except Exception:
-                async with self._instance_lock:
-                    instance.record_failure()
-                raise
+                retryable = isinstance(exc, (httpx.TimeoutException, httpx.ConnectError)) or (
+                    isinstance(exc, ProviderResponseError) and exc.status_code >= 500
+                )
+                if not retryable or attempt == self._max_retries - 1:
+                    raise
+                delay = self._compute_backoff(attempt)
+                logger.warning(
+                    "实例 %s 请求失败 type=%s (尝试 %d/%d)，%.1fs 后重试",
+                    instance.name, type(exc).__name__, attempt + 1, self._max_retries, delay,
+                )
 
             finally:
                 async with self._instance_lock:
@@ -503,7 +479,7 @@ class VLLMClient:
                         0, instance.current_connections - 1
                     )
 
-        raise last_error or RuntimeError("vLLM 请求失败: 未知错误")
+            await asyncio.sleep(delay)
 
     async def _generate_stream_with_circuit(
         self,

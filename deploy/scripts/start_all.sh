@@ -279,10 +279,8 @@ start_docker() {
 
     log_step "启动 Docker Compose..."
     cd "${DEPLOY_DIR}"
-    docker compose up -d
-
-    log_step "等待服务就绪..."
-    wait_for_services_docker
+    # Compose owns the service list and healthchecks; a timeout must fail startup.
+    docker compose up -d --wait --wait-timeout 300
 
     print_status_docker
 }
@@ -407,39 +405,6 @@ wait_for_url() {
 
     log_error "${name} 启动超时 (${url})"
     return 1
-}
-
-# ------------------------------------------
-# 等待 Docker 服务就绪
-# ------------------------------------------
-wait_for_services_docker() {
-    local services=("vllm1" "vllm2" "backend" "frontend" "nginx")
-    local max_wait=300
-    local elapsed=0
-
-    while [[ ${elapsed} -lt ${max_wait} ]]; do
-        local all_healthy=true
-
-        for service in "${services[@]}"; do
-            local status
-            status=$(docker inspect --format='{{.State.Health.Status}}' "multipersonal-${service}" 2>/dev/null || echo "unknown")
-
-            if [[ "${status}" != "healthy" ]]; then
-                all_healthy=false
-                log_info "等待 ${service}... 状态: ${status}"
-            fi
-        done
-
-        if [[ "${all_healthy}" == true ]]; then
-            log_info "所有服务已就绪！"
-            return 0
-        fi
-
-        sleep 10
-        elapsed=$((elapsed + 10))
-    done
-
-    log_warn "部分服务未在 ${max_wait}s 内就绪，请手动检查"
 }
 
 # ------------------------------------------

@@ -87,7 +87,7 @@ async def execute_generation_evaluation(run_id: str, options: Mapping[str, Any],
     """Run one evaluation at a time so it cannot starve interactive inference."""
     async with _get_evaluation_lock():
         try:
-            from evaluation.generation_metrics import GenerationMetrics
+            from evaluation.generation_metrics import GenerationMetrics, validate_generation_response
 
             dataset_id = str(options.get("dataset_id") or "kisaki_v21")
             dataset = await asyncio.to_thread(load_runtime_dataset, dataset_id)
@@ -137,7 +137,11 @@ async def execute_generation_evaluation(run_id: str, options: Mapping[str, Any],
                     turns = conversation_turns(item)
                     history: list[dict[str, str]] = []
                     turn_responses: list[str] = []
+                    error = None
+                    reply = ""
                     try:
+                        if not turns:
+                            raise ValueError("evaluation prompt has no user turns")
                         for turn in turns:
                             generated = await generate_character_response(
                                 GenerationRequest(
@@ -152,7 +156,7 @@ async def execute_generation_evaluation(run_id: str, options: Mapping[str, Any],
                                 ),
                                 client.generate,
                             )
-                            reply = generated.reply
+                            reply = validate_generation_response(generated.reply)
                             turn_responses.append(reply)
                             history.extend(
                                 (
@@ -163,14 +167,17 @@ async def execute_generation_evaluation(run_id: str, options: Mapping[str, Any],
                     except Exception as exc:
                         generation_errors += 1
                         logger.warning("evaluation generation failed run=%s: %s", run_id, exc)
-                        reply = f"[GENERATION_ERROR] {type(exc).__name__}"
-                    responses.append(reply)
+                        error = {"error": str(exc), "error_type": type(exc).__name__}
+                        reply = ""
+                    else:
+                        responses.append(reply)
                     samples.append(
                         {
                             "id": item.get("id"),
                             "turns": turns,
                             "turn_responses": turn_responses,
                             "response": reply,
+                            **(error or {}),
                         }
                     )
 
@@ -179,11 +186,7 @@ async def execute_generation_evaluation(run_id: str, options: Mapping[str, Any],
                     "dataset_status": dataset.get("status"),
                     "dataset_role": dataset.get("evaluation_role"),
                     "total_prompts": len(prompts),
-                    "distinct_1": metric.distinct_n(responses, 1),
-                    "distinct_2": metric.distinct_n(responses, 2),
-                    "avg_repetition_rate": round(sum(metric.repetition_rate(reply) for reply in responses) / max(len(responses), 1), 4),
-                    "avg_length": metric.avg_length(responses),
-                    "max_repetition_ratio": round(sum(metric.max_repetition_ratio(reply) for reply in responses) / max(len(responses), 1), 4),
+                    **metric.summarize(responses),
                     "samples": samples,
                     "mock": False,
                     "generation_errors": generation_errors,

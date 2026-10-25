@@ -201,29 +201,19 @@ class MultiPersonalGatewayPlugin(Star):
         return "sha256=" + digest
 
     def _dedup_key(self, payload: dict[str, Any]) -> str:
-        message_id = str(payload.get("messageId") or "").strip()
-        if message_id:
-            return json.dumps(
-                [
-                    payload["platform"],
-                    payload["adapter"],
-                    payload["conversationType"],
-                    payload["conversationId"],
-                    payload["senderId"],
-                    message_id,
-                ],
-                ensure_ascii=False,
-            )
-        basis = "|".join(
+        # _build_payload always supplies a native or stable per-event message ID.
+        # Never merge distinct events merely because their text matches.
+        return json.dumps(
             [
-                str(payload.get("platform") or ""),
-                str(payload.get("adapter") or ""),
-                str(payload.get("conversationId") or ""),
-                str(payload.get("senderId") or ""),
-                str(payload.get("text") or ""),
-            ]
+                payload["platform"],
+                payload["adapter"],
+                payload["conversationType"],
+                payload["conversationId"],
+                payload["senderId"],
+                payload["messageId"],
+            ],
+            ensure_ascii=False,
         )
-        return "fallback:" + hashlib.sha256(basis.encode("utf-8")).hexdigest()
 
     def _is_duplicate(self, key: str) -> bool:
         now = time.monotonic()

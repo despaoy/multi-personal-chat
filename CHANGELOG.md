@@ -23,6 +23,27 @@ interfaces.
 
 ### Changed
 
+- Reject corrupt training configuration, invalid authentication subjects and failed
+  required migrations instead of silently substituting defaults. Share SQLite /
+  PostgreSQL task decoding and LoRA metadata reading without invented progress.
+- Initialize character embedding providers only when an index is actually loaded;
+  keep required-model/index failures explicit and source ownership checks intact.
+- Score only completed, nonblank evaluation responses; expose scored-response and
+  generation-error counts, retain failure receipts and reject invalid Gold data.
+- Consolidate async provider bridges, admin query filtering, authentication HTTP
+  handling and the backend launcher. Surface feedback and configured tokenizer errors.
+- Require an explicit model download source and wait for Compose service health.
+- Remove verified orphan UI components and unreferenced historical micro-reports;
+  preserve recovery manifests, operational evidence and regression coverage.
+- Update compatible frontend dependencies and remove unused component dependencies.
+
+
+- Consolidate vLLM transient retry handling and release active-connection
+  accounting before backoff. Exhausted requests preserve their actual error;
+  permanent HTTP/protocol failures never switch models or fabricate replies.
+- Bind chat request context once across selected generation providers while
+  retaining provider-specific adapter, timeout and concurrency controls.
+
 - Exclude local caches, test runtimes, environment files and database sidecars
   from container builds; keep personal comparison notes out of Git.
 - Use the official npm registry with package-store integrity verification enabled.

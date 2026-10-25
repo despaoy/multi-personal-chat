@@ -51,7 +51,11 @@ def create_access_token(username: str, user_id: int, role: str = "user") -> str:
 def verify_token(token: str) -> dict:
     """验证 JWT token，返回 payload 或抛出异常"""
     try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        payload = jwt.decode(
+            token, JWT_SECRET, algorithms=[JWT_ALGORITHM], options={"require": ["sub"]}
+        )
+        if not isinstance(payload["sub"], str) or not payload["sub"].strip():
+            raise jwt.InvalidTokenError("Token subject must be non-empty text")
         return payload
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token 已过期，请重新登录")

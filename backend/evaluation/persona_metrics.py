@@ -4,6 +4,8 @@ from __future__ import annotations
 import re
 from typing import List, Dict, Any, Callable, Optional
 
+from evaluation.generation_metrics import validate_generation_response
+
 # 角色关键词表（用于风格一致性检测）
 PERSONA_KEYWORDS: Dict[str, List[str]] = {
     "hutao": ["胡桃", "往生堂", "堂主", "嘿嘿", "本堂主", "生死", "葬仪", "嗨"],
@@ -52,7 +54,6 @@ class PersonaMetrics:
         scores = {}
         for criterion in rubric:
             name = criterion.get("name", "")
-            weight = criterion.get("weight", 0.0)
             scale = criterion.get("scale", 5)
             score = self._score_criterion(name, response, persona, scale)
             scores[name] = score
@@ -60,7 +61,6 @@ class PersonaMetrics:
 
     def _score_criterion(self, name: str, response: str, persona: Optional[str], scale: int) -> float:
         """对单个评分标准打分。"""
-        name_lower = name.lower()
         if "风格" in name or "一致性" in name:
             if persona and persona in PERSONA_KEYWORDS:
                 kws = PERSONA_KEYWORDS[persona]
@@ -113,7 +113,7 @@ class PersonaMetrics:
         """完整角色评估。"""
         results: Dict[str, Any] = {"by_persona": {}, "overall": {}}
         all_scores: Dict[str, List[float]] = {}
-        all_responses: List[str] = []
+        errors: List[Dict[str, Any]] = []
         all_persona_responses: Dict[str, List[str]] = {}
 
         for prompt_data in gold_prompts:
@@ -121,10 +121,11 @@ class PersonaMetrics:
             prompt = prompt_data.get("prompt", "")
             rubric = prompt_data.get("rubric", [])
             try:
-                resp = generate_fn(prompt)
-            except Exception as e:
-                resp = f"[ERROR] {e}"
-            all_responses.append(resp)
+                resp = validate_generation_response(generate_fn(prompt))
+            except Exception as exc:
+                errors.append({"id": prompt_data.get("id"), "prompt": prompt,
+                               "error": str(exc), "error_type": type(exc).__name__})
+                continue
             if persona:
                 all_persona_responses.setdefault(persona, []).append(resp)
 
@@ -154,6 +155,9 @@ class PersonaMetrics:
                 results["by_persona"][persona]["contradiction_rate"] = self.contradiction_rate(resps, facts)
 
         results["total_prompts"] = len(gold_prompts)
+        results["scored_responses"] = len(gold_prompts) - len(errors)
+        results["generation_errors"] = len(errors)
+        results["errors"] = errors
         return results
 
     def evaluate_mock(self, gold_prompts: List[Dict[str, Any]]) -> Dict[str, Any]:

@@ -105,18 +105,22 @@ def _curated_answer_documents(bundle):
         if source["domain_id"] != item["domain_id"] or source["domain_id"] not in bundle["domains"]:
             raise ValueError("Curated source has a conflicting document domain")
         excerpt = source["excerpt"]
-        documents.append({
-            **item,
-            "document_type": "evidence",
-            "title": PurePosixPath(excerpt["source_path"]).name,
-            "summary": "",
-            "content": curated_source_packet(source)["text"],
-            "source": dict(source_path=excerpt["source_path"], line_start=excerpt["line_start"], line_end=excerpt["line_end"]),
-            "metadata": {},
-            "reality_status": "unknown",
-            "temporal_scope": "unknown",
-            "content_scope": "unknown",
-        })
+        documents.append(
+            {
+                **item,
+                "document_type": "evidence",
+                "title": PurePosixPath(excerpt["source_path"]).name,
+                "summary": "",
+                "content": curated_source_packet(source)["text"],
+                "source": dict(
+                    source_path=excerpt["source_path"], line_start=excerpt["line_start"], line_end=excerpt["line_end"]
+                ),
+                "metadata": {},
+                "reality_status": "unknown",
+                "temporal_scope": "unknown",
+                "content_scope": "unknown",
+            }
+        )
     return documents
 
 
@@ -125,7 +129,9 @@ class EvidencePacketBuilder:
 
     def __init__(self, evidence_budget_chars: int | None = 6000):
         # None delegates whole-packet admission to the final model token budget.
-        if evidence_budget_chars is not None and (type(evidence_budget_chars) is not int or evidence_budget_chars < 600):
+        if evidence_budget_chars is not None and (
+            type(evidence_budget_chars) is not int or evidence_budget_chars < 600
+        ):
             raise ValueError("evidence_budget_chars must be an integer >= 600")
         self.evidence_budget = evidence_budget_chars
 

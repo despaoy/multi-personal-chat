@@ -88,15 +88,18 @@ def test_backend_concurrency_settings_are_tunable_in_both_compose_variants() -> 
 def test_all_backend_entrypoints_apply_shared_admission_limits() -> None:
     bare_start_text = BARE_START_SCRIPT.read_text(encoding="utf-8")
     legacy_entrypoint_text = LEGACY_BACKEND_ENTRYPOINT.read_text(encoding="utf-8")
+    canonical_entrypoint_text = (REPOSITORY_ROOT / "backend" / "run.py").read_text(encoding="utf-8")
 
     assert 'python run.py --host 0.0.0.0 --port "${BACKEND_PORT}"' in bare_start_text
     assert "python -m uvicorn app.main:app" not in bare_start_text
+    assert "from run import main" in legacy_entrypoint_text
+    assert "    main()" in legacy_entrypoint_text
     for setting in (
         "BACKEND_LIMIT_CONCURRENCY",
         "BACKEND_BACKLOG",
         "BACKEND_KEEPALIVE_TIMEOUT",
     ):
-        assert setting in legacy_entrypoint_text
+        assert setting in canonical_entrypoint_text
 
 def test_compose_lora_roots_use_their_respective_container_namespaces() -> None:
     standard = COMPOSE_FILE.read_text(encoding="utf-8")
@@ -168,3 +171,25 @@ def test_nginx_preserves_outer_https_for_csrf_origin_checks() -> None:
     assert "proxy_set_header X-Forwarded-Proto $scheme;" not in site_config
     assert "connect-src 'self';" in site_config
     assert "connect-src 'self' http://localhost:" not in site_config
+
+def test_compose_startup_waits_for_real_services_and_propagates_failure(tmp_path) -> None:
+    import os
+    import subprocess
+
+    script = BARE_START_SCRIPT.read_text(encoding="utf-8")
+    # Source the actual functions without invoking host/GPU checks or deployment.
+    functions = script.rsplit('main "$@"', 1)[0]
+    docker = tmp_path / "docker"
+    docker.write_text('#!/bin/bash\nprintf "%s\\n" "$*" >> "$DOCKER_CALLS"\nexit "${DOCKER_RESULT:-0}"\n')
+    docker.chmod(0o755)
+    calls = tmp_path / "calls"
+    env = {**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}", "DOCKER_CALLS": str(calls)}
+    command = functions + f'\nDEPLOY_DIR="{tmp_path}"\nMODEL_PATH="{tmp_path}"\nNGINX_PORT=80\nstart_docker\n'
+    result = subprocess.run(["bash", "-c", command], env=env, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    assert "compose up -d --wait --wait-timeout 300" in calls.read_text()
+    assert "inspect" not in calls.read_text()
+    calls.unlink()
+    failed = subprocess.run(["bash", "-c", command], env={**env, "DOCKER_RESULT": "17"}, capture_output=True, text=True)
+    assert failed.returncode == 17
+    assert calls.read_text().splitlines() == ["compose up -d --wait --wait-timeout 300"]

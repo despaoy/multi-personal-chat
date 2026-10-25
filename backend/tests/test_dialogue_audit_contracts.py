@@ -172,12 +172,12 @@ def test_rag_deduplicates_scene_and_delivers_exact_excerpt(monkeypatch, query, t
 
     from knowledge.multiscale_rag import service
     from knowledge.multiscale_rag.source_text import OriginalTextExtractor
-    from knowledge.retrieval_core.documents import SourceReference
+    from knowledge.retrieval_core.documents import KnowledgeIndexDocument, SourceReference
     source = SourceReference('test.txt', 4, 6)
     (tmp_path / 'test.txt').write_text('占位一\n占位二\n占位三\n未被改写的原文。\n完整条件：仅离线。\n最终例外：仍需审批。', encoding='utf-8')
-    docs = [SimpleNamespace(id=f'fact-{i}', document_type='fact', title=f'事实{i}',
+    docs = [KnowledgeIndexDocument(id=f'fact-{i}', document_type='fact', title=f'事实{i}',
                             summary=f'摘要{i}', metadata={'scene_id': 'shared-scene'}, source=source,
-                            domain_id='test', content=f'摘要{i}', reality_status='objective',
+                            domain_id='test', content=f'摘要{i}', embedding_text=f'摘要{i}', reality_status='objective',
                             temporal_scope='current', content_scope='main_story')
             for i in range(2)]
     candidates = [SimpleNamespace(document=d, to_dict=lambda: {}) for d in docs]
@@ -186,8 +186,14 @@ def test_rag_deduplicates_scene_and_delivers_exact_excerpt(monkeypatch, query, t
     instance.analyzer = None
     instance.retriever = SimpleNamespace(search=lambda *a, **kw: candidates)
     instance.reranker = None
-    instance.by_id = {'shared-scene': SimpleNamespace(id='shared-scene', title='共同场景', summary='背景内容')}
-    instance.evidence_by_parent = {'fact-0': SimpleNamespace(id='evidence-0', source=source)}
+    instance.by_id = {'shared-scene': KnowledgeIndexDocument(
+        'shared-scene', 'test', 'scene', '共同场景', '背景内容', '背景内容', '背景内容', source=source,
+    )}
+    evidence_text = '未被改写的原文。\n完整条件：仅离线。\n最终例外：仍需审批。'
+    instance.evidence_by_parent = {'fact-0': KnowledgeIndexDocument(
+        'evidence-0', 'test', 'evidence', '原文证据', evidence_text, evidence_text, evidence_text,
+        source=source, metadata={'parent_id': 'fact-0'},
+    )}
     instance.extractor = OriginalTextExtractor(tmp_path)
     instance.analyzer = SimpleNamespace(analyze=lambda *a, **_scope: SimpleNamespace(entities=[]))
     monkeypatch.setattr(service, 'rerank_with_title_frames', lambda *a, **kw: candidates)

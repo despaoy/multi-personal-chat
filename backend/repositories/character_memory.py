@@ -102,6 +102,10 @@ class CharacterMemoryRepository(Protocol):
         memory_ids: Optional[tuple[int, ...]] = None,
     ) -> list[dict[str, Any]]: ...
 
+    async def find_rule_memory_records(
+        self, character_id: str, user_scope: UserScope, keys: tuple[str, ...]
+    ) -> list[dict[str, Any]]: ...
+
     async def get_memory_record(
         self, memory_id: int, character_id: str, user_scope: UserScope
     ) -> Optional[dict[str, Any]]: ...

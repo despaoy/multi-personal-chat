@@ -528,7 +528,7 @@ export interface User {
   created_at: string;
   /** M3 fix: 用户角色，后端 login/register/me 均已返回该字段。
    * 缺省为 'user'，首个注册用户为 'admin'。用于前端按角色过滤侧栏导航项。
-   * 类型层强制必填，反映后端契约；AuthContext 会在解析时补齐缺省值。 */
+   * 类型层强制必填，反映后端契约。 */
   role: 'admin' | 'user';
 }
 
@@ -681,23 +681,10 @@ class ApiClient {
    * @returns {Promise<T>} 解析后的 JSON 响应
    */
   private async request<T>(path: string, options?: RequestInit): Promise<T> {
-    const hasBody = options?.body !== undefined;
-    const headers: Record<string, string> = {};
-
-    // 有请求体时自动设置 Content-Type（FormData 除外，让浏览器自动设置 boundary）
-    if (hasBody && !(options?.body instanceof FormData)) {
-      headers['Content-Type'] = 'application/json';
-    }
-
-    // 合并自定义 headers
-    if (options?.headers) {
-      if (options.headers instanceof Headers) {
-        options.headers.forEach((v, k) => { headers[k] = v; });
-      } else if (Array.isArray(options.headers)) {
-        for (const [k, v] of options.headers) { headers[k] = v; }
-      } else {
-        Object.assign(headers, options.headers);
-      }
+    const headers = new Headers(options?.headers);
+    // Let the browser choose the multipart boundary for FormData.
+    if (options?.body !== undefined && !(options.body instanceof FormData) && !headers.has('Content-Type')) {
+      headers.set('Content-Type', 'application/json');
     }
 
     const response = await fetch(`${API_BASE_URL}${path}`, {
@@ -708,7 +695,7 @@ class ApiClient {
 
     if (!response.ok) {
       // 401 时自动清理用户状态并跳转登录页
-      if (response.status === 401) {
+      if (response.status === 401 && !path.startsWith('/auth/')) {
         this._handle401Redirect();
       }
       // 尝试提取后端错误详情
@@ -737,7 +724,6 @@ class ApiClient {
    */
   private _handle401Redirect(): void {
     if (typeof window === 'undefined') return;
-    localStorage.removeItem('qq_assistant_user');
     if (window.location.pathname.includes('/login')) return;
     // C6 fix: httpOnly Cookie 无法被 JS 清除，必须调用后端 /api/auth/logout。
     // 否则 middleware 仍会看到 Cookie 存在，把 /login 重定向回 /，形成死锁。
@@ -752,6 +738,8 @@ class ApiClient {
     } catch { /* 忽略，继续跳转 */ }
     // 略微延迟跳转让 logout 请求发出，带 expired 参数绕过 middleware 死锁
     setTimeout(() => {
+      // A full navigation intentionally discards authenticated client state after expiry.
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
       window.location.href = '/login?expired=1';
     }, 50);
   }
