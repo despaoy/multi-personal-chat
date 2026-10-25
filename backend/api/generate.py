@@ -548,7 +548,7 @@ async def _generate_reply_body(
                                 model_name = provider.get_status()["modelName"]
                             if request_provider == "transformers_peft":
                                 # The local adapter was bound above under this same lock.
-                                kwargs['lora_name'] = None
+                                kwargs["lora_name"] = None
                             text, _cost = await provider.async_complete(messages, **kwargs)
                         return text
 
