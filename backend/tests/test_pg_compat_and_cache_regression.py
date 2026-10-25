@@ -98,7 +98,9 @@ class TestPaginationTotalCount:
 
 
 
-    def test_preference_total_matches_count(self, tmp_path):
+    @pytest.mark.asyncio
+    async def test_preference_api_total_is_filtered_and_independent_of_page(self, tmp_path):
+        from api.preferences import list_preferences
         db = self._make_temp_db(tmp_path)
         for i in range(12):
             db.execute_sql_insert(
@@ -112,13 +114,19 @@ class TestPaginationTotalCount:
                     "created_at": f"2026-01-{i+1:02d}",
                 },
             )
-        total = db.execute_sql("SELECT COUNT(*) AS cnt FROM preference_pairs", {})[0]["cnt"]
-        assert total == 12
-        total_approved = db.execute_sql(
-            "SELECT COUNT(*) AS cnt FROM preference_pairs WHERE review_status=:rs",
-            {"rs": "approved"},
-        )[0]["cnt"]
-        assert total_approved == 7
+        try:
+            for review_status, expected_total in ((None, 12), ("approved", 7), ("pending", 5)):
+                result = await list_preferences(
+                    review_status=review_status, limit=2, offset=1,
+                    current_user={"role": "admin"}, database=db,
+                )
+                assert result["total"] == expected_total, review_status
+                assert len(result["preferences"]) == 2
+                assert result["limit"] == 2 and result["offset"] == 1
+                if review_status:
+                    assert all(row["review_status"] == review_status for row in result["preferences"])
+        finally:
+            db.close_connection()
 
     # --- (b) API layer via TestClient ---
     #

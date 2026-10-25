@@ -48,15 +48,22 @@ test('unmounted authentication requests cannot update state', async () => {
   assert.deepEqual(provider.state, [null, true]);
 });
 
-test('login and registration use the shared API and never require localStorage', async () => {
-  const calls = [];
-  const provider = harness(Object.fromEntries(['login', 'register'].map(action => [action, async credentials => {
-    calls.push({ action, credentials });
-    return { user };
-  }])));
-  await provider.value.login('synthetic', 'not-a-real-password');
-  await provider.value.register('synthetic', 'not-a-real-password');
-  assert.equal(provider.state[0], user);
-  assert.deepEqual(calls.map(call => call.action), ['login', 'register']);
-  assert.ok(calls.every(call => call.credentials.username === 'synthetic'));
-});
+for (const action of ['login', 'register']) {
+  test(`${action} independently authenticates through the API without localStorage`, async () => {
+    const calls = [];
+    const provider = harness({ [action]: async credentials => {
+      calls.push(credentials);
+      return { user };
+    } });
+    await provider.value[action]('synthetic', 'not-a-real-password');
+    assert.equal(provider.state[0], user);
+    assert.deepEqual(calls, [{ username: 'synthetic', password: 'not-a-real-password' }]);
+  });
+
+  test(`${action} rejects failed authentication without changing the current user`, async () => {
+    const failure = new Error('Authentication rejected');
+    const provider = harness({ [action]: async () => { throw failure; } });
+    await assert.rejects(provider.value[action]('synthetic', 'not-a-real-password'), failure);
+    assert.equal(provider.state[0], null);
+  });
+}

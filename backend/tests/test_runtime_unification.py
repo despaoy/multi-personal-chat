@@ -190,18 +190,55 @@ def test_sqlite_assigns_exactly_one_admin_under_concurrent_registration(tmp_path
     assert sorted(user["role"] for user in users) == ["admin", "user"]
 
 
-def test_postgres_serializes_first_admin_with_transaction_lock():
-    from pathlib import Path
+@pytest.mark.asyncio
+@pytest.mark.parametrize("existing,bootstrap_only", [(False, False), (True, False), (True, True)])
+async def test_postgres_registration_executes_lock_before_decision_and_commit(monkeypatch, existing, bootstrap_only):
+    from unittest.mock import AsyncMock, MagicMock
 
-    source = (Path(__file__).parents[1] / "db" / "pg_database.py").read_text(
-        encoding="utf-8"
-    )
-    method = source.split("async def add_user", 1)[1].split(
-        "async def get_user", 1
-    )[0]
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://user:password@localhost/test")
+    from db.errors import RegistrationClosedError
+    from db.pg_database import PgDatabase
 
-    assert "pg_advisory_xact_lock" in method
-    assert method.index("pg_advisory_xact_lock") < method.index("count_stmt")
+    events = []
+    session = MagicMock()
+
+    async def execute(statement):
+        sql = str(statement)
+        if "pg_advisory_xact_lock" in sql:
+            assert not events
+            events.append("lock")
+            return None
+        if sql.startswith("SELECT"):
+            assert events == ["lock"]
+            events.append("read")
+            return SimpleNamespace(fetchone=lambda: {"id": 1} if existing else None)
+        assert sql.startswith("INSERT") and events == ["lock", "read"]
+        values = statement.compile().params
+        assert values["username"] == "alice" and values["password_hash"] == "hash"
+        assert values["role"] == ("user" if existing else "admin")
+        events.append("write")
+        return SimpleNamespace(inserted_primary_key=(2,))
+
+    async def commit():
+        assert events == ["lock", "read", "write"]
+        events.append("commit")
+
+    session.execute = AsyncMock(side_effect=execute)
+    session.commit = AsyncMock(side_effect=commit)
+    session.__aenter__.return_value = session
+    database = object.__new__(PgDatabase)
+    database.async_session = lambda: session
+    if bootstrap_only and existing:
+        with pytest.raises(RegistrationClosedError):
+            await database.add_user("alice", "hash", bootstrap_only=True)
+        assert events == ["lock", "read"]
+        session.commit.assert_not_awaited()
+    else:
+        result = await database.add_user("alice", "hash", bootstrap_only=bootstrap_only)
+        assert result["id"] == 2 and result["role"] == ("user" if existing else "admin")
+        assert events == ["lock", "read", "write", "commit"]
+    session.__aexit__.assert_awaited_once()
+
 
 def test_bounded_ttl_cache_expires_and_evicts(monkeypatch):
     from cache import ttl_value_cache

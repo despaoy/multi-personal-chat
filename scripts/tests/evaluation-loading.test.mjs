@@ -37,17 +37,31 @@ test('evaluation loads authoritative totals and records together', async () => {
   await harness(api, state)();
   assert.equal(state.error, null);
   assert.equal(state.loading, false);
+  assert.deepEqual(state.gold, { total: 1, prompts: ['sample'], category_breakdown: { sample: 1 } });
+  assert.deepEqual(state.runs, ['run']);
   assert.deepEqual(state.feedbacks, ['feedback']);
   assert.equal(state.feedbackTotal, 9);
   assert.equal(state.runsTotal, 7);
 });
 
-test('failed feedback is visible and never replaces existing records with fake empty success', async (t) => {
-  t.mock.method(console, 'error', () => {});
-  const state = { feedbacks: ['previous'], feedbackTotal: 3 };
-  await harness({ ...api, getFeedback: async () => { throw new Error('Feedback unavailable'); } }, state)();
-  assert.equal(state.error, 'Feedback unavailable');
-  assert.equal(state.loading, false);
-  assert.deepEqual(state.feedbacks, ['previous']);
-  assert.equal(state.feedbackTotal, 3);
+for (const endpoint of ['getGoldSet', 'getEvaluationRuns', 'getFeedback']) {
+  test(`${endpoint} failure is visible and preserves every previously loaded collection`, async (t) => {
+    t.mock.method(console, 'error', () => {});
+    const previous = {
+      gold: { total: 2, prompts: ['old'], category_breakdown: { old: 2 } },
+      runs: ['previous run'], runsTotal: 4,
+      feedbacks: ['previous feedback'], feedbackTotal: 3,
+    };
+    const state = structuredClone(previous);
+    await harness({ ...api, [endpoint]: async () => { throw new Error(`${endpoint} unavailable`); } }, state)();
+    assert.deepEqual(state, { ...previous, error: `${endpoint} unavailable`, loading: false });
+  });
+}
+
+test('disabled evaluation does not request data or overwrite state', async () => {
+  const state = { loading: false, error: 'previous error', runs: ['previous run'] };
+  const before = structuredClone(state);
+  const forbidden = Object.fromEntries(Object.keys(api).map(name => [name, () => assert.fail(`${name} called while disabled`)]));
+  await harness(forbidden, state, false)();
+  assert.deepEqual(state, before);
 });
