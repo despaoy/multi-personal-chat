@@ -18,12 +18,13 @@ from knowledge.retrieval_query_plan import RetrievalQueryPlan
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("mode,expected", [("fee", "partial_answer"), ("full", "grounded_answer")])
-async def test_unprepared_public_state_uses_final_fact_coverage(monkeypatch, mode, expected):
+async def test_unprepared_public_state_uses_final_fact_coverage(monkeypatch, mode, expected, provider_budget):
     reviewed, _ = await run(mode)
     install_public_source_reader(monkeypatch, generate, reviewed)
 
     async def planner(query, *, history, context_budget):
-        assert query == QUERY and history == () and context_budget.window_tokens > 0
+        assert query == QUERY and history == ()
+        assert context_budget is provider_budget.review
         return RetrievalQueryPlan(dependencies=deps(), public_obligations=obligations())
 
     async def no_binding(*_args, **_kwargs):
@@ -75,3 +76,21 @@ async def test_fact_scope_failure_stops_before_generation(monkeypatch, semantic_
     assert error.value.http_status == 503 and isinstance(error.value.__cause__, RuntimeError)
     assert str(error.value.__cause__) == "reviewer unavailable"
     model.assert_not_awaited()
+
+
+@pytest.fixture(params=["vllm", "openai_compat"], ids=["local-budget", "cloud-budget"])
+def provider_budget(monkeypatch, request):
+    from types import SimpleNamespace
+    from inference.provider_context import get_provider_context_budget
+
+    manager = SimpleNamespace(_current_provider=SimpleNamespace(value=request.param))
+    budget = get_provider_context_budget(manager, env={
+        "VLLM_MAX_MODEL_LEN": "8192", "OPENAI_COMPAT_CONTEXT_WINDOW_TOKENS": "8192",
+    })
+    assert budget.window_tokens > 0
+    if request.param == "openai_compat":
+        assert budget.review.window_tokens > 0
+    else:
+        assert budget.review is None
+    monkeypatch.setattr(chat_answer, "get_provider_context_budget", lambda: budget)
+    return budget

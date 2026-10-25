@@ -58,6 +58,7 @@ class LocalMeanPoolingEmbeddingProvider:
             import torch
 
             tokenizer, model = self._load()
+
             def encode(features):
                 hidden = model(**features).last_hidden_state
                 mask = features["attention_mask"].unsqueeze(-1).to(hidden.dtype)
@@ -65,8 +66,12 @@ class LocalMeanPoolingEmbeddingProvider:
 
             with torch.inference_mode():
                 return complete_embeddings(
-                    texts, tokenizer, max_tokens=self.max_length, batch_size=self.batch_size,
-                    dimension=self.dimension, encode_batch=encode,
+                    texts,
+                    tokenizer,
+                    max_tokens=self.max_length,
+                    batch_size=self.batch_size,
+                    dimension=self.dimension,
+                    encode_batch=encode,
                 )
 
     def embed_query(self, query: str) -> np.ndarray:
@@ -79,7 +84,6 @@ class LocalMeanPoolingEmbeddingProvider:
                     self._query_cache.popitem(last=False)
             self._query_cache.move_to_end(query)
             return cached.copy()
-
 
 
 class MatrixInnerProductIndex:

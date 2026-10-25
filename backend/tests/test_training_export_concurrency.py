@@ -52,9 +52,13 @@ def _prepare_export(monkeypatch, tmp_path: Path, *, slots: int = 1):
 
 async def _send_response(response: FileResponse, *, fail_on_body: bool = False):
     messages: list[dict] = []
+    incoming: asyncio.Queue[dict] = asyncio.Queue()
+    incoming.put_nowait({"type": "http.request", "body": b"", "more_body": False})
 
     async def receive():
-        return {"type": "http.request", "body": b"", "more_body": False}
+        # A completed request body is delivered once. Subsequent receives wait
+        # for disconnect, allowing Starlette's listener to yield to file streaming.
+        return await incoming.get()
 
     async def send(message: dict):
         if fail_on_body and message["type"] == "http.response.body":

@@ -55,7 +55,7 @@ chmod 600 backend/.env
 - `BASE_MODEL_PATH="$MULTIPERSONAL_LAB_ROOT"/runtime/models/Qwen3-8B-Instruct`
 - `LORA_PATH="$MULTIPERSONAL_LAB_ROOT"/runtime/loras`
 - `VLLM_LORA_ROOT="$MULTIPERSONAL_LAB_ROOT"/runtime/loras`
-- `EMBEDDING_MODEL_PATH="$MULTIPERSONAL_LAB_ROOT"/runtime/models/bge-m3`
+- `EMBEDDING_MODEL_PATH="$MULTIPERSONAL_LAB_ROOT"/runtime/models/paraphrase-multilingual-MiniLM-L12-v2`
 - `RERANKER_MODEL_PATH="$MULTIPERSONAL_LAB_ROOT"/runtime/models/bge-reranker-v2-m3`
 - `CHARACTER_RAG_INDEX_ROOT="$MULTIPERSONAL_LAB_ROOT"/runtime/rag/character_knowledge_index_v3`
 - `CHARACTER_RAG_ABSTAIN_THRESHOLD=0.25`
@@ -63,6 +63,8 @@ chmod 600 backend/.env
 Next.js 本地启动如需覆盖 `BACKEND_URL`，写入仓库根目录 `.env.local`，不要写入根目录 `.env`。
 
 ### 4.2 Docker Compose 模式
+
+`deploy/scripts/start_all.sh docker` 使用 Compose 的 `up --wait --wait-timeout 300` 等待实际服务的健康检查，要求支持该选项的 Docker Compose v2。服务失败或超时会以非零状态退出，不再依赖手写容器名清单，也不会将未就绪报告为启动成功。
 
 ```bash
 cd "$MULTIPERSONAL_LAB_ROOT/multi-personal-chat"
@@ -89,12 +91,12 @@ Compose 只从 `deploy/.env` 做变量插值。复制后至少设置：
 ### 4.3 角色知识索引
 
 多粒度角色知识索引是生成产物，不随源码发布。部署前使用与运行时相同的
-embedding 模型构建：
+本地 `paraphrase-multilingual-MiniLM-L12-v2` 模型构建（384 维，不可替换为 BGE-M3）：
 
 ```bash
 cd "$MULTIPERSONAL_LAB_ROOT/multi-personal-chat"
 python backend/scripts/build_character_rag_index.py \
-  --embedding-model-path "$MULTIPERSONAL_LAB_ROOT/runtime/models/bge-m3"
+  --embedding-model-path "$MULTIPERSONAL_LAB_ROOT/runtime/models/paraphrase-multilingual-MiniLM-L12-v2"
 ```
 
 默认输出到
@@ -104,8 +106,8 @@ python backend/scripts/build_character_rag_index.py \
 
 裸机部署如将索引复制到仓库外，必须在 `backend/.env` 中更新
 `CHARACTER_RAG_INDEX_ROOT`。每个索引分区都应同时包含 `documents.jsonl`、
-`vectors.npy` 和 `manifest.json`。索引缺失时后端仍可启动，但角色作品问答会
-降级到通用知识库或拒答。
+`vectors.npy` 和 `manifest.json`。索引缺失时后端仍可启动，但需要该索引的
+角色作品检索会明确失败；聊天检索接口返回 503，不会自动改查通用知识库或改用其他提供方。
 
 ## 5. 验证源码
 

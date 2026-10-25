@@ -65,8 +65,11 @@ def _load_bundle(root: Path) -> tuple[list[KnowledgeIndexDocument], np.ndarray, 
         raise ValueError(f"多粒度索引数量或维度异常: {root} {vectors.shape} docs={len(documents)}")
     if not np.isfinite(vectors).all():
         raise ValueError(f"Non-finite character index vectors: {root}")
-    if (manifest["document_count"] != len(documents) or manifest["vector_dimension"] != vectors.shape[1]
-            or manifest["normalized"] is not True):
+    if (
+        manifest["document_count"] != len(documents)
+        or manifest["vector_dimension"] != vectors.shape[1]
+        or manifest["normalized"] is not True
+    ):
         raise ValueError(f"Character index manifest does not match vectors: {root}")
     return documents, vectors, manifest
 
@@ -104,9 +107,8 @@ class MultiScaleRagRuntime:
         self._service: RoutedMultiScaleService | None = None
         self._base_config = get_default_registry().require("tsukiyashiro_kisaki")
         self._gate = QueryAnalyzer([self._base_config])
-        self._provider = LocalMeanPoolingEmbeddingProvider(
-            model_path=os.getenv("EMBEDDING_MODEL_PATH", "").strip() or None
-        )
+        self._model_path = os.getenv("EMBEDDING_MODEL_PATH", "").strip() or None
+        self._provider: LocalMeanPoolingEmbeddingProvider | None = None
         self._stats: dict[str, Any] = {}
 
     @property
@@ -119,15 +121,20 @@ class MultiScaleRagRuntime:
         with self._load_lock:
             if self._service is not None:
                 return True
+            provider = self._provider
+            if provider is None:
+                provider = LocalMeanPoolingEmbeddingProvider(model_path=self._model_path)
             bundles = [
                 _load_bundle(self.index_root / "card_index"),
                 _load_bundle(self.index_root / "scene_story_index"),
                 _load_bundle(self.index_root / "evidence_index"),
             ]
-            if any(manifest["embedding_model"] != self._provider.model_id for _, _, manifest in bundles):
+            if any(manifest["embedding_model"] != provider.model_id for _, _, manifest in bundles):
                 raise ValueError("Character index embedding model does not match query encoder")
-            if any(manifest.get("embedding_encoding") != self._provider.encoding_contract for _, _, manifest in bundles):
-                raise ValueError("Character index encoding contract mismatch; rebuild with build_character_rag_index.py")
+            if any(manifest.get("embedding_encoding") != provider.encoding_contract for _, _, manifest in bundles):
+                raise ValueError(
+                    "Character index encoding contract mismatch; rebuild with build_character_rag_index.py"
+                )
             documents = [document for docs, _, _ in bundles for document in docs]
             vectors = np.vstack([matrix for _, matrix, _ in bundles])
             domain_id = self._base_config.domain_id
@@ -156,7 +163,7 @@ class MultiScaleRagRuntime:
             service = RoutedMultiScaleService(
                 config,
                 _retrieval_index(domain_id, documents, vectors),
-                self._provider,
+                provider,
                 all_documents=documents,
                 source_extractor=OriginalTextExtractor(_REPO_ROOT),
                 context_max_chars=self.context_max_chars,
@@ -170,8 +177,9 @@ class MultiScaleRagRuntime:
                 "index_root": str(self.index_root),
                 "documents": len(documents),
                 "document_type_counts": counts,
-                "embedding_model": self._provider.model_id,
+                "embedding_model": provider.model_id,
             }
+            self._provider = provider
             self._service = service
             logger.info("多粒度角色知识索引已加载: %s", self._stats)
             return True
@@ -181,7 +189,7 @@ class MultiScaleRagRuntime:
 
     def is_warm(self) -> bool:
         """Return without I/O; used only to choose the cold-start timeout."""
-        return self._service is not None and self._provider._model is not None
+        return self._service is not None and self._provider is not None and self._provider._model is not None
 
     def stats(self) -> dict[str, Any]:
         self._ensure_loaded()
@@ -217,7 +225,9 @@ class MultiScaleRagRuntime:
         if knowledge_boundary is None:
             result = self._service.retrieve(query, top_k=top_k, analysis=gate, **scoped)
         else:
-            result = self._service.retrieve(query, top_k=top_k, knowledge_boundary=knowledge_boundary, analysis=gate, **scoped)
+            result = self._service.retrieve(
+                query, top_k=top_k, knowledge_boundary=knowledge_boundary, analysis=gate, **scoped
+            )
         results = result["results"]
         top = results[0] if results else {}
         value = top["rerank_score"] if results else 0.0
@@ -251,8 +261,13 @@ class MultiScaleRagRuntime:
             "query_analysis": {
                 "entities": gate.entities,
                 "registered_aliases": (
-                    {name: canonical for name in object_names if (canonical := self.config.canonical_entity(name)) is not None}
-                    if object_names is not None else gate.registered_aliases
+                    {
+                        name: canonical
+                        for name in object_names
+                        if (canonical := self.config.canonical_entity(name)) is not None
+                    }
+                    if object_names is not None
+                    else gate.registered_aliases
                 ),
                 "matched_domains": gate.matched_domains,
                 "candidate_types": result.get("candidate_types", []),

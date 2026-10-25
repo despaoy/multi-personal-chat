@@ -105,7 +105,7 @@ async def test_every_full_original_segment_reaches_planner(monkeypatch):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("mode", ["private", "mixed", "unknown", "missing_context", "branch", "legacy"])
-async def test_actual_route_uses_dependencies_not_presence_of_one_memory(monkeypatch, mode):
+async def test_actual_route_uses_dependencies_not_presence_of_one_memory(monkeypatch, mode, provider_budget):
     from db.schemas import MessageRequest
     from knowledge import public_question_binding, retrieval_query_plan
 
@@ -119,7 +119,8 @@ async def test_actual_route_uses_dependencies_not_presence_of_one_memory(monkeyp
     calls = []
 
     async def planner(query, *, history, context_budget):
-        assert query == QUERY and history == () and context_budget.window_tokens > 0
+        assert query == QUERY and history == ()
+        assert context_budget is provider_budget.review
         return RetrievalQueryPlan(status="applied", dependencies=dep)
 
     async def retrieve(*args, **kwargs):
@@ -182,3 +183,21 @@ def test_unknown_dependency_label_is_rejected_instead_of_rewritten(indices):
     value.pop("unresolved_source")
     with pytest.raises(ValueError, match="Unexpected dependency groups"):
         parse_dependencies(value, QUERY)
+
+
+@pytest.fixture(params=["vllm", "openai_compat"], ids=["local-budget", "cloud-budget"])
+def provider_budget(monkeypatch, request):
+    from types import SimpleNamespace
+    from inference.provider_context import get_provider_context_budget
+
+    manager = SimpleNamespace(_current_provider=SimpleNamespace(value=request.param))
+    budget = get_provider_context_budget(manager, env={
+        "VLLM_MAX_MODEL_LEN": "8192", "OPENAI_COMPAT_CONTEXT_WINDOW_TOKENS": "8192",
+    })
+    assert budget.window_tokens > 0
+    if request.param == "openai_compat":
+        assert budget.review.window_tokens > 0
+    else:
+        assert budget.review is None
+    monkeypatch.setattr(chat_answer, "get_provider_context_budget", lambda: budget)
+    return budget

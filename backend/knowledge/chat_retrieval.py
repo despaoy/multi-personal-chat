@@ -20,8 +20,12 @@ async def retrieve_chat_knowledge(
         # An explicit named-document read owns its evidence targets. Incidental
         # character names must not replace those sources with curated lore.
         # Ordinary character questions retain the strict domain availability gate.
-        if question_binding is not None:
+        use_curated = not filters and not requested_document_titles(query)
+        if question_binding is not None or use_curated:
             from knowledge.multiscale_rag.runtime import get_multiscale_rag_service
+
+            character_rag = get_multiscale_rag_service()
+        if question_binding is not None:
             from knowledge.public_domains import (
                 all_bound_objects_generic,
                 domain_plan,
@@ -30,19 +34,15 @@ async def retrieve_chat_knowledge(
                 retrieve_domains,
             )
 
-            character_rag = get_multiscale_rag_service()
             plan = domain_plan(question_binding, character_rag.config)
             if requires_independent_domains(plan):
                 return retrieve_domains(plan, query, top_k, curated=character_rag.retrieve_with_citations, generic=retrieve_generic)
-            if not filters and not requested_document_titles(query):
+            if use_curated:
                 if any(obj["authority"] == "curated_character" for obj in plan["objects"]):
                     return retrieve_curated_scope(plan, query, top_k, curated=character_rag.retrieve_with_citations)
                 if all_bound_objects_generic(plan):
                     return retrieve_generic()
-        if not filters and not requested_document_titles(query):
-            from knowledge.multiscale_rag.runtime import get_multiscale_rag_service
-
-            character_rag = get_multiscale_rag_service()
+        if use_curated:
             # retrieve_with_citations 内部完成惰性加载和域门控。不能先用
             # is_available() 短路，否则冷启动首条请求无法触发索引加载。
             bundle = character_rag.retrieve_with_citations(query, top_k=top_k, filters=filters)

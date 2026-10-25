@@ -159,3 +159,77 @@ def test_training_callback_observes_cancellation():
     trainer.cancel_event = event
     with pytest.raises(RuntimeError, match="cancelled"):
         trainer._check_cancelled()
+
+
+@pytest.mark.parametrize("stage", ["configuration", "construction", "training"])
+@pytest.mark.parametrize("terminal_status", ["cancelled", "interrupted"])
+def test_training_stages_preserve_cancellation(monkeypatch, tmp_path, stage, terminal_status):
+    import threading
+
+    monkeypatch.setenv("LORA_PATH", str(tmp_path / "loras"))
+    manager = task_manager.SimpleLoRATrainer(base_dir=tmp_path)
+    event = threading.Event()
+    manager._cancel_events["task"] = event
+    manager.tasks["task"] = {"status": "pending", "progress": 0}
+    calls = []
+
+    def cancel(at):
+        calls.append(at)
+        if at == stage:
+            event.set()
+            if terminal_status == "interrupted":
+                manager.tasks["task"].update(status="interrupted", error_message="shutdown")
+
+    class Config:
+        output_dir = str(tmp_path / "output")
+
+        def validate(self):
+            cancel("configuration")
+            return []
+
+        def save(self, path):
+            pass
+
+    class Trainer:
+        def __init__(self, config):
+            cancel("construction")
+
+        def train(self):
+            assert self.cancel_event is event
+            cancel("training")
+            return tmp_path / "output"
+
+    monkeypatch.setitem(sys.modules, "training.trainer", SimpleNamespace(LoRATrainer=Trainer))
+    monkeypatch.setattr(manager, "_build_config", lambda *args: Config())
+    asyncio.run(manager._run_training("task", "adapter", tmp_path, {}))
+    assert manager.tasks["task"]["status"] == terminal_status
+    assert "output_dir" not in manager.tasks["task"]
+    assert calls[-1] == stage
+    if terminal_status == "interrupted":
+        assert manager.tasks["task"]["error_message"] == "shutdown"
+    else:
+        assert manager.tasks["task"]["finished_at"]
+
+
+def test_training_list_does_not_replace_database_failure_with_memory(monkeypatch, tmp_path):
+    monkeypatch.setenv("LORA_PATH", str(tmp_path / "loras"))
+    manager = task_manager.SimpleLoRATrainer(base_dir=tmp_path)
+    manager.tasks["cached"] = {"status": "completed"}
+
+    def fail():
+        raise OSError("database unavailable")
+
+    manager.db = SimpleNamespace(get_all_training_tasks=fail)
+    with pytest.raises(OSError, match="database unavailable"):
+        asyncio.run(manager.get_all_tasks())
+
+
+def test_training_restore_cannot_start_with_unknown_database_state(monkeypatch, tmp_path):
+    monkeypatch.setenv("LORA_PATH", str(tmp_path / "loras"))
+
+    def fail():
+        raise OSError("database unavailable")
+
+    database = SimpleNamespace(get_all_training_tasks=fail)
+    with pytest.raises(OSError, match="database unavailable"):
+        task_manager.SimpleLoRATrainer(base_dir=tmp_path, db=database)

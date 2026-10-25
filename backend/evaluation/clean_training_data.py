@@ -177,20 +177,16 @@ def _persona_consistency_check(item: Dict[str, Any], persona: Optional[str]) -> 
     """角色一致性预检，返回 (pass, contradiction_rate)。"""
     if not persona:
         return True, 0.0
-    try:
-        from evaluation.persona_metrics import PersonaMetrics, PERSONA_FACTS
-        if persona not in PERSONA_FACTS:
-            return True, 0.0
-        convs = item.get("conversations", [])
-        responses = [c.get("content", "") or c.get("value", "") for c in convs if c.get("role") == "assistant" or c.get("from") == "gpt"]
-        if not responses:
-            return True, 0.0
-        metrics = PersonaMetrics()
-        rate = metrics.contradiction_rate(responses, PERSONA_FACTS[persona])
-        return rate <= _CONTRADICTION_THRESHOLD, rate
-    except Exception as e:
-        logger.warning(f"角色一致性预检失败: {e}")
+    from evaluation.persona_metrics import PersonaMetrics, PERSONA_FACTS
+    if persona not in PERSONA_FACTS:
         return True, 0.0
+    convs = item.get("conversations", [])
+    responses = [c.get("content", "") or c.get("value", "") for c in convs if c.get("role") == "assistant" or c.get("from") == "gpt"]
+    if not responses:
+        return True, 0.0
+    metrics = PersonaMetrics()
+    rate = metrics.contradiction_rate(responses, PERSONA_FACTS[persona])
+    return rate <= _CONTRADICTION_THRESHOLD, rate
 
 
 def _safety_reverse_check(item: Dict[str, Any]) -> bool:
@@ -198,39 +194,33 @@ def _safety_reverse_check(item: Dict[str, Any]) -> bool:
 
     返回 True 表示通过（未触发或已拒绝），False 表示需移入审核队列。
     """
-    try:
-        safety_path = Path(__file__).parent / "safety_test_set.json"
-        if not safety_path.exists():
-            return True
-        with open(safety_path, "r", encoding="utf-8") as f:
-            safety_set = json.load(f)
-        safety_prompts: Set[str] = set()
-        for category_prompts in safety_set.values():
-            if isinstance(category_prompts, list):
-                for p in category_prompts:
-                    if isinstance(p, dict) and "prompt" in p:
-                        safety_prompts.add(p["prompt"].strip())
+    safety_path = Path(__file__).parent / "safety_test_set.json"
+    with open(safety_path, "r", encoding="utf-8") as f:
+        safety_set = json.load(f)
+    safety_prompts: Set[str] = set()
+    for category_prompts in safety_set.values():
+        if isinstance(category_prompts, list):
+            for p in category_prompts:
+                if isinstance(p, dict) and "prompt" in p:
+                    safety_prompts.add(p["prompt"].strip())
 
-        convs = item.get("conversations", [])
-        for c in convs:
-            role = c.get("role") or c.get("from", "")
-            if role in ("user", "human"):
-                content = (c.get("content", "") or c.get("value", "")).strip()
-                if content in safety_prompts:
-                    assistant_replies = [
-                        (cc.get("content", "") or cc.get("value", ""))
-                        for cc in convs
-                        if cc.get("role") == "assistant" or cc.get("from") == "gpt"
-                    ]
-                    if assistant_replies:
-                        reply = assistant_replies[0].lower()
-                        refusal_markers = ["不能", "拒绝", "不可以", "无法", "抱歉", "不会", "作为", "我是", "坚持"]
-                        if not any(m in reply for m in refusal_markers):
-                            return False
-        return True
-    except Exception as e:
-        logger.warning(f"安全反向检测失败: {e}")
-        return True
+    convs = item.get("conversations", [])
+    for c in convs:
+        role = c.get("role") or c.get("from", "")
+        if role in ("user", "human"):
+            content = (c.get("content", "") or c.get("value", "")).strip()
+            if content in safety_prompts:
+                assistant_replies = [
+                    (cc.get("content", "") or cc.get("value", ""))
+                    for cc in convs
+                    if cc.get("role") == "assistant" or cc.get("from") == "gpt"
+                ]
+                if assistant_replies:
+                    reply = assistant_replies[0].lower()
+                    refusal_markers = ["不能", "拒绝", "不可以", "无法", "抱歉", "不会", "作为", "我是", "坚持"]
+                    if not any(m in reply for m in refusal_markers):
+                        return False
+    return True
 
 
 def _split_conversations(items: List[Dict[str, Any]], seed: int = _SEED) -> Dict[str, List[Dict[str, Any]]]:

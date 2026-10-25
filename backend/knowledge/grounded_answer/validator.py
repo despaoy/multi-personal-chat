@@ -93,7 +93,9 @@ class CitationValidator:
         if result.duplicate_count:
             result.warnings.append(f"duplicate_citations:{result.duplicate_count}")
         if len(result.valid_keys) > self.max_citations:
-            raise RuntimeError(f"Grounded model citation count exceeds limit: {len(result.valid_keys)}>{self.max_citations}")
+            raise RuntimeError(
+                f"Grounded model citation count exceeds limit: {len(result.valid_keys)}>{self.max_citations}"
+            )
         if packet.documents and not result.valid_keys:
             result.warnings.append("missing_valid_citation")
         if not packet.documents and CITATION_MARKER_RE.search(answer_text):

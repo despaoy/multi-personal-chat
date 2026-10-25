@@ -1,4 +1,4 @@
-﻿"""用户数据持久化API"""
+"""用户数据持久化API"""
 
 import logging
 
@@ -20,8 +20,7 @@ async def get_user_data(
     repository: UserDataRepository = Depends(get_user_data_repository),
 ):
     """获取用户表单数据"""
-    # get_current_user 返回 {"user_id": ..., "username": ...}（无 "sub" 键）
-    username = current_user.get("username") or "unknown"
+    username = current_user["username"]
 
     try:
         data = await repository.load(username, page_key or None)
@@ -44,8 +43,7 @@ async def save_user_data(
     repository: UserDataRepository = Depends(get_user_data_repository),
 ):
     """保存用户表单数据"""
-    # get_current_user 返回 {"user_id": ..., "username": ...}（无 "sub" 键）
-    username = current_user.get("username") or "unknown"
+    username = current_user["username"]
 
     try:
         await repository.save(username, request.page_key, request.data_json)

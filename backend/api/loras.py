@@ -11,6 +11,7 @@ from fastapi import APIRouter, Request, HTTPException, Depends
 from app.dependencies import get_current_admin
 
 from db.adapter import db
+from db.lora_metadata import read_lora_metadata
 from db.database import LORA_ROOT, refresh_lora_dir_map
 from inference.lora_utils import resolve_lora_served_name
 from inference.adapter_checker import AdapterChecker
@@ -130,56 +131,6 @@ def _resolve_vllm_adapter_path(lora_name: str) -> str:
     return str(vllm_root / logical_rel)
 
 
-def _read_lora_metadata(adapter_path: Path) -> dict:
-    """Read LoRA metadata from adapter_config.json and trainer_state.json."""
-    meta = {"rank": 0, "alpha": 0, "trained_steps": 0, "total_steps": 0, "train_completed": False}
-
-    config_path = adapter_path / "adapter_config.json"
-    if config_path.exists():
-        try:
-            with open(config_path, "r", encoding="utf-8") as f:
-                cfg = json.load(f)
-            meta["rank"] = cfg.get("r", 0)
-            meta["alpha"] = cfg.get("lora_alpha", 0)
-        except Exception as e:
-            # H3 fix: 此前静默吞噬，adapter_config.json 读取失败时无法排障
-            logger.warning("读取 adapter_config.json 失败 (lora=%s): %s", adapter_path, e)
-
-    state_path = adapter_path / "trainer_state.json"
-    if not state_path.exists() and adapter_path.name == "final":
-        try:
-            checkpoint_dirs = [
-                d for d in adapter_path.parent.iterdir()
-                if d.is_dir() and d.name.startswith("checkpoint-")
-            ]
-            if checkpoint_dirs:
-                max_ckpt = max(checkpoint_dirs, key=lambda d: int(d.name.split("-")[-1]))
-                candidate = max_ckpt / "trainer_state.json"
-                if candidate.exists():
-                    state_path = candidate
-        except Exception as e:
-            # H3 fix: 此前静默吞噬，checkpoint 目录查找失败时无法排障
-            logger.warning("查找 checkpoint 目录失败 (lora=%s): %s", adapter_path, e)
-
-    if state_path and state_path.exists():
-        try:
-            with open(state_path, "r", encoding="utf-8") as f:
-                state = json.load(f)
-            meta["trained_steps"] = state.get("global_step", 0)
-            meta["total_steps"] = state.get("max_steps", 0)
-            meta["train_completed"] = state.get("best_metric") is not None or meta["trained_steps"] > 0
-        except Exception:
-            pass
-
-    adapter_file = adapter_path / "adapter_model.safetensors"
-    if adapter_file.exists() and meta["trained_steps"] == 0:
-        meta["train_completed"] = True
-        meta["trained_steps"] = 1
-        meta["total_steps"] = 1
-
-    return meta
-
-
 @router.get("/api/loras")
 async def get_loras(status: Optional[str] = None, current_user: dict = Depends(get_current_admin)):
     """获取LoRA模型列表"""
@@ -219,7 +170,7 @@ def _scan_loras_sync():
             continue
 
         # 读取元信息
-        meta = _read_lora_metadata(adapter_path)
+        meta = read_lora_metadata(adapter_path)
 
         # 计算 adapter 大小
         adapter_file = adapter_path / "adapter_model.safetensors"
@@ -229,7 +180,7 @@ def _scan_loras_sync():
             size_str = f"{size_mb:.0f}MB"
 
         trained_steps = meta["trained_steps"]
-        total_steps = meta["total_steps"] if meta["total_steps"] > 0 else trained_steps
+        total_steps = meta["total_steps"]
 
         if d.name in existing_map:
             # 更新已有记录

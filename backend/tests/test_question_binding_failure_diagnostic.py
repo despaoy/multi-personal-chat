@@ -79,7 +79,7 @@ async def test_failed_binding_exposes_internal_diagnostic_without_binding(defect
         assert error.reason == "invalid_or_incomplete_review" and diagnostic["raw"] is None
 
 
-async def run_api(tmp_path, monkeypatch, defect=None, *, private=True, fee_only=False, private_large=False):
+async def run_api(tmp_path, monkeypatch, defect=None, *, provider_budget, private=True, fee_only=False, private_large=False):
     from html import unescape
     from types import SimpleNamespace
 
@@ -95,7 +95,6 @@ async def run_api(tmp_path, monkeypatch, defect=None, *, private=True, fee_only=
 
     from character.models import CompiledCharacterContext
     from db.schemas import MessageRequest
-    from inference.provider_context import ProviderContextBudget
     from knowledge import public_fact_coverage, public_task_evidence, retrieval_query_plan
     from knowledge.retrieval_query_plan import RetrievalQueryPlan
 
@@ -109,13 +108,10 @@ async def run_api(tmp_path, monkeypatch, defect=None, *, private=True, fee_only=
     )
     assert not context.memory_packets and not context.used_memory_ids
     first_body = "霁浦登记不收费；当前完整公开页未载日期、材料、例外，缺项保持未知。" if fee_only else FIRST
-    if private_large:
-        monkeypatch.setattr(
-            chat_answer, 'get_provider_context_budget', lambda: ProviderContextBudget(8192)
-        )
 
     async def planner(query, *, history, context_budget):
-        assert query == QUERY and history == () and context_budget.window_tokens > 0
+        assert query == QUERY and history == ()
+        assert context_budget is provider_budget.review
         return RetrievalQueryPlan(status="applied", dependencies=deps())
 
     async def retrieve(*args, **kwargs):
@@ -238,10 +234,10 @@ async def run_api(tmp_path, monkeypatch, defect=None, *, private=True, fee_only=
     return observed, meta
 
 
-async def test_actual_generation_positive_keeps_five_facts_and_normal_private(tmp_path, monkeypatch):
+async def test_actual_generation_positive_keeps_five_facts_and_normal_private(tmp_path, monkeypatch, provider_budget):
     from knowledge.public_task_evidence import render_public_tasks
 
-    observed, meta = await run_api(tmp_path, monkeypatch)
+    observed, meta = await run_api(tmp_path, monkeypatch, provider_budget=provider_budget)
     assert observed["retrieval_calls"] == 1 and meta["answerMode"] == "grounded_answer" and not meta["abstained"]
     assert sum(len(row["fact_coverage"]) for row in render_public_tasks(observed["plan"].retrieval)) == 5
     assert "failure_diagnostic" not in observed["initial_retrieval"].public_task_review
@@ -249,12 +245,12 @@ async def test_actual_generation_positive_keeps_five_facts_and_normal_private(tm
 
 @pytest.mark.parametrize("defect", ["json", "typed_id", "fence", "non_text", "transport", "timeout"])
 @pytest.mark.parametrize("private", [True, False])
-async def test_failed_binding_stops_generation(tmp_path, monkeypatch, defect, private, caplog):
+async def test_failed_binding_stops_generation(tmp_path, monkeypatch, defect, private, caplog, provider_budget):
 
     from knowledge.public_question_binding import QuestionBindingReviewError
 
     with pytest.raises(chat_answer.ChatRetrievalError) as caught:
-        await run_api(tmp_path, monkeypatch, defect, private=private)
+        await run_api(tmp_path, monkeypatch, defect, private=private, provider_budget=provider_budget)
     assert caught.value.http_status == 503
     assert isinstance(caught.value.__cause__, QuestionBindingReviewError)
     assert MARKER not in caplog.text
@@ -319,10 +315,10 @@ async def budget_pressure_private(tmp_path):
     return context
 
 
-async def test_current_protocol_fee_only_and_private_original_is_partial(tmp_path, monkeypatch):
+async def test_current_protocol_fee_only_and_private_original_is_partial(tmp_path, monkeypatch, provider_budget):
     from knowledge.public_task_evidence import render_public_tasks
 
-    observed, meta = await run_api(tmp_path, monkeypatch, fee_only=True)
+    observed, meta = await run_api(tmp_path, monkeypatch, fee_only=True, provider_budget=provider_budget)
     rows = render_public_tasks(observed["plan"].retrieval)
     assert rows[0]["status"] == "partial_fact_evidence"
     assert [fact["status"] for fact in rows[0]["fact_coverage"]] == ["fact_evidence_admitted"] + [
@@ -331,10 +327,10 @@ async def test_current_protocol_fee_only_and_private_original_is_partial(tmp_pat
     assert meta["answerMode"] == "partial_answer" and meta["abstained"] and not meta.get("generationError")
 
 
-async def test_binding_failure_with_large_private_source_still_errors(tmp_path, monkeypatch):
+async def test_binding_failure_with_large_private_source_still_errors(tmp_path, monkeypatch, provider_budget):
 
     with pytest.raises(chat_answer.ChatRetrievalError) as caught:
-        await run_api(tmp_path, monkeypatch, "json", private_large=True)
+        await run_api(tmp_path, monkeypatch, "json", private_large=True, provider_budget=provider_budget)
     assert caught.value.http_status == 503
 
 
@@ -348,3 +344,21 @@ async def test_diagnostic_valid_json_cannot_grant_binding_or_hide_changed_input(
     error.diagnostic["input"][-1]["content"] = json.dumps(dict(query=QUERY + "其他问题", public_tasks=[]))
     with pytest.raises(ValueError, match="complete original input"):
         validate_question_binding(error.diagnostic, json.loads(error.diagnostic["input"][-1]["content"]))
+
+
+@pytest.fixture(params=["vllm", "openai_compat"], ids=["local-budget", "cloud-budget"])
+def provider_budget(monkeypatch, request):
+    from types import SimpleNamespace
+    from inference.provider_context import get_provider_context_budget
+
+    manager = SimpleNamespace(_current_provider=SimpleNamespace(value=request.param))
+    budget = get_provider_context_budget(manager, env={
+        "VLLM_MAX_MODEL_LEN": "8192", "OPENAI_COMPAT_CONTEXT_WINDOW_TOKENS": "8192",
+    })
+    assert budget.window_tokens > 0
+    if request.param == "openai_compat":
+        assert budget.review.window_tokens > 0
+    else:
+        assert budget.review is None
+    monkeypatch.setattr(chat_answer, "get_provider_context_budget", lambda: budget)
+    return budget

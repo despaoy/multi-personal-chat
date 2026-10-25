@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Button } from '@/components/ui/button';
@@ -53,9 +54,11 @@ export function AuthGuard({
             <h3 className="text-lg font-semibold">请先登录</h3>
             <p className="text-muted-foreground">登录后即可查看此页面内容</p>
           </div>
-          <Button onClick={() => window.location.href = '/login'}>
-            <LogIn className="mr-2 h-4 w-4" />
-            前往登录
+          <Button asChild>
+            <Link href="/login">
+              <LogIn className="mr-2 h-4 w-4" />
+              前往登录
+            </Link>
           </Button>
         </div>
       </AppLayout>

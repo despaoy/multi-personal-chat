@@ -145,12 +145,10 @@ async def test_pg_real_owner_lock_erasure_wins_before_pending_address_sql(databa
     url = os.environ["STAGE35_ADDRESS_PG_URL"]
     engine = create_async_engine(url)
     sessions = async_sessionmaker(engine)
-    c = await asyncpg.connect(
-        user="boot",
-        database="stage3_stage35_address_guards",
-        host="/home/boot/lhm/multipersonal-runtime/evaluations/r148pg.s3/socket",
-        port=25433,
-    )
+    # Observe locks in the same explicitly configured, isolated test database.
+    assert "/stage3_stage35_address_guards?" in url and "port=25433" in url
+    connect_args, connect_kwargs = engine.dialect.create_connect_args(engine.url)
+    c = await asyncpg.connect(*connect_args, **connect_kwargs)
     task = None
     try:
         async with sessions() as session:

@@ -65,3 +65,34 @@ test('successful generation still returns the original result', async (t) => {
   t.mock.method(globalThis, 'fetch', async () => Response.json(result));
   assert.deepEqual(await api.generateDialogues(request), result);
 });
+
+test('auth requests share the client but keep failed credentials in the current form', async (t) => {
+  const calls = [];
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    calls.push({ url, options });
+    return Response.json({ detail: 'Invalid credentials' }, { status: 401 });
+  });
+  // Auth errors must not start a logout or redirect, even outside /login.
+  globalThis.window = { location: { pathname: '/', href: '/' } };
+  t.after(() => { delete globalThis.window; });
+  for (const request of [() => api.login({ username: 'sample', password: 'synthetic' }),
+    () => api.register({ username: 'sample', password: 'synthetic' }), () => api.getCurrentUser()]) {
+    await assert.rejects(request, error => error.status === 401);
+  }
+  assert.deepEqual(calls.map(call => call.url), ['/api/auth/login', '/api/auth/register', '/api/auth/me']);
+  assert.equal(window.location.href, '/');
+  assert.ok(calls.every(call => call.options.credentials === 'include'));
+  assert.equal(calls[0].options.headers.get('Content-Type'), 'application/json');
+});
+
+test('request headers honor case-insensitive overrides and FormData boundaries', async (t) => {
+  const seen = [];
+  t.mock.method(globalThis, 'fetch', async (_, options) => {
+    seen.push(options.headers);
+    return Response.json({ success: true });
+  });
+  await api.request('/synthetic', { body: '{}', headers: { 'content-type': 'application/custom' } });
+  await api.request('/synthetic', { body: new FormData() });
+  assert.equal(seen[0].get('Content-Type'), 'application/custom');
+  assert.equal(seen[1].has('Content-Type'), false);
+});

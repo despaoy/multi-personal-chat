@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import ast
+import asyncio
 import io
 import sys
 import zipfile
@@ -109,24 +109,33 @@ def test_production_validation_allows_container_specific_lora_mount_paths():
     assert not any("must match" in warning for warning in result.warnings)
 
 
-def test_postgresql_sync_adapter_keeps_api_method_contracts():
-    source = (BACKEND_ROOT / "db" / "pg_database.py").read_text(encoding="utf-8")
-    tree = ast.parse(source)
-    adapter = next(
-        node for node in tree.body
-        if isinstance(node, ast.ClassDef) and node.name == "SyncPgAdapter"
-    )
-    methods = {
-        node.name: node
-        for node in adapter.body
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-    }
+def test_postgresql_sync_adapter_forwards_api_calls_and_returns_results(monkeypatch):
+    from unittest.mock import create_autospec, sentinel
 
-    save_args = [arg.arg for arg in methods["save_claw_tool"].args.args]
-    assert save_args == ["self", "name", "description", "code", "enabled"]
-    assert methods["get_training_tasks"].args.args[1].arg == "status"
-    update_args = [arg.arg for arg in methods["update_training_task"].args.args]
-    assert update_args[:3] == ["self", "task_id", "data"]
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://user:password@localhost/test")
+    from db.pg_database import PgDatabase, SyncPgAdapter
+
+    backend = create_autospec(PgDatabase, instance=True)
+    adapter = SyncPgAdapter(backend)
+    monkeypatch.setattr(adapter, "_run", asyncio.run)
+    cases = (
+        ("save_claw_tool", ("tool", "description", "code", False)),
+        ("save_training_task", ("task", {"status": "running"})),
+        ("get_training_task", ("task",)),
+        ("get_all_training_tasks", ()),
+        ("get_active_training_by_lora_name", ("role",)),
+        ("get_training_tasks", ("running",)),
+    )
+    for name, args in cases:
+        method = getattr(backend, name)
+        method.return_value = sentinel.result
+        assert getattr(adapter, name)(*args) is sentinel.result, name
+        method.assert_awaited_once_with(*args)
+    backend.update_training_task.return_value = sentinel.updated
+    original = {"status": "pending", "progress": 1}
+    assert adapter.update_training_task("task", original, status="running") is sentinel.updated
+    backend.update_training_task.assert_awaited_once_with("task", {"status": "running", "progress": 1})
+    assert original == {"status": "pending", "progress": 1}
 
 
 def test_path_validation_rejects_prefix_collision():
@@ -373,65 +382,44 @@ async def test_lora_switch_unloads_previous_adapter_before_loading_new(monkeypat
     ]
 
 
-def test_postgresql_adapter_exposes_training_persistence_contract():
-    source = (BACKEND_ROOT / "db" / "pg_database.py").read_text(encoding="utf-8")
-    tree = ast.parse(source)
-    classes = {
-        node.name: node for node in tree.body if isinstance(node, ast.ClassDef)
-    }
-    for class_name in ("PgDatabase", "SyncPgAdapter"):
-        methods = {
-            node.name
-            for node in classes[class_name].body
-            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-        }
-        assert {
-            "save_training_task",
-            "get_training_task",
-            "get_all_training_tasks",
-            "get_active_training_by_lora_name",
-        }.issubset(methods)
+def test_postgresql_row_iterators_preserve_batches_and_close_early(monkeypatch):
+    monkeypatch.setenv("DATABASE_URL", "postgresql+asyncpg://user:password@localhost/test")
+    from db.pg_database import PgDatabase, SyncPgAdapter
 
+    events = []
+    rows = [{"id": 1}, {"id": 2}, {"id": 3}]
 
-def test_all_db_backends_expose_iter_chunks_with_document_contract():
-    """All DB backends (SQLiteDB, PgDatabase, SyncPgAdapter) must implement
-    iter_chunks_with_document to support vector index rebuild without N+1
-    queries. PgDatabase provides an async row iterator and snapshot batches
-    consumed by the synchronous adapter.
-    """
-    source = (BACKEND_ROOT / "db" / "pg_database.py").read_text(encoding="utf-8")
-    tree = ast.parse(source)
-    classes = {
-        node.name: node for node in tree.body if isinstance(node, ast.ClassDef)
-    }
-    pg_methods = {
-        node.name
-        for node in classes["PgDatabase"].body
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-    }
-    sync_methods = {
-        node.name
-        for node in classes["SyncPgAdapter"].body
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-    }
-    # PgDatabase: async row iterator + snapshot batches for SyncPgAdapter
-    assert "iter_chunks_with_document" in pg_methods, "PgDatabase must implement iter_chunks_with_document"
-    assert "iter_chunk_document_batches" in pg_methods, "PgDatabase must implement snapshot batches for the sync adapter"
-    # SyncPgAdapter: sync generator
-    assert "iter_chunks_with_document" in sync_methods, "SyncPgAdapter must implement iter_chunks_with_document"
+    async def batches(*, batch_size):
+        events.append(("open", batch_size))
+        try:
+            yield rows[:2]
+            yield rows[2:]
+        finally:
+            events.append("closed")
 
-    # SQLiteDB: sync generator (already exists, verify contract)
-    sqlite_source = (BACKEND_ROOT / "db" / "database.py").read_text(encoding="utf-8")
-    sqlite_tree = ast.parse(sqlite_source)
-    sqlite_classes = {
-        node.name: node for node in sqlite_tree.body if isinstance(node, ast.ClassDef)
-    }
-    sqlite_methods = {
-        node.name
-        for node in sqlite_classes["SQLiteDB"].body
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-    }
-    assert "iter_chunks_with_document" in sqlite_methods, "SQLiteDB must implement iter_chunks_with_document"
+    backend = object.__new__(PgDatabase)
+    monkeypatch.setattr(backend, "iter_chunk_document_batches", batches)
+
+    async def consume_async():
+        iterator = PgDatabase.iter_chunks_with_document(backend, batch_size=2)
+        assert [row async for row in iterator] == rows
+        early = PgDatabase.iter_chunks_with_document(backend, batch_size=2)
+        assert await anext(early) == rows[0]
+        await early.aclose()
+
+    asyncio.run(consume_async())
+    assert events == [("open", 2), "closed"] * 2
+    events.clear()
+    adapter = SyncPgAdapter(backend)
+    # One loop spans iteration, matching the real bridge's loop ownership.
+    with asyncio.Runner() as runner:
+        monkeypatch.setattr(adapter, "_run", runner.run)
+        assert list(adapter.iter_chunks_with_document(batch_size=2)) == rows
+        early = adapter.iter_chunks_with_document(batch_size=2)
+        assert next(early) == rows[0]
+        early.close()
+    assert events == [("open", 2), "closed"] * 2
+    assert not adapter._knowledge_readers
 
 
 def test_production_registration_allows_only_bootstrap_user(monkeypatch):

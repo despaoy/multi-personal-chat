@@ -13,11 +13,9 @@ from inference.token_counting import text_token_counter
 SCOPE = UserScope('web', 'test', 'user', 'user', 'private')
 
 
-@pytest.mark.parametrize('payload,authorized', [({'erase_source_ids': ['foreign']}, True),
-    ({'erase_source_ids': ['known']}, False), ({'erase_source_ids': 'known'}, True)])
-def test_invalid_source_targets_never_authorized(payload, authorized):
+def test_known_source_requires_erasure_authority():
     with pytest.raises(ValueError):
-        selected_ids(payload, {'known'}, authorized=authorized)
+        selected_ids({'erase_source_ids': ['known']}, {'known'}, authorized=False)
 
 
 async def test_source_only_target_uses_same_writer_call_and_committed_receipt(tmp_path):

@@ -1,7 +1,5 @@
 """知识库API - 知识库/文件夹/文档管理 + ZIP上传 + 文件夹扫描 + 搜索"""
 
-from knowledge import index_lifecycle
-
 import asyncio
 import io
 import logging
@@ -13,8 +11,6 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 
-from knowledge.text_decode import KnowledgeTextEncoding, decode_knowledge_text
-from infra.input_validator import KNOWLEDGE_DOCUMENT_SCHEMA, InputValidator
 from app.dependencies import get_current_admin
 from app.runtime import get_runtime_container
 from db.adapter import db
@@ -31,10 +27,14 @@ from db.schemas import (
     KnowledgeFolderCreate,
     KnowledgeSearchRequest,
 )
-from infra.db_executor import run_db
 from infra.bounded_executor import BlockingWorkTimeout
+from infra.db_executor import run_db
+from infra.input_validator import KNOWLEDGE_DOCUMENT_SCHEMA, InputValidator
+from knowledge import index_lifecycle
+from knowledge.text_decode import KnowledgeTextEncoding, decode_knowledge_text
 
 logger = logging.getLogger(__name__)
+
 
 def _knowledge_search_response(query: str, results: list[dict[str, Any]]) -> dict[str, Any]:
     """Derive the two supported response labels from the completed results."""
@@ -45,6 +45,7 @@ def _knowledge_search_response(query: str, results: list[dict[str, Any]]) -> dic
         "searchType": "rag_pipeline" if results else "empty",
         "retrievalMode": "evidence" if results else "empty",
     }
+
 
 router = APIRouter()
 
@@ -197,7 +198,7 @@ async def update_knowledge_base(
     result = await run_db(db.update_knowledge_base, kb_id, data)
     if result is None:
         raise HTTPException(status_code=404, detail="知识库不存在")
-    if result['name'] != existing['name']:
+    if result["name"] != existing["name"]:
         await run_db(index_lifecycle._invalidate_local_knowledge_index)
     return {"success": True, "base": result}
 
@@ -305,7 +306,9 @@ def _knowledge_import_result(
 
 @router.post("/api/knowledge/bases/{kb_id}/upload-zip")
 async def upload_zip(
-    kb_id: int, file: UploadFile = File(...), current_user: dict = Depends(get_current_admin),
+    kb_id: int,
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_admin),
     text_encoding: KnowledgeTextEncoding = "unicode",
 ):
     """上传ZIP文件，自动按目录结构创建文件夹和文档
@@ -504,7 +507,9 @@ async def scan_knowledge_dirs(request: Request, current_user: dict = Depends(get
 
 @router.post("/api/knowledge/scan/import")
 async def import_scanned_directory(
-    directory_name: str, kb_id: int = None, current_user: dict = Depends(get_current_admin),
+    directory_name: str,
+    kb_id: int = None,
+    current_user: dict = Depends(get_current_admin),
     text_encoding: KnowledgeTextEncoding = "unicode",
 ):
     """将扫描到的目录导入到知识库
@@ -602,7 +607,6 @@ async def import_scanned_directory(
 
                     # 数据与 dirty 修订已原子提交；此处仅清除当前进程的加速状态
                     await run_db(index_lifecycle._invalidate_local_knowledge_index)
-
 
                 except BlockingWorkTimeout:
                     raise
@@ -790,6 +794,7 @@ async def delete_knowledge_document(doc_id: int, current_user: dict = Depends(ge
 # 搜索
 # ============================================
 
+
 @router.post("/api/knowledge/search")
 async def search_knowledge(
     request: KnowledgeSearchRequest,
@@ -826,8 +831,12 @@ async def search_knowledge(
         from knowledge.rag_helper import get_rag_helper
 
         results = await asyncio.to_thread(
-            get_rag_helper().retrieve_context, query, top_k=top_k,
-            enable_rerank=True, filters=filters, use_cache=False,
+            get_rag_helper().retrieve_context,
+            query,
+            top_k=top_k,
+            enable_rerank=True,
+            filters=filters,
+            use_cache=False,
         )
         if await run_db(index_lifecycle._get_rebuild_revision) != revision:
             raise RuntimeError("Knowledge authority changed during search")

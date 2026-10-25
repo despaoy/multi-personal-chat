@@ -179,10 +179,12 @@ class SentenceTransformerEmbeddingProvider:
     def _embed_texts_locked(self, texts: list[str]) -> np.ndarray:
         model = self._load_model_locked()
         return sentence_transformer_embeddings(
-            model, texts, batch_size=self._batch_size, dimension=self.dimension,
+            model,
+            texts,
+            batch_size=self._batch_size,
+            dimension=self.dimension,
             timeout_seconds=self._timeout_seconds,
         )
-
 
     def embed_query(self, query: str) -> np.ndarray:
         return self.embed_texts([query])[0]

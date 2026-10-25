@@ -98,7 +98,11 @@ class GroundedAnswerService:
         self._index_version_resolver = index_version_resolver
         self.abstention_reply = abstention_reply or DEFAULT_ABSTENTION_REPLY
         self.generation_timeout = float(generation_timeout)
-        if isinstance(generation_timeout, bool) or not isfinite(self.generation_timeout) or self.generation_timeout <= 0:
+        if (
+            isinstance(generation_timeout, bool)
+            or not isfinite(self.generation_timeout)
+            or self.generation_timeout <= 0
+        ):
             raise ValueError("generation_timeout must be a finite positive number")
         if type(answer_max_chars) is not int or answer_max_chars < 0:
             raise ValueError("answer_max_chars must be a non-negative integer")
@@ -170,8 +174,11 @@ class GroundedAnswerService:
         # 角色知识检索是同步 CPU 工作，放入线程池避免阻塞事件循环。
         retrieval_start = time.perf_counter()
         bundle = await self._retrieve(
-            query, history=history,
-            domain_id=domain_id, top_k=top_k, filters=filters,
+            query,
+            history=history,
+            domain_id=domain_id,
+            top_k=top_k,
+            filters=filters,
         )
         timings.retrieval_ms = (time.perf_counter() - retrieval_start) * 1000
 
@@ -235,7 +242,8 @@ class GroundedAnswerService:
 
         retrieval_start = time.perf_counter()
         bundle = await self._retrieve(
-            query, history=history,
+            query,
+            history=history,
             domain_id=domain_id,
             top_k=top_k,
             filters=filters,
@@ -251,8 +259,9 @@ class GroundedAnswerService:
         yield AnswerStreamEvent(
             type="meta",
             data={
-                "answer_mode": (AnswerMode.ABSTENTION.value if packet.answer_mode == AnswerMode.NO_RAG
-                                else packet.answer_mode.value),
+                "answer_mode": (
+                    AnswerMode.ABSTENTION.value if packet.answer_mode == AnswerMode.NO_RAG else packet.answer_mode.value
+                ),
                 "domain_id": packet.domain_id,
             },
         )
@@ -390,7 +399,12 @@ class GroundedAnswerService:
             return None
         scope = {"question_binding": resolved.question_binding} if resolved.question_binding is not None else {}
         return await asyncio.to_thread(
-            self.retriever, resolved.query, top_k=top_k, filters=filters, domain_id=domain_id, **scope,
+            self.retriever,
+            resolved.query,
+            top_k=top_k,
+            filters=filters,
+            domain_id=domain_id,
+            **scope,
         )
 
     async def _answer_from_bundle(
@@ -476,9 +490,7 @@ class GroundedAnswerService:
         if not isinstance(raw_answer, str):
             raise TypeError("Grounded model output must be text")
         raw_answer = _strip_think_blocks(raw_answer)
-        citations, answer_text, warnings = self._finalize_answer(
-            raw_answer, packet, want_citations=want_citations
-        )
+        citations, answer_text, warnings = self._finalize_answer(raw_answer, packet, want_citations=want_citations)
 
         await _validate_sources(receipts)
         return GroundedAnswerResult(
@@ -551,8 +563,9 @@ class GroundedAnswerService:
         if not packet.documents:
             packet.answer_mode = AnswerMode.ABSTENTION
             if not reason:
-                reason = (FailureKind.CONTEXT_BUDGET_EXCEEDED.value if packet.truncated
-                          else FailureKind.NO_RETRIEVAL.value)
+                reason = (
+                    FailureKind.CONTEXT_BUDGET_EXCEEDED.value if packet.truncated else FailureKind.NO_RETRIEVAL.value
+                )
         if packet.answer_mode == AnswerMode.ABSTENTION:
             packet.abstention_reason = packet.abstention_reason or reason
             if not packet.abstention_reason:
@@ -608,8 +621,9 @@ class GroundedAnswerService:
             "domain_id": packet.domain_id,
             "answer": answer,
             "abstained": not model_invoked,
-            "confidence": (None if no_domain else decision.effective_confidence
-                           if model_invoked else packet.retrieval_confidence),
+            "confidence": (
+                None if no_domain else decision.effective_confidence if model_invoked else packet.retrieval_confidence
+            ),
             "warnings": warnings,
             "model_invoked": model_invoked,
             "model_id": model_id,
@@ -631,7 +645,6 @@ class GroundedAnswerService:
         return _single_shot
 
 
-
 def _prompt_version() -> str:
     from .prompt import GROUNDED_PROMPT_VERSION
 
@@ -643,7 +656,9 @@ _service_budget: ProviderContextBudget | None = None
 _service_lock = asyncio.Lock()
 
 
-def build_default_grounded_answer_service(*, context_budget: ProviderContextBudget | None = None) -> GroundedAnswerService:
+def build_default_grounded_answer_service(
+    *, context_budget: ProviderContextBudget | None = None
+) -> GroundedAnswerService:
     """默认服务实例：角色知识检索 + 进程内缓存 + env 配置。"""
     from knowledge.multiscale_rag.constants import INDEX_FORMAT_VERSION
     from knowledge.multiscale_rag.runtime import get_multiscale_rag_service
@@ -669,7 +684,9 @@ def build_default_grounded_answer_service(*, context_budget: ProviderContextBudg
             if all_bound_objects_generic(plan):
                 return None
             if any(obj["authority"] == "curated_character" for obj in plan["objects"]):
-                return retrieve_curated_scope(plan, query, top_k, curated=partial(character_rag.retrieve_with_citations, filters=filters))
+                return retrieve_curated_scope(
+                    plan, query, top_k, curated=partial(character_rag.retrieve_with_citations, filters=filters)
+                )
         return character_rag.retrieve_with_citations(query, domain_id=domain_id, top_k=top_k, filters=filters)
 
     def _domain_supplement(domain_id: str) -> str:
@@ -684,7 +701,9 @@ def build_default_grounded_answer_service(*, context_budget: ProviderContextBudg
 
     return GroundedAnswerService(
         packet_builder=EvidencePacketBuilder(evidence_chars),
-        prompt_builder=GroundedPromptBuilder(evidence_chars, context_budget=ReviewContextBudget(context_budget.window_tokens)),
+        prompt_builder=GroundedPromptBuilder(
+            evidence_chars, context_budget=ReviewContextBudget(context_budget.window_tokens)
+        ),
         retriever=_retriever,
         domain_supplements=_domain_supplement,
         index_version_resolver=_index_version_resolver,

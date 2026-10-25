@@ -4,23 +4,39 @@ from types import SimpleNamespace
 import pytest
 
 from knowledge.multiscale_rag import service
-from knowledge.retrieval_core.documents import SourceReference
+from knowledge.retrieval_core.documents import KnowledgeIndexDocument, SourceReference
+from knowledge.retrieval_core.retrieval import RetrievalCandidate
 
 pytestmark = pytest.mark.usefixtures("literal_grounded_query")
 
+
+def make_document(identity, document_type, title, content, **kwargs):
+    return KnowledgeIndexDocument(
+        id=identity,
+        domain_id='test',
+        document_type=document_type,
+        title=title,
+        summary=content,
+        content=content,
+        embedding_text=content,
+        **kwargs,
+    )
+
+
 def make_service(monkeypatch, evidence_texts):
     source = SourceReference('test.txt', 1, 24)
-    docs = [SimpleNamespace(id=str(i), document_type='fact', title=f'事实{i}',
-                            summary='概括', metadata={'scene_id': 'scene'}, source=source)
+    docs = [make_document(str(i), 'fact', f'事实{i}', '概括',
+                          metadata={'scene_id': 'scene'}, source=source)
             for i in range(len(evidence_texts))]
-    candidates = [SimpleNamespace(document=d, to_dict=lambda: {}) for d in docs]
+    candidates = [RetrievalCandidate(row=i, document=doc) for i, doc in enumerate(docs)]
     instance = object.__new__(service.RoutedMultiScaleService)
     instance.context_max_chars = 6000
     instance.config = SimpleNamespace(domain_id='test')
     instance.analyzer = instance.reranker = instance.extractor = None
     instance.retriever = SimpleNamespace(search=lambda *a, **kw: candidates)
-    instance.by_id = {'scene': SimpleNamespace(id='scene', title='场景', summary='背景' * 1500)}
-    instance.evidence_by_parent = {str(i): SimpleNamespace(content=text)
+    instance.by_id = {'scene': make_document('scene', 'scene', '场景', '背景' * 1500)}
+    instance.evidence_by_parent = {str(i): make_document('evidence-' + str(i), 'evidence', f'证据{i}', text,
+                                                        metadata={'parent_id': str(i)}, source=source)
                                    for i, text in enumerate(evidence_texts) if text is not None}
     instance.analyzer = SimpleNamespace(analyze=lambda *a, **_scope: SimpleNamespace(entities=[]))
     monkeypatch.setattr(service, 'rerank_with_title_frames', lambda *a, **kw: candidates)
@@ -78,7 +94,7 @@ def test_background_requires_its_own_admitted_evidence(monkeypatch):
     candidates = instance.retriever.search()
     candidates[1].document.metadata['scene_id'] = 'excluded-scene'
     instance.by_id['scene'].summary = '有效场景'
-    instance.by_id['excluded-scene'] = SimpleNamespace(id='excluded-scene', title='孤立场景', summary='不应入模')
+    instance.by_id['excluded-scene'] = make_document('excluded-scene', 'scene', '孤立场景', '不应入模')
     result = instance.retrieve('解释人物经历')
     assert '有效场景' in result['context_text']
     assert '不应入模' not in result['context_text']

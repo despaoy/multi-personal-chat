@@ -422,3 +422,17 @@ def test_history_empty_result_and_recovery_remain_distinct(bot_module, monkeypat
         {"role": "user", "content": "周五执行，出差例外。"},
         {"role": "assistant", "content": "已记录例外。"},
     ]
+
+
+def test_explicit_history_tokenizer_failure_does_not_use_character_estimate(bot_module):
+    error = ValueError("controlled tokenizer failure")
+    tokenizer = SimpleNamespace(encode=Mock(side_effect=error))
+    with pytest.raises(ValueError) as caught:
+        bot_module.SessionHistory._count_tokens("完整历史", tokenizer)
+    assert caught.value is error
+
+
+def test_history_token_estimate_is_only_for_absent_tokenizer(bot_module):
+    tokenizer = SimpleNamespace(encode=Mock(return_value=[1, 2, 3]))
+    assert bot_module.SessionHistory._count_tokens("完整历史", tokenizer) == 3
+    assert bot_module.SessionHistory._count_tokens("完整历史") == 2

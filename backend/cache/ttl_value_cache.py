@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import time
 from collections import OrderedDict
 from threading import RLock
@@ -15,8 +16,12 @@ class BoundedTTLCache(Generic[K, V]):
     """Thread-safe in-process TTL cache with deterministic LRU eviction."""
 
     def __init__(self, *, ttl: float = 60.0, max_size: int = 4096) -> None:
-        self._ttl = max(0.001, float(ttl))
-        self._max_size = max(1, int(max_size))
+        if isinstance(ttl, bool) or not isinstance(ttl, (int, float)) or not math.isfinite(ttl) or ttl <= 0:
+            raise ValueError("TTL cache duration must be a finite positive number")
+        if isinstance(max_size, bool) or not isinstance(max_size, int) or max_size <= 0:
+            raise ValueError("TTL cache capacity must be a positive integer")
+        self._ttl = float(ttl)
+        self._max_size = max_size
         self._values: OrderedDict[K, tuple[float, V]] = OrderedDict()
         self._lock = RLock()
 

@@ -12,15 +12,9 @@ from contextlib import nullcontext
 from datetime import datetime, timezone
 from typing import Any
 
-from app.providers import get_vllm_client
-
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import ValidationError
-from services.chat_generation import ChatGenerationService
-from services.model_usage import write_invocation
 
-from inference.openai_protocol import with_provider_error
-from services import chat_answer
 from app.config import (
     circuit_breaker_registry,
     get_llm_semaphore,
@@ -28,28 +22,31 @@ from app.config import (
     response_cache,
 )
 from app.dependencies import get_current_admin, get_current_user
+from app.providers import get_vllm_client
 from app.runtime import get_runtime_container
 from db.adapter import db
 from db.database import get_lora_path_by_id
 from db.message_feedback import reply_with_warning
 from db.schemas import GenerateResponse, MessageRequest
+from inference.context_budget import InputBudgetError
+from inference.generation_options import read_generation_options
 from inference.generation_request import (
     ContextAuthorityChangedError,
     ReplyValidationError,
 )
-from inference.generation_options import read_generation_options
-from inference.context_budget import InputBudgetError
-from inference.usage import collect_usage, has_pending_usage
 from inference.history import HistoryFormatError, validate_history
 from inference.lora_registry import get_lora_character_id
 from inference.lora_utils import resolve_lora_served_name
-from inference.openai_protocol import ProviderResponseError, validate_completion_options
+from inference.openai_protocol import ProviderResponseError, validate_completion_options, with_provider_error
+from inference.usage import collect_usage, has_pending_usage
 from infra.circuit_breaker import CircuitOpenError
 from infra.concurrency_control import InferenceQueueFull, RateLimitExceeded, inference_runtime
 from infra.environment import read_bool
-from infra.observability import increment, log_event, set_consecutive
-
 from infra.input_validator import MESSAGE_SCHEMA, InputValidator
+from infra.observability import increment, log_event, set_consecutive
+from services import chat_answer
+from services.chat_generation import ChatGenerationService
+from services.model_usage import write_invocation
 
 logger = logging.getLogger(__name__)
 
@@ -197,18 +194,28 @@ async def _generate_reply_impl(
         with use_request_context(context), collect_usage():
             try:
                 return await _generate_reply_body(
-                    request, current_user, persist_message=persist_message, enable_rag=enable_rag,
-                    record_invocation=record_invocation, invocation_purpose=invocation_purpose,
+                    request,
+                    current_user,
+                    persist_message=persist_message,
+                    enable_rag=enable_rag,
+                    record_invocation=record_invocation,
+                    invocation_purpose=invocation_purpose,
                     character_service=character_service,
-                    message_db=message_db, delivery_context=delivery_context,
-                    prepared_override=prepared_override, _completion_slots=slots,
+                    message_db=message_db,
+                    delivery_context=delivery_context,
+                    prepared_override=prepared_override,
+                    _completion_slots=slots,
                 )
             except (Exception, asyncio.CancelledError) as error:
                 if record_invocation and has_pending_usage():
                     try:
                         await _record_model_invocation(
-                            request, context.provider.model, "default", round(time.time() - started_at, 2),
-                            error_type=type(error.__cause__ or error).__name__, database=message_db,
+                            request,
+                            context.provider.model,
+                            "default",
+                            round(time.time() - started_at, 2),
+                            error_type=type(error.__cause__ or error).__name__,
+                            database=message_db,
                             purpose=invocation_purpose,
                         )
                     except HTTPException as record_error:
@@ -346,16 +353,24 @@ async def _generate_reply_body(
     if prepared_override is not None and request.loraName and mapped_character_id != prepared_override.character_id:
         raise HTTPException(422, "LoRA 与分支角色不匹配")
     completion_slot = None
-    if (mapped_character_id or prepared_override is not None) and persist_message and delivery_context is None and not request.branchId:
+    if (
+        (mapped_character_id or prepared_override is not None)
+        and persist_message
+        and delivery_context is None
+        and not request.branchId
+    ):
         from services.turn_completion import CompletionUnavailable, get_turn_completion_runtime
 
         try:
             completion_slot = get_turn_completion_runtime().reserve()
         except CompletionUnavailable:
-            raise HTTPException(503, detail={
-                "code": "turn_completion_busy",
-                "message": "长期记忆回写繁忙，本轮尚未生成，请稍后重试。",
-            }) from None
+            raise HTTPException(
+                503,
+                detail={
+                    "code": "turn_completion_busy",
+                    "message": "长期记忆回写繁忙，本轮尚未生成，请稍后重试。",
+                },
+            ) from None
         _completion_slots.append(completion_slot)
 
     if mapped_character_id and prepared_override is None:
@@ -366,8 +381,11 @@ async def _generate_reply_body(
             )
 
             try:
-                character_service = (get_default_character_context_service() if message_db is db
-                                     else build_character_context_service(message_db))
+                character_service = (
+                    get_default_character_context_service()
+                    if message_db is db
+                    else build_character_context_service(message_db)
+                )
             except Exception as exc:
                 raise HTTPException(503, "角色上下文配置读取失败，请检查上下文及审核配置后重试") from exc
         prepared_character_turn = await _prepare_character_turn(
@@ -410,14 +428,17 @@ async def _generate_reply_body(
     # 带角色上下文的对话是有状态流程（每轮回写记忆/关系），整体绕过
     # 响应缓存：缓存命中会跳过回写，导致人物状态与对话脱节。
     use_response_cache = (
-        response_cache is not None and prepared_character_turn is None and selected_lora is None
+        response_cache is not None
+        and prepared_character_turn is None
+        and selected_lora is None
         and not (read_bool(runtime_config, "useKnowledgeBase", True) and enable_rag)
     )
     provider = request_context.provider
     if use_response_cache:
         try:
             model_identity = {
-                "provider": request_provider, "status": provider.get_status(),
+                "provider": request_provider,
+                "status": provider.get_status(),
                 "endpoint": getattr(provider, "base_url", None),
                 "credential_sha256": hashlib.sha256(getattr(provider, "api_key", "").encode()).hexdigest(),
             }
@@ -434,12 +455,19 @@ async def _generate_reply_body(
             cached = await response_cache.get(prompt_hash, cache_key)
             response = GenerateResponse.model_validate(cached) if cached is not None else None
         except ValidationError as exc:
-            raise HTTPException(503, detail={
-                "stage": "response_cache", "reason": "invalid_cached_response",
-                "fields": list(dict.fromkeys(str(error["loc"][0]) if error["loc"] else "$"
-                                             for error in exc.errors(include_input=False))),
-                "message": "缓存的生成结果缺少必要字段或内容无效，请清理该条缓存后重试。",
-            }) from exc
+            raise HTTPException(
+                503,
+                detail={
+                    "stage": "response_cache",
+                    "reason": "invalid_cached_response",
+                    "fields": list(
+                        dict.fromkeys(
+                            str(error["loc"][0]) if error["loc"] else "$" for error in exc.errors(include_input=False)
+                        )
+                    ),
+                    "message": "缓存的生成结果缺少必要字段或内容无效，请清理该条缓存后重试。",
+                },
+            ) from exc
         except Exception as exc:
             raise HTTPException(503, "回复缓存读取失败，请检查缓存状态后重试") from exc
         if response is not None:
@@ -447,15 +475,32 @@ async def _generate_reply_body(
             if persist_message:
                 stored_model_name = "vllm" if response.model.startswith("vllm/") else response.model
                 await _save_message(
-                    request, response.reply, stored_model_name, lora_name,
-                    round(time.time() - start_time, 2), database=message_db, character_id=mapped_character_id,
+                    request,
+                    response.reply,
+                    stored_model_name,
+                    lora_name,
+                    round(time.time() - start_time, 2),
+                    database=message_db,
+                    character_id=mapped_character_id,
                     model_invoked=False,
                 )
-            return response.model_copy(update={
-                "modelInvoked": False, "costTime": round(time.time() - start_time, 2),
-                "warnings": list(dict.fromkeys([*(response.warnings or []), "cached_model_response"])),
-            })
+            return response.model_copy(
+                update={
+                    "modelInvoked": False,
+                    "costTime": round(time.time() - start_time, 2),
+                    "warnings": list(dict.fromkeys([*(response.warnings or []), "cached_model_response"])),
+                }
+            )
 
+    generate_answer = functools.partial(
+        chat_answer.generate_chat_answer,
+        request,
+        runtime_config=runtime_config,
+        enable_rag=enable_rag,
+        prepared_character_turn=prepared_character_turn,
+        message_db=message_db,
+        memory_write_enabled=memory_write_enabled,
+    )
     is_vllm = request_provider == "vllm"
     model_name = f"vllm/{get_vllm_served_model_name()}" if is_vllm else "model_manager"
     try:
@@ -463,11 +508,10 @@ async def _generate_reply_body(
             client = await get_vllm_client()
             if client is None:
                 raise HTTPException(503, "所选 vLLM 服务不可用，请恢复服务后重试")
-            reply, used_rag, rag_meta = await chat_answer.generate_chat_answer(
-                request, vllm_effective_lora, prompt_lora_name=vllm_lora_name, runtime_config=runtime_config,
-                enable_rag=enable_rag, prepared_character_turn=prepared_character_turn,
-                message_db=message_db, model_generate=client.generate,
-                memory_write_enabled=memory_write_enabled,
+            reply, used_rag, rag_meta = await generate_answer(
+                vllm_effective_lora,
+                prompt_lora_name=vllm_lora_name,
+                model_generate=client.generate,
             )
             model_label = model_name
             stored_model_name = "vllm"
@@ -478,7 +522,7 @@ async def _generate_reply_body(
             except TimeoutError as exc:
                 raise HTTPException(503, "服务繁忙，请稍后再试") from exc
             try:
-                async with (nullcontext() if request_provider == "openai_compat" else _get_local_model_lock()):
+                async with nullcontext() if request_provider == "openai_compat" else _get_local_model_lock():
                     try:
                         lora_path = get_lora_path_by_id(selected_lora["id"], loras=loras) if selected_lora else None
                     except OSError as exc:
@@ -491,29 +535,28 @@ async def _generate_reply_body(
                     async def adapter(*, messages, **kwargs):
                         nonlocal model_name
                         breaker = (
-                            await circuit_breaker_registry.get_or_create(f"model_generate:{request_context.connection_id}")
-                            if circuit_breaker_registry else None
+                            await circuit_breaker_registry.get_or_create(
+                                f"model_generate:{request_context.connection_id}"
+                            )
+                            if circuit_breaker_registry
+                            else None
                         )
-                        async with (breaker() if breaker is not None else nullcontext()):
+                        async with breaker() if breaker is not None else nullcontext():
                             if request_provider == "openai_compat":
                                 model_name = provider.get_status()["modelName"]
                                 text, _cost = await provider.async_complete(messages, **kwargs)
                             else:
                                 text, _cost = await provider.async_generate(
-                                    prompt=messages[-1]["content"], session_history=messages[:-1],
+                                    prompt=messages[-1]["content"],
+                                    session_history=messages[:-1],
                                     max_tokens_override=kwargs["max_tokens"],
                                 )
                         return text
 
-                    async def generate():
-                        return await chat_answer.generate_chat_answer(
-                            request, lora_name, runtime_config=runtime_config,
-                            enable_rag=enable_rag, prepared_character_turn=prepared_character_turn,
-                            message_db=message_db, model_generate=adapter,
-                            memory_write_enabled=memory_write_enabled,
-                        )
-
-                    reply, used_rag, rag_meta = await asyncio.wait_for(generate(), timeout=_MODEL_INFERENCE_TIMEOUT)
+                    reply, used_rag, rag_meta = await asyncio.wait_for(
+                        generate_answer(lora_name, model_generate=adapter),
+                        timeout=_MODEL_INFERENCE_TIMEOUT,
+                    )
             finally:
                 semaphore.release()
             if rag_meta.get("modelInvoked", True) is not False:
@@ -535,8 +578,14 @@ async def _generate_reply_body(
         stored_lora_name = lora_name if model_invoked else "default"
         if record_invocation and (model_invoked or has_pending_usage()):
             await _record_model_invocation(
-                request, model_name if model_invoked else provider.model, stored_lora_name,
-                cost_time, used_rag=used_rag, error_type="", model_invoked=model_invoked, database=message_db,
+                request,
+                model_name if model_invoked else provider.model,
+                stored_lora_name,
+                cost_time,
+                used_rag=used_rag,
+                error_type="",
+                model_invoked=model_invoked,
+                database=message_db,
                 purpose=invocation_purpose,
             )
         if model_invoked:
@@ -567,19 +616,28 @@ async def _generate_reply_body(
         if prepared_character_turn is not None and persist_message and delivery_context is None:
             try:
                 completion_warning = await _complete_character_turn(
-                    prepared_character_turn, request, character_service=character_service,
+                    prepared_character_turn,
+                    request,
+                    character_service=character_service,
                     completion_slot=completion_slot,
                 )
             except Exception as exc:
                 logger.warning("回写处理失败 traceId=%s type=%s", request.traceId, type(exc).__name__)
-                raise HTTPException(503, detail={
-                    "stage": "turn_completion", "reason": "completion_failed",
-                    "modelInvoked": model_invoked, "messageSaved": message_saved,
-                    "message": "回复已存档，但后续回写未能确认完成。请核对聊天与记忆记录后再重试。",
-                }) from exc
+                raise HTTPException(
+                    503,
+                    detail={
+                        "stage": "turn_completion",
+                        "reason": "completion_failed",
+                        "modelInvoked": model_invoked,
+                        "messageSaved": message_saved,
+                        "message": "回复已存档，但后续回写未能确认完成。请核对聊天与记忆记录后再重试。",
+                    },
+                ) from exc
             if completion_warning:
                 stored = await _persist_completion_feedback(
-                    archive_receipt, completion_warning, database=message_db,
+                    archive_receipt,
+                    completion_warning,
+                    database=message_db,
                 )
                 if not stored:
                     completion_warning += " 保存提示未能写入聊天历史，刷新后可能看不到本次保存状态。"
@@ -605,17 +663,25 @@ async def _generate_reply_body(
             answerMode=rag_meta.get("answerMode"),
             domainId=rag_meta.get("domainId"),
             modelInvoked=model_invoked,
-            warnings=([*(rag_meta.get("warnings") or []), completion_warning]
-                      if completion_warning else rag_meta.get("warnings")),
+            warnings=(
+                [*(rag_meta.get("warnings") or []), completion_warning]
+                if completion_warning
+                else rag_meta.get("warnings")
+            ),
         )
         if use_response_cache:
             try:
                 await response_cache.set(prompt_hash, cache_key, result.model_dump(), ttl=cache_ttl)
             except Exception as exc:
-                raise HTTPException(503, detail={
-                    "stage": "response_cache", "message": "回复缓存写入失败，请检查缓存状态后重试",
-                    "modelInvoked": model_invoked, "messageSaved": message_saved,
-                }) from exc
+                raise HTTPException(
+                    503,
+                    detail={
+                        "stage": "response_cache",
+                        "message": "回复缓存写入失败，请检查缓存状态后重试",
+                        "modelInvoked": model_invoked,
+                        "messageSaved": message_saved,
+                    },
+                ) from exc
 
         return result
     except chat_answer.ChatRetrievalError as exc:
@@ -657,31 +723,47 @@ async def _generate_reply_body(
         if isinstance(e, (HistoryFormatError, InputBudgetError)):
             raise HTTPException(503, detail=e.public_detail()) from e
         if isinstance(e, _ModelIdentityError):
-            raise HTTPException(503, detail={
-                "stage": "model_status", "reason": "model_identity_unavailable",
-                "modelInvoked": True, "messageSaved": False,
-                "message": "生成后模型标识读取失败，本轮结果未保存。请检查所选模型配置后重试。",
-            }) from e
+            raise HTTPException(
+                503,
+                detail={
+                    "stage": "model_status",
+                    "reason": "model_identity_unavailable",
+                    "modelInvoked": True,
+                    "messageSaved": False,
+                    "message": "生成后模型标识读取失败，本轮结果未保存。请检查所选模型配置后重试。",
+                },
+            ) from e
         if isinstance(e, ProviderResponseError):
             raise HTTPException(e.http_status, detail=e.public_detail()) from e
         if isinstance(e, CircuitOpenError):
-            raise HTTPException(503, detail={
-                "stage": "model_circuit", "reason": "circuit_open",
-                "message": "模型服务连续失败，暂时停止调用。请恢复所选模型服务后重试。",
-                "modelInvoked": False,
-            }) from e
+            raise HTTPException(
+                503,
+                detail={
+                    "stage": "model_circuit",
+                    "reason": "circuit_open",
+                    "message": "模型服务连续失败，暂时停止调用。请恢复所选模型服务后重试。",
+                    "modelInvoked": False,
+                },
+            ) from e
         if isinstance(e, ContextAuthorityChangedError):
-            raise HTTPException(503, detail={
-                "stage": "context_authority", "reason": "repeated_authority_change",
-                "message": "本轮资料在生成期间持续变化，未返回答案，请稍后重新请求。",
-            }) from e
+            raise HTTPException(
+                503,
+                detail={
+                    "stage": "context_authority",
+                    "reason": "repeated_authority_change",
+                    "message": "本轮资料在生成期间持续变化，未返回答案，请稍后重新请求。",
+                },
+            ) from e
         if isinstance(e, ReplyValidationError):
-            raise HTTPException(503, detail={
-                "stage": "reply_validation",
-                "reason": "model_output_invalid",
-                "violations": list(e.violations),
-                "message": "模型回复经一次修正仍未通过校验，本轮未返回回复。请重试或检查模型与输出策略。",
-            }) from e
+            raise HTTPException(
+                503,
+                detail={
+                    "stage": "reply_validation",
+                    "reason": "model_output_invalid",
+                    "violations": list(e.violations),
+                    "message": "模型回复经一次修正仍未通过校验，本轮未返回回复。请重试或检查模型与输出策略。",
+                },
+            ) from e
         # 安全：不把内部异常字符串返回给客户端（信息泄露），
         # 日志记录错误类型；异常链保留内部原因，客户端收到通用消息。
         raise HTTPException(503 if is_vllm else 500, "生成回复失败，请检查所选模型服务后重试") from e
@@ -709,8 +791,12 @@ def _character_turn_input(request: MessageRequest):
 
 
 async def _prepare_character_turn(
-    request: MessageRequest, character_id: str, *, character_service=None, execute_memory_operations: bool = False,
-    defer_memory_operations: bool = False
+    request: MessageRequest,
+    character_id: str,
+    *,
+    character_service=None,
+    execute_memory_operations: bool = False,
+    defer_memory_operations: bool = False,
 ):
     """Prepare the selected character; failures stop generation at this API boundary.
 
@@ -746,39 +832,65 @@ async def _prepare_character_turn(
             if memory_write_allowed(request.message) and is_memory_erasure_request(request.message):
                 # A server-owned delivery plan is not an execution receipt.
                 # Keep the latter empty so the actual post-delivery writer runs.
-                prepared = replace(prepared, compiled=replace(
-                    prepared.compiled, memory_operation_deferred=True,
-                ))
+                prepared = replace(
+                    prepared,
+                    compiled=replace(
+                        prepared.compiled,
+                        memory_operation_deferred=True,
+                    ),
+                )
         return prepared
     except ContextAfterMemoryOperationError as exc:
-        raise HTTPException(503, detail=with_provider_error({
-            "code": "context_failed_after_memory_operation",
-            "message": "角色上下文准备失败，回复未生成。请先核对本轮记忆操作回执，再检查审核模型和上下文配置。",
-            "memoryOperation": exc.operation_summary,
-        }, exc)) from exc
+        raise HTTPException(
+            503,
+            detail=with_provider_error(
+                {
+                    "code": "context_failed_after_memory_operation",
+                    "message": "角色上下文准备失败，回复未生成。请先核对本轮记忆操作回执，再检查审核模型和上下文配置。",
+                    "memoryOperation": exc.operation_summary,
+                },
+                exc,
+            ),
+        ) from exc
     except (HistoryFormatError, InputBudgetError) as exc:
         raise HTTPException(503, detail=exc.public_detail()) from exc
     except MemoryContextBudgetError as exc:
-        raise HTTPException(503, detail={
-            "stage": "memory_context", "reason": "selected_evidence_budget_exceeded",
-            "message": "已选必要记忆无法完整放入当前上下文，本轮未生成。请缩小问题范围或增加上下文预算。",
-        }) from exc
+        raise HTTPException(
+            503,
+            detail={
+                "stage": "memory_context",
+                "reason": "selected_evidence_budget_exceeded",
+                "message": "已选必要记忆无法完整放入当前上下文，本轮未生成。请缩小问题范围或增加上下文预算。",
+            },
+        ) from exc
     except EventMemoryReadError as exc:
-        raise HTTPException(503, detail={
-            "stage": "memory_read", "reason": "invalid_event_record", "field": exc.field,
-            "message": "已保存的事件记录格式错误，本轮未生成。请检查并修复对应记忆字段后重试。",
-        }) from exc
+        raise HTTPException(
+            503,
+            detail={
+                "stage": "memory_read",
+                "reason": "invalid_event_record",
+                "field": exc.field,
+                "message": "已保存的事件记录格式错误，本轮未生成。请检查并修复对应记忆字段后重试。",
+            },
+        ) from exc
     except MemoryRecordError as exc:
-        raise HTTPException(503, detail={
-            "stage": "memory_read", "reason": "invalid_memory_record", "field": exc.field,
-            "message": "已保存的记忆记录格式错误，本轮未生成。请检查并修复对应记忆字段后重试。",
-        }) from exc
+        raise HTTPException(
+            503,
+            detail={
+                "stage": "memory_read",
+                "reason": "invalid_memory_record",
+                "field": exc.field,
+                "message": "已保存的记忆记录格式错误，本轮未生成。请检查并修复对应记忆字段后重试。",
+            },
+        ) from exc
     except HTTPException:
         raise
     except Exception as exc:
         raise HTTPException(
-            503, with_provider_error(
-                "角色上下文准备失败，本轮未生成。请检查数据库、审核模型及上下文配置后重试。", exc,
+            503,
+            with_provider_error(
+                "角色上下文准备失败，本轮未生成。请检查数据库、审核模型及上下文配置后重试。",
+                exc,
             ),
         ) from exc
 
@@ -789,9 +901,12 @@ async def _persist_completion_feedback(receipt: dict, warning: str, *, database)
     if not receipt or not callable(writer):
         return False
     try:
-        return bool(await asyncio.wait_for(
-            asyncio.to_thread(writer, receipt, warning=warning), timeout=_DB_WRITE_TIMEOUT,
-        ))
+        return bool(
+            await asyncio.wait_for(
+                asyncio.to_thread(writer, receipt, warning=warning),
+                timeout=_DB_WRITE_TIMEOUT,
+            )
+        )
     except Exception:
         # Preserve visible current feedback even when history storage is
         # unknown; never regenerate the model or replace an unrelated row.
@@ -799,7 +914,9 @@ async def _persist_completion_feedback(receipt: dict, warning: str, *, database)
         return False
 
 
-async def _complete_character_turn(prepared, request: MessageRequest, *, character_service=None, completion_slot=None) -> str | None:
+async def _complete_character_turn(
+    prepared, request: MessageRequest, *, character_service=None, completion_slot=None
+) -> str | None:
     """生成成功后回写；保留已生成内容，向调用方返回独立的保存提示。
 
     character_service 语义同 _prepare_character_turn：必须与准备阶段
@@ -839,9 +956,8 @@ async def _complete_character_turn(prepared, request: MessageRequest, *, charact
             warning = "这条信息未保存到长期记忆：同一条消息已绑定其他内容，请重新发送。"
         elif status in {"capacity", "closed", "not_scheduled"}:
             warning = (
-                ("原文已保存，但" if capture == "recorded" else "")
-                + "长期记忆任务尚未受理；本次回复不代表结构化记忆已写入，请稍后重试。"
-            )
+                "原文已保存，但" if capture == "recorded" else ""
+            ) + "长期记忆任务尚未受理；本次回复不代表结构化记忆已写入，请稍后重试。"
         elif status == "disabled":
             warning = "自动长期记忆未启用；本次回复不代表已保存。"
         elif status in {"pending", "cancelled", "unknown"}:
@@ -849,8 +965,16 @@ async def _complete_character_turn(prepared, request: MessageRequest, *, charact
         elif status == "conflict":
             warning = "长期记忆记录在处理期间发生变化，本轮操作未完成；请检查后重试。"
         elif capture not in {"", "recorded", "erase_request"} or status not in {
-            "saved", "erased", "no_change", "source_only", "relationship_note_saved",
-            "skipped_fiction_or_note", "skipped", "queued_hot", "buffered_idle", "write_gate",
+            "saved",
+            "erased",
+            "no_change",
+            "source_only",
+            "relationship_note_saved",
+            "skipped_fiction_or_note",
+            "skipped",
+            "queued_hot",
+            "buffered_idle",
+            "write_gate",
         }:
             raise ValueError("Unrecognized memory completion result")
         failures = outcome.failed_writes
@@ -865,6 +989,7 @@ async def _complete_character_turn(prepared, request: MessageRequest, *, charact
         # rollback and does not authorize submitting the work again.
         return "这条信息的长期记忆保存状态尚未确认；本次回复不代表已保存，请稍后检查。"
 
+
 # ═══════════════════════════════════════════
 # vLLM 推理辅助函数
 # ═══════════════════════════════════════════
@@ -877,27 +1002,51 @@ async def _validate_web_source_identity(request, current_user, *, database):
     admission check uses only the authenticated owner's exact source scope and
     returns state without exposing revoked source text.
     """
-    if request.branchId or not request.characterId or request.platform != "web" or request.adapter != "web-character" or not request.sourceMessageId:
+    if (
+        request.branchId
+        or not request.characterId
+        or request.platform != "web"
+        or request.adapter != "web-character"
+        or not request.sourceMessageId
+    ):
         return
     from character.models import build_user_scope
 
-    identity = str((current_user or {}).get("id") or (current_user or {}).get("user_id") or (current_user or {}).get("username") or "")
+    identity = str(
+        (current_user or {}).get("id")
+        or (current_user or {}).get("user_id")
+        or (current_user or {}).get("username")
+        or ""
+    )
     if not identity:
         raise HTTPException(401, "无法确认当前登录用户")
     try:
-        scope = build_user_scope(platform="web", adapter="web-character", sender_id=identity,
-                                 conversation_id=request.conversationId or request.sessionId,
-                                 conversation_type=request.conversationType or request.sessionType)
+        scope = build_user_scope(
+            platform="web",
+            adapter="web-character",
+            sender_id=identity,
+            conversation_id=request.conversationId or request.sessionId,
+            conversation_type=request.conversationType or request.sessionType,
+        )
     except ValueError as exc:
         raise HTTPException(422, "无法确认消息来源范围") from exc
     if not request.message:
         raise HTTPException(422, "消息不能为空")
     try:
-        status = await asyncio.wait_for(asyncio.to_thread(
-            database.memory_source_admission, request.characterId, scope.platform, scope.adapter,
-            scope.sender_id, scope.conversation_type, scope.conversation_id,
-            source_message_id=request.sourceMessageId, body=request.message,
-        ), timeout=_DB_WRITE_TIMEOUT)
+        status = await asyncio.wait_for(
+            asyncio.to_thread(
+                database.memory_source_admission,
+                request.characterId,
+                scope.platform,
+                scope.adapter,
+                scope.sender_id,
+                scope.conversation_type,
+                scope.conversation_id,
+                source_message_id=request.sourceMessageId,
+                body=request.message,
+            ),
+            timeout=_DB_WRITE_TIMEOUT,
+        )
     except Exception as exc:
         raise HTTPException(503, "暂时无法核对消息来源，请稍后重试") from exc
     if status in {"new", "pending"}:
@@ -907,12 +1056,21 @@ async def _validate_web_source_identity(request, current_user, *, database):
         # Opt-out, credential and explicit erasure messages create no binding.
         if memory_write_allowed(request.message) and not is_memory_erasure_request(request.message):
             try:
-                receipt = await asyncio.wait_for(asyncio.to_thread(
-                    database.reserve_memory_source, request.characterId, scope.platform, scope.adapter,
-                    scope.sender_id, scope.conversation_type, scope.conversation_id,
-                    source_message_id=request.sourceMessageId, body=request.message,
-                    observed_at=datetime.now(timezone.utc),
-                ), timeout=_DB_WRITE_TIMEOUT)
+                receipt = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        database.reserve_memory_source,
+                        request.characterId,
+                        scope.platform,
+                        scope.adapter,
+                        scope.sender_id,
+                        scope.conversation_type,
+                        scope.conversation_id,
+                        source_message_id=request.sourceMessageId,
+                        body=request.message,
+                        observed_at=datetime.now(timezone.utc),
+                    ),
+                    timeout=_DB_WRITE_TIMEOUT,
+                )
                 status = receipt["status"]
                 if status == "pending":
                     observed = datetime.fromisoformat(receipt["observed_at"])
@@ -922,7 +1080,11 @@ async def _validate_web_source_identity(request, current_user, *, database):
             except Exception as exc:
                 raise HTTPException(503, "暂时无法核对消息来源，请稍后重试") from exc
     if status in {"revoked", "stale", "conflict"}:
-        message = "该来源标识已用于另一条消息，请为新消息使用新的标识。" if status == "conflict" else "该消息来源已失效，不能重放；重新发送消息时请使用新的标识。"
+        message = (
+            "该来源标识已用于另一条消息，请为新消息使用新的标识。"
+            if status == "conflict"
+            else "该消息来源已失效，不能重放；重新发送消息时请使用新的标识。"
+        )
         raise HTTPException(409, detail={"code": "source_identity_" + status, "message": message})
     if status not in {"new", "pending", "recorded"}:
         raise HTTPException(503, "暂时无法核对消息来源，请稍后重试")
@@ -930,8 +1092,11 @@ async def _validate_web_source_identity(request, current_user, *, database):
 
 def _build_chat_generation_service(runtime, character_service=None, *, message_db) -> ChatGenerationService:
     handler = functools.partial(
-        _generate_reply_impl, character_service=character_service, message_db=message_db,
+        _generate_reply_impl,
+        character_service=character_service,
+        message_db=message_db,
     )
+
     async def validate_request(request, current_user):
         await _validate_web_source_identity(request, current_user, database=message_db)
 
@@ -954,9 +1119,13 @@ def get_request_chat_generation_service(request: Request) -> ChatGenerationServi
     container = get_runtime_container(request.app)
     runtime = container.inference_runtime
     if container.db is None or runtime is None:
-        raise HTTPException(503, detail={
-            "stage": "dependencies", "message": "Chat database or scheduler is not configured; check application startup",
-        })
+        raise HTTPException(
+            503,
+            detail={
+                "stage": "dependencies",
+                "message": "Chat database or scheduler is not configured; check application startup",
+            },
+        )
     return _build_chat_generation_service(runtime, message_db=container.db)
 
 
@@ -975,7 +1144,9 @@ async def generate_reply_core(
     """Generate for a platform caller with its explicitly owned database."""
 
     service = _build_chat_generation_service(
-        inference_runtime, character_service, message_db=message_db,
+        inference_runtime,
+        character_service,
+        message_db=message_db,
     )
     return await service.generate(
         request,
@@ -1075,15 +1246,22 @@ async def _record_model_invocation(
             errorType=type(e).__name__,
         )
         logger.warning("Failed to save model invocation traceId=%s error=%s", request.traceId, type(e).__name__)
-        raise HTTPException(503, detail={
-            "stage": "model_invocation_record",
-            "message": ("生成失败，且调用记录保存失败或未确认，请检查数据库和模型服务后重试"
-                        if error_type else "模型已完成，但调用记录保存失败或未确认，请检查数据库后重试"),
-            "generationErrorType": error_type or None,
-            "recordErrorType": type(e).__name__,
-            "modelInvoked": model_invoked if model_invoked is not None else (None if error_type else True),
-            "invocationRecorded": None, "messageSaved": False,
-        }) from e
+        raise HTTPException(
+            503,
+            detail={
+                "stage": "model_invocation_record",
+                "message": (
+                    "生成失败，且调用记录保存失败或未确认，请检查数据库和模型服务后重试"
+                    if error_type
+                    else "模型已完成，但调用记录保存失败或未确认，请检查数据库后重试"
+                ),
+                "generationErrorType": error_type or None,
+                "recordErrorType": type(e).__name__,
+                "modelInvoked": model_invoked if model_invoked is not None else (None if error_type else True),
+                "invocationRecorded": None,
+                "messageSaved": False,
+            },
+        ) from e
 
 
 async def _save_message(
@@ -1158,11 +1336,15 @@ async def _save_message(
             request.sessionId,
             type(e).__name__,
         )
-        raise HTTPException(503, detail={
-            "stage": "message_archive",
-            "message": "消息保存失败或未确认，请检查数据库及该请求的保存状态后重试",
-            "modelInvoked": model_invoked, "messageSaved": None,
-        }) from e
+        raise HTTPException(
+            503,
+            detail={
+                "stage": "message_archive",
+                "message": "消息保存失败或未确认，请检查数据库及该请求的保存状态后重试",
+                "modelInvoked": model_invoked,
+                "messageSaved": None,
+            },
+        ) from e
 
 
 # ═══════════════════════════════════════════

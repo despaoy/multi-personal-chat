@@ -658,3 +658,18 @@ async def test_gateway_missing_dependencies_fail_before_storage(gateway, missing
     assert calls == []
     for table in ["integration_events", "integration_receipts", "messages"]:
         assert database.execute_sql(f"SELECT COUNT(*) AS count FROM {table}")[0]["count"] == 0
+
+
+def test_plugin_dedup_uses_event_identity_not_matching_text(plugin):
+    first = SimpleNamespace(raw_message={}, message_str="hello")
+    second = SimpleNamespace(raw_message={}, message_str="hello")
+    first_id = plugin._message_id(first)
+    assert plugin._message_id(first) == first_id
+    assert plugin._message_id(second) != first_id
+    payload = plugin._build_payload(first, "hello")
+    payload["messageId"] = first_id
+    first_key = plugin._dedup_key(payload)
+    payload["text"] = "changed text does not change event identity"
+    assert plugin._dedup_key(payload) == first_key
+    payload["messageId"] = plugin._message_id(second)
+    assert plugin._dedup_key(payload) != first_key

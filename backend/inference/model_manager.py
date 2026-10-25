@@ -176,7 +176,21 @@ class BaseProvider(ABC):
         return None
 
 
-class OpenAICompatProvider(BaseProvider):
+class _AsyncProvider(BaseProvider):
+    """Native async providers share one explicit synchronous entry point."""
+
+    def generate(self, prompt: str, session_history: List[Dict] = None,
+                 max_tokens_override: int = None) -> Tuple[str, float]:
+        import asyncio
+        return asyncio.run(self.async_generate(prompt, session_history, max_tokens_override))
+
+    @abstractmethod
+    async def async_generate(self, prompt: str, session_history: List[Dict] = None,
+                             max_tokens_override: int = None) -> Tuple[str, float]:
+        raise NotImplementedError
+
+
+class OpenAICompatProvider(_AsyncProvider):
     """OpenAI兼容API提供商（支持DeepSeek、通义千问等）"""
 
     def __init__(self, config_snapshot: dict[str, Any] | None = None):
@@ -274,11 +288,6 @@ class OpenAICompatProvider(BaseProvider):
         else:
             raise ProviderResponseError(response.status_code)
 
-    def generate(self, prompt: str, session_history: List[Dict] = None,
-                 max_tokens_override: int = None) -> Tuple[str, float]:
-        # R-1 fix: 同步入口通过 asyncio.run 执行异步实现
-        import asyncio
-        return asyncio.run(self.async_generate(prompt, session_history, max_tokens_override))
 
 class MockProvider(BaseProvider):
     """模拟提供商，用于测试"""
@@ -301,7 +310,7 @@ class MockProvider(BaseProvider):
         return reply, cost
 
 
-class OllamaProvider(BaseProvider):
+class OllamaProvider(_AsyncProvider):
     """Ollama 提供商"""
 
     def __init__(self):
@@ -348,13 +357,8 @@ class OllamaProvider(BaseProvider):
             raise ValueError("Ollama completion has no usable content")
         return reply.strip(), round(time.time() - start, 2)
 
-    def generate(self, prompt: str, session_history: List[Dict] = None,
-                 max_tokens_override: int = None) -> Tuple[str, float]:
-        # R-1 fix: 同步入口通过 asyncio.run 执行异步实现
-        import asyncio
-        return asyncio.run(self.async_generate(prompt, session_history, max_tokens_override))
 
-class LlamaCppProvider(BaseProvider):
+class LlamaCppProvider(_AsyncProvider):
     """llama.cpp 提供商"""
 
     def __init__(self):
@@ -394,11 +398,6 @@ class LlamaCppProvider(BaseProvider):
             raise ValueError("llama.cpp completion truncated its context")
         return completed_chat_content(data), round(time.time() - start, 2)
 
-    def generate(self, prompt: str, session_history: List[Dict] = None,
-                 max_tokens_override: int = None) -> Tuple[str, float]:
-        # R-1 fix: 同步入口通过 asyncio.run 执行异步实现
-        import asyncio
-        return asyncio.run(self.async_generate(prompt, session_history, max_tokens_override))
 
 class TransformersPeftProvider(BaseProvider):
     """Transformers + PEFT 本地推理提供商"""
@@ -539,7 +538,7 @@ class TransformersPeftProvider(BaseProvider):
                 logger.info("TransformersPeftProvider 模型资源已释放")
 
 
-class VLLMProvider(BaseProvider):
+class VLLMProvider(_AsyncProvider):
     """vLLM 提供商 - 高性能推理引擎，支持 Continuous Batching"""
 
     def __init__(self):
@@ -596,11 +595,6 @@ class VLLMProvider(BaseProvider):
         cost = round(time.time() - start, 2)
         return reply, cost
 
-    def generate(self, prompt: str, session_history: List[Dict] = None,
-                 max_tokens_override: int = None) -> Tuple[str, float]:
-        """同步生成包装 - 通过 asyncio.run 执行异步方法"""
-        import asyncio
-        return asyncio.run(self.async_generate(prompt, session_history, max_tokens_override))
 
 
 class ProviderShutdownError(RuntimeError):

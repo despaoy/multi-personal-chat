@@ -34,24 +34,16 @@ async def list_preferences(
     try:
         limit = max(1, min(int(limit), 500))
         offset = max(0, int(offset))
-        if review_status:
-            rows = await asyncio.to_thread(
-                database.execute_sql,
-                "SELECT * FROM preference_pairs WHERE review_status=:rs ORDER BY created_at DESC LIMIT :lim OFFSET :off",
-                {"rs": review_status, "lim": limit, "off": offset},
-            )
-            count_rows = await asyncio.to_thread(
-                database.execute_sql,
-                "SELECT COUNT(*) as cnt FROM preference_pairs WHERE review_status=:rs",
-                {"rs": review_status},
-            )
-        else:
-            rows = await asyncio.to_thread(
-                database.execute_sql,
-                "SELECT * FROM preference_pairs ORDER BY created_at DESC LIMIT :lim OFFSET :off",
-                {"lim": limit, "off": offset},
-            )
-            count_rows = await asyncio.to_thread(database.execute_sql, "SELECT COUNT(*) as cnt FROM preference_pairs")
+        where = " WHERE review_status=:rs" if review_status else ""
+        filters = {"rs": review_status} if review_status else {}
+        rows = await asyncio.to_thread(
+            database.execute_sql,
+            f"SELECT * FROM preference_pairs{where} ORDER BY created_at DESC LIMIT :lim OFFSET :off",
+            {**filters, "lim": limit, "off": offset},
+        )
+        count_rows = await asyncio.to_thread(
+            database.execute_sql, f"SELECT COUNT(*) as cnt FROM preference_pairs{where}", filters,
+        )
         total = count_rows[0]["cnt"]
         pairs = []
         for r in rows:
@@ -182,18 +174,17 @@ async def sample_from_history(
 ):
     """从消息历史采样候选偏好对（待人工标注）"""
     try:
+        session_filter = ' AND "sessionId"=:sid' if req.session_id else ""
+        params = {"min_len": req.min_length, "lim": req.limit}
         if req.session_id:
-            rows = await asyncio.to_thread(
-                database.execute_sql,
-                'SELECT message, reply, "loraName", "traceId" FROM messages WHERE "branchId" IS NULL AND "sessionId"=:sid AND reply != \'\' AND LENGTH(reply) >= :min_len ORDER BY RANDOM() LIMIT :lim',
-                {"sid": req.session_id, "min_len": req.min_length, "lim": req.limit},
-            )
-        else:
-            rows = await asyncio.to_thread(
-                database.execute_sql,
-                'SELECT message, reply, "loraName", "traceId" FROM messages WHERE "branchId" IS NULL AND reply != \'\' AND LENGTH(reply) >= :min_len ORDER BY RANDOM() LIMIT :lim',
-                {"min_len": req.min_length, "lim": req.limit},
-            )
+            params["sid"] = req.session_id
+        rows = await asyncio.to_thread(
+            database.execute_sql,
+            'SELECT message, reply, "loraName", "traceId" FROM messages '
+            f'WHERE "branchId" IS NULL{session_filter} '
+            "AND reply != '' AND LENGTH(reply) >= :min_len ORDER BY RANDOM() LIMIT :lim",
+            params,
+        )
         candidates = []
         for r in rows:
             candidates.append({

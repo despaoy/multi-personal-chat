@@ -16,6 +16,7 @@ from sqlalchemy import text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
+from db.training_tasks import training_config_json, training_config_update, training_task_record
 from cache.ttl_value_cache import BoundedTTLCache
 from db import memory_source
 from db.conversation_indexes import SOURCE_INDEX_STATEMENTS
@@ -76,10 +77,7 @@ def _row_to_dict(row) -> dict:
     """将 SQLAlchemy Row / RowMapping 转为普通 dict"""
     if row is None:
         return None
-    try:
-        return dict(row._mapping)
-    except Exception:
-        return dict(row)
+    return dict(getattr(row, "_mapping", row))
 
 
 # ============================================
@@ -2537,21 +2535,7 @@ class PgDatabase:
     def _normalize_training_task(row) -> Optional[Dict]:
         if row is None:
             return None
-        data = _row_to_dict(row)
-        try:
-            config = json.loads(data.get("config_json") or data.get("config") or "{}")
-        except (TypeError, json.JSONDecodeError):
-            config = {}
-        return {
-            "task_id": data.get("task_id") or data.get("id"),
-            "lora_name": data.get("lora_name", ""),
-            "status": data.get("status", "pending"),
-            "progress": float(data.get("progress", 0) or 0),
-            "error_message": data.get("error_message", ""),
-            "config": config,
-            "created_at": data.get("created_at") or data.get("createdAt", ""),
-            "updated_at": data.get("updated_at") or data.get("updatedAt", ""),
-        }
+        return training_task_record(_row_to_dict(row))
 
     async def save_training_task(self, task_id: str, task_data: Dict) -> None:
         # M5 fix: 拒绝空 task_id，与 SQLite 侧保持一致
@@ -2559,7 +2543,7 @@ class PgDatabase:
             raise ValueError("task_id 不能为空")
         created_at = task_data.get("created_at", "")
         updated_at = task_data.get("updated_at", "")
-        config_json = json.dumps(task_data.get("config", {}), ensure_ascii=False)
+        config_json = training_config_json(task_data.get("config", {}))
         async with self.async_session() as session:
             await session.execute(
                 text("""
@@ -2640,7 +2624,6 @@ class PgDatabase:
             stmt = training_tasks_table.select()
             if status:
                 stmt = stmt.where(training_tasks_table.c.status == status)
-            # 优先用 created_at（新 schema），回退到 createdAt（legacy）
             stmt = stmt.order_by(training_tasks_table.c.created_at.desc())
             result = await session.execute(stmt)
             return [self._normalize_training_task(row) for row in result.fetchall()]
@@ -2664,14 +2647,7 @@ class PgDatabase:
         for key in ("status", "progress", "error_message", "lora_name"):
             if key in data:
                 values[key] = data[key]
-        if "config" in data:
-            # config 是 dict，存到 config_json 列
-            try:
-                values["config_json"] = json.dumps(data["config"], ensure_ascii=False)
-            except (TypeError, ValueError):
-                pass
-        if "config_json" in data:
-            values["config_json"] = data["config_json"]
+        values.update(training_config_update(data))
         async with self.async_session() as session:
             stmt = training_tasks_table.update().where(training_tasks_table.c.id == task_id).values(**values)
             await session.execute(stmt)
