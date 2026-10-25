@@ -134,7 +134,7 @@ async def test_real_disabled_completion_is_visible_in_web_reply_and_exact_archiv
     # This is the existing generation boundary fixture, not a real provider
     # response or a model-quality test. Completion, archive and feedback stay real.
     synthetic_reply = AsyncMock(return_value=(REPLY, False, dict(modelInvoked=False,
-        answerMode="fixture_existing_reply", warnings=["合成生成夹具提示"])))
+        answerMode="current_constraint", warnings=["合成生成夹具提示"])))
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', synthetic_reply)
     monkeypatch.setattr(generate, "response_cache", None)
     monkeypatch.setattr(generate, "circuit_breaker_registry", None)

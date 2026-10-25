@@ -135,7 +135,7 @@ def test_invalid_history_role_is_explicit_failure(role):
     assert caught.value.field == "history[0].role"
 
 
-async def test_widened_recall_preserves_lifecycle_subject_and_confidence_guards():
+async def test_widened_recall_preserves_lifecycle_and_confidence_before_subject_review():
     class Repo:
         async def list_memory_records(self, *args, **kwargs):
             records = [
@@ -157,7 +157,14 @@ async def test_widened_recall_preserves_lifecycle_subject_and_confidence_guards(
     baseline, _ = await service.load_relevant_memories("char", scope, "接下来呢")
     assert baseline == ()
     candidates, _ = await service.load_relevant_memories("char", scope, "你喜欢什么", for_contextual_selection=True)
-    assert [item.memory_id for item in candidates] == ["a"]
+    assert {item.memory_id for item in candidates} == {"a", "c"}
+
+    async def reviewer(messages):
+        payload = json.loads(messages[1]["content"])
+        assert payload["query"] == "你喜欢什么" and set(payload["required_ids"]) == {"a", "c"}
+        return json.dumps({"decisions": [{"id": item_id, "label": "wrong_subject"} for item_id in payload["required_ids"]]})
+
+    assert not (await ContextualEvidenceSelector(reviewer).select("你喜欢什么", candidates)).memories
 
 
 async def test_concurrent_requests_do_not_share_selection_state():

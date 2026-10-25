@@ -903,24 +903,8 @@ class CharacterMemoryService:
             # goal 类别路由属于平衡版 query expansion，不污染关闭该开关
             # 的 legacy 消融路径；姓名/偏好/promise 的既有安全意图不变。
             intents = replace(intents, goal=False)
-        # Goal-category routing is a relevance heuristic, not an authorization
-        # or subject boundary. A contextual reviewer must still see resources
-        # needed by compound tasks (e.g. research topic + available hardware).
-        suppression_intents = intents
         if for_contextual_selection:
-            from character.memory_read_subject import closed_other_subject_fields
-
-            # Pronoun/topic proximity is a ranking heuristic. An ambiguous
-            # clause cannot veto other tasks before the mandatory selector has
-            # reviewed the complete query and authorized source evidence.
-            closed_other_fields = closed_other_subject_fields(query)
-            suppression_intents = replace(
-                intents, goal=False,
-                suppress_name='name' in closed_other_fields,
-                suppress_preference='preference' in closed_other_fields,
-            )
-            trace['subject_filter_mode'] = ('closed_other_lookup' if closed_other_fields
-                                            else 'contextual_review')
+            trace['subject_filter_mode'] = 'contextual_review'
         from character.current_turn_memory import shadowed_memory_ids
 
         # Keep the repository snapshot and storage-presence diagnostics intact.
@@ -936,7 +920,7 @@ class CharacterMemoryService:
                     any(temporal_eligible(row, window) for window in row_windows(row))
                 )
             )
-            and not _is_suppressed(row, suppression_intents)
+            and (for_contextual_selection or not _is_suppressed(row, intents))
             and str(row.get('id')) not in shadowed_ids
             # Open owner proximity is a retrieval heuristic, not a veto
             # before the mandatory contextual selector reviews every candidate.

@@ -168,4 +168,15 @@ async def test_open_compound_owner_heuristic_does_not_hide_name_from_reviewer(tm
     packets, _, _ = await CharacterMemoryService(repo, semantic_enabled=False).recall_with_diagnostics(
         ROLE, s, "他的名字是什么？", for_contextual_selection=True
     )
-    assert not packets
+    assert any(item.memory_key == "user_name" for item in packets)
+    from character.evidence_selector import ContextualEvidenceSelector
+
+    async def reviewer(messages):
+        import json
+
+        payload = json.loads(messages[1]["content"])
+        assert payload["query"] == "他的名字是什么？"
+        return json.dumps({"decisions": [{"id": item["id"], "label": "wrong_subject"} for item in payload["candidates"]]})
+
+    outcome = await ContextualEvidenceSelector(reviewer).select("他的名字是什么？", packets)
+    assert not outcome.memories

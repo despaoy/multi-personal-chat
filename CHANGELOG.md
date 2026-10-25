@@ -23,6 +23,9 @@ interfaces.
 
 ### Changed
 
+- Let the existing contextual selector resolve memory subjects from complete history;
+  remove duplicate regex vetoes before review while retaining scoped source authority.
+
 - Reject undeclared no-model generation results before archiving; keep valid source
   unavailability explicit and account only for actual completed review usage.
 

@@ -114,7 +114,7 @@ async def test_model_failure_keeps_primary_cause_and_reports_recording_failure(g
 @pytest.mark.asyncio
 @pytest.mark.parametrize("invoked,record", [(True, True), (False, True), (True, False)])
 async def test_success_deterministic_and_explicit_internal_modes_remain_distinct(generation, database, invoked, record):
-    generation.return_value = (REPLY, False, {"modelInvoked": invoked})
+    generation.return_value = (REPLY, False, {"modelInvoked": invoked, "answerMode": "generated" if invoked else "current_constraint"})
     result = await generate._generate_reply_impl(request(), enable_rag=False, record_invocation=record, message_db=generate.db)
     assert result.reply == REPLY and result.modelInvoked is invoked
     assert len(database.execute_sql("SELECT id FROM model_invocations")) == int(invoked and record)
