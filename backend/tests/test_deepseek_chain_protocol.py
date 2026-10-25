@@ -45,7 +45,7 @@ def test_unverified_free_form_summary_is_error_instead_of_quote_recovery():
 @pytest.mark.parametrize("changes,field", [
     ({"target_memory_id": "999"}, "target_memory_id"), ({"target_memory_key": "user_name"}, "target_memory_key"),
     ({"confidence": .1}, None), ({"attributed_to": "assistant"}, "attributed_to"),
-    ({"evidence": "我新养的猫叫雪饼。"}, None),
+    ({"evidence": "我新养的猫叫雪饼。"}, "evidence"),
 ])
 def test_recorded_candidate_preserves_specific_admission_boundaries(changes, field):
     if field:

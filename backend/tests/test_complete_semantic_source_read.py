@@ -123,7 +123,9 @@ async def test_clipped_quote_cannot_drop_complete_owner_retraction_or_conflict(t
     assert result.status == "unverified" and result.value is None
     assert items and all(i.temporal_mode == "observation" for i in items)
     if source is not None:
-        assert source in items[0].content
+        assert source in items[0].evidence and source not in items[0].content
+        compiled, used = compile_reference_context(items, complete_evidence=True, max_chars=6000)
+        assert source in compiled and items[0].memory_id in used
 
 
 @pytest.mark.asyncio

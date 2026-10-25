@@ -23,6 +23,8 @@ interfaces.
 
 ### Changed
 
+- Reject invented or copied historical proposal evidence before admission, with an
+  explicit model-protocol error and no partial fact writes; retain valid no-change outcomes.
 - Carry observation source text once in memory evidence; retain temporal uncertainty
   in display content and revoke history using original evidence rather than shared labels.
 - Reject corrupt training configuration, invalid authentication subjects and failed

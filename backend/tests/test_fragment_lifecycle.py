@@ -229,7 +229,9 @@ def test_nested_quoted_delete_instruction_is_not_current_authorization():
         + FIXTURE["affirmative_erase_clause"].replace("“", "「").replace("”", "」")
         + "”请保留海庭鹤林工坊纸版压印课预约确认。"
     )
-    assert not parse_llm_proposals(response(), source_message=message, existing_memories=records())
+    payload = json.loads(response())
+    payload["memories"][0]["evidence"] = FIXTURE["affirmative_erase_clause"].replace("“", "「").replace("”", "」")
+    assert not parse_llm_proposals(json.dumps(payload), source_message=message, existing_memories=records())
 
 
 @pytest.mark.parametrize("opening,closing", [("“", "”"), ("‘", "’"), ("「", "」"), ("『", "』"), ('"', '"')])

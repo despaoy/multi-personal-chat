@@ -205,3 +205,37 @@ unauthenticated protected access returns 401 with nosniff. Configuration and
 other services are unchanged. These checks do not prove browser rendering,
 external-platform delivery, sustained load, large-index performance or Windows
 process cleanup. Broad model quality and remaining architectural work stay open.
+
+
+## Validate proposal evidence before admission (2026-10-25)
+
+A synthetic SQLite reproduction showed a valid candidate plus an invented quote
+returning `saved` with one persisted fact, silently omitting the invalid candidate.
+The existing normalized-source check now precedes business admission and raises
+the existing `MemoryResponseError` for `evidence`. The batch fails before fact
+writes while retaining the captured original source. Valid low-confidence and
+empty outputs remain business outcomes. Production code is two lines shorter;
+no semantic keyword rule, additional reviewer, wrapper or repair path was added.
+
+The latest full-file results cover 82 related parser/scheduler caller files:
+1,489 passes, plus syntax/Ruff for 18 modified Python files and repository
+integrity. Initial test-collection errors were editing mistakes, corrected before
+results were counted. Only corrected files were rerun after the first directed
+checks; no manual whole-backend repeat was performed.
+
+The prior commit's CI run 40186588600 actually finished with 10,841 passes,
+33 failures, one skip and eight warnings; frontend passed and Docker was skipped.
+All 33 failures were in seven tests still expecting raw observation sources in
+display content. Updated assertions retain full source evidence, temporal and
+subject constraints, version chains and actual compiled references. The original
+failed run remains evidence, not a claimed green baseline. Tests for authorization
+now supply the actual current quotation and still require denial; invented or
+copied historical quotes explicitly fail the model protocol instead of looking
+like no new information.
+
+One new DeepSeek Flash call (2,720 tokens) saved and recalled two complete
+synthetic identity/study facts through actual SQLite and reference compilation.
+This checks writer success, not final-answer accuracy. Backend restart readiness
+and login are 200; unauthenticated protected access is 401 with nosniff. Frontend
+process and configuration are unchanged. Current-source whole-CI results, browser,
+external-platform, sustained-load and remaining architecture work stay separate.

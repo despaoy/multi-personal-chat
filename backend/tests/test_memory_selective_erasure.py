@@ -106,7 +106,7 @@ def test_clipped_or_negative_retention_evidence_cannot_authorize_erasure(evidenc
 )
 def test_non_authorizing_or_ambiguous_instructions_keep_model_erasure_denied(message):
     assert not is_memory_erasure_request(message)
-    assert not parse_llm_proposals(response(), source_message=message, existing_memories=records())
+    assert not parse_llm_proposals(response(evidence=message), source_message=message, existing_memories=records())
 
 
 def test_unknown_retained_object_and_same_object_conflict_authorize_no_target():

@@ -39,15 +39,15 @@ def test_unverified_summary_additions_are_a_content_error():
 
 
 @pytest.mark.parametrize("changes,error", [
-    ({"evidence": "我的自行车是红色的。"}, False),
-    ({"attributed_to": "assistant"}, True),
+    ({"evidence": "我的自行车是红色的。"}, "evidence"),
+    ({"attributed_to": "assistant"}, "attributed_to"),
     ({"confidence": 0.1}, False),
 ])
 def test_empty_display_does_not_bypass_grounding_or_admission(changes, error):
     if error:
         with pytest.raises(MemoryResponseError) as caught:
             _parse("我的自行车是蓝色的。", "自行车是蓝色", "", **changes)
-        assert caught.value.field == "attributed_to"
+        assert caught.value.field == error
     else:
         assert not _parse("我的自行车是蓝色的。", "自行车是蓝色", "", **changes)
 

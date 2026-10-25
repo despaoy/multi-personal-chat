@@ -59,7 +59,8 @@ def test_place_correction_never_discards_conflict_owner_or_qualification(source)
     row = record(source, "用户说自己居住在舟山", "user_residence")
     before = deepcopy(row)
     view = project_temporal_record(row)
-    assert view["temporal_mode"] == "observation" and source in view["content"]
+    assert view["temporal_mode"] == "observation" and source in view["evidence"]
+    assert source not in view["content"]
     assert row == before
     if source in {"我现在住在舟山，已经不住舟山了。", "我现在住在舟山了，已经不住舟山了。"}:
         assert extract_memories(source) == []

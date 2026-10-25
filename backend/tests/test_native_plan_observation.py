@@ -1,5 +1,4 @@
 import json
-from dataclasses import replace
 from datetime import datetime, timezone
 from types import SimpleNamespace
 
@@ -66,13 +65,13 @@ def test_long_plan_is_a_complete_source_observation_not_a_completed_action():
     "evidence", ["我计划每周日上午九点半到城东青苔工坊练习木刻。只有当天不下雨才去", "我计划每天十点到虚构工坊练习木刻"]
 )
 def test_source_observations_still_reject_stitched_or_invented_quotes(evidence):
-    assert parse_llm_proposals(proposal(evidence), source_message=PLAN) == []
+    with pytest.raises(MemoryResponseError) as caught:
+        parse_llm_proposals(proposal(evidence), source_message=PLAN)
+    assert caught.value.field == "evidence"
 
 
 def test_cloud_reference_allowance_preserves_full_plan_and_late_conditions():
     item = observation()
-    # Actual temporal read views retain the original quotation in content too.
-    item = replace(item, content="用户原话记录：" + json.dumps(list(item.evidence), ensure_ascii=False))
     reference, ids = compile_reference_context(
         (item,), complete_evidence=True, max_chars=32768
     )

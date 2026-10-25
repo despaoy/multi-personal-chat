@@ -84,7 +84,8 @@ async def test_omitted_literal_start_cannot_retire_the_present_target(tmp_path, 
         "unit-character", SCOPE, claim_sources=((new["id"], job.source_message_id),)
     )
     view = project_temporal_record(new, {r["source_message_id"]: r for r in sources})
-    assert view["temporal_mode"] == "observation" and source in view["content"]
+    assert view["temporal_mode"] == "observation" and source in view["evidence"]
+    assert source not in view["content"]
 
 
 @pytest.mark.asyncio

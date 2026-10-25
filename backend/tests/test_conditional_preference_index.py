@@ -86,7 +86,7 @@ async def test_literal_object_preserves_full_condition_and_current_target(tmp_pa
     assert linked[0]["body"] == SOURCE
     view = project_temporal_record(new, {r["source_message_id"]: r for r in linked})
     assert view["temporal_mode"] == "observation"
-    assert SOURCE in json.loads(view["content"].split("：", 1)[1])
+    assert SOURCE in view["evidence"] and SOURCE not in view["content"]
     if operation == "SUPERSEDE":
         assert new["relation_type"] == "COEXIST" and new["parent_memory_id"] == old["id"]
 

@@ -38,17 +38,18 @@ def test_llm_candidate_requires_exact_evidence_and_builds_local_content():
 
 
 def test_llm_candidate_cannot_invent_evidence_or_value():
-    invented_evidence = parse_llm_proposals(
-        _response(
-            {"attributed_to": "user",
-                "operation": "ADD", "kind": "like",
-                "value": "咖啡",
-                "evidence": "我喜欢咖啡",
-                "confidence": 0.99,
-            }
-        ),
-        source_message="我喜欢红茶。",
-    )
+    with pytest.raises(MemoryResponseError, match="evidence"):
+        parse_llm_proposals(
+            _response(
+                {"attributed_to": "user",
+                    "operation": "ADD", "kind": "like",
+                    "value": "咖啡",
+                    "evidence": "我喜欢咖啡",
+                    "confidence": 0.99,
+                }
+            ),
+            source_message="我喜欢红茶。",
+        )
     with pytest.raises(MemoryResponseError, match="value"):
         parse_llm_proposals(
             _response(
@@ -62,7 +63,6 @@ def test_llm_candidate_cannot_invent_evidence_or_value():
             source_message="我喜欢红茶。",
         )
 
-    assert invented_evidence == []
 
 
 def test_llm_path_respects_opt_out_sensitive_and_uncertain_policy():

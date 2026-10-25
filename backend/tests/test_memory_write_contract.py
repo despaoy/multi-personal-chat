@@ -85,7 +85,7 @@ def test_valid_low_confidence_and_unsupported_evidence_remain_normal_rejection()
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("field,bad", [("kind", "private-unknown"), ("value", ""), ("value", "甲" * 49)])
+@pytest.mark.parametrize("field,bad", [("kind", "private-unknown"), ("value", ""), ("value", "甲" * 49), ("evidence", "我的专业是化学")])
 async def test_invalid_second_candidate_never_persists_valid_first_candidate(tmp_path, field, bad):
     database = SQLiteDB(tmp_path / "writing.sqlite")
     repository = DatabaseCharacterMemoryRepository(database)

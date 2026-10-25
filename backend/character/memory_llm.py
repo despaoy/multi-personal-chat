@@ -1021,6 +1021,9 @@ def _candidate_to_proposal(
     evidence = re.sub(r"\s+", " ", evidence).strip()
     if len(evidence) > _MAX_EVIDENCE_CHARS:
         raise MemoryResponseError("evidence", "记忆 LLM evidence 超过约定长度上限")
+    normalized_evidence = _normalize(evidence)
+    if not normalized_evidence or normalized_evidence not in _normalize(source_message):
+        raise MemoryResponseError("evidence", "记忆 LLM evidence 必须引用当前原文，不接受无来源证据")
     proposed_content = re.sub(r"\s+", " ", _proposal_text(raw, "content")).strip()
     target_memory_id = _proposal_text(raw, "target_memory_id").strip()
     target_memory_key = _proposal_text(raw, "target_memory_key").strip()
@@ -1029,8 +1032,6 @@ def _candidate_to_proposal(
         target_memory_key=target_memory_key, existing_memories=existing_memories,
     )
 
-    normalized_source = _normalize(source_message)
-    normalized_evidence = _normalize(evidence)
     unretracted_source = unretracted_memory_source(source_message)
     if (operation not in {"NOOP", "RETRACT", "ERASE"}
             and unretracted_source != source_message
@@ -1094,9 +1095,6 @@ def _candidate_to_proposal(
             for occurrence in occurrences
         ):
             return None
-
-    if not normalized_evidence or normalized_evidence not in normalized_source:
-        return None
 
     if operation == "ERASE" and not is_memory_erasure_request(source_message):
         return None

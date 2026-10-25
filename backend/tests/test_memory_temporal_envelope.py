@@ -72,5 +72,5 @@ def test_canonical_dates_do_not_promote_false_present_summary():
         metadata={"qualifiers": dict(proposal.qualifiers), "temporal_provenance": model_temporal_provenance(
             evidence=proposal.evidence, observed_at=observed, proposed_from=proposal.proposed_valid_from)}))
     assert view["temporal_mode"] == "observation"
-    assert SOURCE in view["content"]
+    assert SOURCE in view["evidence"] and SOURCE not in view["content"]
     assert "用户现在住在宝鸡" not in view["content"]

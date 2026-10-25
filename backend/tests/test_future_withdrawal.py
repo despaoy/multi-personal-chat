@@ -93,7 +93,8 @@ async def test_future_withdrawal_does_not_retract_or_erase_present_claim(tmp_pat
         "unit-character", SCOPE, claim_sources=((new["id"], job.source_message_id),)
     )
     view = project_temporal_record(new, {r["source_message_id"]: r for r in sources})
-    assert view["temporal_mode"] == "observation" and source in view["content"]
+    assert view["temporal_mode"] == "observation" and source in view["evidence"]
+    assert source not in view["content"]
     assert scheduler.status.erased == 0 and scheduler.status.saved == 1
 
 

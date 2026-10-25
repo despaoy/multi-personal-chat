@@ -1,7 +1,5 @@
 """Whitespace variants retain full synthetic sources in independent unit DBs."""
 
-import json
-
 import pytest
 from test_deferred_evidence_binding import LIKE, NOW, RETRACT, SCOPE, setup_writer
 
@@ -31,8 +29,8 @@ async def test_admitted_whitespace_normalization_cannot_remove_future_authority(
     )
     assert sources[0]["body"] == source
     view = project_temporal_record(new, {r["source_message_id"]: r for r in sources})
-    quotes = json.loads(view["content"].split("：", 1)[1])
-    assert view["temporal_mode"] == "observation" and source in quotes and source in view["evidence"]
+    assert view["temporal_mode"] == "observation" and source in view["evidence"]
+    assert source not in view["content"]
 
 
 @pytest.mark.parametrize(

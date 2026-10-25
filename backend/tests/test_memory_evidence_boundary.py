@@ -27,7 +27,9 @@ def parse(raw, source=CURRENT, history=HISTORY):
 
 
 def test_copied_historical_quote_is_not_rewritten_into_new_evidence():
-    assert parse(candidate(HISTORY[0]["content"])) == []
+    with pytest.raises(MemoryResponseError) as caught:
+        parse(candidate(HISTORY[0]["content"]))
+    assert caught.value.field == "evidence"
 
 
 def test_current_quote_can_still_use_user_history_to_resolve_value():
@@ -61,7 +63,7 @@ def test_exact_quote_limit_and_complete_long_source_observation_remain_supported
 @pytest.mark.parametrize(
     "case,expected,reason",
     [
-        ("copied", "no_change", "no_eligible_memory"),
+        ("copied", "failed", "invalid_model_response"),
         ("empty", "no_change", "no_new_information"),
         ("current", "saved", None),
         ("oversized", "failed", "invalid_model_response"),
@@ -94,7 +96,7 @@ async def test_receipt_distinguishes_quote_failure_admission_and_empty_extractio
             assert receipt["persisted"] == len(records) == 1
         else:
             assert receipt["reason"] == reason and receipt["accepted"] == receipt["persisted"] == 0 and not records
-        if case == "oversized":
+        if case in {"copied", "oversized"}:
             assert receipt["error"] == "MemoryResponseError" and receipt["field"] == "evidence"
             assert receipt["stage"] == "proposal_validation" and receipt["retryable"] is False
         assert len(await repository.list_sources("role", scope)) == 1

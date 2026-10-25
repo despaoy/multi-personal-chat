@@ -77,10 +77,10 @@ def test_literal_new_event_keeps_the_complete_original_utterance():
 def test_observation_recovery_preserves_existing_admission_guards(change):
     data = protocol_example()
     data['model_output']['memories'][0].update(change)
-    if 'target_memory_id' in change:
+    if 'target_memory_id' in change or 'evidence' in change:
         with pytest.raises(MemoryResponseError) as caught:
             parse(data)
-        assert caught.value.field == 'target_memory_id'
+        assert caught.value.field == ('evidence' if 'evidence' in change else 'target_memory_id')
     else:
         assert parse(data) == []
 
