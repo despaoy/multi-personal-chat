@@ -73,6 +73,12 @@ BASELINE = {
     "AUTH_PASSWORD_WORKERS": "2",
     "AUTH_PASSWORD_MAX_PENDING": "8",
     "AUTH_PASSWORD_TIMEOUT_SECONDS": "10",
+    "MODEL_INFERENCE_TIMEOUT": "180",
+    "DB_WRITE_TIMEOUT": "3",
+    "RAG_TIMEOUT": "8",
+    "RAG_COLD_START_TIMEOUT": "60",
+    "INTEGRATION_AUTH_TIMEOUT": "3",
+    "INTEGRATION_DB_TIMEOUT": "3",
 }
 
 
@@ -103,6 +109,13 @@ def child_environment(tmp_path):
         ("api.auth", "AUTH_PASSWORD_TIMEOUT_SECONDS", "nan"),
         ("api.auth", "AUTH_PASSWORD_WORKERS", "controlled-private-number"),
         ("infra.auth_work", "AUTH_DATABASE_MAX_PENDING", "controlled-private-number"),
+        ("api.generate", "MODEL_INFERENCE_TIMEOUT", "inf"),
+        ("api.generate", "DB_WRITE_TIMEOUT", "nan"),
+        ("services.model_usage", "DB_WRITE_TIMEOUT", "0"),
+        ("services.chat_answer", "RAG_TIMEOUT", "inf"),
+        ("services.chat_answer", "RAG_COLD_START_TIMEOUT", "-1"),
+        ("api.integrations", "INTEGRATION_AUTH_TIMEOUT", "inf"),
+        ("api.integrations", "INTEGRATION_DB_TIMEOUT", "nan"),
     ],
 )
 def test_configured_consumers_fail_during_import_with_safe_setting_name(tmp_path, module, setting, value):
@@ -178,3 +191,28 @@ def test_both_launchers_use_the_shared_positive_config_contract(monkeypatch, ent
         assert launch.call_args.kwargs["backlog"] == 25
         assert launch.call_args.kwargs["timeout_keep_alive"] == 3
         assert launch.call_args.kwargs["workers"] == 1
+
+
+
+@pytest.mark.parametrize("configured", [False, True])
+def test_chat_deadlines_keep_defaults_and_explicit_positive_values(tmp_path, configured):
+    source = """import json,logging
+logging.disable(logging.CRITICAL)
+from app import env
+env.load_backend_env=lambda *args,**kwargs:None
+from api import generate,integrations
+from services import chat_answer,model_usage
+print(json.dumps([generate._MODEL_INFERENCE_TIMEOUT,generate._DB_WRITE_TIMEOUT,
+ chat_answer._RAG_TIMEOUT,chat_answer._RAG_COLD_START_TIMEOUT,model_usage._WRITE_TIMEOUT,
+ integrations._AUTH_TIMEOUT,integrations._DB_TIMEOUT,integrations._MODEL_TIMEOUT]))
+"""
+    env = child_environment(tmp_path)
+    names = ("MODEL_INFERENCE_TIMEOUT", "DB_WRITE_TIMEOUT", "RAG_TIMEOUT", "RAG_COLD_START_TIMEOUT",
+             "INTEGRATION_AUTH_TIMEOUT", "INTEGRATION_DB_TIMEOUT")
+    for name in names:
+        env.pop(name)
+    if configured:
+        env.update(dict.fromkeys(names, "0.125"))
+    result = subprocess.run([sys.executable, "-c", source], env=env, capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0
+    assert json.loads(result.stdout) == ([.125] * 8 if configured else [180., 3., 8., 60., 3., 3., 3., 180.])

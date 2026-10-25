@@ -51,6 +51,7 @@ from db.adapter import db
 # 统一生成链路：NoneBot 不再自行组装 prompt/RAG/失败回退
 from api.generate import generate_reply_core
 from db.schemas import MessageRequest
+from infra.environment import read_positive_float
 from infra.concurrency_control import (
     InferenceQueueFull,
     RateLimitExceeded,
@@ -299,7 +300,7 @@ async def _unified_generate(prompt: str, session_id: str, lora_name: str) -> str
         ),
         session_id=session_id,
         priority=inference_runtime.priority_for("nonebot", "private"),
-        timeout=float(os.getenv("MODEL_INFERENCE_TIMEOUT", "180")),
+        timeout=read_positive_float(os.environ, "MODEL_INFERENCE_TIMEOUT", 180.0),
     )
     return result.reply
 
@@ -420,7 +421,7 @@ async def process_message(event: MessageEvent) -> str:
         _queued_generation,
         session_id=session_id,
         priority=inference_runtime.priority_for("nonebot", conversation_type),
-        timeout=float(os.getenv("MODEL_INFERENCE_TIMEOUT", "180")),
+        timeout=read_positive_float(os.environ, "MODEL_INFERENCE_TIMEOUT", 180.0),
     )
     reply = result.reply
 

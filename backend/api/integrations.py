@@ -27,7 +27,7 @@ from api.generate import (
 from app.runtime import RuntimeContainer, get_runtime_container
 from db.schemas import MessageRequest, MessageText
 from infra.concurrency_control import InferenceQueueFull, RateLimitExceeded
-from infra.environment import read_bool
+from infra.environment import read_bool, read_positive_float
 from infra.observability import increment, log_event
 from infra.security_utils import (
     constant_time_contains,
@@ -48,9 +48,9 @@ Platform = Literal["qq", "telegram", "wecom", "wechat_official", "wechat_persona
 ConversationType = Literal["private", "group", "channel"]
 T = TypeVar("T")
 
-_AUTH_TIMEOUT = float(os.getenv("INTEGRATION_AUTH_TIMEOUT", "3"))
-_DB_TIMEOUT = float(os.getenv("INTEGRATION_DB_TIMEOUT", "3"))
-_MODEL_TIMEOUT = float(os.getenv("MODEL_INFERENCE_TIMEOUT", "180"))
+_AUTH_TIMEOUT = read_positive_float(os.environ, "INTEGRATION_AUTH_TIMEOUT", 3.0)
+_DB_TIMEOUT = read_positive_float(os.environ, "INTEGRATION_DB_TIMEOUT", 3.0)
+_MODEL_TIMEOUT = read_positive_float(os.environ, "MODEL_INFERENCE_TIMEOUT", 180.0)
 _RAW_MAX_BYTES = int(os.getenv("ASTRBOT_RAW_MAX_BYTES", "65536"))
 _SIGNATURE_SKEW_SECONDS = int(os.getenv("INTEGRATION_SIGNATURE_SKEW_SECONDS", "300"))
 

@@ -14,14 +14,14 @@ from inference.history import HistoryFormatError
 from inference.lora_registry import get_lora_system_prompt
 from inference.openai_protocol import with_provider_error
 from inference.provider_context import get_provider_context_budget
-from infra.environment import read_bool
+from infra.environment import read_bool, read_positive_float
 from infra.observability import increment, log_event
 from knowledge.chat_retrieval import retrieve_chat_knowledge
 from knowledge.public_question_binding import QuestionBindingCapacityError
 from knowledge.retrieval_core.errors import RetrievalIndexError
 
-_RAG_TIMEOUT = float(os.getenv("RAG_TIMEOUT", "8"))
-_RAG_COLD_START_TIMEOUT = float(os.getenv("RAG_COLD_START_TIMEOUT", "60"))
+_RAG_TIMEOUT = read_positive_float(os.environ, "RAG_TIMEOUT", 8.0)
+_RAG_COLD_START_TIMEOUT = read_positive_float(os.environ, "RAG_COLD_START_TIMEOUT", 60.0)
 
 
 @dataclass(frozen=True)

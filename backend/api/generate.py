@@ -41,7 +41,7 @@ from inference.openai_protocol import ProviderResponseError, validate_completion
 from inference.usage import collect_usage, has_pending_usage, usage_record_started
 from infra.circuit_breaker import CircuitOpenError
 from infra.concurrency_control import InferenceQueueFull, RateLimitExceeded, inference_runtime
-from infra.environment import read_bool
+from infra.environment import read_bool, read_positive_float
 from infra.input_validator import MESSAGE_SCHEMA, InputValidator
 from infra.observability import increment, log_event, set_consecutive
 from services import chat_answer
@@ -50,8 +50,8 @@ from services.model_usage import write_invocation
 
 logger = logging.getLogger(__name__)
 
-_DB_WRITE_TIMEOUT = float(os.getenv("DB_WRITE_TIMEOUT", "3"))
-_MODEL_INFERENCE_TIMEOUT = float(os.getenv("MODEL_INFERENCE_TIMEOUT", "180"))
+_DB_WRITE_TIMEOUT = read_positive_float(os.environ, "DB_WRITE_TIMEOUT", 3.0)
+_MODEL_INFERENCE_TIMEOUT = read_positive_float(os.environ, "MODEL_INFERENCE_TIMEOUT", 180.0)
 _DETERMINISTIC_MODEL_LABELS = {
     "current_constraint": "statement/constraint",
     "memory_lookup": "memory/lookup",

@@ -8,10 +8,11 @@ from contextlib import asynccontextmanager
 
 from inference.openai_protocol import ProviderResponseError
 from inference.usage import collect_usage, has_pending_usage, invocation_usage
+from infra.environment import read_positive_float
 from infra.observability import increment
 
 logger = logging.getLogger(__name__)
-_WRITE_TIMEOUT = float(os.getenv("DB_WRITE_TIMEOUT", "3"))
+_WRITE_TIMEOUT = read_positive_float(os.environ, "DB_WRITE_TIMEOUT", 3.0)
 
 
 class UsageRecordingError(RuntimeError):
