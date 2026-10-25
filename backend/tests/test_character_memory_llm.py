@@ -85,7 +85,13 @@ def test_llm_path_respects_opt_out_sensitive_and_uncertain_policy():
             "confidence": 0.99,
         }
     )
-    assert parse_llm_proposals(uncertain, source_message="我可能喜欢咖啡") == []
+    with pytest.raises(MemoryResponseError) as caught:
+        parse_llm_proposals(uncertain, source_message="我可能喜欢咖啡")
+    assert caught.value.field == "evidence"
+    pending = json.loads(uncertain)
+    pending["memories"][0]["operation"] = "PENDING"
+    (proposal,) = parse_llm_proposals(json.dumps(pending), source_message="我可能喜欢咖啡")
+    assert proposal.operation == "PENDING" and proposal.evidence == "我可能喜欢咖啡"
 
 
 class _Completion:

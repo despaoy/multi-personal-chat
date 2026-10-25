@@ -35,7 +35,6 @@ from character.memory_extractor import (
     MAX_EXTRACTED_MEMORIES,
     MAX_MEMORY_CONTENT_CHARS,
     ExtractedMemory,
-    assertion_before_lookup,
     extract_memories,
     fictional_memory_context,
     memory_evidence_allowed,
@@ -158,9 +157,9 @@ MERGE/SUPERSEDE/COEXIST/RETRACT/ERASE 必须从白名单逐字复制 target_memo
 
 value 有两个格式：本条 evidence 中逐字复制的连续短字符串，或模型给出的有序原文片段列表。需要组合分散对象片段时必须显式使用列表，例如 evidence 为“推荐饮料时避开含咖啡因的”，value 可以是 ["含咖啡因的","饮料"]。每片必须有证据，组合后不超过 max_value_chars；后端不猜片段、不改写对象。明确省略的用户上下文消歧遵守下段约定。
 
-qualifiers 只描述业务事实的 condition/context/frequency/preference_strength/certainty/exception/location/time，键限于 payload.proposal_constraints.qualifier_keys。本轮限定值用 {"source_unit":"q编号"} 明确选择 payload.qualifier_sources 中的原文片段，不重述或概括文字；后端只读取指定片段，不猜编号。引用的完整片段必须被本条 evidence 覆盖。解析器仍支持已有调用方的字面标量，其值也必须逐字包含在 evidence 中；限定跨越片段时，可逐字复制 evidence 中的完整连续原文，不要只选其中一段；本轮不要生成概括标签。context 表示事实发生的业务情境。记忆的可见范围、保存授权和跨会话限制只写 scope_level，不复制到 qualifiers；它们不是业务情境。有效期使用顶层 valid_from/valid_to；qualifiers.time 可保留原文时间表述，不把 valid_from/valid_to 当作限定键。
+qualifiers 只描述业务事实的 condition/context/frequency/preference_strength/certainty/exception/location/time，键限于 payload.proposal_constraints.qualifier_keys。本轮限定值用 {"source_unit":"q编号"} 明确选择 payload.source_units 中的原文片段，不重述或概括文字；后端只读取指定片段，不猜编号。引用的完整片段必须被本条 evidence 覆盖。解析器仍支持已有调用方的字面标量，其值也必须逐字包含在 evidence 中；限定跨越片段时，可逐字复制 evidence 中的完整连续原文，不要只选其中一段；本轮不要生成概括标签。context 表示事实发生的业务情境。记忆的可见范围、保存授权和跨会话限制只写 scope_level，不复制到 qualifiers；它们不是业务情境。有效期使用顶层 valid_from/valid_to；qualifiers.time 可保留原文时间表述，不把 valid_from/valid_to 当作限定键。
 
-evidence 必须是 current_user_message 中的一段连续原文，并覆盖本条所有自然语言限定，包括否定、例外和“未实际发生”说明；长度不超过 max_evidence_chars。不要拼接不相邻原文，也不要只引用核心偏好句而漏掉限定。完整当前消息在该长度内时，可以直接引用整条消息。
+本轮 evidence 用 {"source_units":["q编号",...]} 明确选择 payload.source_units 中连续且按原顺序的原文片段，单段也用列表。片段保留问号、钟点和其他原始标点，后端不会裁剪问句或重新提取正文。事实后跟问题时，只选择完整的事实陈述及其限定，不把后续提问当成事实；问题本身不产生新事实。证据必须覆盖本条全部限定、否定和例外，总长度不超过 max_evidence_chars。已有调用方仍可提供一段逐字连续原文字符串；不接受不相邻片段拼接。
 
 content 可以显式留空，由后端按 kind/value/qualifiers 构建显示；若填写，必须以用户开头、包含同一个 value、不包含指令，也不使用占位标签。不要在正文和索引中使用不同词序或添加无来源对象。提供片段列表时，组合的语义由你负责。
 
@@ -169,7 +168,7 @@ content 可以显式留空，由后端按 kind/value/qualifiers 构建显示；�
 明确且稳定的信息可直接 ADD；不确定陈述不要丢弃，应使用 PENDING。confidence 表示“是否准确读懂证据和关系”的把握，不是事实发生概率；因此用户清楚表达“可能/不确定”时，PENDING 的 confidence 仍应较高。低于 payload.confidence_threshold 时用 NOOP 或不返回。最多返回 4 条。
 
 只输出严格 JSON，不要 Markdown、解释或思考过程：
-{"memories":[{"kind":"name|like|dislike|major|study_stage|origin|residence|location|workplace|goal|promise|shared_event|other_user_fact","value":"连续短原文","content":"","evidence":"当前消息连续原文","confidence":0.0,"operation":"ADD|MERGE|SUPERSEDE|COEXIST|PENDING|RETRACT|NOOP|ERASE","target_memory_id":"","target_memory_key":"","attributed_to":"user","qualifiers":{},"valid_from":"","valid_to":"","scope_level":"conversation"}]}
+{"memories":[{"kind":"name|like|dislike|major|study_stage|origin|residence|location|workplace|goal|promise|shared_event|other_user_fact","value":"连续短原文","content":"","evidence":{"source_units":["q编号"]},"confidence":0.0,"operation":"ADD|MERGE|SUPERSEDE|COEXIST|PENDING|RETRACT|NOOP|ERASE","target_memory_id":"","target_memory_key":"","attributed_to":"user","qualifiers":{},"valid_from":"","valid_to":"","scope_level":"conversation"}]}
 顶层只允许 memories 和本轮明确提供的 erase_source_ids，候选只能包含以上声明字段。
 没有合格记忆时输出 {"memories":[]}。"""
 
@@ -653,9 +652,13 @@ def _validate_attribution(value: Any) -> None:
         raise MemoryResponseError("attributed_to", "记忆 LLM attributed_to 必须明确填写用户归属")
 
 
-def _qualifier_sources(message: str) -> dict[str, str]:
-    parts = (part.strip() for part in re.split(r"[，,。！？!?；;：\n]+", message))
-    return {f"q{index}": part for index, part in enumerate(part for part in parts if part)}
+_SOURCE_SEPARATORS = "，,。！？!?；;：\n"
+
+
+def _source_units(message: str) -> dict[str, str]:
+    separators = re.escape(_SOURCE_SEPARATORS)
+    parts = re.finditer(rf"[^{separators}]+[{separators}]*", message)
+    return {f"q{index}": part.group() for index, part in enumerate(parts)}
 
 
 def _sanitize_qualifiers(
@@ -677,7 +680,7 @@ def _sanitize_qualifiers(
     result: list[tuple[str, str]] = []
     seen: set[str] = set()
     normalized_evidence = _normalize(evidence)
-    sources = _qualifier_sources(source_message)
+    sources = _source_units(source_message)
     for key, value in items:
         normalized_key = key.strip().lower()
         if normalized_key not in _ALLOWED_QUALIFIER_KEYS or normalized_key in seen:
@@ -687,7 +690,7 @@ def _sanitize_qualifiers(
             reference = value.get("source_unit")
             if set(value) != {"source_unit"} or not isinstance(reference, str) or reference not in sources:
                 raise MemoryResponseError("qualifiers", "记忆 LLM qualifiers 限定必须引用本轮已提供的原文片段编号")
-            value = sources[reference]
+            value = sources[reference].strip(_SOURCE_SEPARATORS + " \t\r")
         if isinstance(value, bool):
             normalized_value = "true" if value else "false"
         elif isinstance(value, (str, int, float)):
@@ -999,6 +1002,22 @@ def _proposal_text(raw: dict[str, Any], field: str) -> str:
     return value
 
 
+def _proposal_evidence(raw: dict[str, Any], source_message: str) -> str:
+    value = raw.get("evidence", "")
+    if not isinstance(value, dict):
+        return _proposal_text(raw, "evidence")
+    references = value.get("source_units")
+    units = _source_units(source_message)
+    if (set(value) != {"source_units"} or not isinstance(references, list) or not references
+            or not all(isinstance(key, str) and key in units for key in references)):
+        raise MemoryResponseError("evidence", "记忆 LLM evidence 必须引用本轮已提供的原文片段")
+    keys = list(units)
+    positions = [keys.index(key) for key in references]
+    if positions != list(range(positions[0], positions[0] + len(positions))):
+        raise MemoryResponseError("evidence", "记忆 LLM evidence 的片段必须连续、按原文顺序且不重复")
+    return "".join(units[key] for key in references)
+
+
 def _candidate_to_proposal(
     raw: dict[str, Any],
     *,
@@ -1025,7 +1044,7 @@ def _candidate_to_proposal(
         raise MemoryResponseError("kind", "记忆 LLM kind 缺失或不受支持")
     if writes_content and (not value or len(value) > _MAX_VALUE_CHARS):
         raise MemoryResponseError("value", "记忆 LLM value 必须是约定长度内的非空短索引")
-    evidence = _proposal_text(raw, "evidence")
+    evidence = _proposal_evidence(raw, source_message)
     if not evidence.strip():
         raise MemoryResponseError('evidence', "记忆 LLM evidence 必须是非空字符串")
     evidence = re.sub(r"\s+", " ", evidence).strip()
@@ -1091,39 +1110,27 @@ def _candidate_to_proposal(
         evidence_allowed = memory_write_allowed(evidence) and "?" not in evidence and "？" not in evidence
     else:
         evidence_allowed = memory_evidence_allowed(evidence)
-    if (not evidence_allowed and operation in {"ADD", "SUPERSEDE"}
-            and normalized_evidence == normalized_source
-            and assertion_before_lookup(source_message)):
-        # Recover a model's over-wide quote only from an independently parsed
-        # unqualified assertion. Values in the question cannot support a fact;
-        # unknown kinds/operations keep their original admission behavior.
-        supported = _supported_generic_fact(value, source_message)
-        if supported is not None and supported[0] == kind:
-            item = supported[1]
-            if item.evidence and _normalize(item.evidence) in normalized_evidence:
-                evidence = item.evidence
-                normalized_evidence = _normalize(evidence)
-                proposed_content = item.content
-                evidence_allowed = memory_evidence_allowed(evidence)
-    if evidence_allowed and kind in {"origin", "residence", "location"} and operation in {"ADD", "SUPERSEDE", "COEXIST", "MERGE"}:
-        # A clipped quote must not turn a hypothetical source clause into
-        # an asserted residence/origin. Check each original overlapping
-        # clause; independent assertions elsewhere retain their own scope.
-        occurrences = list(re.finditer(re.escape(evidence), source_message))
-        if occurrences:
-            evidence_allowed = any(
-                all(memory_evidence_allowed(clause.group())
-                    and not fictional_memory_context(clause.group())
-                    and not _NAMED_THIRD_PARTY_PATTERN.search(clause.group())
-                    and not _THIRD_PARTY_FACT_PATTERN.search(clause.group())
-                    for clause in re.finditer(r"[^，,。！？!?；;\n]+[。！？!?；;]?", source_message)
-                    if clause.start() < occurrence.end() and clause.end() > occurrence.start())
-                and all(not fictional_memory_context(sentence.group())
-                        for sentence in re.finditer(r"[^。！？!?；;\n]+[。！？!?；;]?", source_message)
-                        if sentence.start() < occurrence.end() and sentence.end() > occurrence.start())
-                for occurrence in occurrences)
     if not evidence_allowed:
-        return None
+        if operation == "NOOP":
+            return None
+        raise MemoryResponseError("evidence", "记忆 LLM evidence 不是可写入的当前陈述，不自动裁剪或补写")
+    if kind in {"origin", "residence", "location"} and operation in {"ADD", "SUPERSEDE", "COEXIST", "MERGE"}:
+        # Admission of a quote does not prove the original clause's actor or
+        # factual scope. Keep this independent source boundary unchanged.
+        occurrences = list(re.finditer(re.escape(evidence), source_message))
+        if occurrences and not any(
+            all(memory_evidence_allowed(clause.group())
+                and not fictional_memory_context(clause.group())
+                and not _NAMED_THIRD_PARTY_PATTERN.search(clause.group())
+                and not _THIRD_PARTY_FACT_PATTERN.search(clause.group())
+                for clause in re.finditer(r"[^，,。！？!?；;\n]+[。！？!?；;]?", source_message)
+                if clause.start() < occurrence.end() and clause.end() > occurrence.start())
+            and all(not fictional_memory_context(sentence.group())
+                    for sentence in re.finditer(r"[^。！？!?；;\n]+[。！？!?；;]?", source_message)
+                    if sentence.start() < occurrence.end() and sentence.end() > occurrence.start())
+            for occurrence in occurrences
+        ):
+            return None
 
     if not normalized_evidence or normalized_evidence not in normalized_source:
         return None
@@ -1376,7 +1383,7 @@ def build_memory_llm_messages(
     }
     payload = {
         "current_user_message": message,
-        "qualifier_sources": _qualifier_sources(message),
+        "source_units": _source_units(message),
         "recent_history": [
             {**item, "eligible_as_memory_evidence": False} for item in safe_history
         ],
@@ -1410,6 +1417,7 @@ def build_memory_llm_messages(
             "max_value_chars": _MAX_VALUE_CHARS,
             "value_formats": ["literal_string", "ordered_literal_fragments"],
             "max_evidence_chars": _MAX_EVIDENCE_CHARS,
+            "evidence_formats": ["literal_string", "contiguous_source_units"],
             "qualifier_keys": sorted(_ALLOWED_QUALIFIER_KEYS),
             "qualifier_formats": ["source_unit_reference", "literal_scalar"],
             "scope_levels": (_scope_levels_for_message(message, scope_authorization) if scope_authorization is not None

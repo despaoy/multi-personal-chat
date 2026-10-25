@@ -4,11 +4,11 @@ import json
 import pytest
 
 from character.memory_extractor import assertion_before_lookup, extract_memories
-from character.memory_llm import parse_llm_proposals
+from character.memory_llm import MemoryResponseError, parse_llm_proposals
 
 
-def candidate(message, kind, value, **kwargs):
-    return json.dumps({'memories': [dict(attributed_to='user', kind=kind, value=value, evidence=message,
+def candidate(message, kind, value, *, evidence=None, **kwargs):
+    return json.dumps({'memories': [dict(attributed_to='user', kind=kind, value=value, evidence=message if evidence is None else evidence,
         content='用户提到' + value, confidence=.96, operation='ADD', **kwargs)]}, ensure_ascii=False)
 
 
@@ -25,35 +25,40 @@ def candidate(message, kind, value, **kwargs):
 def test_supported_statement_survives_closed_question(statement, kind, value, key, separator):
     message = statement + separator + '你还记得我叫什么吗？'
     assert assertion_before_lookup(message) == statement
-    proposal, = parse_llm_proposals(candidate(message, kind, value), source_message=message)
+    proposal, = parse_llm_proposals(candidate(message, kind, value, evidence=statement), source_message=message)
     assert proposal.memory.memory_key == key
     assert proposal.evidence == statement
     assert '？' not in proposal.evidence
     assert any(item.memory_key == key for item in extract_memories(message))
 
 
-@pytest.mark.parametrize('message', [
-    '我明天搬到晋城了，你还记得我叫什么吗？',
-    '我准备搬到晋城了，你还记得我叫什么吗？',
-    '我可能搬到晋城了，你还记得我叫什么吗？',
-    '如果我搬到晋城了，你还记得我叫什么吗？',
-    '我如果搬到晋城了，你还记得我叫什么吗？',
-    '我搬到晋城了吗，你还记得我叫什么吗？',
-    '我朋友搬到晋城了，你还记得我叫什么吗？',
-    '我搬到晋城了，你觉得这是真的吗？',
-    '我搬到晋城了，你还记得我叫什么吗？其实是编的。',
-    '我搬到晋城了，你还记得我叫什么吗？不要保存。',
-    '“我搬到晋城了”，你还记得我叫什么吗？',
-    '我搬到晋城了，但只住周末，你还记得我叫什么吗？',
+@pytest.mark.parametrize('message,error', [
+    ('我明天搬到晋城了，你还记得我叫什么吗？', True),
+    ('我准备搬到晋城了，你还记得我叫什么吗？', True),
+    ('我可能搬到晋城了，你还记得我叫什么吗？', True),
+    ('如果我搬到晋城了，你还记得我叫什么吗？', True),
+    ('我如果搬到晋城了，你还记得我叫什么吗？', True),
+    ('我搬到晋城了吗，你还记得我叫什么吗？', True),
+    ('我朋友搬到晋城了，你还记得我叫什么吗？', False),
+    ('我搬到晋城了，你觉得这是真的吗？', True),
+    ('我搬到晋城了，你还记得我叫什么吗？其实是编的。', True),
+    ('我搬到晋城了，你还记得我叫什么吗？不要保存。', False),
+    ('“我搬到晋城了”，你还记得我叫什么吗？', True),
+    ('我搬到晋城了，但只住周末，你还记得我叫什么吗？', True),
 ])
-def test_question_split_does_not_certify_uncertain_or_qualified_residence(message):
-    assert not parse_llm_proposals(candidate(message, 'location', '晋城'), source_message=message)
+def test_overwide_questions_are_not_repaired_and_existing_rejections_remain(message,error):
+    if error:
+        with pytest.raises(MemoryResponseError) as caught:
+            parse_llm_proposals(candidate(message, 'location', '晋城'), source_message=message)
+        assert caught.value.field == 'evidence'
+    else:
+        assert not parse_llm_proposals(candidate(message, 'location', '晋城'), source_message=message)
 
 
 @pytest.mark.parametrize('kind', ['residence', 'user_fact'])
 def test_existing_residence_can_be_superseded_with_scoped_evidence(kind):
     message = '我搬到宣城了，你还记得我的专业吗？'
-    raw = dict(attributed_to='user', kind=kind, value='宣城', evidence=message, confidence=.96,
+    raw = dict(attributed_to='user', kind=kind, value='宣城', evidence='我搬到宣城了', confidence=.96,
                operation='SUPERSEDE', target_memory_id='7', target_memory_key='user_residence')
     if kind == 'user_fact':
         with pytest.raises(ValueError, match='kind'):
@@ -72,7 +77,9 @@ def test_existing_residence_can_be_superseded_with_scoped_evidence(kind):
 
 def test_value_only_in_question_is_not_a_new_assertion():
     message = '我喜欢木工，我叫什么名字？'
-    assert not parse_llm_proposals(candidate(message, 'name', '什么名字'), source_message=message)
+    with pytest.raises(MemoryResponseError) as caught:
+        parse_llm_proposals(candidate(message, 'name', '什么名字'), source_message=message)
+    assert caught.value.field == 'evidence'
 
 
 @pytest.mark.parametrize('denial', [
@@ -121,7 +128,7 @@ async def test_scoped_update_persists_versions_and_keeps_full_source(tmp_path):
             source = payload['current_user_message']
             update = source == statements[1]
             proposal = dict(attributed_to='user', kind='residence', value='宣城' if update else '衡水',
-                evidence=source, confidence=.96, operation='SUPERSEDE' if update else 'ADD')
+                evidence='我搬到宣城了' if update else source, confidence=.96, operation='SUPERSEDE' if update else 'ADD')
             if update:
                 old, = payload['existing_memories']
                 proposal.update(target_memory_id=old['memory_id'], target_memory_key=old['memory_key'])

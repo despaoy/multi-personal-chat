@@ -185,9 +185,9 @@ def source_reference_candidate(**changes):
     messages = build_memory_llm_messages(SOURCE, (), (), (), 2000, .85)
     payload = json.loads(messages[-1]["content"])
     assert payload["current_user_message"] == SOURCE
-    references = {body: key for key, body in payload["qualifier_sources"].items()}
+    references = {body: key for key, body in payload["source_units"].items()}
     raw = candidate(qualifiers={"condition": {"source_unit": references[next(body for body in references if CONDITION in body)]},
-        "certainty": {"source_unit": references["这不是已经实际饮用"]}})
+        "certainty": {"source_unit": references[next(body for body in references if "这不是已经实际饮用" in body)]}})
     return raw | changes
 
 
@@ -223,9 +223,9 @@ def test_source_units_preserve_complete_clock_times():
 
     source = "每天09:30以后，我喜欢紫茶，但只在课程10:00开始前饮用。"
     payload = json.loads(build_memory_llm_messages(source, (), (), (), 2000, .85)[-1]["content"])
-    references = {body: key for key, body in payload["qualifier_sources"].items()}
+    references = {body: key for key, body in payload["source_units"].items()}
     raw = candidate(value="紫茶", content="", evidence=source, qualifiers={
-        "time": {"source_unit": references["每天09:30以后"]},
-        "condition": {"source_unit": references["但只在课程10:00开始前饮用"]}})
+        "time": {"source_unit": references[next(body for body in references if "每天09:30以后" in body)]},
+        "condition": {"source_unit": references[next(body for body in references if "但只在课程10:00开始前饮用" in body)]}})
     (proposal,) = parse(raw, source=source)
     assert dict(proposal.qualifiers) == {"time": "每天09:30以后", "condition": "但只在课程10:00开始前饮用"}
