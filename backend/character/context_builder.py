@@ -659,7 +659,7 @@ def compile_reference_context(
         MAX_COMPLETE_MEMORY_TOTAL_CHARS if complete_evidence else MAX_MEMORY_TOTAL_CHARS
     )
     address = preferred_address.strip()
-    lines = [f"- 用户希望被称为：{_truncate(address, MAX_PREFERRED_ADDRESS_CHARS)}（用户自述偏好）"] if address else []
+    lines = [f"- 对话默认称呼设置：{_truncate(address, MAX_PREFERRED_ADDRESS_CHARS)}（不证明姓名或别名）"] if address else []
     body_chars = sum(map(len, lines))
     disclaimer = MEMORY_REFERENCE_DISCLAIMER
     observed_source = False

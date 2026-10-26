@@ -153,7 +153,7 @@ MERGE/SUPERSEDE/COEXIST/RETRACT/ERASE 必须从白名单逐字复制 target_memo
 
 对明确表达的本人未来计划，“说过这个计划”与“已经实施”是两个不同的命题。若计划的时间、地点、条件或尚未实施说明分散在长消息里，使用 kind=shared_event、operation=ADD 保存当前完整发言的原话观察，绝不确认行动发生。value 取当前连续原文中的短话题（不超过 payload.proposal_constraints.max_value_chars），evidence 只复制一段相关连续原文（不超过 max_evidence_chars），content 留空、qualifiers 使用空对象 {}，不要再次概括条件。后端保留整条当前消息及全部限定，包括末尾条件，不会用短引文代替完整来源。不要拼接开头和末尾当作连续 evidence。虚构材料、第三方计划不是用户本人的计划；未确定的外部事实仍按 PENDING 处理，不因这条规则变成事实。
 
-写入新内容的 ADD/MERGE/SUPERSEDE/COEXIST/PENDING 必须填写 payload.proposal_constraints.kinds 中的 kind 和非空 value，不能从 target 的存储类型猜 kind。value 只表示对象，不包含场景、必要条件或格式化标签；场景和条件分别写入 qualifiers。籍贯/家乡用 origin，长期现居用 residence；原话没有区分来处与现居时才用 location。 规范姓名用 name，常用别名或昵称用 alias；明确否认某个名称属于本人别名或拒绝被这样称呼用 alias_exclusion。两种别名类别的 value 只复制名称本身，朋友说明保留在 evidence 中，不能并入或改写为另一个索引。称呼只在特定场合、时间适用，或存在例外时，必须在 evidence 和 qualifiers 中完整保留，不能写成无条件事实。 已列出的个人字段使用对应 kind，other_user_fact 仅用于未列出的个人事实；请直接给出正确 kind，不要依赖后端从通用类别补出个人字段。
+写入新内容的 ADD/MERGE/SUPERSEDE/COEXIST/PENDING 必须填写 payload.proposal_constraints.kinds 中的 kind 和非空 value，不能从 target 的存储类型猜 kind。value 只表示对象，不包含场景、必要条件或格式化标签；场景和条件分别写入 qualifiers。籍贯/家乡用 origin，长期现居用 residence；原话没有区分来处与现居时才用 location。 规范姓名用 name，常用别名、昵称或用户希望被称呼的名称用 alias；明确否认某个名称属于本人别名或拒绝被这样称呼用 alias_exclusion。别名与规范姓名是不同命题；否认某称呼是规范姓名，不等于否认它是别名或拒绝该称呼，不应据此生成 alias_exclusion。两种别名类别的 value 只复制名称本身，朋友说明保留在 evidence 中，不能并入或改写为另一个索引。称呼只在特定场合、时间适用，或存在例外时，必须在 evidence 和 qualifiers 中完整保留，不能写成无条件事实。 已列出的个人字段使用对应 kind，other_user_fact 仅用于未列出的个人事实；请直接给出正确 kind，不要依赖后端从通用类别补出个人字段。
 
 value 有两个格式：本条 evidence 中逐字复制的连续短字符串，或模型给出的有序原文片段列表。需要组合分散对象片段时必须显式使用列表，例如 evidence 为“推荐饮料时避开含咖啡因的”，value 可以是 ["含咖啡因的","饮料"]。每片必须有证据，组合后不超过 max_value_chars；后端不猜片段、不改写对象。明确省略的用户上下文消歧遵守下段约定。
 
@@ -932,9 +932,9 @@ def _canonical_memory_fields(kind: str, value: str, evidence: str) -> tuple[str,
             return None
         return "user_fact", "user_name", f"用户说自己叫{value}", 0.9
     if kind == "alias":
-        return "user_fact", "user_alias", f"用户明确说自己的常用别名是{value}", 0.7
+        return "user_fact", "user_alias", f"用户的别名或对话称呼：{value}", 0.7
     if kind == "alias_exclusion":
-        return "user_fact", f"user_alias_exclusion_{value[:24]}", f"用户明确说{value}不是本人的别名", 0.6
+        return "user_fact", f"user_alias_exclusion_{value[:24]}", f"用户否认的别名或拒绝的称呼：{value}", 0.6
     if kind in {"like", "dislike"}:
         return (
             "user_fact",

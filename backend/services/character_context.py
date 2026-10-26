@@ -27,7 +27,6 @@ from character.decision_policy import DecisionPolicy
 from character.evidence_selector import ContextualEvidenceSelector, SelectionOutcome, create_evidence_selector
 from character.memory_extractor import (
     extract_memories,
-    extract_preferred_address,
     memory_write_allowed,
 )
 from character.memory_service import CharacterMemoryService
@@ -434,7 +433,7 @@ class CharacterContextService:
         memory_receipt: asyncio.Future | None = None,
         memory_retry_only: bool = False,
     ) -> _TurnOutcome:
-        """生成成功后回写：交互计数、新记忆、关系推进。
+        """生成成功后回写交互计数、显式备忘和语义记忆。
 
         记忆失败通过回执明确反馈，并保留已完成数量；已生成回复由调用方保留。
         """
@@ -544,35 +543,6 @@ class CharacterContextService:
             if outcome.source_capture != "failed":
                 outcome.memory_enrichment_status = "failed"
             logger.warning("角色长期记忆写入失败 character=%s type=%s", prepared.character_id, type(exc).__name__)
-
-        if memory_retry_only or outcome.source_capture in {"stale", "revoked", "conflict"}:
-            return outcome
-
-        # 3. 关系起点仅手动设置；次数只是统计，不自动升温。
-        try:
-            address = (
-                extract_preferred_address(turn.message)
-                if memory_write_allowed(turn.message) and not relationship_write_blocked(turn.message)
-                else None
-            )
-            if address:
-                result = await self._memory_repo.set_address_from_turn(
-                    prepared.character_id,
-                    prepared.user_scope,
-                    source_message_id=source_message_id,
-                    observed_at=prepared.received_at,
-                    address=address,
-                )
-                if result["status"] in {"stale", "revoked", "conflict"}:
-                    outcome.source_capture = result["status"]
-                    return outcome
-                if result["status"] != "written":
-                    raise ValueError("Address write did not confirm persistence")
-                outcome.stage = result["relationship"]["relationship_stage"]
-                outcome.preferred_address = address
-        except Exception as exc:
-            outcome.failed_writes += ("preferred_address",)
-            logger.warning("角色关系更新失败 character=%s type=%s", prepared.character_id, type(exc).__name__)
 
         return outcome
 

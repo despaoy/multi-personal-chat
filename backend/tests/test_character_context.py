@@ -325,7 +325,7 @@ def test_memories_only_enter_reference_context():
 
 
 def test_preferred_address_only_enters_reference_context():
-    """用户自述称呼偏好属于用户控制内容，只进不可信参考区。"""
+    """默认称呼设置属于用户控制内容，只进不可信参考区。"""
     # 使用唯一称呼值，避免与关系摘要中的常见词撞车
     context = dataclasses.replace(
         _context(),
@@ -337,14 +337,15 @@ def test_preferred_address_only_enters_reference_context():
     )
     compiled = compile_character_context(context)
 
-    # 称呼出现在参考区，并标注为用户自述偏好
+    # 默认称呼只进入参考区，不冒充姓名或别名证据
     assert "小刺猬骑士" in compiled.reference_context
-    assert "用户希望被称为" in compiled.reference_context
+    assert "对话默认称呼设置" in compiled.reference_context
+    assert "不证明姓名或别名" in compiled.reference_context
 
     # 称呼绝不进入系统提示词区域（画像区、动态区）
     for trusted_area in (compiled.profile_context, compiled.dynamic_context):
         assert "小刺猬骑士" not in trusted_area
-        assert "用户希望被称为" not in trusted_area
+        assert "对话默认称呼设置" not in trusted_area
 
 
 def test_no_memories_yields_empty_reference_context():

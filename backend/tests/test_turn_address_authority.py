@@ -1,16 +1,15 @@
-"""Only turn-derived address authority and actual owner-lock interleaving."""
+"""Semantic address evidence, default settings and completion authority."""
 
 import asyncio
 import os
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import pytest
 
 from character.models import build_user_scope
 from character.models import RelationshipState
-from db import memory_source
 from db.database import SQLiteDB
 from repositories.character_memory import DatabaseCharacterMemoryRepository
 from services.character_context import CharacterContextService, TurnInput
@@ -47,51 +46,6 @@ def source(database):
         == "recorded"
     )
     return fields, source_id, stamp
-
-
-def test_current_turn_changes_only_address_and_preserves_manual_fields(database):
-    fields, sid, stamp = source(database)
-    before = database.get_character_relationship(*fields)
-    result = database.set_character_address_from_turn(*fields, source_message_id=sid, observed_at=stamp, address="柚汀")
-    assert result["status"] == "written"
-    after = database.get_character_relationship(*fields)
-    assert after["preferred_address"] == "柚汀"
-    for field in ["relationship_stage", "summary", "interaction_count", "created_at"]:
-        assert after[field] == before[field]
-
-
-@pytest.mark.parametrize("denied", ["stale", "revoked", "conflict"])
-def test_turn_address_rejects_erased_identity_or_replaced_clock(database, denied):
-    fields, sid, stamp = source(database)
-    if denied in {"stale", "revoked"}:
-        database.clear_character_memories(*fields)
-    if denied in {"revoked", "conflict"}:
-        stamp = datetime.now(timezone.utc) + timedelta(seconds=1)
-    before = database.get_character_relationship(*fields)
-    result = database.set_character_address_from_turn(*fields, source_message_id=sid, observed_at=stamp, address="柚汀")
-    assert result["status"] == denied and database.get_character_relationship(*fields) == before
-
-
-@pytest.mark.parametrize("invalid", ["naive_clock", "empty_source", "expanded_scope", "narrative", "empty_address"])
-def test_turn_address_requires_explicit_valid_receipt_scope(database, invalid):
-    fields, sid, stamp = source(database)
-    fields = list(fields)
-    original = tuple(fields)
-    kwargs = dict(source_message_id=sid, observed_at=stamp, address="柚汀")
-    if invalid == "naive_clock":
-        kwargs["observed_at"] = stamp.replace(tzinfo=None)
-    if invalid == "empty_source":
-        kwargs["source_message_id"] = ""
-    if invalid == "expanded_scope":
-        fields[0] = "*"
-    if invalid == "narrative":
-        fields[2] = "narrative"
-    if invalid == "empty_address":
-        kwargs["address"] = ""
-    before = database.get_character_relationship(*original)
-    with pytest.raises(ValueError):
-        database.set_character_address_from_turn(*fields, **kwargs)
-    assert database.get_character_relationship(*original) == before
 
 
 @pytest.mark.asyncio
@@ -134,61 +88,7 @@ async def test_complete_turn_does_not_write_rejected_source_address(database, mo
 
 
 @pytest.mark.asyncio
-async def test_pg_real_owner_lock_erasure_wins_before_pending_address_sql(database):
-    if not hasattr(database, "_pg"):
-        pytest.skip("Real PostgreSQL row-lock case only")
-    import asyncpg
-    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-
-    fields, sid, stamp = source(database)
-    before = database.get_character_relationship(*fields)
-    url = os.environ["STAGE35_ADDRESS_PG_URL"]
-    engine = create_async_engine(url)
-    sessions = async_sessionmaker(engine)
-    # Observe locks in the same explicitly configured, isolated test database.
-    assert "/stage3_stage35_address_guards?" in url and "port=25433" in url
-    connect_args, connect_kwargs = engine.dialect.create_connect_args(engine.url)
-    c = await asyncpg.connect(*connect_args, **connect_kwargs)
-    task = None
-    try:
-        async with sessions() as session:
-            await memory_source.run_postgres(
-                session, memory_source.lock_owner(memory_source.source_scope(*fields), postgres=True)
-            )
-            task = asyncio.create_task(
-                asyncio.to_thread(
-                    database.set_character_address_from_turn,
-                    *fields,
-                    source_message_id=sid,
-                    observed_at=stamp,
-                    address="柚汀",
-                ),
-                name="actual-pg-address-waiter",
-            )
-            for _ in range(80):
-                waiting = await c.fetchval(
-                    "SELECT count(*) FROM pg_stat_activity WHERE datname='stage3_stage35_address_guards' AND wait_event_type='Lock' AND query LIKE '%memory_source_fences%'"
-                )
-                if waiting:
-                    break
-                await asyncio.sleep(0.025)
-            assert waiting and not task.done(), "Actual new address SQL must be waiting on real owner lock"
-            await memory_source.run_postgres(
-                session, memory_source.revoke_plan(memory_source.source_scope(*fields), [], clear=True)
-            )
-            await session.commit()
-        result = await asyncio.wait_for(asyncio.shield(task), 5)
-        assert result["status"] == "stale" and database.get_character_relationship(*fields) == before
-        assert database.list_memory_sources(*fields, source_message_ids=(sid,), limit=1) == []
-    finally:
-        if task is not None and not task.done():
-            await asyncio.wait_for(asyncio.shield(task), 5)
-        await c.close()
-        await engine.dispose()
-
-
-@pytest.mark.asyncio
-async def test_final_address_rejection_overrides_earlier_semantic_success(database, monkeypatch):
+async def test_source_rejection_overrides_earlier_semantic_success(database, monkeypatch):
     import json
 
     from db.schemas import MessageRequest
@@ -257,8 +157,6 @@ async def test_final_address_rejection_overrides_earlier_semantic_success(databa
 @pytest.mark.parametrize("operation_status", ["erased", "failed"])
 async def test_explicit_completion_never_reinterprets_erasure_as_address(database, monkeypatch, operation_status):
     import json
-    from unittest.mock import AsyncMock
-
     from api import generate
     from character.memory_extractor import extract_preferred_address
     from character.memory_llm import MemoryEnrichmentScheduler, MemoryLlmConfig, is_memory_erasure_request
@@ -315,8 +213,6 @@ async def test_explicit_completion_never_reinterprets_erasure_as_address(databas
             compiled=SimpleNamespace(used_memory_ids=()),
         )
         service = CharacterContextService(object(), repository, object(), source_recall_enabled=False)
-        writes = AsyncMock(wraps=repository.set_address_from_turn)
-        monkeypatch.setattr(repository, "set_address_from_turn", writes)
         monkeypatch.setattr(
             "character.memory_llm.get_memory_enrichment_scheduler",
             lambda: pytest.fail("An executed operation must not initialize another writer"),
@@ -352,10 +248,118 @@ async def test_explicit_completion_never_reinterprets_erasure_as_address(databas
             outcomes[0].stage == relationship.stage and outcomes[0].preferred_address == relationship.preferred_address
         )
         assert not outcomes[0].failed_writes and not outcomes[0].memory_enrichment_scheduled
-        writes.assert_not_awaited()
         assert (warning is None) if operation_status == "erased" else ("失败" in warning and "称呼" not in warning)
         rows = await repository.list_sources(role, scope)
         assert [row["source_message_id"] for row in rows] == ([] if operation_status == "erased" else [old_source])
         assert completion.calls == 1
+    finally:
+        await scheduler.shutdown()
+
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("case", ["ordinary", "conditional", "excluded"])
+async def test_semantic_address_evidence_never_overwrites_default_setting(database, monkeypatch, case):
+    import json
+    from character import memory_llm
+    from character.memory_llm import MemoryEnrichmentScheduler, MemoryLlmConfig
+    from character.memory_service import CharacterMemoryService
+    from character.profile_registry import get_default_profile_registry
+    from repositories.character_memory import relationship_from_record
+    from repositories.messages import DatabaseMessageRepository
+
+    cases = {
+        "ordinary": (
+            "请叫我柚汀。这个称呼只用于对话，不是更改我的姓名。",
+            [("alias", "柚汀", "请叫我柚汀。这个称呼只用于对话，不是更改我的姓名。", {})],
+        ),
+        "conditional": (
+            "周末请叫我杉岚，工作日请叫我知禾。",
+            [
+                ("alias", "杉岚", "周末请叫我杉岚", {"time": "周末"}),
+                ("alias", "知禾", "工作日请叫我知禾。", {"time": "工作日"}),
+            ],
+        ),
+        "excluded": (
+            "杉岚不是我的别名，是朋友的别名，请不要叫我杉岚。",
+            [("alias_exclusion", "杉岚", "杉岚不是我的别名，是朋友的别名，请不要叫我杉岚。", {})],
+        ),
+    }
+    message, expected = cases[case]
+    fields, _, _ = source(database)
+    role, platform, adapter, sender, kind, conversation = fields
+    scope = build_user_scope(platform, adapter, sender, conversation, kind)
+    repo = DatabaseCharacterMemoryRepository(database)
+    before = database.get_character_relationship(*fields)
+    response = json.dumps(
+        {
+            "memories": [
+                dict(
+                    kind=k,
+                    value=v,
+                    evidence=e,
+                    qualifiers=q,
+                    content="",
+                    operation="ADD",
+                    confidence=0.99,
+                    attributed_to="user",
+                    scope_level="conversation",
+                )
+                for k, v, e, q in expected
+            ]
+        },
+        ensure_ascii=False,
+    )
+
+    class Completion:
+        calls = 0
+
+        async def complete(self, messages):
+            self.calls += 1
+            assert json.loads(messages[1]["content"])["current_user_message"] == message
+            return response
+
+        async def close(self):
+            pass
+
+    completion = Completion()
+    scheduler = MemoryEnrichmentScheduler(
+        config=MemoryLlmConfig(True, "unit-only", "unit-only"),
+        completion=completion,
+        embedding_provider=SimpleNamespace(embed_texts=lambda texts: [[1.0, 0.0] for _ in texts]),
+    )
+    monkeypatch.setattr(memory_llm, "get_memory_enrichment_scheduler", lambda: scheduler)
+    service = CharacterContextService(
+        get_default_profile_registry(), repo, DatabaseMessageRepository(database), source_recall_enabled=False
+    )
+    turn = TurnInput(message, platform, adapter, sender, conversation, kind)
+    prepared = await service.prepare_turn(turn, role)
+    receipt = asyncio.get_running_loop().create_future()
+    sid = "semantic-address-" + uuid.uuid4().hex
+    try:
+        outcome = await service.complete_turn(prepared, turn, source_message_id=sid, memory_receipt=receipt)
+        result = await asyncio.wait_for(asyncio.shield(receipt), 5)
+        assert result["status"] == "saved" and result["persisted"] == len(expected)
+        assert completion.calls == 1 and outcome.memory_enrichment_scheduled
+        rows = await repo.list_memory_records(role, scope)
+        assert len(rows) == len(expected)
+        by_evidence = {tuple(row["evidence"]): row for row in rows}
+        assert len(by_evidence) == len(expected)
+        for kind, value, evidence, qualifiers in expected:
+            row = by_evidence[(evidence,)]
+            assert value in row["content"] and row["evidence"] == [evidence]
+            assert row["metadata"]["qualifiers"] == qualifiers and row["metadata"]["fact_kind"] == kind
+            assert row["memory_key"] != "user_name"
+        sources = await repo.list_sources(role, scope, source_message_ids=(sid,))
+        assert len(sources) == 1 and sources[0]["body"] == message
+        packets, _ = await CharacterMemoryService(repo, semantic_enabled=False).load_relevant_memories(
+            role, scope, "请根据记录说明我的称呼及其条件", for_contextual_selection=True
+        )
+        assert len(packets) == len(expected) and all(message in packet.evidence for packet in packets)
+        after = database.get_character_relationship(*fields)
+        for name in ["preferred_address", "relationship_stage", "summary", "created_at"]:
+            assert after[name] == before[name]
+        assert after["interaction_count"] == before["interaction_count"] + 1
+        assert outcome.preferred_address == relationship_from_record(before).preferred_address
     finally:
         await scheduler.shutdown()

@@ -419,7 +419,7 @@ function CharactersContent() {
                         </span>
                         {relationship.preferred_address && (
                           <span className="text-muted-foreground">
-                            称呼偏好：{relationship.preferred_address}
+                            默认称呼：{relationship.preferred_address}
                           </span>
                         )}
                       </div>

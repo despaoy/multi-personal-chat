@@ -269,7 +269,7 @@ def test_alias_denial_with_reinforcing_address_boundary_is_preserved(suffix):
     assert caught.value.field == 'value'
     proposal, = parse(source, value='小岚', kind='alias_exclusion', source=source, qualifiers={}, scope_level='conversation', content='')
     assert proposal.memory.memory_key == 'user_alias_exclusion_小岚'
-    assert proposal.memory.content == '用户明确说小岚不是本人的别名'
+    assert proposal.memory.content == '用户否认的别名或拒绝的称呼：小岚'
     assert proposal.evidence == source
 
 

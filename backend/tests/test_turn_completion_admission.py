@@ -235,16 +235,14 @@ async def test_internal_no_archive_does_not_reserve_completion(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_relation_failure_reports_stage_without_private_diagnostic(monkeypatch, caplog):
+async def test_counter_failure_reports_stage_without_private_diagnostic(monkeypatch, caplog):
     from character import memory_llm
     from character.models import RelationshipState, UserScope
     from services.character_context import CharacterContextService, TurnInput
 
     service = object.__new__(CharacterContextService)
     service._memory_repo = SimpleNamespace(
-        increment_interaction=AsyncMock(return_value=1),
-        get_relationship_record=AsyncMock(return_value=None),
-        set_address_from_turn=AsyncMock(side_effect=RuntimeError("synthetic-relation-failure")),
+        increment_interaction=AsyncMock(side_effect=RuntimeError("synthetic-counter-failure")),
     )
     monkeypatch.setattr(memory_llm, "get_memory_enrichment_scheduler", lambda: SimpleNamespace(enabled=False))
     scope = UserScope("web", "unit", "owner", "owner", "private")
@@ -258,12 +256,14 @@ async def test_relation_failure_reports_stage_without_private_diagnostic(monkeyp
     )
     turn = TurnInput("请叫我杉岚。", "web", "unit", "owner", "owner", "private")
     result = await service.complete_turn(prepared, turn, source_message_id="source")
-    records = [r for r in caplog.records if r.name == "services.character_context" and "角色关系更新失败" in str(r.msg)]
-    assert result.interaction_count == 1 and len(records) == 1
-    assert result.failed_writes == ("preferred_address",)
-    assert records[0].getMessage() == "角色关系更新失败 character=role type=RuntimeError"
+    records = [
+        r for r in caplog.records if r.name == "services.character_context" and "角色交互计数更新失败" in str(r.msg)
+    ]
+    assert result.interaction_count == 0 and len(records) == 1
+    assert result.failed_writes == ("interaction_count",)
+    assert records[0].getMessage() == "角色交互计数更新失败 character=role type=RuntimeError"
     assert records[0].exc_info is None
-    assert "synthetic-relation-failure" not in caplog.text
+    assert "synthetic-counter-failure" not in caplog.text
 
 
 @pytest.mark.asyncio
