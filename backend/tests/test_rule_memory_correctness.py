@@ -5,7 +5,7 @@ import asyncio
 import pytest
 
 from character.models import build_user_scope
-from character.memory_extractor import extract_memories, extract_preferred_address
+from character.memory_extractor import extract_memories
 from character.models import MemoryItem
 from character.natural_relationship import relationship_write_blocked
 from character.rule_memory_writer import write_rule_memory
@@ -48,7 +48,6 @@ async def save(repo, text, sender="alice", source="m1"):
 )
 def test_non_assertions_never_become_facts(text):
     assert not extract_memories(text)
-    assert extract_preferred_address(text) is None
 
 
 def test_hobby_is_not_fiction_and_questions_do_not_erase_other_sentences():

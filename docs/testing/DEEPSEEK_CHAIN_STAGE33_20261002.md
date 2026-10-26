@@ -1,5 +1,7 @@
 # DeepSeek 后端链路阶段 33：生成前预留回写容量
 
+
+> 2026-10-26 维护说明：下文是当时版本的历史实验记录。`--memory-turn-capacity` 与 `--turn-capacity-retry` 已退役，原因是探针依赖的聊天称呼关系写入已移除；历史用例和结果保留。当前容量与交付行为由 `test_turn_completion_admission.py`、`test_delivery_memory.py` 和 `test_memory_admission_delivery.py` 验证。
 日期：2026-10-02。基线：`bd95d56387f4ffce2edc50e1456079c830a9f018`。
 
 本轮确认并修复了一个后端满载缺陷：受管理的完成任务达到容量上限后，第二条角色消息仍准备上下文、调用实际 DeepSeek 并返回“记下了”，随后完成任务才因容量不足拒绝创建。原话仅留下 pending 身份绑定，正文为空、索引为零，释放容量后也没有补写。输入完整，实际模型明确区分了转述者与朋友，问题发生在生成与回写的衔接。

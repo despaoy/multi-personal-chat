@@ -3,7 +3,6 @@
 from character.memory_extractor import (
     MAX_EXTRACTED_MEMORIES,
     extract_memories,
-    extract_preferred_address,
 )
 
 
@@ -48,13 +47,11 @@ def test_questions_are_not_converted_to_user_facts():
     assert extract_memories("我叫什么名字？") == []
     assert extract_memories("我的专业是什么？") == []
     assert extract_memories("我喜欢什么？") == []
-    assert extract_preferred_address("你准备叫我什么？") is None
 
 
-def test_commands_are_not_mistaken_for_names_or_addresses():
+def test_commands_are_not_mistaken_for_names():
     assert extract_memories("我叫你别走") == []
     assert extract_memories("我叫了一辆车") == []
-    assert extract_preferred_address("叫我帮你看看") is None
 
 
 def test_dislike_uses_same_key_shape_as_preference():
@@ -73,12 +70,6 @@ def test_write_gate_caps_output_and_keeps_high_importance_items():
     assert "user_name" in keys
     assert "user_major" in keys
     assert "promise_带你去书店" in keys
-
-
-def test_preferred_address_extracts_only_explicit_non_question_value():
-    assert extract_preferred_address("以后叫我小林") == "小林"
-    assert extract_preferred_address("我喜欢被叫作小林") == "小林"
-    assert extract_preferred_address("你想叫我什么？") is None
 
 
 def test_address_preference_is_not_saved_as_generic_interest():

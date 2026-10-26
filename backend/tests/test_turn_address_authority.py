@@ -158,7 +158,6 @@ async def test_source_rejection_overrides_earlier_semantic_success(database, mon
 async def test_explicit_completion_never_reinterprets_erasure_as_address(database, monkeypatch, operation_status):
     import json
     from api import generate
-    from character.memory_extractor import extract_preferred_address
     from character.memory_llm import MemoryEnrichmentScheduler, MemoryLlmConfig, is_memory_erasure_request
     from db.schemas import MessageRequest
     from repositories.character_memory import relationship_from_record
@@ -168,7 +167,7 @@ async def test_explicit_completion_never_reinterprets_erasure_as_address(databas
     scope = build_user_scope(platform, adapter, sender, conversation, kind)
     repository = DatabaseCharacterMemoryRepository(database)
     message = "请从长期记忆中删除我让你叫我柚汀的那条原话记录。"
-    assert is_memory_erasure_request(message) and extract_preferred_address(message)
+    assert is_memory_erasure_request(message)
     received = datetime.now(timezone.utc)
     current_source = "operation-" + uuid.uuid4().hex
 

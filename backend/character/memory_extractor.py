@@ -1,9 +1,8 @@
-"""精度优先的规则版记忆提取与关系推进。
+"""规则候选、写入门与关系起点兼容工具。
 
 长期记忆采用 write gate：只从用户消息中提取"明确说出来"且适合
 跨会话复用的信息，宁缺毋滥：
 - 自我介绍（"我叫X"）→ user_fact / user_name；
-- 称呼偏好（"叫我X"）→ 关系 preferred_address；
 - 好恶表达（"我喜欢/讨厌X"）→ user_fact / preference_*（喜欢与
   厌恶共用同一 key，最新表态覆盖旧表态，避免"喜欢咖啡"与
   "讨厌咖啡"并存的事实冲突）；
@@ -22,9 +21,9 @@
 
 关系起点仅手动设置，交互轮数只作为统计，不能推断亲密程度。
 
-本模块本身不调用 LLM：全部为正则/关键词规则，可独立测试。运行时可将
-这里产生的高置信候选交给后台 LLM 复核，相关编排位于
-``character.memory_llm``。
+本模块不调用 LLM。正式聊天仅把提取结果作为语义写入器的候选提示，
+不能独立确认事实或覆盖关系设置；称呼由同一语义记忆链路处理。
+独立规则实验仍可使用这些候选，正式编排位于 ``character.memory_llm``。
 """
 
 from __future__ import annotations
@@ -69,11 +68,6 @@ _NAME_PATTERNS = (
     re.compile(r"我叫(?P<name>[\w\u4e00-\u9fff]{1,12})"),
     re.compile(r"我的名字(?:是|叫)(?P<name>[\w\u4e00-\u9fff]{1,12})"),
     re.compile(r"(?:我是|我叫)(?P<name>[A-Za-z][A-Za-z0-9_ ]{0,15})"),
-)
-# "叫我X" / "称呼我为X"
-_ADDRESS_PATTERNS = (
-    re.compile(r"(?:叫我|称呼我为|称呼我叫)(?P<name>[\w\u4e00-\u9fff]{1,12})"),
-    re.compile(r"我(?:希望|喜欢)(?:被)?叫(?:作|做)?(?P<name>[\w\u4e00-\u9fff]{1,12})"),
 )
 # "我喜欢X" / "我爱X" / "我不喜欢X" / "我讨厌X"
 _PREFERENCE_PATTERNS = (
@@ -705,17 +699,6 @@ def _extract_simple_memories(message: str) -> list[ExtractedMemory]:
         )
         for item in selected
     ]
-
-
-def extract_preferred_address(message: str) -> str | None:
-    """从"叫我X"类表达中提取用户偏好的称呼。"""
-    address = _first_match(_ADDRESS_PATTERNS, "。".join(_asserted_sentences(message or "")))
-    if not address:
-        return None
-    cleaned = _clean(address)
-    if not _looks_like_name(cleaned):
-        return None
-    return _truncate(cleaned, 20)
 
 
 def next_relationship_stage(current_stage: RelationshipStage, interaction_count: int) -> RelationshipStage:

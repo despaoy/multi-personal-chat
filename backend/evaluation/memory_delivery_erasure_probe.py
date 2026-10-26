@@ -11,7 +11,6 @@ from dataclasses import asdict
 
 import asyncpg
 
-from character.memory_extractor import extract_preferred_address
 from character.memory_llm import get_memory_enrichment_scheduler, is_memory_erasure_request
 from db.memory_source import source_identity, source_scope
 from inference.lora_registry import get_lora_character_id
@@ -45,7 +44,7 @@ async def run_delivery_erasure_probe(
     erase_id = args.run_label + "-erase"
     proof["integration_target_fields"] = list(fields)
     assert len(target["message"]) > 150 and len(erase["message"]) > 200
-    assert extract_preferred_address(target["message"]) == "柚汀" and is_memory_erasure_request(erase["message"])
+    assert is_memory_erasure_request(erase["message"])
     assert not is_memory_erasure_request(target["message"])
     assert database.memory_source_admission(*fields, source_message_id=target_id, body=target["message"]) == "new"
     active = [r for r in database.loras if r["status"] == "active"]
