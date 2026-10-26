@@ -228,12 +228,12 @@ class CharacterContextService:
             sender_id=turn.sender_id, conversation_id=turn.conversation_id,
             conversation_type=turn.conversation_type)
         await asyncio.to_thread(self._profiles.get_profile, character_id)
-        received_at = turn.received_at or datetime.now(timezone.utc)
+        turn = replace(turn, received_at=turn.received_at or datetime.now(timezone.utc))
         history = tuple(turn.history) or tuple(await self._load_history(turn, user_scope, character_id))
         receipt = await get_memory_enrichment_scheduler().schedule_and_wait(
             repository=self._memory_repo, character_id=character_id, user_scope=user_scope,
             message=turn.message, rule_hints=(), history=history,
-            source_message_id=source_message_id or None, observed_at=received_at,
+            source_message_id=source_message_id or None, observed_at=turn.received_at,
         )
         # The operation may already be committed; preserve its receipt on failure.
         try:

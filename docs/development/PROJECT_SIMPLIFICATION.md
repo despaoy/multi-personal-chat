@@ -70,9 +70,10 @@ CLI, dataset or offline experiment is disposable.
 - Memory observations, superseded records, pending conflicts, temporal projections
   and protected claims represent distinct history. Confirmed writes remain
   reportable when a later operation fails or is cancelled.
-- Background delivery failures keep explicit retry receipts. Optional diagnostic
-  logging does not invalidate an otherwise completed review. Dashboard snapshots
-  copy cached state and reject invalid configuration.
+- Background delivery failures keep explicit retry receipts. Semantic-review
+  metrics and diagnostic failures propagate through the context error boundary;
+  a completed review is not reported as a successful turn when that step fails.
+  Dashboard snapshots copy cached state and reject invalid configuration.
 - Offline probes, replay tools, experiment fixtures and benchmark compatibility
   entrypoints retain distinct schemas. Explicit mock/ablation choices remain;
   they do not activate after real generation fails.

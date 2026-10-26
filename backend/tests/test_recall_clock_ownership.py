@@ -215,3 +215,68 @@ async def baseline_preflight(workdir):
                 source_record_count=len(await rig.repo.list_sources(ROLE, SCOPE)), model_calls=0)
         finally:
             close_recall_clock(rig)
+
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("supplied_clock", [None, RECEIVED], ids=["capture_once", "preserve_receipt"])
+async def test_interactive_operation_keeps_one_clock_and_reloads_revoked_history(clock_rig, monkeypatch, supplied_clock):
+    from dataclasses import replace
+
+    from character.memory_llm import is_memory_erasure_request
+    from services import character_context
+
+    rig = clock_rig
+    clock = [RECEIVED]
+
+    class TurnDateTime(ProcessingDateTime):
+        @classmethod
+        def now(cls, tz=None):
+            return clock[0].astimezone(tz) if tz is not None else clock[0].replace(tzinfo=None)
+
+    monkeypatch.setattr(character_context, "datetime", TurnDateTime)
+    phone_body = "我本人陈榆保存的联系电话是010-55551234，只有工作日可联系；不是朋友林澈的号码。"
+    phone_source = "fiction-phone-to-delete"
+    assert await rig.repo.capture_source(ROLE, SCOPE, source_message_id=phone_source,
+        body=phone_body, observed_at=RECEIVED) == "recorded"
+    phone = await rig.repo.append_claim(ROLE, SCOPE, MemoryItem("", "user_fact", phone_body, .9),
+        memory_key="user_contact_phone", source_message_id=phone_source, evidence=(phone_body,),
+        observed_at=RECEIVED.isoformat(), confidence=.99)
+    assert phone["persisted"] is True
+    rig.database.add_message(dict(platform=SCOPE.platform, adapter=SCOPE.adapter,
+        senderId=SCOPE.sender_id, characterId=ROLE, conversationType="private", conversationId=SCOPE.conversation_id,
+        sourceMessageId=phone_source, message=phone_body, reply="已记录这项合成资料。", createdAt=RECEIVED.isoformat()))
+    histories, observed = [], []
+    load_history = rig.context._load_history
+
+    async def history(*args):
+        result = await load_history(*args)
+        histories.append(result)
+        return result
+
+    async def operation(**kwargs):
+        observed.append(kwargs["observed_at"])
+        assert kwargs["history"][0]["content"] == phone_body
+        erased = await rig.repo.erase_memory(ROLE, SCOPE, memory_id=int(phone["id"]))
+        assert erased == 1
+        assert await rig.repo.source_windows(ROLE, SCOPE, source_message_ids=(phone_source,), radius=1) == []
+        clock[0] = PROCESSING
+        return dict(status="erased", persisted=erased, source_erased=1)
+
+    monkeypatch.setattr(rig.context, "_load_history", history)
+    worker = SimpleNamespace(schedule_and_wait=AsyncMock(side_effect=operation))
+    monkeypatch.setattr("character.memory_llm.get_memory_enrichment_scheduler", lambda: worker)
+    query = "请从记忆里删除我的电话号码，保留其他资料。" + QUERY
+    assert is_memory_erasure_request(query)
+    turn = replace(rig.turn, message=query, received_at=supplied_clock)
+    prepared = await rig.context.prepare_interactive_turn(turn, ROLE, source_message_id="delete-phone-on-new-year")
+    assert prepared.received_at == RECEIVED and observed == [RECEIVED]
+    assert turn.received_at is supplied_clock
+    worker.schedule_and_wait.assert_awaited_once()
+    assert len(histories) == 2 and histories[0][0]["content"] == phone_body and histories[1] == []
+    assert prepared.history == () and prepared.memory_operation_receipt["persisted"] == 1
+    assert prepared.compiled.used_memory_ids == (rig.ids[2024],)
+    assert_received_selection(rig, prepared.compiled.memory_packets, prepared.compiled.reference_context)
+    remaining = await rig.repo.list_memory_records(ROLE, SCOPE, limit=None, include_inactive=True)
+    assert {str(row["id"]) for row in remaining} == set(rig.ids.values())
+    assert phone_body not in prepared.compiled.reference_context
