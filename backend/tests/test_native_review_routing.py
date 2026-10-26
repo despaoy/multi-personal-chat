@@ -116,7 +116,7 @@ async def test_native_lowlevel_completion_keeps_complete_messages_and_explicit_r
     client = httpx.AsyncClient(transport=httpx.MockTransport(respond))
 
     @asynccontextmanager
-    async def acquire(timeout):
+    async def acquire(timeout, **_resource_options):
         yield client
     monkeypatch.setattr(provider, '_acquire_http_client', acquire)
     messages = [{'role': 'system', 'content': '仅从允许的策略中选择。'}, {'role': 'user', 'content': '木刻板坏了，只听吐槽、不建议也不追问；这项边界仍然有效。'}]

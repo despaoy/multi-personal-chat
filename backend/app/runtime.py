@@ -22,6 +22,9 @@ class RuntimeContainer:
     startup_env: Mapping[str, str] = field(default_factory=lambda: dict(os.environ))
     model_check: Callable[[], Any] | None = None
     knowledge_scan_executor: Any | None = None
+    http_client_pool: Any | None = None
+    backup_mgr: Any | None = None
+    access_control_mgr: Any | None = None
 
     def __post_init__(self) -> None:
         # Keep startup validation deterministic even if tests or callers mutate

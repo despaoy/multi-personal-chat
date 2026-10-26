@@ -104,7 +104,7 @@ def native_http(request, monkeypatch):
         return httpx.Response(200, json=completed_provider_response(provider.__class__.__name__, '总共六元；尚未购买，下雨则在线购买。'))
 
     @asynccontextmanager
-    async def acquire(timeout):
+    async def acquire(timeout, **_resource_options):
         async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
             yield client
     monkeypatch.setattr(provider, '_acquire_http_client', acquire)

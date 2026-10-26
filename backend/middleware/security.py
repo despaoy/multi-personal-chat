@@ -627,9 +627,9 @@ class SecurityMiddleware(BaseHTTPMiddleware):
                 return await call_next(request)
 
             try:
-                from app import config as app_config
+                from app.runtime import get_runtime_container
 
-                principal = await app_config.access_control_mgr.authenticate(api_key)
+                principal = await get_runtime_container(request.app).access_control_mgr.authenticate(api_key)
                 role = principal["role"]
                 request.state.user = f"managed_api_key:{role.value}"
                 request.state.auth_type = "managed_api_key"

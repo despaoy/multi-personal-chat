@@ -9,6 +9,8 @@
 - 令牌桶限流器
 """
 
+from infra.resource_pool import HttpClientPool
+
 import asyncio
 import uuid
 from pathlib import Path
@@ -543,58 +545,45 @@ class TestAstrBotContracts:
 
 
 class TestAstrBotIntegrationFlow:
+
     async def _call_success(self, monkeypatch, platform, conversation_type, conversation_id):
         from api import integrations
         from db.schemas import GenerateResponse
-
         temp_db = TestMultiPlatformStorage()._make_db()
-        monkeypatch.setenv("ENVIRONMENT", "development")
-        monkeypatch.setenv("ASTRBOT_ENABLED", "true")
-        monkeypatch.setenv("ASTRBOT_INTEGRATION_TOKEN", "test-token")
-        monkeypatch.setenv("INTEGRATION_SIGNATURE_REQUIRED", "false")
-        application = SimpleNamespace(state=SimpleNamespace(runtime_container=RuntimeContainer(
-            db=temp_db, is_pg_mode=lambda: False, inference_runtime=_FakeRuntime(), startup_env={})))
+        monkeypatch.setenv('ENVIRONMENT', 'development')
+        monkeypatch.setenv('ASTRBOT_ENABLED', 'true')
+        monkeypatch.setenv('ASTRBOT_INTEGRATION_TOKEN', 'test-token')
+        monkeypatch.setenv('INTEGRATION_SIGNATURE_REQUIRED', 'false')
+        application = SimpleNamespace(state=SimpleNamespace(runtime_container=RuntimeContainer(db=temp_db, is_pg_mode=lambda: False, inference_runtime=_FakeRuntime(), startup_env={}, http_client_pool=HttpClientPool(max_connections=1))))
 
         async def fake_generate(message_request, current_user=None, **kwargs):
             assert message_request.platform == platform
             assert message_request.conversationId == conversation_id
-            assert message_request.sessionId == f"{platform}:{conversation_type}:{conversation_id}"
-            return GenerateResponse(reply=f"reply:{platform}", model="mock", costTime=0.01)
-
-        monkeypatch.setattr(integrations, "generate_reply_core", fake_generate)
-        req = integrations.AstrBotMessageRequest(
-            platform=platform,
-            adapter="telegram" if platform == "telegram" else "napcat" if platform == "qq" else "official_account",
-            messageId=f"msg-{platform}-{conversation_id}",
-            conversationId=conversation_id,
-            conversationType=conversation_type,
-            senderId="sender-1",
-            senderName="Alice",
-            text="hello",
-            raw={"conversationName": "Room", "timestamp": 123456},
-        )
-
+            assert message_request.sessionId == f'{platform}:{conversation_type}:{conversation_id}'
+            return GenerateResponse(reply=f'reply:{platform}', model='mock', costTime=0.01)
+        monkeypatch.setattr(integrations, 'generate_reply_core', fake_generate)
+        req = integrations.AstrBotMessageRequest(platform=platform, adapter='telegram' if platform == 'telegram' else 'napcat' if platform == 'qq' else 'official_account', messageId=f'msg-{platform}-{conversation_id}', conversationId=conversation_id, conversationType=conversation_type, senderId='sender-1', senderName='Alice', text='hello', raw={'conversationName': 'Room', 'timestamp': 123456})
         http_request = _DummyRequest()
         http_request.app = application
-        return await integrations.receive_astrbot_message(req, http_request, x_integration_token="test-token")
+        return await integrations.receive_astrbot_message(req, http_request, x_integration_token='test-token')
 
     @pytest.mark.asyncio
     async def test_simulated_astrbot_qq_group_message(self, monkeypatch):
-        resp = await self._call_success(monkeypatch, "qq", "group", "10001")
+        resp = await self._call_success(monkeypatch, 'qq', 'group', '10001')
         assert resp.shouldReply is True
-        assert resp.replyText == "reply:qq"
+        assert resp.replyText == 'reply:qq'
 
     @pytest.mark.asyncio
     async def test_simulated_telegram_private_message(self, monkeypatch):
-        resp = await self._call_success(monkeypatch, "telegram", "private", "42")
+        resp = await self._call_success(monkeypatch, 'telegram', 'private', '42')
         assert resp.shouldReply is True
-        assert resp.replyText == "reply:telegram"
+        assert resp.replyText == 'reply:telegram'
 
     @pytest.mark.asyncio
     async def test_simulated_wechat_message(self, monkeypatch):
-        resp = await self._call_success(monkeypatch, "wechat_official", "private", "openid-1")
+        resp = await self._call_success(monkeypatch, 'wechat_official', 'private', 'openid-1')
         assert resp.shouldReply is True
-        assert resp.replyText == "reply:wechat_official"
+        assert resp.replyText == 'reply:wechat_official'
 
 class TestDeploymentValidation:
     def test_production_requires_explicit_critical_environment(self):

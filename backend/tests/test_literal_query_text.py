@@ -1,5 +1,7 @@
 """Literal teaching examples remain data through validation, model transport and storage."""
 
+from infra.resource_pool import HttpClientPool
+
 from app.runtime import RuntimeContainer
 
 from knowledge.index_lifecycle import default_knowledge_index as index_lifecycle
@@ -29,7 +31,7 @@ COURSE_TEXTS = (*SQL_TEXTS,
 @pytest.mark.parametrize('message', COURSE_TEXTS)
 async def test_literal_course_text_reaches_compiled_provider_unchanged(installed, message):
     app = FastAPI()
-    app.state.runtime_container = RuntimeContainer(db=index_lifecycle.db, is_pg_mode=lambda: False, startup_env={})
+    app.state.runtime_container = RuntimeContainer(db=index_lifecycle.db, is_pg_mode=lambda: False, startup_env={}, http_client_pool=HttpClientPool(max_connections=1))
     app.add_middleware(InputValidationMiddleware)
     app.add_middleware(SecurityMiddleware, api_keys=['synthetic-text-key'])
 

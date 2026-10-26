@@ -1,5 +1,7 @@
 """A complete dialogue task keeps its selected resource across awaited work."""
 
+from infra.resource_pool import HttpClientPool
+
 import asyncio
 import json
 from contextlib import asynccontextmanager
@@ -56,7 +58,7 @@ async def test_dialogue_task_keeps_owner_and_reports_real_failure(monkeypatch, t
         return httpx.Response(200, json={'usage': {'prompt_tokens': 100, 'completion_tokens': 20, 'total_tokens': 120}, 'choices': [{'finish_reason': 'stop', 'message': {'content': raw}}]})
 
     @asynccontextmanager
-    async def acquire(_self, timeout):
+    async def acquire(_self, timeout, **_resource_options):
         async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
             yield client
     monkeypatch.setattr(model_manager.OpenAICompatProvider, '_acquire_http_client', acquire)
@@ -94,7 +96,7 @@ async def test_dialogue_task_keeps_owner_and_reports_real_failure(monkeypatch, t
     monkeypatch.setattr(training, '_dialogue_generation_task', None)
     monkeypatch.setattr(training, 'search_character_info', research)
     app = FastAPI()
-    app.state.runtime_container = RuntimeContainer(db=SQLiteDB(tmp_path / 'dialogue-accounting.sqlite'), is_pg_mode=lambda: False)
+    app.state.runtime_container = RuntimeContainer(db=SQLiteDB(tmp_path / 'dialogue-accounting.sqlite'), is_pg_mode=lambda: False, http_client_pool=HttpClientPool(max_connections=1))
     app.include_router(training.router)
     app.dependency_overrides[get_current_admin] = lambda: {'id': 901, 'role': 'admin'}
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://fixture.invalid') as client:

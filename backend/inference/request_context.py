@@ -1,4 +1,4 @@
-"""One resolved inference connection and counter for a generation request."""
+"""One provider, token counter and HTTP owner for each inference request."""
 
 import asyncio
 import hashlib
@@ -17,6 +17,7 @@ class InferenceRequestContext:
     provider_name: str
     provider: Any = field(repr=False)
     count_tokens: Callable[[str], int] = field(repr=False)
+    http_client_pool: Any | None = field(default=None, repr=False, compare=False)
 
     @property
     def connection_id(self) -> str:
@@ -34,13 +35,16 @@ def get_request_context() -> InferenceRequestContext | None:
     return _current.get()
 
 
-async def resolve_request_context(manager) -> InferenceRequestContext:
+async def resolve_request_context(manager, *, http_client_pool=None) -> InferenceRequestContext:
     selected = manager.get_current_provider()
     name = selected.name
     provider = await asyncio.to_thread(selected.snapshot) if name == "openai_compat" else selected
-    counter = (text_token_counter(name, provider.base_url, provider.model)
-               if name == "openai_compat" else text_token_counter(name, "", ""))
-    return InferenceRequestContext(name, provider, counter)
+    counter = (
+        text_token_counter(name, provider.base_url, provider.model)
+        if name == "openai_compat"
+        else text_token_counter(name, "", "")
+    )
+    return InferenceRequestContext(name, provider, counter, http_client_pool)
 
 
 @contextmanager

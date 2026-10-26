@@ -1,5 +1,7 @@
 """Mechanism tests, never evidence of real-model counterfactual quality."""
 
+from infra.resource_pool import HttpClientPool
+
 from services import chat_answer
 from unittest.mock import AsyncMock
 from types import SimpleNamespace
@@ -348,7 +350,7 @@ def test_full_web_generation_and_canonical_return(repo, monkeypatch):
     monkeypatch.setattr(gen, 'response_cache', ForbiddenCache())
     runtime = Runtime()
     app = FastAPI()
-    app.state.runtime_container = RuntimeContainer(repo.db, lambda: False, runtime)
+    app.state.runtime_container = RuntimeContainer(repo.db, lambda: False, runtime, http_client_pool=HttpClientPool(max_connections=1))
     app.include_router(gen.router)
     app.include_router(narrative_router)
     app.dependency_overrides[get_current_user] = lambda: {'user_id': 1}
@@ -404,7 +406,7 @@ def test_invalid_branch_setting_is_not_reported_as_disabled(monkeypatch, value):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('failure', [None, 'snapshot', 'prepare', 'budget'])
+@pytest.mark.parametrize('failure', [None, 'snapshot', 'prepare', 'budget', 'pool'])
 async def test_canonical_preparation_and_generation_share_one_model_context(monkeypatch, failure):
     from api import narrative, generate
     from app.runtime import RuntimeContainer
@@ -461,13 +463,19 @@ async def test_canonical_preparation_and_generation_share_one_model_context(monk
         return await job()
     runtime = SimpleNamespace(check_rate_limits=AsyncMock(), priority_for=lambda *args: 1, submit=submit)
     app = FastAPI()
-    app.state.runtime_container = RuntimeContainer(database, lambda: False, runtime)
+    app.state.runtime_container = RuntimeContainer(database, lambda: False, runtime, http_client_pool=HttpClientPool(max_connections=1))
     monkeypatch.setattr(narrative, 'validate_character', lambda _: None)
     monkeypatch.setattr(character_context, 'build_character_context_service', build)
     monkeypatch.setattr(generate, '_generate_reply_impl', reply)
     body = narrative.CanonicalMessage(character_id='isolated-character', message='核对已提供的完整记录，不推断实际办理结果。')
     assert get_request_context() is None
-    if failure == 'snapshot':
+    if failure == 'pool':
+        app.state.runtime_container.http_client_pool = None
+        with pytest.raises(HTTPException) as caught:
+            await narrative.canonical_generate(body, SimpleNamespace(app=app), {'user_id': 1})
+        assert caught.value.status_code == 503 and '连接池' in caught.value.detail
+        assert events == []
+    elif failure == 'snapshot':
         with pytest.raises(HTTPException) as caught:
             await narrative.canonical_generate(body, SimpleNamespace(app=app), {'user_id': 1})
         assert caught.value.status_code == 503 and caught.value.__cause__ is error
@@ -489,7 +497,7 @@ async def test_canonical_preparation_and_generation_share_one_model_context(monk
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("missing", ["db", "scheduler"])
+@pytest.mark.parametrize('missing', ['db', 'scheduler'])
 async def test_canonical_missing_dependencies_stop_before_queue_or_model(monkeypatch, missing):
     from api import narrative
     from app.runtime import RuntimeContainer
@@ -497,19 +505,15 @@ async def test_canonical_missing_dependencies_stop_before_queue_or_model(monkeyp
     from inference import model_manager
 
     def forbidden(*args, **kwargs):
-        pytest.fail("Missing application dependency must not use global runtime or model")
-
+        pytest.fail('Missing application dependency must not use global runtime or model')
     runtime = SimpleNamespace(check_rate_limits=forbidden, submit=forbidden, priority_for=forbidden)
-    monkeypatch.setattr(concurrency_control, "inference_runtime", runtime)
-    monkeypatch.setattr(model_manager, "get_model_manager", forbidden)
-    monkeypatch.setattr(narrative, "validate_character", lambda _: None)
+    monkeypatch.setattr(concurrency_control, 'inference_runtime', runtime)
+    monkeypatch.setattr(model_manager, 'get_model_manager', forbidden)
+    monkeypatch.setattr(narrative, 'validate_character', lambda _: None)
     app = FastAPI()
-    app.state.runtime_container = RuntimeContainer(
-        None if missing == "db" else object(), lambda: False,
-        None if missing == "scheduler" else runtime,
-    )
-    body = narrative.CanonicalMessage(character_id="isolated-character", message="继续已提供的正史记录。")
+    app.state.runtime_container = RuntimeContainer(None if missing == 'db' else object(), lambda: False, None if missing == 'scheduler' else runtime, http_client_pool=HttpClientPool(max_connections=1))
+    body = narrative.CanonicalMessage(character_id='isolated-character', message='继续已提供的正史记录。')
     with pytest.raises(HTTPException) as caught:
-        await narrative.canonical_generate(body, SimpleNamespace(app=app), {"user_id": 1})
+        await narrative.canonical_generate(body, SimpleNamespace(app=app), {'user_id': 1})
     assert caught.value.status_code == 503
-    assert caught.value.detail["stage"] == "dependencies"
+    assert caught.value.detail['stage'] == 'dependencies'

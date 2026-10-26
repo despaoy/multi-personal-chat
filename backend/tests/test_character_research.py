@@ -7,6 +7,8 @@ The runner supplies isolated application/JWT/database configuration.
 
 from __future__ import annotations
 
+from infra.resource_pool import HttpClientPool
+
 import asyncio
 import json
 from types import SimpleNamespace
@@ -89,7 +91,7 @@ def rig(monkeypatch, tmp_path):
     scoped_httpx.AsyncClient = client_factory
     monkeypatch.setattr(research, 'httpx', scoped_httpx)
     app = FastAPI()
-    app.state.runtime_container = RuntimeContainer(db=SQLiteDB(tmp_path / 'dialogue-accounting.sqlite'), is_pg_mode=lambda: False)
+    app.state.runtime_container = RuntimeContainer(db=SQLiteDB(tmp_path / 'dialogue-accounting.sqlite'), is_pg_mode=lambda: False, http_client_pool=HttpClientPool(max_connections=1))
     app.include_router(training.router)
     app.dependency_overrides[get_current_admin] = lambda: {'id': 901, 'role': 'admin'}
     context.app = app

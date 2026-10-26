@@ -1,5 +1,7 @@
 """Complete, isolated dashboard applications; no external model or host probes."""
 
+from infra.resource_pool import HttpClientPool
+
 from datetime import datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
@@ -68,47 +70,22 @@ class CountingStatsDB:
 
 
 class StatsRig:
+
     def __init__(self, path, *, env=None):
         self.database = SQLiteDB(path)
         self.db = CountingStatsDB(self.database)
-        self.queue = SimpleNamespace(
-            stats=Mock(return_value={"queue_size": 0, "max_queue_size": 100, "workers": 2, "active": 1})
-        )
-        self.probe = SimpleNamespace(
-            get=AsyncMock(
-                return_value={
-                    "ready": True,
-                    "deps": {"model": True, "database": True},
-                    "details": {"rag": "not_probed"},
-                }
-            )
-        )
+        self.queue = SimpleNamespace(stats=Mock(return_value={'queue_size': 0, 'max_queue_size': 100, 'workers': 2, 'active': 1}))
+        self.probe = SimpleNamespace(get=AsyncMock(return_value={'ready': True, 'deps': {'model': True, 'database': True}, 'details': {'rag': 'not_probed'}}))
         self.app = FastAPI()
-        self.app.state.runtime_container = RuntimeContainer(
-            db=self.db,
-            is_pg_mode=lambda: False,
-            inference_runtime=self.queue,
-            startup_env={"STATS_CACHE_TTL_SECONDS": "60", "ASTRBOT_ENABLED": "false"} if env is None else env,
-        )
+        self.app.state.runtime_container = RuntimeContainer(db=self.db, is_pg_mode=lambda: False, inference_runtime=self.queue, startup_env={'STATS_CACHE_TTL_SECONDS': '60', 'ASTRBOT_ENABLED': 'false'} if env is None else env, http_client_pool=HttpClientPool(max_connections=1))
         self.app.state.readiness_probe = self.probe
         self.app.include_router(stats.router)
-        self.app.dependency_overrides[get_current_admin] = lambda: {"role": "admin"}
+        self.app.dependency_overrides[get_current_admin] = lambda: {'role': 'admin'}
 
     def client(self):
-        return httpx.AsyncClient(transport=httpx.ASGITransport(app=self.app), base_url="http://isolated.test")
+        return httpx.AsyncClient(transport=httpx.ASGITransport(app=self.app), base_url='http://isolated.test')
 
     def seed(self, count=1, *, hour=11, cost=1.0):
         observed = datetime.now().replace(hour=hour, minute=1, second=0, microsecond=0).isoformat()
         for index in range(count):
-            self.database.add_message(
-                {
-                    "sessionType": "private",
-                    "sessionId": f"synthetic:{index}",
-                    "platform": "web",
-                    "conversationId": f"synthetic:{index}",
-                    "message": "synthetic-private-dialogue-body",
-                    "reply": "complete synthetic reply",
-                    "costTime": cost,
-                    "createdAt": observed,
-                }
-            )
+            self.database.add_message({'sessionType': 'private', 'sessionId': f'synthetic:{index}', 'platform': 'web', 'conversationId': f'synthetic:{index}', 'message': 'synthetic-private-dialogue-body', 'reply': 'complete synthetic reply', 'costTime': cost, 'createdAt': observed})

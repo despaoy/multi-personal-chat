@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, Any
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 
-from app.dependencies import get_current_user, get_request_database
+from app.dependencies import get_current_user, get_request_database, get_request_http_client_pool
 from db.schemas import AskRequest, AskResponse
 from inference.context_budget import InputBudgetError
 from inference.openai_protocol import ProviderResponseError
@@ -132,12 +132,15 @@ def _usage_metadata(model_id, current_user):
 
 @router.post("/api/ask")
 async def ask(
-    request: AskRequest, current_user: dict = Depends(get_current_user), database=Depends(get_request_database)
+    request: AskRequest,
+    current_user: dict = Depends(get_current_user),
+    database=Depends(get_request_database),
+    http_client_pool=Depends(get_request_http_client_pool),
 ):
     """知识问答（非流式）。"""
     from inference.model_manager import get_model_manager
 
-    context = await resolve_request_context(get_model_manager(database=database))
+    context = await resolve_request_context(get_model_manager(database=database), http_client_pool=http_client_pool)
     generate, _stream, model_id, cache_identity = await _resolve_generate_adapters(context)
 
     start = time.perf_counter()
@@ -189,6 +192,7 @@ async def ask_stream(
     http_request: Request,
     current_user: dict = Depends(get_current_user),
     database=Depends(get_request_database),
+    http_client_pool=Depends(get_request_http_client_pool),
 ):
     """知识问答（SSE 流式）。
 
@@ -198,7 +202,7 @@ async def ask_stream(
     """
     from inference.model_manager import get_model_manager
 
-    context = await resolve_request_context(get_model_manager(database=database))
+    context = await resolve_request_context(get_model_manager(database=database), http_client_pool=http_client_pool)
     generate, generate_stream, model_id, _cache_identity = await _resolve_generate_adapters(context)
     debug = request.debug and current_user.get("role") == "admin"
 

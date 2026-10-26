@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from inference.request_context import InferenceRequestContext, use_request_context
+
 import asyncio
 from contextlib import asynccontextmanager, nullcontext
 from types import SimpleNamespace
@@ -8,7 +10,6 @@ from unittest.mock import AsyncMock, Mock
 import httpx
 import pytest
 
-from app import config as app_config
 from inference.model_manager import BaseProvider
 from provider_fixtures import completed_provider_response
 
@@ -21,11 +22,12 @@ class DummyProvider(BaseProvider):
         return prompt, 0.0
 
 
-@pytest.mark.parametrize("fail", [False, True])
+@pytest.mark.parametrize('fail', [False, True])
 def test_standalone_http_client_closes_on_its_creating_loop(monkeypatch, fail):
     clients = []
 
     class FakeAsyncClient:
+
         def __init__(self, *args, **kwargs):
             self.closed = False
             clients.append(self)
@@ -36,23 +38,19 @@ def test_standalone_http_client_closes_on_its_creating_loop(monkeypatch, fail):
         async def __aexit__(self, exc_type, exc, traceback):
             self.closed = True
             return False
-
-    monkeypatch.setattr(app_config, "http_client_pool", None)
-    monkeypatch.setattr(httpx, "AsyncClient", FakeAsyncClient)
+    monkeypatch.setattr(httpx, 'AsyncClient', FakeAsyncClient)
     provider = DummyProvider()
 
     async def acquire_once():
-        with pytest.raises(RuntimeError, match="request failed") if fail else nullcontext():
+        with pytest.raises(RuntimeError, match='request failed') if fail else nullcontext():
             async with provider._acquire_http_client(timeout=1.0) as client:
                 assert client.closed is False
                 if fail:
-                    raise RuntimeError("request failed")
-
+                    raise RuntimeError('request failed')
     asyncio.run(acquire_once())
     asyncio.run(acquire_once())
-
     assert len(clients) == 2
-    assert all(client.closed for client in clients)
+    assert all((client.closed for client in clients))
 
 
 @pytest.mark.asyncio
@@ -63,7 +61,7 @@ async def test_shared_pool_owns_client_and_failures_never_create_replacement(mon
     failure = OSError('private-transport-detail')
 
     @asynccontextmanager
-    async def acquire():
+    async def acquire(**_resource_options):
         events.append('acquire')
         if failure_at == 'pool':
             raise failure
@@ -71,13 +69,12 @@ async def test_shared_pool_owns_client_and_failures_never_create_replacement(mon
             yield client
         finally:
             events.append('release')
-
-    monkeypatch.setattr(app_config, 'http_client_pool', SimpleNamespace(acquire=acquire))
+    pool = SimpleNamespace(acquire=acquire)
     replacement = Mock(side_effect=AssertionError('replacement client is forbidden'))
     monkeypatch.setattr(httpx, 'AsyncClient', replacement)
     provider = DummyProvider()
     with pytest.raises(OSError) if failure_at else nullcontext():
-        async with provider._acquire_http_client() as actual:
+        async with provider._acquire_http_client(pool=pool) as actual:
             assert actual is client
             if failure_at == 'request':
                 raise failure
@@ -103,25 +100,26 @@ async def test_http_provider_errors_propagate_without_private_body_logging(monke
     released = []
 
     @asynccontextmanager
-    async def acquire():
+    async def acquire(**_resource_options):
         try:
             yield SimpleNamespace(post=post)
         finally:
             released.append(True)
-    monkeypatch.setattr(app_config, 'http_client_pool', SimpleNamespace(acquire=acquire))
-    if mode == 'success':
-        reply, _ = await provider.async_generate('完整的合成问题')
-        assert reply == '有效回答'
-    else:
-        with pytest.raises(RuntimeError if mode == 'http_error' else httpx.ConnectError) as caught:
-            await provider.async_generate('完整的合成问题')
-        if mode == 'http_error':
-            assert '502' in str(caught.value) and 'private-response-body' not in str(caught.value)
+    pool = SimpleNamespace(acquire=acquire)
+    with use_request_context(InferenceRequestContext(provider.name, provider, len, http_client_pool=pool)):
+        if mode == 'success':
+            reply, _ = await provider.async_generate('完整的合成问题')
+            assert reply == '有效回答'
         else:
-            assert caught.value is failure
-    assert released == [True]
-    assert 'private-response-body' not in caplog.text and 'private-transport-detail' not in caplog.text
-    assert post.await_count == 1
+            with pytest.raises(RuntimeError if mode == 'http_error' else httpx.ConnectError) as caught:
+                await provider.async_generate('完整的合成问题')
+            if mode == 'http_error':
+                assert '502' in str(caught.value) and 'private-response-body' not in str(caught.value)
+            else:
+                assert caught.value is failure
+        assert released == [True]
+        assert 'private-response-body' not in caplog.text and 'private-transport-detail' not in caplog.text
+        assert post.await_count == 1
 
 
 @pytest.mark.asyncio
@@ -154,7 +152,7 @@ async def test_local_provider_accepts_only_complete_text(monkeypatch, kind, faul
     async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as http:
 
         @asynccontextmanager
-        async def acquire(timeout):
+        async def acquire(timeout, **_resource_options):
             yield http
         monkeypatch.setattr(provider, '_acquire_http_client', acquire)
         prompt = '完整虚构题设：三张票每张2元，尚未付款，下雨取消。请计算总额并保留条件。'
@@ -177,7 +175,7 @@ async def test_llama_chat_rejects_lost_context(monkeypatch, metadata):
     post = AsyncMock(return_value=httpx.Response(200, json=payload))
 
     @asynccontextmanager
-    async def acquire(timeout):
+    async def acquire(timeout, **_resource_options):
         yield SimpleNamespace(post=post)
     monkeypatch.setattr(provider, '_acquire_http_client', acquire)
     with pytest.raises(ValueError if metadata else KeyError):

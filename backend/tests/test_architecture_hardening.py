@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from infra.resource_pool import HttpClientPool
+
 from dataclasses import dataclass
 from types import SimpleNamespace
 
@@ -96,7 +98,7 @@ class _FakeRequest:
 
     def __init__(self, payload: dict | None, database=None):
         from app.runtime import RuntimeContainer
-        self.app = SimpleNamespace(state=SimpleNamespace(runtime_container=RuntimeContainer(db=database, is_pg_mode=lambda: False)))
+        self.app = SimpleNamespace(state=SimpleNamespace(runtime_container=RuntimeContainer(db=database, is_pg_mode=lambda: False, http_client_pool=HttpClientPool(max_connections=1))))
         self.state = SimpleNamespace(jwt_payload=payload)
         self.headers = {}
         self.cookies = {}

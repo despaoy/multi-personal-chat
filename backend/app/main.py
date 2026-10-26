@@ -121,15 +121,15 @@ _LIFESPAN_RESOURCE_NAMES = (
 )
 
 
-def _clear_lifespan_resource_references(config_module) -> None:
+def _clear_lifespan_resource_references(container) -> None:
     for name in _LIFESPAN_RESOURCE_NAMES:
-        setattr(config_module, name, None)
+        setattr(container, name, None)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    _clear_lifespan_resource_references(_cfg)
     container = get_runtime_container(app)
+    _clear_lifespan_resource_references(container)
     database = container.db
     postgres_mode = bool(container.is_pg_mode())
 
@@ -155,15 +155,15 @@ async def lifespan(app: FastAPI):
 
         # SQLite backups use the database selected by the runtime container.
         db_file = Path(database.db_path).expanduser().resolve() if not postgres_mode else None
-        _cfg.http_client_pool = HttpClientPool(max_connections=100, request_timeout=120.0)
+        container.http_client_pool = HttpClientPool(max_connections=100, request_timeout=120.0)
         if not postgres_mode:
             configured_backup_dir = container.startup_env.get("BACKUP_DIR", "").strip()
             backup_dir = Path(configured_backup_dir).expanduser() if configured_backup_dir else db_file.parent / "backups"
             if not backup_dir.is_absolute():
                 backup_dir = db_file.parent / backup_dir
-            _cfg.backup_mgr = BackupManager(str(db_file), backup_dir=str(backup_dir))
-            await _cfg.backup_mgr.start_scheduled_backup()
-        _cfg.access_control_mgr = AccessControlManager(database)
+            container.backup_mgr = BackupManager(str(db_file), backup_dir=str(backup_dir))
+            await container.backup_mgr.start_scheduled_backup()
+        container.access_control_mgr = AccessControlManager(database)
         logger.info("✅ 资源池、备份调度与访问控制初始化完成")
 
         # 延迟重建向量索引（首次搜索时自动触发，避免启动时阻塞）
@@ -190,8 +190,8 @@ async def lifespan(app: FastAPI):
             ("后台长期记忆任务", "character.memory_llm", "shutdown_memory_enrichment"),
             ("知识库扫描", container.knowledge_scan_executor, "shutdown"),
             ("readiness probe", getattr(app.state, "readiness_probe", None), "shutdown"),
-            ("HTTP 客户端池", _cfg.http_client_pool, "close"),
-            ("备份调度器", _cfg.backup_mgr, "stop_scheduled_backup"),
+            ("HTTP 客户端池", container.http_client_pool, "close"),
+            ("备份调度器", container.backup_mgr, "stop_scheduled_backup"),
             ("PostgreSQL 适配器", database if postgres_mode else None, "close"),
             ("模型管理器", database, "_model_manager.shutdown"),
             ("vLLM 客户端", "inference.vllm_client", "close_shared_vllm_client"),
@@ -199,7 +199,7 @@ async def lifespan(app: FastAPI):
             ("async Redis 客户端", "cache.redis_client", "close_async_redis"),
         )
         cleanup = AsyncExitStack()
-        cleanup.callback(_clear_lifespan_resource_references, _cfg)
+        cleanup.callback(_clear_lifespan_resource_references, container)
         cleanup.callback(setattr, container, "knowledge_scan_executor", None)
         for resource in reversed(resources):
             await cleanup.enter_async_context(_closing_resource(*resource))
@@ -369,7 +369,7 @@ def create_app(container: RuntimeContainer | None = None) -> FastAPI:
     application.state.runtime_container = runtime_container
     application.state.readiness_probe = ReadinessProbe(
         database_check=lambda: get_runtime_container(application).db.execute_sql("SELECT 1"),
-        model_check=runtime_container.model_check or (lambda: check_model_readiness(runtime_container.db)),
+        model_check=runtime_container.model_check or (lambda: check_model_readiness(runtime_container.db, http_client_pool=runtime_container.http_client_pool)),
         model_required=True,
     )
     _install_middleware(application, runtime_container.startup_env)

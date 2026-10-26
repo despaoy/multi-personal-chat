@@ -6,6 +6,8 @@ Only model output and queue timing are controlled. No live model, external
 HTTP, real credentials or paid inference are used.
 """
 
+from infra.resource_pool import HttpClientPool
+
 from services import chat_answer
 
 import asyncio
@@ -224,22 +226,16 @@ async def test_captured_local_preparation_is_not_mutated_by_overlapping_cloud_fa
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("database_kind", ["default", "custom"])
+@pytest.mark.parametrize('database_kind', ['default', 'custom'])
 async def test_queued_http_turn_uses_execution_provider_and_one_owning_service(budget_rig, monkeypatch, database_kind):
     from repositories.character_memory import DatabaseCharacterMemoryRepository
-
     from app.main import create_app
-
     rig = budget_rig
-    database = rig.database if database_kind == "default" else rig.custom_db
-    other_database = rig.custom_db if database_kind == "default" else rig.database
-    # This ownership test needs an enabled, terminal synthetic no-change writer.
-    # Source capture and the completion/archive/counter writes remain real.
-    monkeypatch.setattr("character.memory_llm.get_memory_enrichment_scheduler", lambda: SimpleNamespace(
-        enabled=True, schedule=lambda **kwargs: False, status=SimpleNamespace(last_outcome="no_change"),
-    ))
-    queued, release = asyncio.Event(), asyncio.Event()
-    preparations, completions = [], []
+    database = rig.database if database_kind == 'default' else rig.custom_db
+    other_database = rig.custom_db if database_kind == 'default' else rig.database
+    monkeypatch.setattr('character.memory_llm.get_memory_enrichment_scheduler', lambda: SimpleNamespace(enabled=True, schedule=lambda **kwargs: False, status=SimpleNamespace(last_outcome='no_change')))
+    queued, release = (asyncio.Event(), asyncio.Event())
+    preparations, completions = ([], [])
     actual_prepare = character_context.CharacterContextService.prepare_turn
     actual_complete = character_context.CharacterContextService.complete_turn
 
@@ -252,11 +248,11 @@ async def test_queued_http_turn_uses_execution_provider_and_one_owning_service(b
         outcome = await actual_complete(service, prepared, *args, **kwargs)
         completions.append((service, prepared, outcome, get_request_context()))
         return outcome
-
-    monkeypatch.setattr(character_context.CharacterContextService, "prepare_turn", prepare)
-    monkeypatch.setattr(character_context.CharacterContextService, "complete_turn", complete)
+    monkeypatch.setattr(character_context.CharacterContextService, 'prepare_turn', prepare)
+    monkeypatch.setattr(character_context.CharacterContextService, 'complete_turn', complete)
 
     class QueueTiming:
+
         def priority_for(self, platform, session_type):
             return 5
 
@@ -264,31 +260,21 @@ async def test_queued_http_turn_uses_execution_provider_and_one_owning_service(b
             assert identity == OWNER
 
         async def submit(self, job, *, session_id, priority):
-            assert session_id == "fiction-budget-session" and priority == 5
+            assert session_id == 'fiction-budget-session' and priority == 5
             queued.set()
             await release.wait()
             return await job()
-
-    local = await select_context(rig, "vllm")
+    local = await select_context(rig, 'vllm')
     with use_request_context(local):
         old_default = character_context.get_default_character_context_service()
         assert old_default._history_max_chars == 16000
-    application = create_app(RuntimeContainer(
-        db=database, is_pg_mode=lambda: False, inference_runtime=QueueTiming(), startup_env={},
-    ))
-    # Resolve the actual HTTP dependency while local is selected. Its owning
-    # database must survive queueing, while its provider budget resolves later.
-    service = generate.get_request_chat_generation_service(Request({"type": "http", "app": application}))
-    request = MessageRequest(
-        message=QUERY, characterId=ROLE, loraName="default", platform="web", adapter="web-character",
-        sessionId="fiction-budget-session", sessionType="private", conversationType="private",
-        senderId=OWNER, userId=OWNER, sourceMessageId=f"fiction-queued-{database_kind}",
-        traceId=f"fiction-budget-{database_kind}",
-    )
-    pending = asyncio.create_task(generate.generate_reply(request, {"id": OWNER, "user_id": OWNER}, service))
+    application = create_app(RuntimeContainer(db=database, is_pg_mode=lambda: False, inference_runtime=QueueTiming(), startup_env={}, http_client_pool=HttpClientPool(max_connections=1)))
+    service = generate.get_request_chat_generation_service(Request({'type': 'http', 'app': application}))
+    request = MessageRequest(message=QUERY, characterId=ROLE, loraName='default', platform='web', adapter='web-character', sessionId='fiction-budget-session', sessionType='private', conversationType='private', senderId=OWNER, userId=OWNER, sourceMessageId=f'fiction-queued-{database_kind}', traceId=f'fiction-budget-{database_kind}')
+    pending = asyncio.create_task(generate.generate_reply(request, {'id': OWNER, 'user_id': OWNER}, service))
     try:
         await asyncio.wait_for(queued.wait(), 1)
-        assert not preparations and not completions and not rig.answers
+        assert not preparations and (not completions) and (not rig.answers)
         rig.manager._current_provider = model_manager.ModelProvider.OPENAI_COMPAT
         release.set()
         result = await asyncio.wait_for(pending, 5)
@@ -300,23 +286,23 @@ async def test_queued_http_turn_uses_execution_provider_and_one_owning_service(b
         assert prepared_service._memory_repo._database is database
         assert prepared_service._message_repo._database is database
         assert prepared_service._history_max_chars == 65536
-        assert prepared.memory_budget["budget_chars"] == 32768
-        assert reference_packet(prepared)["source_observation"] is True
-        assert context is completed_context is rig.answers[0]["context"]
-        assert context.provider_name == "openai_compat"
-        assert outcome.interaction_count == 1 and not outcome.failed_writes
+        assert prepared.memory_budget['budget_chars'] == 32768
+        assert reference_packet(prepared)['source_observation'] is True
+        assert context is completed_context is rig.answers[0]['context']
+        assert context.provider_name == 'openai_compat'
+        assert outcome.interaction_count == 1 and (not outcome.failed_writes)
         assert old_default._history_max_chars == 16000
-        assert [row["provider"] for row in rig.reviews] == ["openai_compat"]
-        saved = database.execute_sql("SELECT * FROM messages ORDER BY id")
-        invocations = database.execute_sql("SELECT * FROM model_invocations ORDER BY id")
+        assert [row['provider'] for row in rig.reviews] == ['openai_compat']
+        saved = database.execute_sql('SELECT * FROM messages ORDER BY id')
+        invocations = database.execute_sql('SELECT * FROM model_invocations ORDER BY id')
         assert len(saved) == len(invocations) == 1
-        assert saved[0]["message"] == QUERY and saved[0]["reply"] == BODY
-        assert saved[0]["traceId"] == request.traceId
-        assert invocations[0]["errorType"] == "" and invocations[0]["completionTokens"] is None
+        assert saved[0]['message'] == QUERY and saved[0]['reply'] == BODY
+        assert saved[0]['traceId'] == request.traceId
+        assert invocations[0]['errorType'] == '' and invocations[0]['completionTokens'] is None
         relationship = await DatabaseCharacterMemoryRepository(database).get_relationship_record(ROLE, rig.scope)
-        assert relationship["interaction_count"] == 1
-        assert other_database.execute_sql("SELECT * FROM messages") == []
-        assert other_database.execute_sql("SELECT * FROM model_invocations") == []
+        assert relationship['interaction_count'] == 1
+        assert other_database.execute_sql('SELECT * FROM messages') == []
+        assert other_database.execute_sql('SELECT * FROM model_invocations') == []
         assert await DatabaseCharacterMemoryRepository(other_database).get_relationship_record(ROLE, rig.scope) is None
         assert get_request_context() is None
     finally:

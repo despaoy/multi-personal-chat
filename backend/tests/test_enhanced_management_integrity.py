@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from app.runtime import RuntimeContainer
+from infra.concurrency_control import inference_runtime
+
 from dataclasses import dataclass
 from datetime import datetime
 import gzip
@@ -50,32 +53,30 @@ def test_managed_api_keys_flow_through_security_dependencies(tmp_path, monkeypat
     from app.dependencies import get_current_admin, get_current_user
     from infra.access_control import AccessControlManager, Role
     from middleware.security import SecurityMiddleware
-
     from db.database import SQLiteDB
-
-    database = SQLiteDB(tmp_path / "middleware-access.db")
+    database = SQLiteDB(tmp_path / 'middleware-access.db')
     manager = AccessControlManager(database)
-    user_key = manager.create_api_key(Role.API_USER)["api_key"]
-    admin_key = manager.create_api_key(Role.ADMIN)["api_key"]
-    monkeypatch.setattr(app_config, "access_control_mgr", manager)
-
+    user_key = manager.create_api_key(Role.API_USER)['api_key']
+    admin_key = manager.create_api_key(Role.ADMIN)['api_key']
+    runtime = RuntimeContainer(db=database, is_pg_mode=lambda: False, inference_runtime=inference_runtime)
+    runtime.access_control_mgr = manager
     application = FastAPI()
+    application.state.runtime_container = runtime
     application.add_middleware(SecurityMiddleware, api_keys=[])
 
-    @application.get("/user")
-    async def user_route(user: dict = Depends(get_current_user)):
+    @application.get('/user')
+    async def user_route(user: dict=Depends(get_current_user)):
         return user
 
-    @application.get("/admin")
-    async def admin_route(user: dict = Depends(get_current_admin)):
+    @application.get('/admin')
+    async def admin_route(user: dict=Depends(get_current_admin)):
         return user
-
     with TestClient(application) as client:
-        assert client.get("/user", headers={"X-API-Key": user_key}).status_code == 200
-        assert client.get("/admin", headers={"X-API-Key": user_key}).status_code == 403
-        response = client.get("/admin", headers={"X-API-Key": admin_key})
+        assert client.get('/user', headers={'X-API-Key': user_key}).status_code == 200
+        assert client.get('/admin', headers={'X-API-Key': user_key}).status_code == 403
+        response = client.get('/admin', headers={'X-API-Key': admin_key})
         assert response.status_code == 200
-        assert response.json()["role"] == "admin"
+        assert response.json()['role'] == 'admin'
 
 
 @dataclass
@@ -100,6 +101,7 @@ async def test_enhanced_backup_endpoints_use_the_real_manager_contract(monkeypat
     from infra.backup_manager import BackupType
 
     class BackupManager:
+
         def __init__(self) -> None:
             self.received_type = None
 
@@ -109,18 +111,16 @@ async def test_enhanced_backup_endpoints_use_the_real_manager_contract(monkeypat
         async def backup(self, backup_type):
             self.received_type = backup_type
             return _BackupInfo()
-
     manager = BackupManager()
-    monkeypatch.setattr(enhanced._app_config, "backup_mgr", manager)
-
-    listed = await enhanced.list_backups({"role": "admin"})
-    created = await enhanced.create_backup("full", {"role": "admin"})
-
-    assert listed["backups"][0]["filename"] == "example.bak.gz"
-    assert created["backup"]["backup_type"] == "full"
+    runtime = RuntimeContainer(db=None, is_pg_mode=lambda: False, inference_runtime=inference_runtime)
+    runtime.backup_mgr = manager
+    listed = await enhanced.list_backups({'role': 'admin'}, runtime=runtime)
+    created = await enhanced.create_backup('full', {'role': 'admin'}, runtime=runtime)
+    assert listed['backups'][0]['filename'] == 'example.bak.gz'
+    assert created['backup']['backup_type'] == 'full'
     assert manager.received_type is BackupType.FULL
     with pytest.raises(HTTPException) as exc_info:
-        await enhanced.restore_backup("example.bak.gz", {"role": "admin"})
+        await enhanced.restore_backup('example.bak.gz', {'role': 'admin'}, runtime=runtime)
     assert exc_info.value.status_code == 409
 
 
@@ -164,24 +164,22 @@ async def test_enhanced_status_distinguishes_available_code_from_active_resource
 
     async def no_vllm_stats():
         return None
-
-    monkeypatch.setattr(enhanced, "_get_vllm_load_balancer_stats", no_vllm_stats)
-    monkeypatch.setattr(enhanced._app_config, "backup_mgr", None)
-    monkeypatch.setattr(enhanced._app_config, "access_control_mgr", None)
-    monkeypatch.setattr(enhanced._app_config, "http_client_pool", None)
-
-    result = await enhanced.get_enhanced_status({"role": "admin"})
-
-    assert result["availableFeatures"]["backupManager"] is True
-    assert result["availableFeatures"]["accessControl"] is True
-    assert result["enhancedFeatures"]["backupManager"] is False
-    assert result["enhancedFeatures"]["accessControl"] is False
-    assert result["enhancedFeatures"]["loadBalancer"] is False
-    assert result["availableFeatures"]["resourcePool"] is True
-    assert result["enhancedFeatures"]["resourcePool"] is False
-    monkeypatch.setattr(enhanced._app_config, "http_client_pool", object())
-    active = await enhanced.get_enhanced_status({"role": "admin"})
-    assert active["enhancedFeatures"]["resourcePool"] is True
+    monkeypatch.setattr(enhanced, '_get_vllm_load_balancer_stats', no_vllm_stats)
+    runtime = RuntimeContainer(db=None, is_pg_mode=lambda: False, inference_runtime=inference_runtime)
+    runtime.backup_mgr = None
+    runtime.access_control_mgr = None
+    runtime.http_client_pool = None
+    result = await enhanced.get_enhanced_status({'role': 'admin'}, runtime=runtime)
+    assert result['availableFeatures']['backupManager'] is True
+    assert result['availableFeatures']['accessControl'] is True
+    assert result['enhancedFeatures']['backupManager'] is False
+    assert result['enhancedFeatures']['accessControl'] is False
+    assert result['enhancedFeatures']['loadBalancer'] is False
+    assert result['availableFeatures']['resourcePool'] is True
+    assert result['enhancedFeatures']['resourcePool'] is False
+    runtime.http_client_pool = object()
+    active = await enhanced.get_enhanced_status({'role': 'admin'}, runtime=runtime)
+    assert active['enhancedFeatures']['resourcePool'] is True
 
 
 @pytest.mark.asyncio
@@ -190,63 +188,55 @@ async def test_api_key_storage_failures_return_stable_503_responses(monkeypatch)
     from db.schemas import ApiKeyCreateRequest
 
     class BrokenManager:
+
         def list_api_keys(self):
-            raise RuntimeError("sqlite path=/private/access.db")
+            raise RuntimeError('sqlite path=/private/access.db')
 
         def create_api_key(self, *args):
-            raise RuntimeError("sqlite path=/private/access.db")
+            raise RuntimeError('sqlite path=/private/access.db')
 
         def revoke_api_key_by_id(self, key_id):
-            raise RuntimeError("sqlite path=/private/access.db")
-
-    monkeypatch.setattr(enhanced._app_config, "access_control_mgr", BrokenManager())
-
-    calls = (
-        enhanced.list_api_keys({"role": "admin"}),
-        enhanced.create_api_key(
-            ApiKeyCreateRequest(role="api_user"),
-            {"role": "admin"},
-        ),
-        enhanced.revoke_api_key(1, {"role": "admin"}),
-    )
+            raise RuntimeError('sqlite path=/private/access.db')
+    runtime = RuntimeContainer(db=None, is_pg_mode=lambda: False, inference_runtime=inference_runtime)
+    runtime.access_control_mgr = BrokenManager()
+    calls = (enhanced.list_api_keys({'role': 'admin'}, runtime=runtime), enhanced.create_api_key(ApiKeyCreateRequest(role='api_user'), {'role': 'admin'}, runtime=runtime), enhanced.revoke_api_key(1, {'role': 'admin'}, runtime=runtime))
     for call in calls:
         with pytest.raises(HTTPException) as exc_info:
             await call
         assert exc_info.value.status_code == 503
-        assert exc_info.value.detail == "API Key 存储暂时不可用"
-        assert "private" not in exc_info.value.detail
+        assert exc_info.value.detail == 'API Key 存储暂时不可用'
+        assert 'private' not in exc_info.value.detail
 
 
-@pytest.mark.parametrize("failure_at, expected_status", [("store", 503), ("manager", 503), ("route", 500)])
+@pytest.mark.parametrize('failure_at, expected_status', [('store', 503), ('manager', 503), ('route', 500)])
 def test_managed_authentication_preserves_service_and_route_failures(tmp_path, monkeypatch, failure_at, expected_status):
     from app import config
     from app.dependencies import get_current_user
     from db.database import SQLiteDB
     from infra.access_control import AccessControlManager, Role
     from middleware.security import SecurityMiddleware
-
-    database = SQLiteDB(tmp_path / "auth-failure.db")
+    database = SQLiteDB(tmp_path / 'auth-failure.db')
     manager = AccessControlManager(database)
-    key = manager.create_api_key(Role.API_USER)["api_key"]
-    monkeypatch.setattr(config, "access_control_mgr", None if failure_at == "manager" else manager)
-    failure = OSError("synthetic private failure detail")
+    key = manager.create_api_key(Role.API_USER)['api_key']
+    runtime = RuntimeContainer(db=database, is_pg_mode=lambda: False, inference_runtime=inference_runtime)
+    runtime.access_control_mgr = None if failure_at == 'manager' else manager
+    failure = OSError('synthetic private failure detail')
 
     def unavailable(_prefix):
         raise failure
-
-    if failure_at == "store":
-        monkeypatch.setattr(database, "get_api_key_rows_by_prefix", unavailable)
+    if failure_at == 'store':
+        monkeypatch.setattr(database, 'get_api_key_rows_by_prefix', unavailable)
     application = FastAPI()
+    application.state.runtime_container = runtime
     application.add_middleware(SecurityMiddleware, api_keys=[])
     calls = []
 
-    @application.get("/protected")
-    async def protected(user: dict = Depends(get_current_user)):
+    @application.get('/protected')
+    async def protected(user: dict=Depends(get_current_user)):
         calls.append(user)
         raise failure
-
     with TestClient(application, raise_server_exceptions=False) as client:
-        response = client.get("/protected", headers={"X-API-Key": key})
+        response = client.get('/protected', headers={'X-API-Key': key})
     assert response.status_code == expected_status
-    assert len(calls) == (1 if failure_at == "route" else 0)
+    assert len(calls) == (1 if failure_at == 'route' else 0)
     assert key not in response.text and str(failure) not in response.text

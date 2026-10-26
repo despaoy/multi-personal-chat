@@ -24,13 +24,13 @@ def select(monkeypatch, provider):
 
 
 def install_http(monkeypatch, provider, handler):
+
     @asynccontextmanager
-    async def acquire(self, timeout):
+    async def acquire(self, timeout, **_resource_options):
         assert timeout == 3.0
         async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
             yield client
-
-    monkeypatch.setattr(type(provider), "_acquire_http_client", acquire)
+    monkeypatch.setattr(type(provider), '_acquire_http_client', acquire)
 
 
 @pytest.mark.asyncio

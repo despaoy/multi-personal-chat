@@ -6,6 +6,8 @@ result and the model returns complete synthetic messages, never paid output.
 
 from __future__ import annotations
 
+from infra.resource_pool import HttpClientPool
+
 import json
 import re
 from collections import Counter
@@ -114,7 +116,7 @@ def rig(monkeypatch, tmp_path):
     monkeypatch.setattr(model_manager, 'get_model_manager', lambda *, database=None: manager)
     context.manager = manager
     app = FastAPI()
-    app.state.runtime_container = RuntimeContainer(db=SQLiteDB(tmp_path / 'dialogue-accounting.sqlite'), is_pg_mode=lambda: False)
+    app.state.runtime_container = RuntimeContainer(db=SQLiteDB(tmp_path / 'dialogue-accounting.sqlite'), is_pg_mode=lambda: False, http_client_pool=HttpClientPool(max_connections=1))
     app.include_router(training.router)
     app.dependency_overrides[get_current_admin] = lambda: {'id': 901, 'role': 'admin'}
     context.app = app

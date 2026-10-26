@@ -21,7 +21,7 @@ from app.config import (
     get_vllm_served_model_name,
     response_cache,
 )
-from app.dependencies import get_current_admin, get_current_user
+from app.dependencies import get_current_admin, get_current_user, get_request_http_client_pool
 from app.providers import get_vllm_client
 from app.runtime import get_runtime_container
 from db.adapter import db
@@ -178,6 +178,7 @@ async def _generate_reply_impl(
     invocation_purpose: str = "chat",
     character_service=None,
     message_db,
+    http_client_pool=None,
     delivery_context: dict | None = None,
     prepared_override=None,
 ):
@@ -187,7 +188,9 @@ async def _generate_reply_impl(
     context = get_request_context()
     if context is None:
         try:
-            context = await resolve_request_context(get_model_manager(database=message_db))
+            context = await resolve_request_context(
+                get_model_manager(database=message_db), http_client_pool=http_client_pool
+            )
         except Exception as exc:
             raise HTTPException(503, "模型配置读取失败，请检查配置及模型状态后重试") from exc
     started_at = time.time()
@@ -1160,11 +1163,14 @@ async def _validate_web_source_identity(request, current_user, *, database):
         raise HTTPException(503, "暂时无法核对消息来源，请稍后重试")
 
 
-def _build_chat_generation_service(runtime, character_service=None, *, message_db) -> ChatGenerationService:
+def _build_chat_generation_service(
+    runtime, character_service=None, *, message_db, http_client_pool=None
+) -> ChatGenerationService:
     handler = functools.partial(
         _generate_reply_impl,
         character_service=character_service,
         message_db=message_db,
+        http_client_pool=http_client_pool,
     )
 
     async def validate_request(request, current_user):
@@ -1196,7 +1202,9 @@ def get_request_chat_generation_service(request: Request) -> ChatGenerationServi
                 "message": "Chat database or scheduler is not configured; check application startup",
             },
         )
-    return _build_chat_generation_service(runtime, message_db=container.db)
+    return _build_chat_generation_service(
+        runtime, message_db=container.db, http_client_pool=get_request_http_client_pool(request)
+    )
 
 
 async def generate_reply_core(
@@ -1209,6 +1217,7 @@ async def generate_reply_core(
     invocation_purpose: str = "chat",
     character_service=None,
     message_db,
+    http_client_pool=None,
     delivery_context: dict | None = None,
 ):
     """Generate for a platform caller with its explicitly owned database."""
@@ -1217,6 +1226,7 @@ async def generate_reply_core(
         inference_runtime,
         character_service,
         message_db=message_db,
+        http_client_pool=http_client_pool,
     )
     return await service.generate(
         request,

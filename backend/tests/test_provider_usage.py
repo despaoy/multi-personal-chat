@@ -20,12 +20,13 @@ def payload(prompt=1000, completion=100):
 
 
 def provider(monkeypatch, response):
-    instance = OpenAICompatProvider({"openaiCompatBaseUrl": "https://fixture.invalid", "openaiCompatApiKey": "synthetic-only", "openaiCompatModel": "fixture"})
+    instance = OpenAICompatProvider({'openaiCompatBaseUrl': 'https://fixture.invalid', 'openaiCompatApiKey': 'synthetic-only', 'openaiCompatModel': 'fixture'})
+
     @asynccontextmanager
-    async def acquire(timeout):
+    async def acquire(timeout, **_resource_options):
         async with httpx.AsyncClient(transport=httpx.MockTransport(lambda request: response)) as client:
             yield client
-    monkeypatch.setattr(instance, "_acquire_http_client", acquire)
+    monkeypatch.setattr(instance, '_acquire_http_client', acquire)
     return instance
 
 

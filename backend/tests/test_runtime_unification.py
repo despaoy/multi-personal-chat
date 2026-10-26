@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+from app.runtime import RuntimeContainer
+from infra.concurrency_control import inference_runtime
+
+from infra.resource_pool import HttpClientPool
+
 from services import chat_answer
 
 import asyncio
@@ -46,38 +51,27 @@ async def test_readiness_uses_runtime_container_database(monkeypatch):
     from app import main
     from app.readiness import ReadinessProbe
     from app.runtime import RuntimeContainer, get_runtime_container
-
-    vector_db = ModuleType("knowledge.vector_db")
+    vector_db = ModuleType('knowledge.vector_db')
     vector_db.get_vector_db = lambda: object()
-    monkeypatch.setitem(sys.modules, "knowledge.vector_db", vector_db)
-
+    monkeypatch.setitem(sys.modules, 'knowledge.vector_db', vector_db)
     calls = []
 
     class Database:
+
         def execute_sql(self, query):
             calls.append(query)
-            return [{"ok": 1}]
-
+            return [{'ok': 1}]
     original_container = main.app.state.runtime_container
-    main.app.state.runtime_container = RuntimeContainer(
-        db=Database(),
-        is_pg_mode=lambda: False,
-        startup_env={},
-    )
-    # 替换 readiness_probe 为 model_not_required，避免依赖 create_app() 时的环境变量
+    main.app.state.runtime_container = RuntimeContainer(db=Database(), is_pg_mode=lambda: False, startup_env={}, http_client_pool=HttpClientPool(max_connections=1))
     original_probe = main.app.state.readiness_probe
-    main.app.state.readiness_probe = ReadinessProbe(
-        database_check=lambda: get_runtime_container(main.app).db.execute_sql("SELECT 1"),
-        model_required=False,
-    )
+    main.app.state.readiness_probe = ReadinessProbe(database_check=lambda: get_runtime_container(main.app).db.execute_sql('SELECT 1'), model_required=False)
     try:
         result = await main.readiness_check(SimpleNamespace(app=main.app))
     finally:
         main.app.state.runtime_container = original_container
         main.app.state.readiness_probe = original_probe
-
-    assert result["status"] == "ready"
-    assert calls == ["SELECT 1"]
+    assert result['status'] == 'ready'
+    assert calls == ['SELECT 1']
 
 def test_session_identity_isolates_type_and_deduplicates_adapters(tmp_path):
     from db.database import SQLiteDB
@@ -500,50 +494,32 @@ async def test_duplicate_integration_message_does_not_emit_rate_limit_reply(monk
     from db.database import SQLiteDB
 
     class Request:
+
         async def body(self):
-            return b"{}"
+            return b'{}'
 
     class Runtime:
+
         async def check_rate_limits(self, *args):
-            raise AssertionError("duplicates must be resolved before chat rate limiting")
-
-    db = SQLiteDB(tmp_path / "integration.db")
-    monkeypatch.setenv("ENVIRONMENT", "development")
-    monkeypatch.setenv("ASTRBOT_ENABLED", "true")
-    monkeypatch.setenv("ASTRBOT_INTEGRATION_TOKEN", "test-token")
-    monkeypatch.setenv("INTEGRATION_SIGNATURE_REQUIRED", "false")
+            raise AssertionError('duplicates must be resolved before chat rate limiting')
+    db = SQLiteDB(tmp_path / 'integration.db')
+    monkeypatch.setenv('ENVIRONMENT', 'development')
+    monkeypatch.setenv('ASTRBOT_ENABLED', 'true')
+    monkeypatch.setenv('ASTRBOT_INTEGRATION_TOKEN', 'test-token')
+    monkeypatch.setenv('INTEGRATION_SIGNATURE_REQUIRED', 'false')
     from app.runtime import RuntimeContainer
-
     http_request = Request()
-    http_request.app = SimpleNamespace(state=SimpleNamespace(runtime_container=RuntimeContainer(
-        db=db, is_pg_mode=lambda: False, inference_runtime=Runtime(),
-    )))
-
-    payload = integrations.AstrBotMessageRequest(
-        platform="qq",
-        adapter="napcat",
-        messageId="duplicate-1",
-        conversationId="room",
-        conversationType="private",
-        senderId="sender",
-        text="hello",
-    )
+    http_request.app = SimpleNamespace(state=SimpleNamespace(runtime_container=RuntimeContainer(db=db, is_pg_mode=lambda: False, inference_runtime=Runtime(), http_client_pool=HttpClientPool(max_connections=1))))
+    payload = integrations.AstrBotMessageRequest(platform='qq', adapter='napcat', messageId='duplicate-1', conversationId='room', conversationType='private', senderId='sender', text='hello')
     import hashlib
     import json
-    key = hashlib.sha256(json.dumps([
-        "qq", "napcat", "private", "room", "sender", "duplicate-1",
-    ], ensure_ascii=False).encode()).hexdigest()
-    db.integration_receipt("claim", key=key, owner="owner", now=0, expires_at=1)
-    db.integration_receipt("finish", key=key, owner="owner", status="generated", response="{}")
-    db.integration_receipt("delivery", key=key, owner="owner", status="delivered")
-    response = await integrations.receive_astrbot_message(
-        payload,
-        http_request,
-        x_integration_token="test-token",
-    )
-
+    key = hashlib.sha256(json.dumps(['qq', 'napcat', 'private', 'room', 'sender', 'duplicate-1'], ensure_ascii=False).encode()).hexdigest()
+    db.integration_receipt('claim', key=key, owner='owner', now=0, expires_at=1)
+    db.integration_receipt('finish', key=key, owner='owner', status='generated', response='{}')
+    db.integration_receipt('delivery', key=key, owner='owner', status='delivered')
+    response = await integrations.receive_astrbot_message(payload, http_request, x_integration_token='test-token')
     assert response.shouldReply is False
-    assert response.model == "duplicate"
+    assert response.model == 'duplicate'
 
 @pytest.mark.asyncio
 async def test_enhanced_cache_endpoints_use_async_cache_contract(monkeypatch):
@@ -554,7 +530,7 @@ async def test_enhanced_cache_endpoints_use_async_cache_contract(monkeypatch):
 
         @property
         def stats(self):
-            return {"size": 2}
+            return {'size': 2}
 
         async def invalidate(self, pattern=None):
             self.removed_pattern = pattern
@@ -562,21 +538,19 @@ async def test_enhanced_cache_endpoints_use_async_cache_contract(monkeypatch):
 
     async def no_vllm_stats():
         return None
-
     cache = Cache()
-    monkeypatch.setattr(enhanced, "response_cache", cache)
-    monkeypatch.setattr(enhanced, "_get_vllm_load_balancer_stats", no_vllm_stats)
-    monkeypatch.setattr(enhanced._app_config, "http_client_pool", None)
-    monkeypatch.setattr(enhanced._app_config, "backup_mgr", None)
-    monkeypatch.setattr(enhanced._app_config, "access_control_mgr", None)
-    monkeypatch.setattr(enhanced, "circuit_breaker_registry", None)
-
-    stats = await enhanced.get_enhanced_stats(current_user={})
-    cleared = await enhanced.invalidate_cache("prefix", current_user={})
-
-    assert stats["stats"]["responseCache"] == {"size": 2}
-    assert cleared["removed"] == 2
-    assert cache.removed_pattern == "prefix"
+    monkeypatch.setattr(enhanced, 'response_cache', cache)
+    monkeypatch.setattr(enhanced, '_get_vllm_load_balancer_stats', no_vllm_stats)
+    runtime = RuntimeContainer(db=None, is_pg_mode=lambda: False, inference_runtime=inference_runtime, http_client_pool=HttpClientPool(max_connections=1))
+    runtime.http_client_pool = None
+    runtime.backup_mgr = None
+    runtime.access_control_mgr = None
+    monkeypatch.setattr(enhanced, 'circuit_breaker_registry', None)
+    stats = await enhanced.get_enhanced_stats(current_user={}, runtime=runtime)
+    cleared = await enhanced.invalidate_cache('prefix', current_user={})
+    assert stats['stats']['responseCache'] == {'size': 2}
+    assert cleared['removed'] == 2
+    assert cache.removed_pattern == 'prefix'
 @pytest.mark.asyncio
 async def test_close_resource_offloads_synchronous_cleanup():
     import threading
@@ -801,7 +775,10 @@ async def test_enhanced_status_does_not_advertise_retired_failover(monkeypatch):
         return None
 
     monkeypatch.setattr(enhanced, '_get_vllm_load_balancer_stats', no_vllm_stats)
+    from app.runtime import RuntimeContainer
+    from infra.concurrency_control import inference_runtime
     app = FastAPI()
+    app.state.runtime_container = RuntimeContainer(db=None, is_pg_mode=lambda: False, inference_runtime=inference_runtime)
     app.include_router(enhanced.router)
     app.dependency_overrides[get_current_admin] = lambda: {'role': 'admin'}
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://test') as client:

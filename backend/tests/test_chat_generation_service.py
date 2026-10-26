@@ -165,27 +165,16 @@ async def test_generate_queued_owns_admission_control_and_session_identity(curre
 @pytest.mark.asyncio
 async def test_generate_reply_core_keeps_compatibility_entry_point(monkeypatch):
     from api import generate
-
-    expected = GenerateResponse(reply="compat", model="fake", costTime=0.0)
+    expected = GenerateResponse(reply='compat', model='fake', costTime=0.0)
 
     class _FakeService:
+
         async def generate(self, request, current_user, **kwargs):
-            assert request.message == "hello"
-            assert current_user == {"username": "integration"}
+            assert request.message == 'hello'
+            assert current_user == {'username': 'integration'}
             return expected
-
-    monkeypatch.setattr(
-        generate,
-        "_build_chat_generation_service",
-        lambda _runtime, _character=None, *, message_db: _FakeService(),
-    )
-
-    actual = await generate.generate_reply_core(
-        MessageRequest(message="hello"),
-        {"username": "integration"},
-        message_db=object(),
-    )
-
+    monkeypatch.setattr(generate, '_build_chat_generation_service', lambda _runtime, _character=None, *, message_db, **_resource_options: _FakeService())
+    actual = await generate.generate_reply_core(MessageRequest(message='hello'), {'username': 'integration'}, message_db=object())
     assert actual is expected
 
 

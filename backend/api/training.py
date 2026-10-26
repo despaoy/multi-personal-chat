@@ -12,7 +12,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import FileResponse
-from app.dependencies import get_current_admin, get_request_database
+from app.dependencies import get_current_admin, get_request_database, get_request_http_client_pool
 from infra.db_executor import run_db
 from infra.environment import read_positive_float, read_positive_int
 from inference.openai_protocol import ProviderResponseError
@@ -558,7 +558,7 @@ async def list_predefined_styles(current_user: dict = Depends(get_current_admin)
 
 @router.post("/api/training/generate-dialogues")
 async def generate_dialogues(request: DialogueGenerateRequest, current_user: dict = Depends(get_current_admin),
-                             database=Depends(get_request_database)):
+                             database=Depends(get_request_database), http_client_pool=Depends(get_request_http_client_pool)):
     """基于角色描述生成LoRA训练对话数据
 
     s2 fix: 消耗 LLM token/GPU 资源，限定 admin。
@@ -584,7 +584,7 @@ async def generate_dialogues(request: DialogueGenerateRequest, current_user: dic
             "started_at": time.time(),
         })
 
-        task = asyncio.create_task(_run_dialogue_generation(request, database, batch_plan), name="dialogue-generation")
+        task = asyncio.create_task(_run_dialogue_generation(request, database, batch_plan, http_client_pool=http_client_pool), name="dialogue-generation")
         _dialogue_generation_task = task
 
     try:
@@ -626,14 +626,14 @@ def _dialogue_error_detail(detail, dialogues, cost):
     }
 
 
-async def _run_dialogue_generation(request, database, batch_plan):
+async def _run_dialogue_generation(request, database, batch_plan, *, http_client_pool=None):
     all_validated = []
     total_cost = 0.0
     try:
         from inference.model_manager import get_model_manager
-        from inference.request_context import resolve_request_context
+        from inference.request_context import resolve_request_context, use_request_context
 
-        context = await resolve_request_context(get_model_manager(database=database))
+        context = await resolve_request_context(get_model_manager(database=database), http_client_pool=http_client_pool)
         provider = context.provider
         if context.provider_name == "mock":
             raise HTTPException(status_code=400, detail="当前模型提供商为 mock 模式，无法调用大模型生成对话。请在设置中配置有效的模型提供商（如 DeepSeek API）。")
@@ -659,11 +659,12 @@ async def _run_dialogue_generation(request, database, batch_plan):
             }):
                 if context.provider_name != "openai_compat":
                     begin_completion()
-                result, cost = await provider.async_generate(
-                    prompt=system_prompt,
-                    session_history=[],
-                    max_tokens_override=batch.max_tokens
-                )
+                with use_request_context(context):
+                    result, cost = await provider.async_generate(
+                        prompt=system_prompt,
+                        session_history=[],
+                        max_tokens_override=batch.max_tokens
+                    )
                 total_cost += cost
 
                 try:

@@ -109,7 +109,7 @@ async def test_native_answer_uses_complete_content_and_provider_specific_thinkin
     client = httpx.AsyncClient(transport=httpx.MockTransport(respond))
 
     @asynccontextmanager
-    async def acquire(timeout):
+    async def acquire(timeout, **_resource_options):
         yield client
     monkeypatch.setattr(provider, '_acquire_http_client', acquire)
     history = [{'role': 'system', 'content': '完整人物上下文'}, {'role': 'user', 'content': '我叫岚舟，老家宣城，现住丽水，专业环境工程。'}]

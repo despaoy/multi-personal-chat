@@ -27,64 +27,42 @@ ANSWER = "测试控制回复：周二09:00开门、17:00闭馆，暴雨暂停开
 
 @pytest.fixture
 def stores(tmp_path, monkeypatch):
-    monkeypatch.setenv("MODEL_PROVIDER", "openai_compat")
-    monkeypatch.setenv("MODEL_STORAGE_PATH", str(tmp_path / "models"))
+    monkeypatch.setenv('MODEL_PROVIDER', 'openai_compat')
+    monkeypatch.setenv('MODEL_STORAGE_PATH', str(tmp_path / 'models'))
     invalidate_config_cache()
-    databases = [SQLiteDB(tmp_path / f"application-{index}.sqlite") for index in range(2)]
+    databases = [SQLiteDB(tmp_path / f'application-{index}.sqlite') for index in range(2)]
     for index, database in enumerate(databases):
-        database.add_user("synthetic-owner", "unused-hash-for-signed-token")
-        database.update_config(
-            {
-                "modelProvider": "openai_compat",
-                "openaiCompatBaseUrl": f"https://owner-{index}.invalid/v1",
-                "openaiCompatApiKey": f"synthetic-owner-{index}-credential",
-                "openaiCompatModel": f"fixture-model-{index}",
-                "temperature": 0.2 + index * 0.5,
-                "maxTokens": 128,
-                "topP": 1.0,
-                "useKnowledgeBase": False,
-            }
-        )
-    forbidden = Mock(side_effect=AssertionError("Application settings must not use the default database"))
-    monkeypatch.setattr(default_database, "_get_connection", forbidden)
+        database.add_user('synthetic-owner', 'unused-hash-for-signed-token')
+        database.update_config({'modelProvider': 'openai_compat', 'openaiCompatBaseUrl': f'https://owner-{index}.invalid/v1', 'openaiCompatApiKey': f'synthetic-owner-{index}-credential', 'openaiCompatModel': f'fixture-model-{index}', 'temperature': 0.2 + index * 0.5, 'maxTokens': 128, 'topP': 1.0, 'useKnowledgeBase': False})
+    forbidden = Mock(side_effect=AssertionError('Application settings must not use the default database'))
+    monkeypatch.setattr(default_database, '_get_connection', forbidden)
     calls = []
 
     def respond(request):
-        calls.append((request.url.host, request.headers["authorization"], json.loads(request.content)))
-        return httpx.Response(
-            200,
-            json={
-                "choices": [{"message": {"content": ANSWER}, "finish_reason": "stop"}],
-                "usage": {"prompt_tokens": 40, "completion_tokens": 20, "total_tokens": 60},
-            },
-        )
+        calls.append((request.url.host, request.headers['authorization'], json.loads(request.content)))
+        return httpx.Response(200, json={'choices': [{'message': {'content': ANSWER}, 'finish_reason': 'stop'}], 'usage': {'prompt_tokens': 40, 'completion_tokens': 20, 'total_tokens': 60}})
 
     @asynccontextmanager
-    async def client(self, timeout=120.0):
+    async def client(self, timeout=120.0, **_resource_options):
         async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as connection:
             yield connection
-
-    monkeypatch.setattr(model_manager.BaseProvider, "_acquire_http_client", client)
+    monkeypatch.setattr(model_manager.BaseProvider, '_acquire_http_client', client)
     try:
         yield SimpleNamespace(databases=databases, forbidden=forbidden, calls=calls)
     finally:
         for database in databases:
-            owner = getattr(database, "_model_manager", None)
+            owner = getattr(database, '_model_manager', None)
             if owner is not None:
                 owner.shutdown()
             database.close_connection()
         invalidate_config_cache()
 
 
-def client(database):
+def client(database, **_resource_options):
     app = FastAPI()
     app.state.runtime_container = RuntimeContainer(db=database, is_pg_mode=lambda: False, startup_env={})
     app.include_router(config.router)
-    return httpx.AsyncClient(
-        transport=httpx.ASGITransport(app=app, raise_app_exceptions=False),
-        base_url="https://isolated",
-        headers={"Authorization": "Bearer " + create_access_token("synthetic-owner", 1, "admin")},
-    )
+    return httpx.AsyncClient(transport=httpx.ASGITransport(app=app, raise_app_exceptions=False), base_url='https://isolated', headers={'Authorization': 'Bearer ' + create_access_token('synthetic-owner', 1, 'admin')})
 
 
 async def test_authenticated_settings_and_model_status_follow_the_application_database(stores):

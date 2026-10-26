@@ -73,7 +73,7 @@ def owned(monkeypatch):
         return httpx.Response(200, json={'usage': {'prompt_tokens': 100, 'completion_tokens': 20, 'total_tokens': 120}, 'choices': [{'finish_reason': 'stop', 'message': {'content': ANSWER}}]})
 
     @asynccontextmanager
-    async def acquire(_self, timeout):
+    async def acquire(_self, timeout, **_resource_options):
         async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
             yield client
     monkeypatch.setattr(model_manager.OpenAICompatProvider, '_acquire_http_client', acquire)

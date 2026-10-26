@@ -1,4 +1,5 @@
 """FastAPI 依赖注入"""
+
 import os
 
 from fastapi import Request, HTTPException
@@ -8,6 +9,17 @@ from app.runtime import get_runtime_container
 from infra.auth_work import run_auth_database
 from infra.bounded_executor import BlockingWorkRejected, BlockingWorkTimeout
 from infra.observability import increment
+
+
+def get_request_runtime(request: Request):
+    return get_runtime_container(request.app)
+
+
+def get_request_http_client_pool(request: Request):
+    pool = get_request_runtime(request).http_client_pool
+    if pool is None:
+        raise HTTPException(503, "应用 HTTP 连接池未初始化，请检查服务启动状态")
+    return pool
 
 
 def get_request_database(request: Request):
@@ -40,6 +52,7 @@ async def get_current_user(request: Request) -> dict:
 
     # 检查 Token 是否已被注销
     from infra.token_revocation import is_token_revoked
+
     if is_token_revoked(payload.get("jti", "")):
         raise HTTPException(status_code=401, detail="Token 已注销，请重新登录")
 

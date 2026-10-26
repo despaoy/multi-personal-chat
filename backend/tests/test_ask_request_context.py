@@ -93,7 +93,7 @@ async def ask_rig(tmp_path, monkeypatch):
     transport = httpx.MockTransport(respond)
 
     @asynccontextmanager
-    async def acquire(_provider, timeout):
+    async def acquire(_provider, timeout, **_resource_options):
         async with httpx.AsyncClient(transport=transport, timeout=timeout) as client:
             yield client
     monkeypatch.setattr(model_manager.OpenAICompatProvider, '_acquire_http_client', acquire)
@@ -124,101 +124,93 @@ async def ask_rig(tmp_path, monkeypatch):
 
 async def test_answer_configuration_change_during_retrieval_uses_one_snapshot_and_next_request_refreshes(ask_rig):
     rig = ask_rig
-    rig.after_retrieve = lambda: rig.set_config(openaiCompatModel="deepseek-v4-pro")
-    first = await ask.ask(request(), current_user=USER, database=rig.database)
-    assert first.model == "openai_compat/deepseek-flash" and first.answer == ANSWER
-    assert first.modelInvoked and not first.cacheHit and len(first.citations) == 1
-    assert rig.calls[0]["body"]["model"] == "deepseek-flash"
-    assert rig.retrieval_contexts[0].provider.model == "deepseek-flash"
+    rig.after_retrieve = lambda: rig.set_config(openaiCompatModel='deepseek-v4-pro')
+    first = await ask.ask(request(), current_user=USER, database=rig.database, http_client_pool=None)
+    assert first.model == 'openai_compat/deepseek-flash' and first.answer == ANSWER
+    assert first.modelInvoked and (not first.cacheHit) and (len(first.citations) == 1)
+    assert rig.calls[0]['body']['model'] == 'deepseek-flash'
+    assert rig.retrieval_contexts[0].provider.model == 'deepseek-flash'
     assert get_request_context() is None
-
-    second = await ask.ask(request(), current_user=USER, database=rig.database)
-    assert second.model == "openai_compat/deepseek-v4-pro" and second.answer == ANSWER
-    assert second.modelInvoked and not second.cacheHit
-    assert rig.calls[1]["body"]["model"] == "deepseek-v4-pro"
-    assert rig.retrieval_contexts[1].provider.model == "deepseek-v4-pro"
-    rig.set_config(openaiCompatModel="deepseek-flash")
-    cached = await ask.ask(request(), current_user=USER, database=rig.database)
-    assert cached.cacheHit and not cached.modelInvoked and cached.answer == first.answer
-    assert cached.model == first.model and len(rig.calls) == 2 and rig.retrievals == 2
+    second = await ask.ask(request(), current_user=USER, database=rig.database, http_client_pool=None)
+    assert second.model == 'openai_compat/deepseek-v4-pro' and second.answer == ANSWER
+    assert second.modelInvoked and (not second.cacheHit)
+    assert rig.calls[1]['body']['model'] == 'deepseek-v4-pro'
+    assert rig.retrieval_contexts[1].provider.model == 'deepseek-v4-pro'
+    rig.set_config(openaiCompatModel='deepseek-flash')
+    cached = await ask.ask(request(), current_user=USER, database=rig.database, http_client_pool=None)
+    assert cached.cacheHit and (not cached.modelInvoked) and (cached.answer == first.answer)
+    assert cached.model == first.model and len(rig.calls) == 2 and (rig.retrievals == 2)
     assert rig.snapshots.call_count == 3 and get_request_context() is None
-    assert rig.database.get_knowledge_document(int(rig.document_id))["content"] == SOURCE
+    assert rig.database.get_knowledge_document(int(rig.document_id))['content'] == SOURCE
 
 
 async def test_same_model_endpoint_or_credential_change_does_not_reuse_another_source_cache(ask_rig):
     rig = ask_rig
-    first = await ask.ask(request(), current_user=USER, database=rig.database)
-    rig.set_config(openaiCompatBaseUrl="https://alternate.invalid/v1")
-    second = await ask.ask(request(), current_user=USER, database=rig.database)
-    rig.set_config(openaiCompatApiKey="synthetic-second-key")
-    third = await ask.ask(request(), current_user=USER, database=rig.database)
-    assert first.model == second.model == third.model == "openai_compat/deepseek-flash"
-    assert all(result.modelInvoked and not result.cacheHit for result in (first, second, third))
+    first = await ask.ask(request(), current_user=USER, database=rig.database, http_client_pool=None)
+    rig.set_config(openaiCompatBaseUrl='https://alternate.invalid/v1')
+    second = await ask.ask(request(), current_user=USER, database=rig.database, http_client_pool=None)
+    rig.set_config(openaiCompatApiKey='synthetic-second-key')
+    third = await ask.ask(request(), current_user=USER, database=rig.database, http_client_pool=None)
+    assert first.model == second.model == third.model == 'openai_compat/deepseek-flash'
+    assert all((result.modelInvoked and (not result.cacheHit) for result in (first, second, third)))
     assert len(rig.calls) == 3
-    assert [row["endpoint"] for row in rig.calls] == [
-        "https://api.deepseek.com/v1/chat/completions",
-        "https://alternate.invalid/v1/chat/completions",
-        "https://alternate.invalid/v1/chat/completions",
-    ]
-    assert [row["auth"] for row in rig.calls] == [
-        "Bearer synthetic-first-key", "Bearer synthetic-first-key", "Bearer synthetic-second-key",
-    ]
-    assert "synthetic-" not in first.model + second.model + third.model
+    assert [row['endpoint'] for row in rig.calls] == ['https://api.deepseek.com/v1/chat/completions', 'https://alternate.invalid/v1/chat/completions', 'https://alternate.invalid/v1/chat/completions']
+    assert [row['auth'] for row in rig.calls] == ['Bearer synthetic-first-key', 'Bearer synthetic-first-key', 'Bearer synthetic-second-key']
+    assert 'synthetic-' not in first.model + second.model + third.model
     assert get_request_context() is None
 
 
 async def test_sse_real_iterator_owns_scope_through_retrieval_generation_and_done(ask_rig):
     rig = ask_rig
-    rig.after_retrieve = lambda: rig.set_config(openaiCompatModel="deepseek-v4-pro")
-    response = await ask.ask_stream(request(), rig.http_request, current_user=USER, database=rig.database)
-    # Returning StreamingResponse cannot leave a binding in the endpoint caller.
-    assert get_request_context() is None and not rig.calls
+    rig.after_retrieve = lambda: rig.set_config(openaiCompatModel='deepseek-v4-pro')
+    response = await ask.ask_stream(request(), rig.http_request, current_user=USER, database=rig.database, http_client_pool=None)
+    assert get_request_context() is None and (not rig.calls)
     events = [decode_event(chunk) async for chunk in response.body_iterator]
-    assert [event["type"] for event in events] == ["meta", "delta", "citations", "done"]
-    assert events[1]["text"] == ANSWER
-    assert events[-1]["model_id"] == "openai_compat/deepseek-flash"
-    assert events[-1]["model_invoked"] is True and events[-1]["abstained"] is False
-    assert len(events[2]["citations"]) == 1
-    assert rig.calls[0]["body"]["model"] == "deepseek-flash"
-    assert rig.retrieval_contexts[0].provider.model == "deepseek-flash"
+    assert [event['type'] for event in events] == ['meta', 'delta', 'citations', 'done']
+    assert events[1]['text'] == ANSWER
+    assert events[-1]['model_id'] == 'openai_compat/deepseek-flash'
+    assert events[-1]['model_invoked'] is True and events[-1]['abstained'] is False
+    assert len(events[2]['citations']) == 1
+    assert rig.calls[0]['body']['model'] == 'deepseek-flash'
+    assert rig.retrieval_contexts[0].provider.model == 'deepseek-flash'
     assert rig.snapshots.call_count == 1 and get_request_context() is None
 
 
 async def test_closing_sse_after_meta_restores_scope_without_starting_generation(ask_rig):
     rig = ask_rig
-    response = await ask.ask_stream(request(), rig.http_request, current_user=USER, database=rig.database)
+    response = await ask.ask_stream(request(), rig.http_request, current_user=USER, database=rig.database, http_client_pool=None)
     iterator = response.body_iterator
     try:
-        assert decode_event(await anext(iterator))["type"] == "meta"
+        assert decode_event(await anext(iterator))['type'] == 'meta'
     finally:
         await iterator.aclose()
     assert rig.retrieval_contexts[0] is not None
-    assert not rig.calls and rig.service.cache.stats()["entries"] == 0
+    assert not rig.calls and rig.service.cache.stats()['entries'] == 0
     assert get_request_context() is None
 
 
-@pytest.mark.parametrize("timeout", [False, True], ids=["provider-error", "bounded-timeout"])
+@pytest.mark.parametrize('timeout', [False, True], ids=['provider-error', 'bounded-timeout'])
 async def test_nonstream_failure_preserves_original_failure_and_clears_scope_without_cache(ask_rig, timeout):
     rig = ask_rig
-    failure = OSError("synthetic-private-provider-detail")
+    failure = OSError('synthetic-private-provider-detail')
     rig.hold = timeout
     rig.failure = None if timeout else failure
-    rig.service.generation_timeout = .01 if timeout else 10
+    rig.service.generation_timeout = 0.01 if timeout else 10
     with pytest.raises(TimeoutError if timeout else OSError) as error:
-        await ask.ask(request(), current_user=USER, database=rig.database)
+        await ask.ask(request(), current_user=USER, database=rig.database, http_client_pool=None)
     if timeout:
         assert rig.transport_cancelled.is_set()
     else:
         assert error.value is failure
-    assert len(rig.calls) == 1 and rig.service.cache.stats()["entries"] == 0
+    assert len(rig.calls) == 1 and rig.service.cache.stats()['entries'] == 0
     assert get_request_context() is None
 
 
 async def test_external_sse_cancellation_cancels_actual_transport_and_clears_consuming_task_scope(ask_rig):
     rig = ask_rig
     rig.hold = True
-    response = await ask.ask_stream(request(), rig.http_request, current_user=USER, database=rig.database)
-    events, cleaned = [], []
+    response = await ask.ask_stream(request(), rig.http_request, current_user=USER, database=rig.database, http_client_pool=None)
+    events, cleaned = ([], [])
 
     async def consume():
         try:
@@ -226,7 +218,6 @@ async def test_external_sse_cancellation_cancels_actual_transport_and_clears_con
                 events.append(decode_event(chunk))
         finally:
             cleaned.append(get_request_context())
-
     task = asyncio.create_task(consume())
     try:
         await asyncio.wait_for(rig.entered.wait(), 2)
@@ -239,15 +230,15 @@ async def test_external_sse_cancellation_cancels_actual_transport_and_clears_con
             task.cancel()
         await asyncio.gather(task, return_exceptions=True)
     assert rig.transport_cancelled.is_set() and len(rig.calls) == 1
-    assert [event["type"] for event in events] == ["meta"]
+    assert [event['type'] for event in events] == ['meta']
     assert cleaned == [None] and get_request_context() is None
-    assert rig.service.cache.stats()["entries"] == 0
+    assert rig.service.cache.stats()['entries'] == 0
 
 
 async def test_simultaneous_ask_requests_keep_distinct_snapshots_and_reset_their_own_tasks(ask_rig, monkeypatch):
     rig = ask_rig
     original = rig.service._retrieve
-    entered = {model: asyncio.Event() for model in ("deepseek-flash", "deepseek-v4-pro")}
+    entered = {model: asyncio.Event() for model in ('deepseek-flash', 'deepseek-v4-pro')}
     release = asyncio.Event()
     cleaned = []
 
@@ -259,26 +250,23 @@ async def test_simultaneous_ask_requests_keep_distinct_snapshots_and_reset_their
 
     async def invoke():
         try:
-            return await ask.ask(request(), current_user=USER, database=rig.database)
+            return await ask.ask(request(), current_user=USER, database=rig.database, http_client_pool=None)
         finally:
             cleaned.append(get_request_context())
-
-    monkeypatch.setattr(rig.service, "_retrieve", pause_retrieval)
+    monkeypatch.setattr(rig.service, '_retrieve', pause_retrieval)
     first = asyncio.create_task(invoke())
     second = None
     try:
-        await asyncio.wait_for(entered["deepseek-flash"].wait(), 2)
-        rig.set_config(openaiCompatModel="deepseek-v4-pro")
+        await asyncio.wait_for(entered['deepseek-flash'].wait(), 2)
+        rig.set_config(openaiCompatModel='deepseek-v4-pro')
         second = asyncio.create_task(invoke())
-        await asyncio.wait_for(entered["deepseek-v4-pro"].wait(), 2)
+        await asyncio.wait_for(entered['deepseek-v4-pro'].wait(), 2)
     finally:
         release.set()
         results = await asyncio.gather(first, *([second] if second is not None else []))
-    assert [result.model for result in results] == [
-        "openai_compat/deepseek-flash", "openai_compat/deepseek-v4-pro",
-    ]
-    assert all(result.answer == ANSWER and result.modelInvoked for result in results)
-    assert {row["body"]["model"] for row in rig.calls} == {"deepseek-flash", "deepseek-v4-pro"}
+    assert [result.model for result in results] == ['openai_compat/deepseek-flash', 'openai_compat/deepseek-v4-pro']
+    assert all((result.answer == ANSWER and result.modelInvoked for result in results))
+    assert {row['body']['model'] for row in rig.calls} == {'deepseek-flash', 'deepseek-v4-pro'}
     assert len(rig.calls) == 2 and rig.snapshots.call_count == 2
     assert len(rig.retrieval_contexts) == 2
     assert rig.retrieval_contexts[0] is not rig.retrieval_contexts[1]
@@ -287,26 +275,24 @@ async def test_simultaneous_ask_requests_keep_distinct_snapshots_and_reset_their
 
 async def test_provider_type_change_keeps_current_owner_and_blocks_new_unsupported_request(ask_rig):
     rig = ask_rig
-    rig.manager._providers[model_manager.ModelProvider.OLLAMA] = SimpleNamespace(
-        name="ollama", get_status=lambda: {"modelName": "synthetic-ollama"},
-    )
-    rig.after_retrieve = lambda: setattr(rig.manager, "_current_provider", model_manager.ModelProvider.OLLAMA)
+    rig.manager._providers[model_manager.ModelProvider.OLLAMA] = SimpleNamespace(name='ollama', get_status=lambda: {'modelName': 'synthetic-ollama'})
+    rig.after_retrieve = lambda: setattr(rig.manager, '_current_provider', model_manager.ModelProvider.OLLAMA)
     try:
-        first = await ask.ask(request(), current_user=USER, database=rig.database)
-        assert first.answer == ANSWER and first.model == "openai_compat/deepseek-flash"
-        assert first.modelInvoked and not first.cacheHit and len(rig.calls) == 1
-        assert rig.calls[0]["body"]["model"] == "deepseek-flash"
-        assert rig.retrieval_contexts[0].provider_name == "openai_compat"
+        first = await ask.ask(request(), current_user=USER, database=rig.database, http_client_pool=None)
+        assert first.answer == ANSWER and first.model == 'openai_compat/deepseek-flash'
+        assert first.modelInvoked and (not first.cacheHit) and (len(rig.calls) == 1)
+        assert rig.calls[0]['body']['model'] == 'deepseek-flash'
+        assert rig.retrieval_contexts[0].provider_name == 'openai_compat'
         assert get_request_context() is None
-        with pytest.raises(ValueError, match="Knowledge answers require"):
-            await ask.ask(request(), current_user=USER, database=rig.database)
+        with pytest.raises(ValueError, match='Knowledge answers require'):
+            await ask.ask(request(), current_user=USER, database=rig.database, http_client_pool=None)
         assert len(rig.calls) == 1 and rig.retrievals == 2
-        assert rig.retrieval_contexts[1].provider_name == "ollama"
+        assert rig.retrieval_contexts[1].provider_name == 'ollama'
         assert get_request_context() is None
     finally:
         rig.manager._current_provider = model_manager.ModelProvider.OPENAI_COMPAT
-    cached = await ask.ask(request(), current_user=USER, database=rig.database)
-    assert cached.answer == ANSWER and not cached.modelInvoked and cached.cacheHit
-    assert cached.model == "openai_compat/deepseek-flash"
+    cached = await ask.ask(request(), current_user=USER, database=rig.database, http_client_pool=None)
+    assert cached.answer == ANSWER and (not cached.modelInvoked) and cached.cacheHit
+    assert cached.model == 'openai_compat/deepseek-flash'
     assert len(rig.calls) == 1 and rig.snapshots.call_count == 2
     assert get_request_context() is None

@@ -6,6 +6,8 @@ ASGI routes, request context and answer cache remain active. No live HTTP or
 paid model is used.
 """
 
+from infra.resource_pool import HttpClientPool
+
 import json
 import logging
 from contextlib import asynccontextmanager, contextmanager
@@ -41,43 +43,35 @@ FAILURES = [
 async def provider_api(ask_rig, monkeypatch):
     rig = ask_rig
     rig.set_config(openaiCompatApiKey=PRIVATE_KEY)
-    state = SimpleNamespace(
-        status=200, failure=None, contexts=[], scope_exits=[], clients_closed=[], rig=rig,
-    )
-    forbidden_fallback = AsyncMock(side_effect=AssertionError("Provider rejection cannot switch models"))
-    monkeypatch.setattr(generate, "get_vllm_client", forbidden_fallback)
-    monkeypatch.setattr(rig.manager, "async_generate", forbidden_fallback)
+    state = SimpleNamespace(status=200, failure=None, contexts=[], scope_exits=[], clients_closed=[], rig=rig)
+    forbidden_fallback = AsyncMock(side_effect=AssertionError('Provider rejection cannot switch models'))
+    monkeypatch.setattr(generate, 'get_vllm_client', forbidden_fallback)
+    monkeypatch.setattr(rig.manager, 'async_generate', forbidden_fallback)
     state.forbidden_fallback = forbidden_fallback
 
     async def respond(http_request):
         wire = json.loads(http_request.content)
-        rig.calls.append(dict(body=wire, endpoint=str(http_request.url), auth=http_request.headers["Authorization"]))
+        rig.calls.append(dict(body=wire, endpoint=str(http_request.url), auth=http_request.headers['Authorization']))
         state.contexts.append(get_request_context())
-        assert SOURCE in str(wire["messages"])
-        assert wire["temperature"] == .2 and wire["max_tokens"] == 128 and wire["top_p"] == 1.0
-        assert http_request.headers["Authorization"] == "Bearer " + PRIVATE_KEY
+        assert SOURCE in str(wire['messages'])
+        assert wire['temperature'] == 0.2 and wire['max_tokens'] == 128 and (wire['top_p'] == 1.0)
+        assert http_request.headers['Authorization'] == 'Bearer ' + PRIVATE_KEY
         if state.failure is not None:
             raise state.failure
         if state.status != 200:
-            return httpx.Response(state.status, json={"error": {
-                "message": PRIVATE_DETAIL + " " + PRIVATE_KEY + " " + PRIVATE_URL,
-            }})
-        return httpx.Response(200, json={"usage": {"prompt_tokens": 100, "completion_tokens": 20, "total_tokens": 120}, "choices": [{
-            "finish_reason": "stop", "message": {"role": "assistant", "content": ANSWER + "[S1]"},
-        }]})
-
+            return httpx.Response(state.status, json={'error': {'message': PRIVATE_DETAIL + ' ' + PRIVATE_KEY + ' ' + PRIVATE_URL}})
+        return httpx.Response(200, json={'usage': {'prompt_tokens': 100, 'completion_tokens': 20, 'total_tokens': 120}, 'choices': [{'finish_reason': 'stop', 'message': {'role': 'assistant', 'content': ANSWER + '[S1]'}}]})
     transport = httpx.MockTransport(respond)
 
     @asynccontextmanager
-    async def acquire(_provider, timeout):
+    async def acquire(_provider, timeout, **_resource_options):
         client = httpx.AsyncClient(transport=transport, timeout=timeout)
         try:
             async with client:
                 yield client
         finally:
             state.clients_closed.append(client.is_closed)
-
-    monkeypatch.setattr(model_manager.OpenAICompatProvider, "_acquire_http_client", acquire)
+    monkeypatch.setattr(model_manager.OpenAICompatProvider, '_acquire_http_client', acquire)
     actual_scope = ask.use_request_context
 
     @contextmanager
@@ -86,20 +80,12 @@ async def provider_api(ask_rig, monkeypatch):
             with actual_scope(context):
                 yield context
         finally:
-            # Runs in the actual endpoint/stream consumer task after reset,
-            # rather than inspecting only the unrelated ASGI caller's context.
             state.scope_exits.append(get_request_context())
-
-    monkeypatch.setattr(ask, "use_request_context", observe_scope)
-    app = create_app(RuntimeContainer(
-        db=rig.database, is_pg_mode=lambda: False, inference_runtime=None,
-        startup_env={"SECURITY_MIDDLEWARE_ENABLED": "false", "MODEL_PROVIDER": "openai_compat", "VLLM_ENABLED": "false"},
-    ))
+    monkeypatch.setattr(ask, 'use_request_context', observe_scope)
+    app = create_app(RuntimeContainer(db=rig.database, is_pg_mode=lambda: False, inference_runtime=None, startup_env={'SECURITY_MIDDLEWARE_ENABLED': 'false', 'MODEL_PROVIDER': 'openai_compat', 'VLLM_ENABLED': 'false'}, http_client_pool=HttpClientPool(max_connections=1)))
     app.dependency_overrides[ask.get_current_user] = lambda: USER
     try:
-        async with httpx.AsyncClient(
-            transport=httpx.ASGITransport(app=app, raise_app_exceptions=False), base_url="http://fiction-provider-api",
-        ) as client:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app, raise_app_exceptions=False), base_url='http://fiction-provider-api') as client:
             yield SimpleNamespace(client=client, state=state)
     finally:
         await app.state.readiness_probe.shutdown()

@@ -1,5 +1,7 @@
 """Independent operation accounting with real adapters, stores and source evidence."""
 
+from infra.resource_pool import HttpClientPool
+
 import asyncio
 import importlib.util
 import json
@@ -57,10 +59,10 @@ async def test_operation_totals_and_failures_are_preserved_on_both_databases(sou
 
 async def test_ask_records_actual_completion_once_and_cache_hit_does_not_add_usage(ask_rig):
     rig = ask_rig
-    first = await ask.ask(request(), current_user=USER, database=rig.database)
-    cached = await ask.ask(request(), current_user=USER, database=rig.database)
+    first = await ask.ask(request(), current_user=USER, database=rig.database, http_client_pool=None)
+    cached = await ask.ask(request(), current_user=USER, database=rig.database, http_client_pool=None)
     assert first.answer == cached.answer == ANSWER
-    assert first.modelInvoked and cached.cacheHit and not cached.modelInvoked
+    assert first.modelInvoked and cached.cacheHit and (not cached.modelInvoked)
     rows = rig.database.execute_sql('SELECT * FROM model_invocations')
     assert len(rows) == 1 and len(rig.calls) == 1
     assert rows[0]['totalTokens'] == 120 and rows[0]['usageSource'] == 'provider'
@@ -71,7 +73,7 @@ async def test_ask_records_actual_completion_once_and_cache_hit_does_not_add_usa
 async def test_actual_fastapi_dependency_selects_the_application_database(ask_rig):
     rig = ask_rig
     application = FastAPI()
-    application.state.runtime_container = RuntimeContainer(db=rig.database, is_pg_mode=lambda: False)
+    application.state.runtime_container = RuntimeContainer(db=rig.database, is_pg_mode=lambda: False, http_client_pool=HttpClientPool(max_connections=1))
     application.include_router(ask.router)
     application.dependency_overrides[get_current_user] = lambda: USER
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=application), base_url='http://isolated.test') as client:
@@ -83,7 +85,7 @@ async def test_actual_fastapi_dependency_selects_the_application_database(ask_ri
 
 async def test_stream_is_recorded_before_the_done_receipt_is_emitted(ask_rig):
     rig = ask_rig
-    response = await ask.ask_stream(request(), rig.http_request, current_user=USER, database=rig.database)
+    response = await ask.ask_stream(request(), rig.http_request, current_user=USER, database=rig.database, http_client_pool=None)
     events = []
     async for chunk in response.body_iterator:
         event = decode_event(chunk)
@@ -91,7 +93,7 @@ async def test_stream_is_recorded_before_the_done_receipt_is_emitted(ask_rig):
         if event['type'] == 'done':
             rows = rig.database.execute_sql('SELECT * FROM model_invocations')
             assert len(rows) == 1 and rows[0]['totalTokens'] == 120
-    assert events[-1]['type'] == 'done' and all(event['type'] != 'error' for event in events)
+    assert events[-1]['type'] == 'done' and all((event['type'] != 'error' for event in events))
 
 
 @pytest.mark.parametrize('streaming', [False, True])
@@ -100,14 +102,14 @@ async def test_record_failure_cannot_return_an_overall_success(ask_rig, monkeypa
     write = Mock(side_effect=OSError('synthetic-private-record-path'))
     monkeypatch.setattr(rig.database, 'add_model_invocation', write)
     if streaming:
-        response = await ask.ask_stream(request(), rig.http_request, current_user=USER, database=rig.database)
+        response = await ask.ask_stream(request(), rig.http_request, current_user=USER, database=rig.database, http_client_pool=None)
         events = [decode_event(chunk) async for chunk in response.body_iterator]
         assert events[-1]['type'] == 'error' and events[-1]['kind'] == 'usage_record_failed'
-        assert all(event['type'] != 'done' for event in events)
+        assert all((event['type'] != 'done' for event in events))
         assert 'synthetic-private' not in str(events)
     else:
         with pytest.raises(UsageRecordingError) as caught:
-            await ask.ask(request(), current_user=USER, database=rig.database)
+            await ask.ask(request(), current_user=USER, database=rig.database, http_client_pool=None)
         response = await global_exception_handler(None, caught.value)
         assert response.status_code == 503
         assert json.loads(response.body)['kind'] == 'usage_record_failed'
@@ -123,7 +125,7 @@ async def test_cancelled_ask_accounts_unknown_usage_and_still_cancels(ask_rig, m
     rig.hold = True
     if write_failure:
         monkeypatch.setattr(rig.database, 'add_model_invocation', Mock(side_effect=OSError('synthetic write failure')))
-    task = asyncio.create_task(ask.ask(request(), current_user=USER, database=rig.database))
+    task = asyncio.create_task(ask.ask(request(), current_user=USER, database=rig.database, http_client_pool=None))
     await asyncio.wait_for(rig.entered.wait(), 2)
     task.cancel()
     with pytest.raises(asyncio.CancelledError) as caught:

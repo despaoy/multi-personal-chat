@@ -1,5 +1,7 @@
 """Dialogue batches keep their full inputs and confirm accounting before publication."""
 
+from infra.resource_pool import HttpClientPool
+
 import asyncio
 import hashlib
 import json
@@ -59,12 +61,12 @@ async def dialogue_usage(tmp_path, monkeypatch):
         return httpx.Response(200, json={'choices': [{'finish_reason': 'stop', 'message': {'content': json.dumps(batch, ensure_ascii=False)}}], 'usage': {'prompt_tokens': 100, 'completion_tokens': 20, 'total_tokens': 120}})
 
     @asynccontextmanager
-    async def acquire(_self, timeout):
+    async def acquire(_self, timeout, **_resource_options):
         async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
             yield client
     monkeypatch.setattr(model_manager.OpenAICompatProvider, '_acquire_http_client', acquire)
     application = FastAPI()
-    application.state.runtime_container = RuntimeContainer(db=database, is_pg_mode=lambda: False)
+    application.state.runtime_container = RuntimeContainer(db=database, is_pg_mode=lambda: False, http_client_pool=HttpClientPool(max_connections=1))
     application.include_router(training.router)
     application.dependency_overrides[get_current_admin] = lambda: {'user_id': 901, 'username': 'synthetic', 'role': 'admin'}
     rig.app = application

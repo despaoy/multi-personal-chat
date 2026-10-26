@@ -151,11 +151,13 @@ class BaseProvider(ABC):
             raise ValueError("Selected model provider does not support LoRA")
 
     @asynccontextmanager
-    async def _acquire_http_client(self, timeout: float = 120.0):
-        """Borrow the shared pool client, or own a client for a standalone call."""
-        from app.config import http_client_pool
+    async def _acquire_http_client(self, timeout: float = 120.0, *, pool=None):
+        """Borrow this request's application pool; standalone calls own a client."""
+        from inference.request_context import get_request_context
 
-        pool = http_client_pool
+        context = get_request_context()
+        if pool is None and context is not None:
+            pool = context.http_client_pool
         if pool is not None:
             # P1-M4 fix: pool 的 client 以固定 request_timeout 创建，此处无法
             # 逐请求覆盖。调用方应在 client.post(...) 时显式传入 timeout 参数

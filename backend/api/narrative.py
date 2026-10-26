@@ -7,7 +7,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.dependencies import get_current_user, require_narrative_enabled
+from app.dependencies import get_current_user, require_narrative_enabled, get_request_http_client_pool
 from app.runtime import get_runtime_container
 from character.profile_registry import CharacterProfileNotFoundError, get_default_profile_registry
 from db.schemas import GenerateResponse, MessageRequest, MessageText
@@ -91,8 +91,9 @@ async def canonical_generate(body: CanonicalMessage, request: Request, user=Depe
                 return GenerateResponse(
                     reply=prior[0]["reply"], model=prior[0]["modelName"], costTime=prior[0]["costTime"]
                 )
+        http_client_pool = get_request_http_client_pool(request)
         try:
-            context = await resolve_request_context(get_model_manager(database=container.db))
+            context = await resolve_request_context(get_model_manager(database=container.db), http_client_pool=http_client_pool)
         except Exception as exc:
             raise HTTPException(503, "模型配置读取失败，请检查配置及模型状态后重试") from exc
         with use_request_context(context):

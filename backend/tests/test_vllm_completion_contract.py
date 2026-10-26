@@ -217,7 +217,7 @@ async def test_actual_ask_stream_rejects_corruption_after_fully_cited_body_and_c
     monkeypatch.setattr(providers, 'get_vllm_client', AsyncMock(return_value=rig.client))
     monkeypatch.setattr(ask, 'get_grounded_answer_service', AsyncMock(return_value=service))
     request = AskRequest(message=QUERY, domainId='fiction-archive', topK=1, temperature=0.2, maxTokens=256, topP=0.9, wantCitations=True)
-    response = await ask.ask_stream(request, SimpleNamespace(is_disconnected=AsyncMock(return_value=False)), current_user={'user_id': 901, 'username': 'synthetic', 'role': 'user'}, database=SQLiteDB(tmp_path / 'ask-accounting.sqlite'))
+    response = await ask.ask_stream(request, SimpleNamespace(is_disconnected=AsyncMock(return_value=False)), current_user={'user_id': 901, 'username': 'synthetic', 'role': 'user'}, database=SQLiteDB(tmp_path / 'ask-accounting.sqlite'), http_client_pool=None)
     events = []
     async for chunk in response.body_iterator:
         text = chunk.decode() if isinstance(chunk, bytes) else chunk

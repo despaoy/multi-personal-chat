@@ -21,7 +21,10 @@ def stats_api(monkeypatch):
     client = SimpleNamespace(get_stats=AsyncMock(return_value={"healthy_instances": 1}))
     getter = AsyncMock(return_value=client)
     monkeypatch.setattr(vllm_client, "get_vllm_client", getter)
+    from app.runtime import RuntimeContainer
+    from infra.concurrency_control import inference_runtime
     app = FastAPI()
+    app.state.runtime_container = RuntimeContainer(db=None, is_pg_mode=lambda: False, inference_runtime=inference_runtime)
     app.include_router(enhanced.router)
     app.dependency_overrides[get_current_admin] = lambda: {"role": "admin"}
     return SimpleNamespace(app=app, client=client, getter=getter)

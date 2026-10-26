@@ -139,7 +139,7 @@ async def test_startup_error_propagates_and_closes_preceding_allocations(lifecyc
             pytest.fail("Required resource failure admitted startup")
     assert raised.value is rig.failure
     assert rig.events == closed
-    assert all(getattr(rig.config, name) is None for name in rig.main._LIFESPAN_RESOURCE_NAMES)
+    assert all(getattr(app.state.runtime_container, name) is None for name in rig.main._LIFESPAN_RESOURCE_NAMES)
     rig.getter.assert_not_called()
 
 
@@ -164,7 +164,7 @@ async def test_postgresql_needs_no_sqlite_path_or_backup(lifecycle):
     app, db = rig.application(postgres=True, db_path=False)
     async with rig.main.lifespan(app):
         assert set(rig.allocations) == {"http", "access"}
-        assert rig.config.backup_mgr is None
+        assert app.state.runtime_container.backup_mgr is None
     assert rig.events == ["http"]
     db.close.assert_awaited_once()
     rig.getter.assert_not_called()
@@ -205,7 +205,7 @@ async def test_web_startup_does_not_connect_unrelated_deduplication_redis(lifecy
     monkeypatch.setattr(aioredis.ConnectionPool, "from_url", async_pool)
     app, _ = lifecycle.application()
     async with lifecycle.main.lifespan(app):
-        assert lifecycle.config.http_client_pool is not None
+        assert app.state.runtime_container.http_client_pool is not None
     sync_pool.assert_not_called()
     async_pool.assert_not_called()
     assert lifecycle.events == ["http", "backup"]

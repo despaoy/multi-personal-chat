@@ -7,6 +7,8 @@ provider. The runner supplies isolated JWT/application/database configuration.
 
 from __future__ import annotations
 
+from infra.resource_pool import HttpClientPool
+
 import asyncio
 import json
 import re
@@ -93,7 +95,7 @@ async def rig(monkeypatch, tmp_path):
     context.manager.get_current_provider = lambda: provider
     monkeypatch.setattr(model_manager, 'get_model_manager', lambda *, database=None: context.manager)
     app = FastAPI()
-    app.state.runtime_container = RuntimeContainer(db=SQLiteDB(tmp_path / 'dialogue-accounting.sqlite'), is_pg_mode=lambda: False)
+    app.state.runtime_container = RuntimeContainer(db=SQLiteDB(tmp_path / 'dialogue-accounting.sqlite'), is_pg_mode=lambda: False, http_client_pool=HttpClientPool(max_connections=1))
     app.include_router(training.router)
     app.dependency_overrides[get_current_admin] = lambda: {'id': 901, 'role': 'admin'}
     context.app = app

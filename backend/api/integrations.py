@@ -370,6 +370,7 @@ async def receive_astrbot_message(
                 context,
                 source_db=source_db,
                 runtime=runtime,
+                http_client_pool=container.http_client_pool,
             ),
             timeout=remaining,
         )
@@ -412,7 +413,7 @@ async def receive_astrbot_message(
         }) from exc
 
 
-async def _process_astrbot_message(request, text, dedup_message_id, trace_id, start_time, context, *, source_db, runtime):
+async def _process_astrbot_message(request, text, dedup_message_id, trace_id, start_time, context, *, source_db, runtime, http_client_pool=None):
     await runtime.check_rate_limits(request.platform, request.conversationId, request.senderId)
 
     session_id = _session_id(request.platform, request.conversationType, request.conversationId)
@@ -434,6 +435,11 @@ async def _process_astrbot_message(request, text, dedup_message_id, trace_id, st
         }) from exc
     if not session_enabled:
         return AstrBotMessageResponse(shouldReply=False, model="session-disabled", traceId=trace_id)
+    if http_client_pool is None:
+        raise HTTPException(503, detail={
+            "stage": "dependencies", "traceId": trace_id,
+            "message": "Application HTTP pool unavailable; check application startup",
+        })
 
     msg = MessageRequest(
         message=text,
@@ -458,6 +464,7 @@ async def _process_astrbot_message(request, text, dedup_message_id, trace_id, st
             msg,
             current_user={"username": "astrbot", "user_id": 0},
             message_db=source_db,
+            http_client_pool=http_client_pool,
             delivery_context=context,
         ),
         session_id=session_id,

@@ -1,4 +1,7 @@
 """Each supported backup artifact must preserve SQLite schema and behavior."""
+
+from app.runtime import RuntimeContainer
+from infra.concurrency_control import inference_runtime
 import sqlite3
 from pathlib import Path
 
@@ -43,26 +46,27 @@ async def test_backup_and_offline_restore_preserve_complete_schema_and_triggers(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("kind", [BackupType.FULL, BackupType.INCREMENTAL])
-@pytest.mark.parametrize("stage", ["missing", "compression", "destination"])
+@pytest.mark.parametrize('kind', [BackupType.FULL, BackupType.INCREMENTAL])
+@pytest.mark.parametrize('stage', ['missing', 'compression', 'destination'])
 async def test_backup_failure_preserves_cause_and_releases_owned_files(tmp_path, monkeypatch, kind, stage):
     from api import enhanced
     from fastapi import HTTPException
     from infra import backup_manager as module
-
-    source = tmp_path / "source.sqlite"
-    if stage != "missing":
+    source = tmp_path / 'source.sqlite'
+    if stage != 'missing':
         with sqlite3.connect(source) as connection:
-            connection.execute("CREATE TABLE evidence(value TEXT NOT NULL)")
+            connection.execute('CREATE TABLE evidence(value TEXT NOT NULL)')
             connection.execute("INSERT INTO evidence VALUES('complete synthetic source')")
-    manager = BackupManager(str(source), backup_dir=str(tmp_path / "archives"))
-    monkeypatch.setattr(enhanced._app_config, "backup_mgr", manager)
-    failure = OSError("synthetic compression unavailable") if stage == "compression" else sqlite3.OperationalError("synthetic destination unavailable")
+    manager = BackupManager(str(source), backup_dir=str(tmp_path / 'archives'))
+    runtime = RuntimeContainer(db=None, is_pg_mode=lambda: False, inference_runtime=inference_runtime)
+    runtime.backup_mgr = manager
+    failure = OSError('synthetic compression unavailable') if stage == 'compression' else sqlite3.OperationalError('synthetic destination unavailable')
     connections = []
     real_connect = sqlite3.connect
 
     class TrackedConnection(sqlite3.Connection):
         closed = False
+
         def close(self):
             self.closed = True
             return super().close()
@@ -73,23 +77,23 @@ async def test_backup_failure_preserves_cause_and_releases_owned_files(tmp_path,
         connection = real_connect(*args, **kwargs, factory=TrackedConnection)
         connections.append(connection)
         return connection
+    if stage == 'destination':
+        monkeypatch.setattr(sqlite3, 'connect', connect)
+    if stage == 'compression':
 
-    if stage == "destination":
-        monkeypatch.setattr(sqlite3, "connect", connect)
-    if stage == "compression":
         def compress(*args, **kwargs):
             raise failure
-        monkeypatch.setattr(module.gzip, "open", compress)
+        monkeypatch.setattr(module.gzip, 'open', compress)
     with pytest.raises(HTTPException) as caught:
-        await enhanced.create_backup(kind.value, {"role": "admin"})
+        await enhanced.create_backup(kind.value, {'role': 'admin'}, runtime=runtime)
     assert caught.value.status_code == 500
-    if stage == "missing":
+    if stage == 'missing':
         assert isinstance(caught.value.__cause__, FileNotFoundError)
     else:
         assert caught.value.__cause__ is failure
-    assert all(connection.closed for connection in connections)
-    assert not list((tmp_path / "archives").rglob("*"))
-    assert manager.get_backup_stats()["total_backups"] == 0
+    assert all((connection.closed for connection in connections))
+    assert not list((tmp_path / 'archives').rglob('*'))
+    assert manager.get_backup_stats()['total_backups'] == 0
 
 
 @pytest.mark.asyncio
@@ -168,22 +172,23 @@ async def test_unknown_backup_type_fails_before_creating_files(tmp_path):
 @pytest.mark.asyncio
 async def test_backup_list_io_failure_cannot_become_partial_success(tmp_path, monkeypatch):
     from api import enhanced
-
-    source = tmp_path / "source.sqlite"
+    source = tmp_path / 'source.sqlite'
     with sqlite3.connect(source) as connection:
-        connection.execute("CREATE TABLE evidence(value TEXT)")
+        connection.execute('CREATE TABLE evidence(value TEXT)')
         connection.execute("INSERT INTO evidence VALUES('complete synthetic source')")
-    manager = BackupManager(str(source), backup_dir=str(tmp_path / "archives"))
+    manager = BackupManager(str(source), backup_dir=str(tmp_path / 'archives'))
     full = await manager.backup(BackupType.FULL)
     await manager.backup(BackupType.INCREMENTAL)
-    failure = OSError("synthetic backup metadata unavailable")
+    failure = OSError('synthetic backup metadata unavailable')
     real_stat = Path.stat
+
     def stat(path, *args, **kwargs):
         if path == Path(full.path):
             raise failure
         return real_stat(path, *args, **kwargs)
-    monkeypatch.setattr(Path, "stat", stat)
-    monkeypatch.setattr(enhanced._app_config, "backup_mgr", manager)
+    monkeypatch.setattr(Path, 'stat', stat)
+    runtime = RuntimeContainer(db=None, is_pg_mode=lambda: False, inference_runtime=inference_runtime)
+    runtime.backup_mgr = manager
     with pytest.raises(OSError) as caught:
-        await enhanced.list_backups({"role": "admin"})
+        await enhanced.list_backups({'role': 'admin'}, runtime=runtime)
     assert caught.value is failure

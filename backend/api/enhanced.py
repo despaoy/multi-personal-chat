@@ -1,13 +1,14 @@
 """增强功能API"""
+
 import asyncio
 import logging
 import sqlite3
 from typing import Literal, Optional
 
 from fastapi import APIRouter, HTTPException, Depends
-from app.dependencies import get_current_admin
+from app.dependencies import get_current_admin, get_request_runtime
+from app.runtime import RuntimeContainer
 from db.schemas import ApiKeyCreateRequest
-from infra.concurrency_control import inference_runtime
 
 from app.config import (
     circuit_breaker_registry,
@@ -30,12 +31,15 @@ async def _get_vllm_load_balancer_stats():
         logger.error("读取 vLLM 负载统计失败: %s", type(exc).__name__)
         raise HTTPException(status_code=503, detail="vLLM 负载统计不可用，请检查配置和服务状态") from exc
 
+
 logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
 @router.get("/api/enhanced/status")
-async def get_enhanced_status(current_user: dict = Depends(get_current_admin)):
+async def get_enhanced_status(
+    current_user: dict = Depends(get_current_admin), *, runtime: RuntimeContainer = Depends(get_request_runtime)
+):
     """获取增强功能状态"""
     available = {
         "loadBalancer": True,
@@ -51,46 +55,39 @@ async def get_enhanced_status(current_user: dict = Depends(get_current_admin)):
     active = {
         **available,
         "loadBalancer": vllm_stats is not None,
-        "resourcePool": _app_config.http_client_pool is not None,
-        "backupManager": _app_config.backup_mgr is not None,
+        "resourcePool": runtime.http_client_pool is not None,
+        "backupManager": runtime.backup_mgr is not None,
         "encryption": encryption_mgr is not None,
-        "accessControl": _app_config.access_control_mgr is not None,
+        "accessControl": runtime.access_control_mgr is not None,
     }
-    return {
-        "success": True,
-        "enhancedFeatures": active,
-        "availableFeatures": available,
-    }
+    return {"success": True, "enhancedFeatures": active, "availableFeatures": available}
 
 
 @router.get("/api/enhanced/stats")
-async def get_enhanced_stats(current_user: dict = Depends(get_current_admin)):
+async def get_enhanced_stats(
+    current_user: dict = Depends(get_current_admin), *, runtime: RuntimeContainer = Depends(get_request_runtime)
+):
     """获取增强功能统计信息"""
     stats = {}
-
     vllm_stats = await _get_vllm_load_balancer_stats()
     if vllm_stats is not None:
         stats["loadBalancer"] = vllm_stats
-    _hcp = _app_config.http_client_pool
+    _hcp = runtime.http_client_pool
     if _hcp:
         stats["httpClientPool"] = _hcp.get_pool_stats()
-
     if circuit_breaker_registry:
         stats["circuitBreakers"] = circuit_breaker_registry.get_all_stats()
-
-    _bm = _app_config.backup_mgr
+    _bm = runtime.backup_mgr
     if _bm:
         stats["backup"] = _bm.get_backup_stats()
-
     if response_cache:
         stats["responseCache"] = response_cache.stats
-
-    stats["rateLimiter"] = inference_runtime.rate_limit_stats()
-
+    stats["rateLimiter"] = runtime.inference_runtime.rate_limit_stats()
     return {"success": True, "stats": stats}
 
 
 # --- 负载均衡API ---
+
 
 @router.get("/api/enhanced/load-balancer/stats")
 async def get_load_balancer_stats(current_user: dict = Depends(get_current_admin)):
@@ -99,7 +96,9 @@ async def get_load_balancer_stats(current_user: dict = Depends(get_current_admin
         raise HTTPException(status_code=503, detail="vLLM 负载均衡器不可用")
     return {"success": True, "stats": stats}
 
+
 # --- 熔断器API ---
+
 
 @router.get("/api/enhanced/circuit-breaker/stats")
 async def get_circuit_breaker_stats(current_user: dict = Depends(get_current_admin)):
@@ -122,9 +121,12 @@ async def reset_circuit_breaker(name: str, current_user: dict = Depends(get_curr
 
 # --- 备份管理API ---
 
+
 @router.get("/api/enhanced/backups")
-async def list_backups(current_user: dict = Depends(get_current_admin)):
-    _bm = _app_config.backup_mgr
+async def list_backups(
+    current_user: dict = Depends(get_current_admin), *, runtime: RuntimeContainer = Depends(get_request_runtime)
+):
+    _bm = runtime.backup_mgr
     if not _bm:
         raise HTTPException(status_code=503, detail="备份管理器不可用")
     backups = await asyncio.to_thread(_bm.list_backups)
@@ -135,8 +137,10 @@ async def list_backups(current_user: dict = Depends(get_current_admin)):
 async def create_backup(
     backup_type: Literal["full", "incremental"] = "full",
     current_user: dict = Depends(get_current_admin),
+    *,
+    runtime: RuntimeContainer = Depends(get_request_runtime),
 ):
-    _bm = _app_config.backup_mgr
+    _bm = runtime.backup_mgr
     if not _bm:
         raise HTTPException(status_code=503, detail="备份管理器不可用")
     from infra.backup_manager import BackupType
@@ -147,30 +151,26 @@ async def create_backup(
         logger.exception("备份创建失败 type=%s", type(exc).__name__)
         raise HTTPException(status_code=500, detail="备份创建失败，请检查服务器日志") from exc
     payload = result.to_dict()
-    return {
-        "success": True,
-        "message": "备份创建成功",
-        "path": payload["path"],
-        "backup": payload,
-    }
+    return {"success": True, "message": "备份创建成功", "path": payload["path"], "backup": payload}
 
 
 @router.post("/api/enhanced/backups/{backup_name}/restore")
 async def restore_backup(
     backup_name: str,
     current_user: dict = Depends(get_current_admin),
+    *,
+    runtime: RuntimeContainer = Depends(get_request_runtime),
 ):
-    # SQLite connections are thread-local and may still reference the old file.
-    # Replacing the database under a running process can split reads and writes
-    # across two files, so restoration must be performed while the backend is stopped.
-    if not _app_config.backup_mgr:
+    if not runtime.backup_mgr:
         raise HTTPException(status_code=503, detail="备份管理器不可用")
     raise HTTPException(
         status_code=409,
         detail="不支持在线恢复 SQLite。请停止后端后运行 scripts/restore_sqlite_backup.py，并在恢复后重新启动服务。",
     )
 
+
 # --- 缓存管理API ---
+
 
 @router.get("/api/enhanced/cache/stats")
 async def get_cache_stats(current_user: dict = Depends(get_current_admin)):
@@ -190,9 +190,12 @@ async def invalidate_cache(pattern: Optional[str] = None, current_user: dict = D
 
 # --- 访问控制API ---
 
+
 @router.get("/api/enhanced/access-control/keys")
-async def list_api_keys(current_user: dict = Depends(get_current_admin)):
-    _acm = _app_config.access_control_mgr
+async def list_api_keys(
+    current_user: dict = Depends(get_current_admin), *, runtime: RuntimeContainer = Depends(get_request_runtime)
+):
+    _acm = runtime.access_control_mgr
     if not _acm:
         raise HTTPException(status_code=503, detail="访问控制不可用")
     try:
@@ -207,18 +210,17 @@ async def list_api_keys(current_user: dict = Depends(get_current_admin)):
 async def create_api_key(
     request: ApiKeyCreateRequest,
     current_user: dict = Depends(get_current_admin),
+    *,
+    runtime: RuntimeContainer = Depends(get_request_runtime),
 ):
-    _acm = _app_config.access_control_mgr
+    _acm = runtime.access_control_mgr
     if not _acm:
         raise HTTPException(status_code=503, detail="访问控制不可用")
     from infra.access_control import Role
 
     try:
         api_key = await asyncio.to_thread(
-            _acm.create_api_key,
-            Role(request.role),
-            request.description,
-            request.rate_limit,
+            _acm.create_api_key, Role(request.role), request.description, request.rate_limit
         )
     except Exception as exc:
         logger.exception("创建 API Key 失败")
@@ -230,8 +232,10 @@ async def create_api_key(
 async def revoke_api_key(
     key_id: int,
     current_user: dict = Depends(get_current_admin),
+    *,
+    runtime: RuntimeContainer = Depends(get_request_runtime),
 ):
-    _acm = _app_config.access_control_mgr
+    _acm = runtime.access_control_mgr
     if not _acm:
         raise HTTPException(status_code=503, detail="访问控制不可用")
     try:
@@ -243,14 +247,19 @@ async def revoke_api_key(
         raise HTTPException(status_code=404, detail="API Key 不存在或已吊销")
     return {"success": True, "message": "API Key已吊销"}
 
+
 # --- 限流器API ---
 
+
 @router.get("/api/enhanced/rate-limiter/stats")
-async def get_rate_limiter_stats(current_user: dict = Depends(get_current_admin)):
-    return {"success": True, "stats": inference_runtime.rate_limit_stats()}
+async def get_rate_limiter_stats(
+    current_user: dict = Depends(get_current_admin), *, runtime: RuntimeContainer = Depends(get_request_runtime)
+):
+    return {"success": True, "stats": runtime.inference_runtime.rate_limit_stats()}
 
 
 # --- 加密管理API ---
+
 
 @router.get("/api/enhanced/encryption/status")
 async def get_encryption_status(current_user: dict = Depends(get_current_admin)):

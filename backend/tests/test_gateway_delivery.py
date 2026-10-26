@@ -1,5 +1,7 @@
 """Gateway retries must reuse generation and expose only delivered history."""
 
+from infra.resource_pool import HttpClientPool
+
 import asyncio
 import importlib.util
 import logging
@@ -33,35 +35,25 @@ class Runtime:
 
 @pytest.fixture
 def gateway(monkeypatch, tmp_path):
-    database = SQLiteDB(tmp_path / "delivery.db")
-    monkeypatch.setenv("ENVIRONMENT", "development")
-    monkeypatch.setenv("ASTRBOT_ENABLED", "true")
-    monkeypatch.setenv("INTEGRATION_SIGNATURE_REQUIRED", "false")
-    monkeypatch.setenv("ASTRBOT_INTEGRATION_TOKEN", "test-token")
+    database = SQLiteDB(tmp_path / 'delivery.db')
+    monkeypatch.setenv('ENVIRONMENT', 'development')
+    monkeypatch.setenv('ASTRBOT_ENABLED', 'true')
+    monkeypatch.setenv('INTEGRATION_SIGNATURE_REQUIRED', 'false')
+    monkeypatch.setenv('ASTRBOT_INTEGRATION_TOKEN', 'test-token')
     app = FastAPI()
-    app.state.runtime_container = RuntimeContainer(db=database, is_pg_mode=lambda: False,
-        inference_runtime=Runtime(), startup_env={})
-    monkeypatch.setattr(Request, "app", app, raising=False)
+    app.state.runtime_container = RuntimeContainer(db=database, is_pg_mode=lambda: False, inference_runtime=Runtime(), startup_env={}, http_client_pool=HttpClientPool(max_connections=1))
+    monkeypatch.setattr(Request, 'app', app, raising=False)
     calls = []
 
     async def generate(msg, **kwargs):
         from api.generate import _save_message
-
         calls.append(msg)
-        assert await _save_message(msg, "reply", "model", "default", 0.1, database=database)
-        kwargs["delivery_context"].update(message_saved=True, character_id=None)
-        return GenerateResponse(reply="reply", model="model", costTime=0.1)
-
-    monkeypatch.setattr(integrations, "generate_reply_core", generate)
-    payload = integrations.AstrBotMessageRequest(
-        platform="qq",
-        adapter="napcat",
-        messageId="m1",
-        conversationId="room",
-        senderId="sender",
-        text="hello",
-    )
-    return database, calls, payload
+        assert await _save_message(msg, 'reply', 'model', 'default', 0.1, database=database)
+        kwargs['delivery_context'].update(message_saved=True, character_id=None)
+        return GenerateResponse(reply='reply', model='model', costTime=0.1)
+    monkeypatch.setattr(integrations, 'generate_reply_core', generate)
+    payload = integrations.AstrBotMessageRequest(platform='qq', adapter='napcat', messageId='m1', conversationId='room', senderId='sender', text='hello')
+    return (database, calls, payload)
 
 
 async def receive(payload):
@@ -513,14 +505,13 @@ def test_gateway_http_failure_has_no_reply_or_delivery_token(gateway, monkeypatc
 async def test_plugin_http_failure_is_not_marked_seen_or_delivered(plugin):
     attempts = []
 
-    def fail(payload):
+    def fail(payload, **_resource_options):
         attempts.append(payload)
-        raise RuntimeError("backend returned HTTP 503")
-
+        raise RuntimeError('backend returned HTTP 503')
     plugin._post_message = fail
 
     class Event:
-        message_str = "hello"
+        message_str = 'hello'
 
         def stop_event(self):
             pass
@@ -529,12 +520,11 @@ async def test_plugin_http_failure_is_not_marked_seen_or_delivered(plugin):
             return text
 
         async def send(self, text):
-            pytest.fail("A gateway failure must not deliver a generated answer")
-
+            pytest.fail('A gateway failure must not deliver a generated answer')
     for _ in range(2):
         notices = [item async for item in plugin.on_message(Event())]
-        assert len(notices) == 1 and notices[0].startswith("[系统提示]")
-        assert not plugin._seen_events and not plugin._sent_receipts and not plugin._inflight
+        assert len(notices) == 1 and notices[0].startswith('[系统提示]')
+        assert not plugin._seen_events and (not plugin._sent_receipts) and (not plugin._inflight)
     assert len(attempts) == 2
 
 
@@ -576,18 +566,19 @@ def test_signature_absence_keeps_the_explicit_environment_default(monkeypatch, e
 
 
 
-@pytest.mark.parametrize("scope", ["config_on", "config_off", "falsy"])
+@pytest.mark.parametrize('scope', ['config_on', 'config_off', 'falsy'])
 async def test_gateway_uses_one_application_database_through_delivery(gateway, monkeypatch, tmp_path, scope):
     import httpx
     from api.generate import _save_message
-
     foreign, calls, payload = gateway
 
     class FalsyDatabase(SQLiteDB):
+
         def __bool__(self):
             return False
 
     class FalsyRuntime(Runtime):
+
         def __init__(self):
             self.submitted = 0
 
@@ -597,67 +588,57 @@ async def test_gateway_uses_one_application_database_through_delivery(gateway, m
         async def submit(self, factory, **kwargs):
             self.submitted += 1
             return await super().submit(factory, **kwargs)
-
-    owned = (FalsyDatabase if scope == "falsy" else SQLiteDB)(tmp_path / "owned.sqlite")
+    owned = (FalsyDatabase if scope == 'falsy' else SQLiteDB)(tmp_path / 'owned.sqlite')
     runtime = FalsyRuntime()
-    monkeypatch.delenv("ASTRBOT_QQ_ENABLED", raising=False)
-    foreign.set_config_value("astrbotQQEnabled", scope != "config_on")
-    owned.set_config_value("astrbotQQEnabled", scope != "config_off")
+    monkeypatch.delenv('ASTRBOT_QQ_ENABLED', raising=False)
+    foreign.set_config_value('astrbotQQEnabled', scope != 'config_on')
+    owned.set_config_value('astrbotQQEnabled', scope != 'config_off')
     app = FastAPI()
     app.include_router(integrations.router)
-    app.state.runtime_container = RuntimeContainer(db=owned, is_pg_mode=lambda: False,
-        inference_runtime=runtime, startup_env={})
+    app.state.runtime_container = RuntimeContainer(db=owned, is_pg_mode=lambda: False, inference_runtime=runtime, startup_env={}, http_client_pool=HttpClientPool(max_connections=1))
 
     async def generate(message, **kwargs):
-        assert kwargs["message_db"] is owned
-        assert "character_service" not in kwargs
+        assert kwargs['message_db'] is owned
+        assert 'character_service' not in kwargs
         calls.append(message)
-        assert await _save_message(message, "reply", "controlled", "default", .1, database=owned)
-        kwargs["delivery_context"].update(message_saved=True, character_id=None)
-        return GenerateResponse(reply="reply", model="controlled", costTime=.1)
-
-    monkeypatch.setattr(integrations, "generate_reply_core", generate)
+        assert await _save_message(message, 'reply', 'controlled', 'default', 0.1, database=owned)
+        kwargs['delivery_context'].update(message_saved=True, character_id=None)
+        return GenerateResponse(reply='reply', model='controlled', costTime=0.1)
+    monkeypatch.setattr(integrations, 'generate_reply_core', generate)
     try:
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-            response = await client.post("/api/integrations/astrbot/messages", json=payload.model_dump(),
-                headers={"X-Integration-Token": "test-token"})
-            assert response.status_code == 200 and response.json()["shouldReply"] is (scope != "config_off")
-            if scope != "config_off":
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://test') as client:
+            response = await client.post('/api/integrations/astrbot/messages', json=payload.model_dump(), headers={'X-Integration-Token': 'test-token'})
+            assert response.status_code == 200 and response.json()['shouldReply'] is (scope != 'config_off')
+            if scope != 'config_off':
                 assert len(calls) == runtime.submitted == 1
-                assert owned.list_conversation_history("qq", "napcat", "sender", "private", "room") == []
+                assert owned.list_conversation_history('qq', 'napcat', 'sender', 'private', 'room') == []
                 body = response.json()
-                acknowledged = await client.post("/api/integrations/astrbot/delivery",
-                    json=dict(receiptId=body["receiptId"], deliveryToken=body["deliveryToken"], status="delivered"),
-                    headers={"X-Integration-Token": "test-token"})
-                assert acknowledged.status_code == 200 and acknowledged.json()["acknowledged"]
-                assert [row["content"] for row in owned.list_conversation_history("qq", "napcat", "sender", "private", "room")] == ["hello", "reply"]
+                acknowledged = await client.post('/api/integrations/astrbot/delivery', json=dict(receiptId=body['receiptId'], deliveryToken=body['deliveryToken'], status='delivered'), headers={'X-Integration-Token': 'test-token'})
+                assert acknowledged.status_code == 200 and acknowledged.json()['acknowledged']
+                assert [row['content'] for row in owned.list_conversation_history('qq', 'napcat', 'sender', 'private', 'room')] == ['hello', 'reply']
             else:
                 assert calls == [] and runtime.submitted == 0
-        for table in ["integration_events", "integration_receipts", "messages"]:
-            assert foreign.execute_sql(f"SELECT COUNT(*) AS count FROM {table}")[0]["count"] == 0
-            assert owned.execute_sql(f"SELECT COUNT(*) AS count FROM {table}")[0]["count"] == int(scope != "config_off")
+        for table in ['integration_events', 'integration_receipts', 'messages']:
+            assert foreign.execute_sql(f'SELECT COUNT(*) AS count FROM {table}')[0]['count'] == 0
+            assert owned.execute_sql(f'SELECT COUNT(*) AS count FROM {table}')[0]['count'] == int(scope != 'config_off')
     finally:
         owned.close_connection()
 
 
-@pytest.mark.parametrize("missing", ["container", "invalid_container", "database", "scheduler"])
+@pytest.mark.parametrize('missing', ['container', 'invalid_container', 'database', 'scheduler'])
 async def test_gateway_missing_dependencies_fail_before_storage(gateway, missing):
     import httpx
-
     database, calls, payload = gateway
     app = FastAPI()
     app.include_router(integrations.router)
-    if missing != "container":
-        app.state.runtime_container = object() if missing == "invalid_container" else RuntimeContainer(
-            db=None if missing == "database" else database, is_pg_mode=lambda: False,
-            inference_runtime=None if missing == "scheduler" else Runtime(), startup_env={})
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
-        response = await client.post("/api/integrations/astrbot/messages", json=payload.model_dump(),
-            headers={"X-Integration-Token": "test-token"})
-    assert response.status_code == 503 and response.json()["detail"]["stage"] == "dependencies"
+    if missing != 'container':
+        app.state.runtime_container = object() if missing == 'invalid_container' else RuntimeContainer(db=None if missing == 'database' else database, is_pg_mode=lambda: False, inference_runtime=None if missing == 'scheduler' else Runtime(), startup_env={}, http_client_pool=HttpClientPool(max_connections=1))
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://test') as client:
+        response = await client.post('/api/integrations/astrbot/messages', json=payload.model_dump(), headers={'X-Integration-Token': 'test-token'})
+    assert response.status_code == 503 and response.json()['detail']['stage'] == 'dependencies'
     assert calls == []
-    for table in ["integration_events", "integration_receipts", "messages"]:
-        assert database.execute_sql(f"SELECT COUNT(*) AS count FROM {table}")[0]["count"] == 0
+    for table in ['integration_events', 'integration_receipts', 'messages']:
+        assert database.execute_sql(f'SELECT COUNT(*) AS count FROM {table}')[0]['count'] == 0
 
 
 def test_plugin_dedup_uses_event_identity_not_matching_text(plugin):
