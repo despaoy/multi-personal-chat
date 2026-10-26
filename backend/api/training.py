@@ -14,6 +14,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import FileResponse
 from app.dependencies import get_current_admin, get_request_database
 from infra.db_executor import run_db
+from infra.environment import read_positive_float, read_positive_int
 from inference.openai_protocol import ProviderResponseError
 from pydantic import BaseModel
 from typing import Optional
@@ -37,12 +38,8 @@ _dialogue_generation_task: asyncio.Task | None = None
 _DIALOGUE_CANCELLED = "dialogue_user_cancel"
 
 
-_DATASET_EXPORT_MAX_CONCURRENCY = max(
-    1, int(os.getenv("TRAINING_EXPORT_MAX_CONCURRENCY", "2"))
-)
-_DATASET_EXPORT_ACQUIRE_TIMEOUT = max(
-    0.05, float(os.getenv("TRAINING_EXPORT_ACQUIRE_TIMEOUT", "1"))
-)
+_DATASET_EXPORT_MAX_CONCURRENCY = read_positive_int(os.environ, "TRAINING_EXPORT_MAX_CONCURRENCY", 2)
+_DATASET_EXPORT_ACQUIRE_TIMEOUT = read_positive_float(os.environ, "TRAINING_EXPORT_ACQUIRE_TIMEOUT", 1.0)
 _dataset_export_slots: asyncio.BoundedSemaphore | None = None
 _dataset_export_slots_loop: asyncio.AbstractEventLoop | None = None
 

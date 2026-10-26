@@ -79,6 +79,8 @@ BASELINE = {
     "RAG_COLD_START_TIMEOUT": "60",
     "INTEGRATION_AUTH_TIMEOUT": "3",
     "INTEGRATION_DB_TIMEOUT": "3",
+    "TRAINING_EXPORT_MAX_CONCURRENCY": "2",
+    "TRAINING_EXPORT_ACQUIRE_TIMEOUT": "1",
 }
 
 
@@ -116,6 +118,8 @@ def child_environment(tmp_path):
         ("services.chat_answer", "RAG_COLD_START_TIMEOUT", "-1"),
         ("api.integrations", "INTEGRATION_AUTH_TIMEOUT", "inf"),
         ("api.integrations", "INTEGRATION_DB_TIMEOUT", "nan"),
+        ("api.training", "TRAINING_EXPORT_MAX_CONCURRENCY", "0"),
+        ("api.training", "TRAINING_EXPORT_ACQUIRE_TIMEOUT", "nan"),
     ],
 )
 def test_configured_consumers_fail_during_import_with_safe_setting_name(tmp_path, module, setting, value):
@@ -216,3 +220,28 @@ print(json.dumps([generate._MODEL_INFERENCE_TIMEOUT,generate._DB_WRITE_TIMEOUT,
     result = subprocess.run([sys.executable, "-c", source], env=env, capture_output=True, text=True, timeout=30)
     assert result.returncode == 0
     assert json.loads(result.stdout) == ([.125] * 8 if configured else [180., 3., 8., 60., 3., 3., 3., 180.])
+
+
+
+@pytest.mark.parametrize(
+    "settings,expected",
+    [
+        ({}, [2, 1.0]),
+        ({"TRAINING_EXPORT_MAX_CONCURRENCY": "3", "TRAINING_EXPORT_ACQUIRE_TIMEOUT": "0.001"}, [3, 0.001]),
+    ],
+)
+def test_training_export_defaults_and_configured_limits_remain_exact(tmp_path, settings, expected):
+    source = """import json,logging
+logging.disable(logging.CRITICAL)
+from app import env
+env.load_backend_env=lambda *args,**kwargs:None
+from api import training
+print(json.dumps([training._DATASET_EXPORT_MAX_CONCURRENCY,training._DATASET_EXPORT_ACQUIRE_TIMEOUT]))
+"""
+    env = child_environment(tmp_path)
+    for name in ["TRAINING_EXPORT_MAX_CONCURRENCY", "TRAINING_EXPORT_ACQUIRE_TIMEOUT"]:
+        env.pop(name)
+    env.update(settings)
+    result = subprocess.run([sys.executable, "-c", source], env=env, capture_output=True, text=True, timeout=30)
+    assert result.returncode == 0
+    assert json.loads(result.stdout) == expected
