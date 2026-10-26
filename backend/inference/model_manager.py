@@ -26,11 +26,14 @@ from services.model_management import ModelDownloadError, UnknownModelError
 
 logger = logging.getLogger(__name__)
 
-def _get_db_config():
+def _get_db_config(database=None):
     from cache.config_cache import read_config
-    from db.adapter import db
 
-    return read_config(db)[0]
+    if database is None:
+        from db.adapter import db
+
+        database = db
+    return read_config(database)[0]
 
 from abc import ABC, abstractmethod
 from contextlib import asynccontextmanager
@@ -193,15 +196,16 @@ class _AsyncProvider(BaseProvider):
 class OpenAICompatProvider(_AsyncProvider):
     """OpenAI兼容API提供商（支持DeepSeek、通义千问等）"""
 
-    def __init__(self, config_snapshot: dict[str, Any] | None = None):
+    def __init__(self, config_snapshot: dict[str, Any] | None = None, *, database=None):
         super().__init__("openai_compat")
         self._snapshot_config = dict(config_snapshot) if config_snapshot is not None else None
+        self._database = database
         self._refresh_db_config()
         self._loaded = True
 
     def _refresh_db_config(self):
         """Resolve stored settings, then environment defaults, from one snapshot."""
-        config = self._snapshot_config if self._snapshot_config is not None else _get_db_config()
+        config = self._snapshot_config if self._snapshot_config is not None else _get_db_config(self._database)
         self.base_url = config.get("openaiCompatBaseUrl") or os.getenv("OPENAI_COMPAT_BASE_URL", "https://api.deepseek.com")
         self.api_key = config.get("openaiCompatApiKey") or os.getenv("OPENAI_COMPAT_API_KEY", "")
         self.model = config.get("openaiCompatModel") or os.getenv("OPENAI_COMPAT_MODEL", "deepseek-chat")
@@ -212,7 +216,7 @@ class OpenAICompatProvider(_AsyncProvider):
         """Own one resolved connection for a request, without refreshing mid-turn."""
         if self._snapshot_config is not None:
             return self
-        return OpenAICompatProvider(_get_db_config())
+        return OpenAICompatProvider(_get_db_config(self._database))
 
     async def async_generate(self, prompt: str, session_history: List[Dict] = None,
                               max_tokens_override: int = None) -> Tuple[str, float]:
@@ -631,9 +635,9 @@ class ProviderShutdownError(RuntimeError):
 class ModelManager:
     """模型管理器，负责多提供商切换、LoRA管理、模型文件操作。"""
 
-    def __init__(self, base_dir: Optional[Path] = None):
+    def __init__(self, base_dir: Optional[Path] = None, *, database=None):
         env_provider = os.getenv("MODEL_PROVIDER", "").strip().lower()
-        provider_name = env_provider or _get_db_config().get("modelProvider")
+        provider_name = env_provider or _get_db_config(database).get("modelProvider")
         self._current_provider = validate_provider(provider_name)
         logger.info("Model provider selected from %s: %s",
                     "environment" if env_provider else "database", self._current_provider.value)
@@ -653,7 +657,7 @@ class ModelManager:
             ModelProvider.MOCK: MockProvider(),
             ModelProvider.OLLAMA: OllamaProvider(),
             ModelProvider.LLAMA_CPP: LlamaCppProvider(),
-            ModelProvider.OPENAI_COMPAT: OpenAICompatProvider(),
+            ModelProvider.OPENAI_COMPAT: OpenAICompatProvider(database=database),
             ModelProvider.TRANSFORMERS_PEFT: TransformersPeftProvider(),
             ModelProvider.VLLM: VLLMProvider(),
         }
@@ -793,14 +797,18 @@ class ModelManager:
         return True
 
 
-_model_manager: Optional[ModelManager] = None
 _model_manager_init_lock = threading.Lock()
 
 
-def get_model_manager() -> ModelManager:
-    global _model_manager
-    if _model_manager is None:
-        with _model_manager_init_lock:
-            if _model_manager is None:
-                _model_manager = ModelManager()
-    return _model_manager
+def get_model_manager(database=None) -> ModelManager:
+    """Reuse the manager belonging to the selected application database."""
+    if database is None:
+        from db.adapter import db
+
+        database = db
+    with _model_manager_init_lock:
+        manager = getattr(database, "_model_manager", None)
+        if manager is None:
+            manager = ModelManager(database=database)
+            database._model_manager = manager
+        return manager

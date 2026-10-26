@@ -94,48 +94,32 @@ def test_generic_chat_provider_does_not_receive_local_template_extensions(base_u
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("base_url,deepseek", [("https://api.deepseek.com", True), ("https://generic.test", False)])
-async def test_native_answer_uses_complete_content_and_provider_specific_thinking_switch(
-    monkeypatch, base_url, deepseek
-):
+@pytest.mark.parametrize('base_url,deepseek', [('https://api.deepseek.com', True), ('https://generic.test', False)])
+async def test_native_answer_uses_complete_content_and_provider_specific_thinking_switch(monkeypatch, base_url, deepseek):
     from contextlib import asynccontextmanager
-
     from inference import model_manager
-
     requests = []
 
     def respond(request):
         requests.append(json.loads(request.content))
-        reason = "stop" if len(requests) == 1 else "length"
-        return httpx.Response(200, json={"choices": [{"finish_reason": reason, "message": {"content": "完整回答"}}]})
-
-    monkeypatch.setattr(model_manager, "_get_db_config", lambda: {
-        "maxTokens": 1024, "temperature": 0.2, "openaiCompatBaseUrl": base_url,
-        "openaiCompatApiKey": "private-test-credential", "openaiCompatModel": "configured-large-model",
-    })
+        reason = 'stop' if len(requests) == 1 else 'length'
+        return httpx.Response(200, json={'choices': [{'finish_reason': reason, 'message': {'content': '完整回答'}}]})
+    monkeypatch.setattr(model_manager, '_get_db_config', lambda _owner_database=None: {'maxTokens': 1024, 'temperature': 0.2, 'openaiCompatBaseUrl': base_url, 'openaiCompatApiKey': 'private-test-credential', 'openaiCompatModel': 'configured-large-model'})
     provider = model_manager.OpenAICompatProvider()
     client = httpx.AsyncClient(transport=httpx.MockTransport(respond))
 
     @asynccontextmanager
     async def acquire(timeout):
         yield client
-
-    monkeypatch.setattr(provider, "_acquire_http_client", acquire)
-    history = [
-        {"role": "system", "content": "完整人物上下文"},
-        {"role": "user", "content": "我叫岚舟，老家宣城，现住丽水，专业环境工程。"},
-    ]
+    monkeypatch.setattr(provider, '_acquire_http_client', acquire)
+    history = [{'role': 'system', 'content': '完整人物上下文'}, {'role': 'user', 'content': '我叫岚舟，老家宣城，现住丽水，专业环境工程。'}]
     try:
-        answer, _ = await provider.async_generate("请逐项回答", session_history=history, max_tokens_override=733)
-        assert answer == "完整回答"
-        with pytest.raises(ValueError, match="finish normally"):
-            await provider.async_generate("请逐项回答", session_history=history, max_tokens_override=733)
-        assert all(
-            request["max_tokens"] == 733
-            and request["messages"] == history + [{"role": "user", "content": "请逐项回答"}]
-            for request in requests
-        )
-        assert all("chat_template_kwargs" not in request for request in requests)
-        assert all((request.get("thinking") == {"type": "disabled"}) == deepseek for request in requests)
+        answer, _ = await provider.async_generate('请逐项回答', session_history=history, max_tokens_override=733)
+        assert answer == '完整回答'
+        with pytest.raises(ValueError, match='finish normally'):
+            await provider.async_generate('请逐项回答', session_history=history, max_tokens_override=733)
+        assert all((request['max_tokens'] == 733 and request['messages'] == history + [{'role': 'user', 'content': '请逐项回答'}] for request in requests))
+        assert all(('chat_template_kwargs' not in request for request in requests))
+        assert all(((request.get('thinking') == {'type': 'disabled'}) == deepseek for request in requests))
     finally:
         await client.aclose()

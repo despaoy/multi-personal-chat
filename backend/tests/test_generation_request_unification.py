@@ -59,7 +59,7 @@ async def test_generation_failure_is_reported_and_recorded(monkeypatch, provider
     connection = cloud_connection('fixture-model')
     connection.name = provider
     manager.get_current_provider = lambda: connection
-    monkeypatch.setattr(model_manager, 'get_model_manager', lambda: manager)
+    monkeypatch.setattr(model_manager, 'get_model_manager', lambda *, database=None: manager)
     monkeypatch.setattr(generate, 'db', SimpleNamespace(config={}, loras=[]))
     monkeypatch.setattr(generate, 'response_cache', None)
     monkeypatch.setattr(generate, 'get_vllm_client', AsyncMock(return_value=SimpleNamespace(generate=AsyncMock())))
@@ -279,13 +279,10 @@ async def test_production_rag_uses_shared_grounded_request(monkeypatch, semantic
 
 @pytest.mark.asyncio
 async def test_configuration_read_failure_stops_before_model_or_save(monkeypatch):
-
     from fastapi import HTTPException
-
     from api import generate
     from inference import model_manager
-
-    failure = OSError("database disconnected")
+    failure = OSError('database disconnected')
 
     class BrokenDatabase:
         loras = []
@@ -293,41 +290,34 @@ async def test_configuration_read_failure_stops_before_model_or_save(monkeypatch
         @property
         def config(self):
             raise failure
-
-    connection = cloud_connection("fixture-model")
-    monkeypatch.setattr(model_manager, "get_model_manager", lambda: SimpleNamespace(
-        _current_provider=SimpleNamespace(value="openai_compat"),
-        get_current_provider=lambda: connection))
-    model, save = AsyncMock(), AsyncMock()
+    connection = cloud_connection('fixture-model')
+    monkeypatch.setattr(model_manager, 'get_model_manager', lambda *, database=None: SimpleNamespace(_current_provider=SimpleNamespace(value='openai_compat'), get_current_provider=lambda: connection))
+    model, save = (AsyncMock(), AsyncMock())
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', model)
-    monkeypatch.setattr(generate, "_save_message", save)
+    monkeypatch.setattr(generate, '_save_message', save)
     with pytest.raises(HTTPException) as caught:
-        await generate._generate_reply_impl(MessageRequest(message="完整测试问题"), message_db=BrokenDatabase())
+        await generate._generate_reply_impl(MessageRequest(message='完整测试问题'), message_db=BrokenDatabase())
     assert caught.value.status_code == 503 and caught.value.__cause__ is failure
     model.assert_not_awaited()
     save.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("provider", ["vllm", "openai_compat", "transformers_peft"])
-@pytest.mark.parametrize("stage", ["review", "main"])
-async def test_generation_deadline_cancels_work_records_usage_and_can_recover(
-    monkeypatch, tmp_path, fresh_observability, provider, stage,
-):
+@pytest.mark.parametrize('provider', ['vllm', 'openai_compat', 'transformers_peft'])
+@pytest.mark.parametrize('stage', ['review', 'main'])
+async def test_generation_deadline_cancels_work_records_usage_and_can_recover(monkeypatch, tmp_path, fresh_observability, provider, stage):
     import asyncio
-
     from fastapi import HTTPException
     from api import generate
     from db.database import SQLiteDB
     from inference import model_manager
     from inference.usage import begin_completion
     from services.chat_answer import ChatAnswer
-
-    facts = "完整虚构题设：林绮周四14:00开会，15:00结束；尚未出发，下雨改为线上。请复述时间、否定和条件。"
-    reply = "林绮周四14:00至15:00开会，尚未出发；下雨改为线上。"
-    database = SQLiteDB(tmp_path / "deadline.sqlite")
-    database.update_config(dict(useKnowledgeBase=False, temperature=.2, maxTokens=128, topP=1.0))
-    semaphore, cancelled = asyncio.Semaphore(1), asyncio.Event()
+    facts = '完整虚构题设：林绮周四14:00开会，15:00结束；尚未出发，下雨改为线上。请复述时间、否定和条件。'
+    reply = '林绮周四14:00至15:00开会，尚未出发；下雨改为线上。'
+    database = SQLiteDB(tmp_path / 'deadline.sqlite')
+    database.update_config(dict(useKnowledgeBase=False, temperature=0.2, maxTokens=128, topP=1.0))
+    semaphore, cancelled = (asyncio.Semaphore(1), asyncio.Event())
     state = SimpleNamespace(blocked=True, calls=0)
 
     async def hold():
@@ -337,69 +327,61 @@ async def test_generation_deadline_cancels_work_records_usage_and_can_recover(
             cancelled.set()
 
     async def complete(*, messages, **options):
-        assert messages[-1] == {"role": "user", "content": facts}
+        assert messages[-1] == {'role': 'user', 'content': facts}
         state.calls += 1
         usage = begin_completion()
         if state.blocked:
             await hold()
-        usage.read({"usage": {"prompt_tokens": 20, "completion_tokens": 10, "total_tokens": 30}})
-        return reply, .01
-
-    connection = cloud_connection("fiction-deadline-model", completion=complete)
+        usage.read({'usage': {'prompt_tokens': 20, 'completion_tokens': 10, 'total_tokens': 30}})
+        return (reply, 0.01)
+    connection = cloud_connection('fiction-deadline-model', completion=complete)
     connection.name = provider
     connection.set_lora_adapter = lambda _: None
-    monkeypatch.setattr(model_manager, "get_model_manager", lambda: SimpleNamespace(get_current_provider=lambda: connection))
-    monkeypatch.setattr(generate, "response_cache", None)
-    monkeypatch.setattr(generate, "circuit_breaker_registry", None)
-    monkeypatch.setattr(generate, "get_llm_semaphore", lambda: semaphore)
-    monkeypatch.setattr(generate, "_MODEL_INFERENCE_TIMEOUT", .03)
+    monkeypatch.setattr(model_manager, 'get_model_manager', lambda *, database=None: SimpleNamespace(get_current_provider=lambda: connection))
+    monkeypatch.setattr(generate, 'response_cache', None)
+    monkeypatch.setattr(generate, 'circuit_breaker_registry', None)
+    monkeypatch.setattr(generate, 'get_llm_semaphore', lambda: semaphore)
+    monkeypatch.setattr(generate, '_MODEL_INFERENCE_TIMEOUT', 0.03)
 
     async def vllm_complete(**kwargs):
         text, _cost = await complete(**kwargs)
         return text
-
-    monkeypatch.setattr(generate, "get_vllm_client", AsyncMock(return_value=SimpleNamespace(generate=vllm_complete)))
+    monkeypatch.setattr(generate, 'get_vllm_client', AsyncMock(return_value=SimpleNamespace(generate=vllm_complete)))
 
     async def compiled(request, lora_name, *, model_generate, **kwargs):
-        assert request.message == facts and kwargs["message_db"] is database
-        if state.blocked and stage == "review":
-            begin_completion().read({"usage": {"prompt_tokens": 10, "completion_tokens": 2, "total_tokens": 12}})
+        assert request.message == facts and kwargs['message_db'] is database
+        if state.blocked and stage == 'review':
+            begin_completion().read({'usage': {'prompt_tokens': 10, 'completion_tokens': 2, 'total_tokens': 12}})
             await hold()
-        text = await model_generate(messages=[{"role": "user", "content": request.message}],
-            temperature=.2, max_tokens=128, top_p=1.0)
+        text = await model_generate(messages=[{'role': 'user', 'content': request.message}], temperature=0.2, max_tokens=128, top_p=1.0)
         return ChatAnswer(reply=text, used_rag=False, model_invoked=True, metadata={})
-
-    monkeypatch.setattr(chat_answer, "generate_chat_answer", compiled)
+    monkeypatch.setattr(chat_answer, 'generate_chat_answer', compiled)
 
     async def turn():
-        return await generate._generate_reply_impl(
-            MessageRequest(message=facts, loraName="default", traceId="fiction-deadline"),
-            message_db=database, enable_rag=False,
-        )
-
+        return await generate._generate_reply_impl(MessageRequest(message=facts, loraName='default', traceId='fiction-deadline'), message_db=database, enable_rag=False)
     try:
         with pytest.raises(HTTPException) as caught:
             await asyncio.wait_for(turn(), 1)
         assert caught.value.status_code == 503 and isinstance(caught.value.__cause__, TimeoutError)
-        assert caught.value.detail["reason"] == "deadline_exceeded"
-        assert caught.value.detail["messageSaved"] is False and caught.value.detail["modelInvoked"] is None
-        assert cancelled.is_set() and semaphore._value == 1 and not generate._get_local_model_lock().locked()
-        assert state.calls == (stage == "main")
-        assert fresh_observability.get_counter("model_failures") == 0
-        assert database.execute_sql("SELECT * FROM messages") == []
-        rows = database.execute_sql("SELECT * FROM model_invocations ORDER BY id")
-        assert len(rows) == 1 and rows[0]["errorType"] == "TimeoutError"
-        assert rows[0]["usageSource"] == ("provider" if stage == "review" else "unavailable")
-        assert rows[0]["totalTokens"] == (12 if stage == "review" else None)
+        assert caught.value.detail['reason'] == 'deadline_exceeded'
+        assert caught.value.detail['messageSaved'] is False and caught.value.detail['modelInvoked'] is None
+        assert cancelled.is_set() and semaphore._value == 1 and (not generate._get_local_model_lock().locked())
+        assert state.calls == (stage == 'main')
+        assert fresh_observability.get_counter('model_failures') == 0
+        assert database.execute_sql('SELECT * FROM messages') == []
+        rows = database.execute_sql('SELECT * FROM model_invocations ORDER BY id')
+        assert len(rows) == 1 and rows[0]['errorType'] == 'TimeoutError'
+        assert rows[0]['usageSource'] == ('provider' if stage == 'review' else 'unavailable')
+        assert rows[0]['totalTokens'] == (12 if stage == 'review' else None)
         state.blocked = False
         result = await turn()
         assert result.reply == reply and result.modelInvoked is True
-        assert state.calls == 1 + (stage == "main") and semaphore._value == 1
-        rows = database.execute_sql("SELECT * FROM model_invocations ORDER BY id")
-        assert len(rows) == 2 and rows[1]["errorType"] == "" and rows[1]["totalTokens"] == 30
-        saved = database.execute_sql("SELECT * FROM messages")
-        assert len(saved) == 1 and saved[0]["message"] == facts and saved[0]["reply"] == reply
-        assert fresh_observability.get_counter("model_failures") == 0
+        assert state.calls == 1 + (stage == 'main') and semaphore._value == 1
+        rows = database.execute_sql('SELECT * FROM model_invocations ORDER BY id')
+        assert len(rows) == 2 and rows[1]['errorType'] == '' and (rows[1]['totalTokens'] == 30)
+        saved = database.execute_sql('SELECT * FROM messages')
+        assert len(saved) == 1 and saved[0]['message'] == facts and (saved[0]['reply'] == reply)
+        assert fresh_observability.get_counter('model_failures') == 0
     finally:
         database.close_connection()
 

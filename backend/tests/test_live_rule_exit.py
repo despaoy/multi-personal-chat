@@ -152,28 +152,24 @@ async def test_checker_failure_or_cancel_never_creates_a_report(records, checker
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("selection", ["base", "explicit_adapter"])
+@pytest.mark.parametrize('selection', ['base', 'explicit_adapter'])
 async def test_legacy_rule_config_cannot_choose_a_persona_from_a_name(monkeypatch, selection):
-    manager = SimpleNamespace(_current_provider=SimpleNamespace(value="openai_compat"),
-        set_lora_adapter=Mock(), set_provider=Mock(),
-        get_status=lambda: {"currentProvider": "openai_compat", "providers": {"openai_compat": {"modelName": "fixture-model"}}})
-    connection = cloud_connection("fixture-model")
+    manager = SimpleNamespace(_current_provider=SimpleNamespace(value='openai_compat'), set_lora_adapter=Mock(), set_provider=Mock(), get_status=lambda: {'currentProvider': 'openai_compat', 'providers': {'openai_compat': {'modelName': 'fixture-model'}}})
+    connection = cloud_connection('fixture-model')
     manager.get_current_provider = lambda: connection
-    monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
-    legacy = {"enabled": True, "mode": "rule", "persona_keywords": {"hutao": ["胡桃"]}, "persona_adapters": {"hutao": "hutao"}}
-    store = SimpleNamespace(config={"useKnowledgeBase": False, "lora_router_config": json.dumps(legacy)},
-        loras=[{"id": "fiction-hutao", "name": "hutao", "status": "inactive"}])
-    monkeypatch.setattr(generate, "db", store)
-    monkeypatch.setattr(generate, "response_cache", None)
-    monkeypatch.setattr(generate, "circuit_breaker_registry", None)
-    monkeypatch.setattr(generate, "get_llm_semaphore", lambda: asyncio.Semaphore(1))
+    monkeypatch.setattr(model_manager, 'get_model_manager', lambda *, database=None: manager)
+    legacy = {'enabled': True, 'mode': 'rule', 'persona_keywords': {'hutao': ['胡桃']}, 'persona_adapters': {'hutao': 'hutao'}}
+    store = SimpleNamespace(config={'useKnowledgeBase': False, 'lora_router_config': json.dumps(legacy)}, loras=[{'id': 'fiction-hutao', 'name': 'hutao', 'status': 'inactive'}])
+    monkeypatch.setattr(generate, 'db', store)
+    monkeypatch.setattr(generate, 'response_cache', None)
+    monkeypatch.setattr(generate, 'circuit_breaker_registry', None)
+    monkeypatch.setattr(generate, 'get_llm_semaphore', lambda: asyncio.Semaphore(1))
     operation = AsyncMock(return_value=ChatAnswer(reply='3张票，每张2元，总额6元。', used_rag=False, model_invoked=True, metadata={}))
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', operation)
-    req = MessageRequest(message="只是讨论胡桃这个名字，不要求切换角色。完整题设：3张票，每张2元，计算总额。",
-        loraName="hutao" if selection == "explicit_adapter" else "")
-    if selection == "base":
+    req = MessageRequest(message='只是讨论胡桃这个名字，不要求切换角色。完整题设：3张票，每张2元，计算总额。', loraName='hutao' if selection == 'explicit_adapter' else '')
+    if selection == 'base':
         response = await generate._generate_reply_impl(req, persist_message=False, record_invocation=False, message_db=generate.db)
-        assert response.reply == "3张票，每张2元，总额6元。" and operation.await_args.args[1] == "default"
+        assert response.reply == '3张票，每张2元，总额6元。' and operation.await_args.args[1] == 'default'
     else:
         with pytest.raises(HTTPException) as error:
             await generate._generate_reply_impl(req, persist_message=False, record_invocation=False, message_db=generate.db)

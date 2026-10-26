@@ -36,12 +36,12 @@ def get_character_memory_repository(request: Request) -> DatabaseCharacterMemory
     return DatabaseCharacterMemoryRepository(container.db)
 
 
-def get_model_management_service() -> ModelManagementService:
+def get_model_management_service(request: Request) -> ModelManagementService:
     """Resolve the concrete model manager at the application's composition edge."""
 
     from inference.model_manager import get_model_manager
 
-    return ModelManagerService(get_model_manager())
+    return ModelManagerService(get_model_manager(database=get_runtime_container(request.app).db))
 
 
 async def get_vllm_client():

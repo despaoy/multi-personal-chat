@@ -50,14 +50,12 @@ class LocalResource(model_manager.BaseProvider):
 
 @pytest.fixture
 def owned(monkeypatch):
-    config = dict(openaiCompatBaseUrl="https://api.deepseek.com", openaiCompatModel="deepseek-flash",
-                  openaiCompatApiKey="synthetic-owned-key", useKnowledgeBase=False,
-                  temperature=.2, maxTokens=128, topP=1.0)
-    monkeypatch.setattr(model_manager, "_get_db_config", lambda: dict(config))
+    config = dict(openaiCompatBaseUrl='https://api.deepseek.com', openaiCompatModel='deepseek-flash', openaiCompatApiKey='synthetic-owned-key', useKnowledgeBase=False, temperature=0.2, maxTokens=128, topP=1.0)
+    monkeypatch.setattr(model_manager, '_get_db_config', lambda _owner_database=None: dict(config))
     cloud = model_manager.OpenAICompatProvider()
     snapshots = Mock(wraps=cloud.snapshot)
-    monkeypatch.setattr(cloud, "snapshot", snapshots)
-    local_calls, http_calls = [], []
+    monkeypatch.setattr(cloud, 'snapshot', snapshots)
+    local_calls, http_calls = ([], [])
     manager = model_manager.ModelManager.__new__(model_manager.ModelManager)
     manager._current_provider = model_manager.ModelProvider.OPENAI_COMPAT
     resources = {model_manager.ModelProvider.OPENAI_COMPAT: cloud}
@@ -65,27 +63,26 @@ def owned(monkeypatch):
         resources[kind] = LocalResource(kind.value, local_calls)
     manager._providers = resources
     reads = Mock(wraps=manager.get_current_provider)
-    monkeypatch.setattr(manager, "get_current_provider", reads)
+    monkeypatch.setattr(manager, 'get_current_provider', reads)
     legacy_calls = Mock(wraps=manager.async_generate)
-    monkeypatch.setattr(manager, "async_generate", legacy_calls)
-    monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
+    monkeypatch.setattr(manager, 'async_generate', legacy_calls)
+    monkeypatch.setattr(model_manager, 'get_model_manager', lambda *, database=None: manager)
 
     def respond(request):
-        http_calls.append(dict(body=json.loads(request.content), auth=request.headers["Authorization"]))
-        return httpx.Response(200, json={"usage": {"prompt_tokens": 100, "completion_tokens": 20, "total_tokens": 120}, "choices": [{"finish_reason": "stop", "message": {"content": ANSWER}}]})
+        http_calls.append(dict(body=json.loads(request.content), auth=request.headers['Authorization']))
+        return httpx.Response(200, json={'usage': {'prompt_tokens': 100, 'completion_tokens': 20, 'total_tokens': 120}, 'choices': [{'finish_reason': 'stop', 'message': {'content': ANSWER}}]})
 
     @asynccontextmanager
     async def acquire(_self, timeout):
         async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
             yield client
-
-    monkeypatch.setattr(model_manager.OpenAICompatProvider, "_acquire_http_client", acquire)
-    monkeypatch.setattr(generate, "db", SimpleNamespace(config=config, loras=[]))
-    monkeypatch.setattr(generate, "response_cache", None)
-    monkeypatch.setattr(generate, "circuit_breaker_registry", None)
-    monkeypatch.setattr(generate, "get_lora_character_id", lambda _: None)
+    monkeypatch.setattr(model_manager.OpenAICompatProvider, '_acquire_http_client', acquire)
+    monkeypatch.setattr(generate, 'db', SimpleNamespace(config=config, loras=[]))
+    monkeypatch.setattr(generate, 'response_cache', None)
+    monkeypatch.setattr(generate, 'circuit_breaker_registry', None)
+    monkeypatch.setattr(generate, 'get_lora_character_id', lambda _: None)
     semaphore = asyncio.Semaphore(2)
-    monkeypatch.setattr(generate, "get_llm_semaphore", lambda: semaphore)
+    monkeypatch.setattr(generate, 'get_llm_semaphore', lambda: semaphore)
     state = SimpleNamespace(pause_compile=False, compile_entered=asyncio.Event(), compile_release=asyncio.Event())
 
     async def compiled(request, lora_name, *, model_generate, runtime_config, **_kwargs):
@@ -93,15 +90,10 @@ def owned(monkeypatch):
             state.pause_compile = False
             state.compile_entered.set()
             await state.compile_release.wait()
-        result = await generate_character_response(GenerationRequest(message=request.message,
-            persona_prompt="保留完整虚构题设的金额、时间、否定和条件。", apply_prompt_policy=False,
-            temperature=runtime_config["temperature"], max_tokens=runtime_config["maxTokens"],
-            top_p=runtime_config["topP"], context_window_tokens=8192), model_generate)
+        result = await generate_character_response(GenerationRequest(message=request.message, persona_prompt='保留完整虚构题设的金额、时间、否定和条件。', apply_prompt_policy=False, temperature=runtime_config['temperature'], max_tokens=runtime_config['maxTokens'], top_p=runtime_config['topP'], context_window_tokens=8192), model_generate)
         return ChatAnswer(reply=result.reply, used_rag=False, model_invoked=True, metadata={})
-
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', compiled)
-    return SimpleNamespace(manager=manager, resources=resources, reads=reads, snapshots=snapshots,
-        local_calls=local_calls, http_calls=http_calls, legacy_calls=legacy_calls, state=state, semaphore=semaphore)
+    return SimpleNamespace(manager=manager, resources=resources, reads=reads, snapshots=snapshots, local_calls=local_calls, http_calls=http_calls, legacy_calls=legacy_calls, state=state, semaphore=semaphore)
 
 
 async def turn():

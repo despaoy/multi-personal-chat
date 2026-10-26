@@ -24,20 +24,18 @@ STORED = {
 
 @pytest.fixture
 def configured(monkeypatch, tmp_path):
-    database = SQLiteDB(tmp_path / "config.db")
+    database = SQLiteDB(tmp_path / 'config.db')
     database.update_config(STORED)
-    monkeypatch.setattr(adapter, "db", database)
-    monkeypatch.setattr(config_api, "db", database)
-    # These provider tests isolate refresh/transport behavior from cache expiry.
-    monkeypatch.setattr(model_manager, "_get_db_config", lambda: database.config)
-    monkeypatch.setenv("MODEL_PROVIDER", "openai_compat")
-    monkeypatch.setenv("OPENAI_COMPAT_BASE_URL", "https://environment.example")
-    monkeypatch.setenv("OPENAI_COMPAT_API_KEY", "fiction-environment-key")
-    monkeypatch.setenv("OPENAI_COMPAT_MODEL", "environment-model")
+    monkeypatch.setattr(adapter, 'db', database)
+    monkeypatch.setattr(model_manager, '_get_db_config', lambda _owner_database=None: database.config)
+    monkeypatch.setenv('MODEL_PROVIDER', 'openai_compat')
+    monkeypatch.setenv('OPENAI_COMPAT_BASE_URL', 'https://environment.example')
+    monkeypatch.setenv('OPENAI_COMPAT_API_KEY', 'fiction-environment-key')
+    monkeypatch.setenv('OPENAI_COMPAT_MODEL', 'environment-model')
     manager = model_manager.ModelManager(base_dir=tmp_path)
-    monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
+    monkeypatch.setattr(model_manager, 'get_model_manager', lambda *, database=None: manager)
     try:
-        yield database, manager
+        yield (database, manager)
     finally:
         manager.shutdown()
         database.close_connection()
@@ -51,60 +49,58 @@ def request(body):
 async def test_config_update_and_provider_switch_use_the_same_resolver(configured):
     database, manager = configured
     provider = manager.get_current_provider()
-    result = await config_api.update_config(request({"openaiCompatModel": "new-model"}), current_user={"isAdmin": True})
-    assert result["success"] and database.config["openaiCompatModel"] == "new-model"
-    assert provider.model == provider.get_status()["modelName"] == "new-model"
-    assert provider.api_key == STORED["openaiCompatApiKey"] and "fiction-stored-key" not in str(result)
-    database.update_config({"openaiCompatModel": "switched-model"})
-    switched = await config_api.set_model_provider(request({"provider": "openai_compat"}), current_user={"isAdmin": True})
-    assert switched["success"] and manager.get_current_provider() is provider
-    assert provider.model == "switched-model" and switched["status"]["providers"]["openai_compat"]["modelName"] == "switched-model"
+    result = await config_api.update_config(request({'openaiCompatModel': 'new-model'}), current_user={'isAdmin': True}, database=configured[0])
+    assert result['success'] and database.config['openaiCompatModel'] == 'new-model'
+    assert provider.model == provider.get_status()['modelName'] == 'new-model'
+    assert provider.api_key == STORED['openaiCompatApiKey'] and 'fiction-stored-key' not in str(result)
+    database.update_config({'openaiCompatModel': 'switched-model'})
+    switched = await config_api.set_model_provider(request({'provider': 'openai_compat'}), current_user={'isAdmin': True}, database=configured[0])
+    assert switched['success'] and manager.get_current_provider() is provider
+    assert provider.model == 'switched-model' and switched['status']['providers']['openai_compat']['modelName'] == 'switched-model'
 
 
 @pytest.mark.asyncio
 async def test_cleared_database_fields_re_resolve_environment_instead_of_old_memory(configured):
     _, manager = configured
     provider = manager.get_current_provider()
-    body = {key: "" for key in ("openaiCompatBaseUrl", "openaiCompatApiKey", "openaiCompatModel")}
-    result = await config_api.update_config(request(body), current_user={"isAdmin": True})
-    assert result["success"]
-    assert (provider.base_url, provider.api_key, provider.model) == (
-        "https://environment.example", "fiction-environment-key", "environment-model")
+    body = {key: '' for key in ('openaiCompatBaseUrl', 'openaiCompatApiKey', 'openaiCompatModel')}
+    result = await config_api.update_config(request(body), current_user={'isAdmin': True}, database=configured[0])
+    assert result['success']
+    assert (provider.base_url, provider.api_key, provider.model) == ('https://environment.example', 'fiction-environment-key', 'environment-model')
 
 
 @pytest.mark.asyncio
 async def test_cleared_key_without_environment_cannot_use_the_previous_key(configured, monkeypatch):
     _, manager = configured
     provider = manager.get_current_provider()
-    monkeypatch.delenv("OPENAI_COMPAT_API_KEY")
-    await config_api.update_config(request({"openaiCompatApiKey": ""}), current_user={"isAdmin": True})
-    assert provider.api_key == ""
-    with pytest.raises(RuntimeError, match="API Key"):
-        await provider.async_generate("完整的合成问题")
+    monkeypatch.delenv('OPENAI_COMPAT_API_KEY')
+    await config_api.update_config(request({'openaiCompatApiKey': ''}), current_user={'isAdmin': True}, database=configured[0])
+    assert provider.api_key == ''
+    with pytest.raises(RuntimeError, match='API Key'):
+        await provider.async_generate('完整的合成问题')
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("switch", [False, True])
+@pytest.mark.parametrize('switch', [False, True])
 async def test_runtime_sync_failure_reports_persisted_partial_state(configured, monkeypatch, switch):
     database, manager = configured
     provider = manager.get_current_provider()
-    failure = OSError("fiction-private-config-failure")
+    failure = OSError('fiction-private-config-failure')
 
-    def fail():
+    def fail(_owner_database=None):
         raise failure
-
-    monkeypatch.setattr(provider, "_refresh_db_config", fail)
+    monkeypatch.setattr(provider, '_refresh_db_config', fail)
     operation = config_api.set_model_provider if switch else config_api.update_config
-    body = {"provider": "openai_compat"} if switch else {"openaiCompatModel": "persisted-model"}
+    body = {'provider': 'openai_compat'} if switch else {'openaiCompatModel': 'persisted-model'}
     with pytest.raises(HTTPException) as error:
-        await operation(request(body), current_user={"isAdmin": True})
+        await operation(request(body), current_user={'isAdmin': True}, database=configured[0])
     assert error.value.status_code == 503 and error.value.__cause__ is failure
-    assert error.value.detail["configPersisted"] and error.value.detail["stage"] == "runtime_config"
+    assert error.value.detail['configPersisted'] and error.value.detail['stage'] == 'runtime_config'
     if switch:
-        assert error.value.detail["providerSwitched"] and database.config["modelProvider"] == "openai_compat"
+        assert error.value.detail['providerSwitched'] and database.config['modelProvider'] == 'openai_compat'
     else:
-        assert database.config["openaiCompatModel"] == "persisted-model"
-    assert "fiction-private" not in str(error.value.detail)
+        assert database.config['openaiCompatModel'] == 'persisted-model'
+    assert 'fiction-private' not in str(error.value.detail)
 
 
 @pytest.mark.asyncio
@@ -140,7 +136,7 @@ async def test_request_keeps_its_connection_snapshot_during_runtime_refresh(conf
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("kind", ["OpenAICompatProvider", "OllamaProvider", "LlamaCppProvider"])
+@pytest.mark.parametrize('kind', ['OpenAICompatProvider', 'OllamaProvider', 'LlamaCppProvider'])
 async def test_http_generation_refreshes_parameters_and_propagates_config_read_failure(configured, monkeypatch, kind):
     database, _ = configured
     provider = getattr(model_manager, kind)()
@@ -154,31 +150,28 @@ async def test_http_generation_refreshes_parameters_and_propagates_config_read_f
     async def acquire(timeout):
         async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
             yield client
-
-    monkeypatch.setattr(provider, "_acquire_http_client", acquire)
+    monkeypatch.setattr(provider, '_acquire_http_client', acquire)
     for temperature, tokens in [(0.37, 733), (0.12, 377)]:
-        database.update_config({"temperature": temperature, "maxTokens": tokens})
-        assert (await provider.async_generate("完整的合成问题"))[0] == "完整回答"
+        database.update_config({'temperature': temperature, 'maxTokens': tokens})
+        assert (await provider.async_generate('完整的合成问题'))[0] == '完整回答'
         body = calls[-1]
-        if kind == "OllamaProvider":
-            assert body["options"]["temperature"] == temperature and body["options"]["num_predict"] == tokens
+        if kind == 'OllamaProvider':
+            assert body['options']['temperature'] == temperature and body['options']['num_predict'] == tokens
         else:
-            assert body["temperature"] == temperature and body["max_tokens"] == tokens
-    failure = OSError("fiction-config-read-failure")
+            assert body['temperature'] == temperature and body['max_tokens'] == tokens
+    failure = OSError('fiction-config-read-failure')
 
-    def fail():
+    def fail(_owner_database=None):
         raise failure
-
-    monkeypatch.setattr(model_manager, "_get_db_config", fail)
+    monkeypatch.setattr(model_manager, '_get_db_config', fail)
     with pytest.raises(OSError) as error:
-        await provider.async_generate("完整的合成问题")
+        await provider.async_generate('完整的合成问题')
     assert error.value is failure and len(calls) == 2
 
 
 @pytest.mark.asyncio
 async def test_vllm_generation_refreshes_parameters_without_connection_db_overrides(configured, monkeypatch):
     from inference import vllm_client
-
     database, _ = configured
     provider = model_manager.VLLMProvider()
     connection = (provider.base_url, provider.model, provider.timeout)
@@ -186,25 +179,23 @@ async def test_vllm_generation_refreshes_parameters_without_connection_db_overri
 
     async def generate(**kwargs):
         calls.append(kwargs)
-        return "完整回答"
+        return '完整回答'
 
     async def get_client():
         return SimpleNamespace(generate=generate)
-
-    monkeypatch.setattr(vllm_client, "get_vllm_client", get_client)
+    monkeypatch.setattr(vllm_client, 'get_vllm_client', get_client)
     for temperature, tokens in [(0.37, 733), (0.12, 377)]:
-        database.update_config({"temperature": temperature, "maxTokens": tokens, "vllmBaseUrl": "https://unused.example"})
-        assert (await provider.async_generate("完整的合成问题"))[0] == "完整回答"
-        assert calls[-1]["temperature"] == temperature and calls[-1]["max_tokens"] == tokens
+        database.update_config({'temperature': temperature, 'maxTokens': tokens, 'vllmBaseUrl': 'https://unused.example'})
+        assert (await provider.async_generate('完整的合成问题'))[0] == '完整回答'
+        assert calls[-1]['temperature'] == temperature and calls[-1]['max_tokens'] == tokens
     assert (provider.base_url, provider.model, provider.timeout) == connection
-    failure = OSError("fiction-config-read-failure")
+    failure = OSError('fiction-config-read-failure')
 
-    def fail():
+    def fail(_owner_database=None):
         raise failure
-
-    monkeypatch.setattr(model_manager, "_get_db_config", fail)
+    monkeypatch.setattr(model_manager, '_get_db_config', fail)
     with pytest.raises(OSError) as error:
-        await provider.async_generate("完整的合成问题")
+        await provider.async_generate('完整的合成问题')
     assert error.value is failure and len(calls) == 2
 
 
@@ -217,25 +208,22 @@ def test_loaded_local_generation_reads_current_parameters_without_loading_weight
     def generate(*args, **kwargs):
         calls.append(kwargs)
         return [[1, 2, 3]]
-
-    monkeypatch.setitem(sys.modules, "torch", SimpleNamespace(no_grad=nullcontext))
-    monkeypatch.setattr(provider, "_ensure_loaded", lambda: None)
-    provider._model = SimpleNamespace(device="cpu", generate=generate)
-    provider._tokenizer = SimpleNamespace(apply_chat_template=lambda *args, **kwargs: SimpleNamespace(input_ids=tensor),
-                                          decode=lambda *args, **kwargs: "完整回答", eos_token_id=0)
+    monkeypatch.setitem(sys.modules, 'torch', SimpleNamespace(no_grad=nullcontext))
+    monkeypatch.setattr(provider, '_ensure_loaded', lambda: None)
+    provider._model = SimpleNamespace(device='cpu', generate=generate)
+    provider._tokenizer = SimpleNamespace(apply_chat_template=lambda *args, **kwargs: SimpleNamespace(input_ids=tensor), decode=lambda *args, **kwargs: '完整回答', eos_token_id=0)
     try:
         for temperature, tokens in [(0.37, 733), (0.12, 377)]:
-            database.update_config({"temperature": temperature, "maxTokens": tokens})
-            assert provider.generate("完整的合成问题")[0] == "完整回答"
-            assert calls[-1]["temperature"] == temperature and calls[-1]["max_new_tokens"] == tokens
-        failure = OSError("fiction-config-read-failure")
+            database.update_config({'temperature': temperature, 'maxTokens': tokens})
+            assert provider.generate('完整的合成问题')[0] == '完整回答'
+            assert calls[-1]['temperature'] == temperature and calls[-1]['max_new_tokens'] == tokens
+        failure = OSError('fiction-config-read-failure')
 
-        def fail():
+        def fail(_owner_database=None):
             raise failure
-
-        monkeypatch.setattr(model_manager, "_get_db_config", fail)
+        monkeypatch.setattr(model_manager, '_get_db_config', fail)
         with pytest.raises(OSError) as error:
-            provider.generate("完整的合成问题")
+            provider.generate('完整的合成问题')
         assert error.value is failure and len(calls) == 2
     finally:
         provider._model = None
@@ -245,48 +233,43 @@ def test_loaded_local_generation_reads_current_parameters_without_loading_weight
 def token_limit_provider(monkeypatch, kind):
     from unittest.mock import Mock
     from inference import vllm_client
-
-    settings = dict(openaiCompatBaseUrl="https://api.deepseek.com", openaiCompatApiKey="synthetic-not-a-real-key",
-                    openaiCompatModel="synthetic-token-limit", temperature=0.25)
-    monkeypatch.setattr(model_manager, "_get_db_config", lambda: settings)
+    settings = dict(openaiCompatBaseUrl='https://api.deepseek.com', openaiCompatApiKey='synthetic-not-a-real-key', openaiCompatModel='synthetic-token-limit', temperature=0.25)
+    monkeypatch.setattr(model_manager, '_get_db_config', lambda _owner_database=None: settings)
     provider = getattr(model_manager, kind)()
     calls = []
     attempts = Mock()
-    if kind == "TransformersPeftProvider":
+    if kind == 'TransformersPeftProvider':
         tensor = SimpleNamespace(shape=(1, 2), to=lambda device: tensor)
-        monkeypatch.setitem(sys.modules, "torch", SimpleNamespace(no_grad=nullcontext))
+        monkeypatch.setitem(sys.modules, 'torch', SimpleNamespace(no_grad=nullcontext))
         provider._ensure_loaded = attempts
-        provider._tokenizer = SimpleNamespace(eos_token_id=0,
-            apply_chat_template=lambda *args, **kwargs: SimpleNamespace(input_ids=tensor),
-            decode=lambda *args, **kwargs: "完整受控回答")
+        provider._tokenizer = SimpleNamespace(eos_token_id=0, apply_chat_template=lambda *args, **kwargs: SimpleNamespace(input_ids=tensor), decode=lambda *args, **kwargs: '完整受控回答')
 
         def generate(*args, **kwargs):
-            calls.append(kwargs["max_new_tokens"])
+            calls.append(kwargs['max_new_tokens'])
             return [[1, 2, 3]]
+        provider._model = SimpleNamespace(device='cpu', generate=generate)
+    elif kind == 'VLLMProvider':
 
-        provider._model = SimpleNamespace(device="cpu", generate=generate)
-    elif kind == "VLLMProvider":
         async def generate(**kwargs):
-            calls.append(kwargs["max_tokens"])
-            return "完整受控回答"
+            calls.append(kwargs['max_tokens'])
+            return '完整受控回答'
 
         async def acquire():
             attempts()
             return SimpleNamespace(generate=generate)
-
-        monkeypatch.setattr(vllm_client, "get_vllm_client", acquire)
+        monkeypatch.setattr(vllm_client, 'get_vllm_client', acquire)
     else:
+
         async def post(*args, **kwargs):
-            body = kwargs["json"]
-            calls.append(body["options"]["num_predict"] if kind == "OllamaProvider" else body["max_tokens"])
+            body = kwargs['json']
+            calls.append(body['options']['num_predict'] if kind == 'OllamaProvider' else body['max_tokens'])
             return httpx.Response(200, json=completed_provider_response(kind, '完整受控回答'))
 
         @asynccontextmanager
         async def acquire(timeout):
             attempts()
             yield SimpleNamespace(post=post)
-
-        monkeypatch.setattr(provider, "_acquire_http_client", acquire)
+        monkeypatch.setattr(provider, '_acquire_http_client', acquire)
     return SimpleNamespace(provider=provider, settings=settings, calls=calls, attempts=attempts)
 
 

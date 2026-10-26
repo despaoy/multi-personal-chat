@@ -43,13 +43,13 @@ class Cache(ResponseCache):
 @pytest.fixture
 def installed(monkeypatch):
     stored = {'openaiCompatBaseUrl': 'https://api.deepseek.com', 'openaiCompatApiKey': 'fiction-key', 'openaiCompatModel': 'fixture-model', 'temperature': 1.6, 'maxTokens': 999}
-    monkeypatch.setattr(model_manager, '_get_db_config', lambda: dict(stored))
+    monkeypatch.setattr(model_manager, '_get_db_config', lambda _owner_database=None: dict(stored))
     provider = model_manager.OpenAICompatProvider()
     manager = model_manager.ModelManager.__new__(model_manager.ModelManager)
     manager._current_provider = model_manager.ModelProvider.OPENAI_COMPAT
     manager._providers = {model_manager.ModelProvider.OPENAI_COMPAT: provider}
     manager.async_generate = AsyncMock(side_effect=AssertionError('Compiled cloud messages must not re-enter legacy generation'))
-    monkeypatch.setattr(model_manager, 'get_model_manager', lambda: manager)
+    monkeypatch.setattr(model_manager, 'get_model_manager', lambda *, database=None: manager)
     runtime_config = {'useKnowledgeBase': False, 'temperature': 0.83, 'maxTokens': 173}
     monkeypatch.setattr(generate, 'db', SimpleNamespace(config=runtime_config, loras=[]))
     monkeypatch.setattr(generate, 'response_cache', None)
@@ -185,13 +185,12 @@ async def test_direct_cache_reuse_is_labelled_and_model_source_changes_miss(inst
 @pytest.mark.asyncio
 async def test_required_configuration_failure_cannot_fall_through_cache_handling(installed, monkeypatch):
     cache = Cache()
-    monkeypatch.setattr(generate, "response_cache", cache)
-    failure = OSError("fiction-config-error")
+    monkeypatch.setattr(generate, 'response_cache', cache)
+    failure = OSError('fiction-config-error')
 
-    def fail():
+    def fail(_owner_database=None):
         raise failure
-
-    monkeypatch.setattr(model_manager, "_get_db_config", fail)
+    monkeypatch.setattr(model_manager, '_get_db_config', fail)
     with pytest.raises(HTTPException) as error:
         await receive()
     assert error.value.status_code == 503 and error.value.__cause__ is failure

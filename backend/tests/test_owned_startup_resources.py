@@ -76,7 +76,6 @@ def lifecycle(monkeypatch, tmp_path):
     monkeypatch.setattr(main, "HttpClientPool", lambda *a, **k: allocate("http", *a, **k))
     monkeypatch.setattr(main, "BackupManager", lambda *a, **k: allocate("backup", *a, **k))
     monkeypatch.setattr(main, "AccessControlManager", lambda *a, **k: allocate("access", *a, **k))
-    monkeypatch.setattr(model_manager, "_model_manager", None)
     getter = Mock(side_effect=AssertionError("Shutdown must not allocate a model manager"))
     monkeypatch.setattr(model_manager, "get_model_manager", getter)
     for module, name in [
@@ -185,8 +184,8 @@ async def test_shutdown_closes_existing_model_and_preserves_request_failure(life
 
     rig = lifecycle
     model = SimpleNamespace(shutdown=AsyncMock())
-    monkeypatch.setattr(model_manager, "_model_manager", model)
-    app, _ = rig.application()
+    app, database = rig.application()
+    database._model_manager = model
     with pytest.raises(RuntimeError) as raised:
         async with rig.main.lifespan(app):
             raise rig.failure

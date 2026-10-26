@@ -69,48 +69,37 @@ async def reached(*events):
 
 @pytest.fixture
 async def rig(monkeypatch, tmp_path):
-    state = dict(is_generating=False, cancel_requested=False, progress=0, total=0,
-                 batch_num=0, total_batches=0, generated_count=0, new_dialogues=[],
-                 all_generated_dialogues=[], started_at=None)
+    state = dict(is_generating=False, cancel_requested=False, progress=0, total=0, batch_num=0, total_batches=0, generated_count=0, new_dialogues=[], all_generated_dialogues=[], started_at=None)
     lock = asyncio.Lock()
-    monkeypatch.setattr(training, "generation_state", state)
-    monkeypatch.setattr(training, "get_generation_state_lock", lambda: lock)
-    monkeypatch.setattr(training, "_dialogue_generation_task", None, raising=False)
-    search = AsyncMock(return_value="")
-    monkeypatch.setattr(training, "search_character_info", search)
-    context = SimpleNamespace(state=state, lock=lock, search=search, calls=[], on_model=None,
-                              tasks=[], releases=[])
+    monkeypatch.setattr(training, 'generation_state', state)
+    monkeypatch.setattr(training, 'get_generation_state_lock', lambda: lock)
+    monkeypatch.setattr(training, '_dialogue_generation_task', None, raising=False)
+    search = AsyncMock(return_value='')
+    monkeypatch.setattr(training, 'search_character_info', search)
+    context = SimpleNamespace(state=state, lock=lock, search=search, calls=[], on_model=None, tasks=[], releases=[])
 
     async def model(**kwargs):
         ordinal = len(context.calls) + 1
-        count, turns, batch = complete_prompt_batch(kwargs["prompt"], ordinal)
-        assert kwargs["session_history"] == []
-        assert kwargs["max_tokens_override"] == (2048 if turns <= 2 else 4096 if turns <= 5 else 6144)
+        count, turns, batch = complete_prompt_batch(kwargs['prompt'], ordinal)
+        assert kwargs['session_history'] == []
+        assert kwargs['max_tokens_override'] == (2048 if turns <= 2 else 4096 if turns <= 5 else 6144)
         context.calls.append((count, turns, batch))
         if context.on_model is not None:
             await context.on_model(ordinal)
-        return json.dumps(batch, ensure_ascii=False), 0.25
-
-    context.manager = SimpleNamespace(
-        _current_provider=SimpleNamespace(value="openai_compat"),
-        async_generate=AsyncMock(side_effect=model),
-        generate=Mock(side_effect=AssertionError("Synchronous model generation is forbidden")),
-    )
-    provider = cloud_connection("fixture-dialogue-model")
+        return (json.dumps(batch, ensure_ascii=False), 0.25)
+    context.manager = SimpleNamespace(_current_provider=SimpleNamespace(value='openai_compat'), async_generate=AsyncMock(side_effect=model), generate=Mock(side_effect=AssertionError('Synchronous model generation is forbidden')))
+    provider = cloud_connection('fixture-dialogue-model')
     provider.async_generate = context.manager.async_generate
     context.manager.get_current_provider = lambda: provider
-    monkeypatch.setattr(model_manager, "get_model_manager", lambda: context.manager)
+    monkeypatch.setattr(model_manager, 'get_model_manager', lambda *, database=None: context.manager)
     app = FastAPI()
-    app.state.runtime_container = RuntimeContainer(
-        db=SQLiteDB(tmp_path / "dialogue-accounting.sqlite"), is_pg_mode=lambda: False)
+    app.state.runtime_container = RuntimeContainer(db=SQLiteDB(tmp_path / 'dialogue-accounting.sqlite'), is_pg_mode=lambda: False)
     app.include_router(training.router)
-    app.dependency_overrides[get_current_admin] = lambda: {"id": 901, "role": "admin"}
+    app.dependency_overrides[get_current_admin] = lambda: {'id': 901, 'role': 'admin'}
     context.app = app
     try:
         yield context
     finally:
-        # Release event gates before joining every owned HTTP/child task, also
-        # when an assertion fails. No background task survives this fixture.
         for release in context.releases:
             release.set()
         child = training._dialogue_generation_task

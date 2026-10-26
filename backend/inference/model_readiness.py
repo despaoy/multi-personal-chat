@@ -3,11 +3,11 @@
 from inference.openai_protocol import chat_completions_endpoint
 
 
-def check_model_readiness():
+def check_model_readiness(database=None):
     """Resolve configuration in the probe's bounded executor, then await network I/O."""
     from inference.model_manager import get_model_manager
 
-    provider = get_model_manager().get_current_provider()
+    provider = get_model_manager(database=database).get_current_provider()
     if provider.name == "mock":
         return False  # The chat endpoint rejects mock inference in every environment.
     if provider.name == "transformers_peft":

@@ -43,117 +43,76 @@ def decode_event(chunk):
 
 @pytest.fixture
 async def ask_rig(tmp_path, monkeypatch):
-    # The global chat environment deliberately describes another connection.
-    monkeypatch.setenv("MODEL_PROVIDER", "vllm")
-    monkeypatch.setenv("OPENAI_COMPAT_MODEL", "unrelated-environment-model")
-    monkeypatch.setenv("OPENAI_COMPAT_BASE_URL", "http://local.invalid/v1")
-    database = SQLiteDB(tmp_path / "ask-scope.sqlite")
-    database.update_config({
-        "openaiCompatBaseUrl": "https://api.deepseek.com",
-        "openaiCompatApiKey": "synthetic-first-key",
-        "openaiCompatModel": "deepseek-flash",
-    })
-    document = database.save_knowledge_document({"title": "虚构档案馆完整开放资料", "content": SOURCE}, chunks=[SOURCE])
-    source_path = tmp_path / "ask-scope-complete-source.txt"
-    source_path.write_text(SOURCE, encoding="utf-8")
-    rig = SimpleNamespace(
-        database=database, document_id=str(document["id"]), calls=[], retrieval_contexts=[],
-        after_retrieve=None, failure=None, hold=False, entered=asyncio.Event(),
-        release=asyncio.Event(), transport_cancelled=asyncio.Event(), retrievals=0,
-    )
+    monkeypatch.setenv('MODEL_PROVIDER', 'vllm')
+    monkeypatch.setenv('OPENAI_COMPAT_MODEL', 'unrelated-environment-model')
+    monkeypatch.setenv('OPENAI_COMPAT_BASE_URL', 'http://local.invalid/v1')
+    database = SQLiteDB(tmp_path / 'ask-scope.sqlite')
+    database.update_config({'openaiCompatBaseUrl': 'https://api.deepseek.com', 'openaiCompatApiKey': 'synthetic-first-key', 'openaiCompatModel': 'deepseek-flash'})
+    document = database.save_knowledge_document({'title': '虚构档案馆完整开放资料', 'content': SOURCE}, chunks=[SOURCE])
+    source_path = tmp_path / 'ask-scope-complete-source.txt'
+    source_path.write_text(SOURCE, encoding='utf-8')
+    rig = SimpleNamespace(database=database, document_id=str(document['id']), calls=[], retrieval_contexts=[], after_retrieve=None, failure=None, hold=False, entered=asyncio.Event(), release=asyncio.Event(), transport_cancelled=asyncio.Event(), retrievals=0)
 
-    def config():
+    def config(_owner_database=None):
         try:
             return dict(database.config)
         finally:
-            # Reads may run in the resolver's thread. Close that thread's own
-            # SQLite connection, not an unrelated test/worker connection.
             database.close_connection()
-
-    monkeypatch.setattr(model_manager, "_get_db_config", config)
+    monkeypatch.setattr(model_manager, '_get_db_config', config)
     provider = model_manager.OpenAICompatProvider()
     manager = model_manager.ModelManager.__new__(model_manager.ModelManager)
     manager._current_provider = model_manager.ModelProvider.OPENAI_COMPAT
     manager._providers = {model_manager.ModelProvider.OPENAI_COMPAT: provider}
-    monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
+    monkeypatch.setattr(model_manager, 'get_model_manager', lambda *, database=None: manager)
     rig.snapshots = Mock(wraps=provider.snapshot)
-    monkeypatch.setattr(provider, "snapshot", rig.snapshots)
-    rig.provider, rig.manager = provider, manager
+    monkeypatch.setattr(provider, 'snapshot', rig.snapshots)
+    rig.provider, rig.manager = (provider, manager)
 
     def set_config(**values):
         try:
             database.update_config(values)
         finally:
             database.close_connection()
-
     rig.set_config = set_config
 
     async def respond(http_request):
         wire = json.loads(http_request.content)
-        rig.calls.append({"body": wire, "endpoint": str(http_request.url),
-                          "auth": http_request.headers["Authorization"]})
-        assert SOURCE in str(wire["messages"])
-        assert wire["temperature"] == .2 and wire["max_tokens"] == 128 and wire["top_p"] == 1.0
+        rig.calls.append({'body': wire, 'endpoint': str(http_request.url), 'auth': http_request.headers['Authorization']})
+        assert SOURCE in str(wire['messages'])
+        assert wire['temperature'] == 0.2 and wire['max_tokens'] == 128 and (wire['top_p'] == 1.0)
         rig.entered.set()
         try:
             if rig.hold:
                 await rig.release.wait()
             if rig.failure is not None:
                 raise rig.failure
-            return httpx.Response(200, json={"usage": {"prompt_tokens": 100, "completion_tokens": 20, "total_tokens": 120}, "choices": [{"finish_reason": "stop", "message": {
-                "role": "assistant", "content": ANSWER + "[S1]",
-            }}]})
+            return httpx.Response(200, json={'usage': {'prompt_tokens': 100, 'completion_tokens': 20, 'total_tokens': 120}, 'choices': [{'finish_reason': 'stop', 'message': {'role': 'assistant', 'content': ANSWER + '[S1]'}}]})
         except asyncio.CancelledError:
             rig.transport_cancelled.set()
             raise
-
     transport = httpx.MockTransport(respond)
 
     @asynccontextmanager
     async def acquire(_provider, timeout):
         async with httpx.AsyncClient(transport=transport, timeout=timeout) as client:
             yield client
-
-    monkeypatch.setattr(model_manager.OpenAICompatProvider, "_acquire_http_client", acquire)
+    monkeypatch.setattr(model_manager.OpenAICompatProvider, '_acquire_http_client', acquire)
 
     def retrieve(query, *, domain_id, top_k, filters):
-        assert query == QUESTION and domain_id == "story" and top_k == 1 and filters is None
+        assert query == QUESTION and domain_id == 'story' and (top_k == 1) and (filters is None)
         rig.retrievals += 1
         rig.retrieval_contexts.append(get_request_context())
         try:
             row = database.get_knowledge_document(int(rig.document_id))
-            assert row["content"] == source_path.read_text(encoding="utf-8") == SOURCE
-            callback, rig.after_retrieve = rig.after_retrieve, None
+            assert row['content'] == source_path.read_text(encoding='utf-8') == SOURCE
+            callback, rig.after_retrieve = (rig.after_retrieve, None)
             if callback is not None:
                 callback()
-            # Ranking is an explicit retrieval-boundary control. Evidence,
-            # attribution, citation binding, prompt and answer handling are real.
-            return {
-                "domains": ["story"], "confidence": .95, "abstained": False,
-                "query_analysis": {"entities": ["虚构档案馆"], "matched_domains": ["story"]},
-                "results": [{
-                    "id": rig.document_id, "document_type": "fact", "title": row["title"],
-                    "summary": SOURCE, "content": row["content"], "domain_id": "story",
-                    "reality_status": "objective", "temporal_scope": "current",
-                    "content_scope": "main_story", "index_version": "synthetic-source-v1",
-                    "rerank_score": .95, "fused_score": .95, "vector_score": .95, "bm25_score": .95,
-                    "source": {"source_path": str(source_path), "line_start": 1, "line_end": 1},
-                    "metadata": {"story_unit_id": "synthetic-library-unit"},
-                }],
-                "citations": [{
-                    "source_id": rig.document_id, "source_title": row["title"], "document_type": "fact",
-                    "source_path": str(source_path), "source_line": 1, "source_line_end": 1,
-                    "domain_id": "story", "index_version": "synthetic-source-v1",
-                }],
-            }
+            return {'domains': ['story'], 'confidence': 0.95, 'abstained': False, 'query_analysis': {'entities': ['虚构档案馆'], 'matched_domains': ['story']}, 'results': [{'id': rig.document_id, 'document_type': 'fact', 'title': row['title'], 'summary': SOURCE, 'content': row['content'], 'domain_id': 'story', 'reality_status': 'objective', 'temporal_scope': 'current', 'content_scope': 'main_story', 'index_version': 'synthetic-source-v1', 'rerank_score': 0.95, 'fused_score': 0.95, 'vector_score': 0.95, 'bm25_score': 0.95, 'source': {'source_path': str(source_path), 'line_start': 1, 'line_end': 1}, 'metadata': {'story_unit_id': 'synthetic-library-unit'}}], 'citations': [{'source_id': rig.document_id, 'source_title': row['title'], 'document_type': 'fact', 'source_path': str(source_path), 'source_line': 1, 'source_line_end': 1, 'domain_id': 'story', 'index_version': 'synthetic-source-v1'}]}
         finally:
             database.close_connection()
-
-    rig.service = GroundedAnswerService(
-        retriever=retrieve, cache=AnswerCache(ttl_seconds=60),
-        index_version_resolver=lambda domain: "synthetic-source-v1",
-    )
-    monkeypatch.setattr(ask, "get_grounded_answer_service", AsyncMock(return_value=rig.service))
+    rig.service = GroundedAnswerService(retriever=retrieve, cache=AnswerCache(ttl_seconds=60), index_version_resolver=lambda domain: 'synthetic-source-v1')
+    monkeypatch.setattr(ask, 'get_grounded_answer_service', AsyncMock(return_value=rig.service))
     rig.http_request = SimpleNamespace(is_disconnected=AsyncMock(return_value=False))
     try:
         yield rig

@@ -15,17 +15,8 @@ lifecycle = owned_lifecycle
 
 @pytest.fixture
 def manager(monkeypatch, tmp_path):
-    monkeypatch.setenv("MODEL_PROVIDER", "openai_compat")
-    monkeypatch.setattr(
-        model_manager,
-        "_get_db_config",
-        lambda: {
-            "modelProvider": "openai_compat",
-            "openaiCompatBaseUrl": "https://synthetic.invalid",
-            "openaiCompatApiKey": "synthetic-key",
-            "openaiCompatModel": "synthetic-model",
-        },
-    )
+    monkeypatch.setenv('MODEL_PROVIDER', 'openai_compat')
+    monkeypatch.setattr(model_manager, '_get_db_config', lambda _owner_database=None: {'modelProvider': 'openai_compat', 'openaiCompatBaseUrl': 'https://synthetic.invalid', 'openaiCompatApiKey': 'synthetic-key', 'openaiCompatModel': 'synthetic-model'})
     return model_manager.ModelManager(base_dir=tmp_path)
 
 
@@ -115,10 +106,10 @@ async def test_real_manager_close_failure_reaches_lifespan_after_other_cleanup(
     first = RuntimeError("synthetic-private-provider-failure")
     second = ValueError("synthetic-private-last-provider-failure")
     order, providers = controlled_closes(manager, {0: first, 5: second}, monkeypatch)
-    monkeypatch.setattr(model_manager, "_model_manager", manager)
     if startup_failure:
         lifecycle.worker.side_effect = lifecycle.failure
-    app, _ = lifecycle.application()
+    app, database = lifecycle.application()
+    database._model_manager = manager
     with pytest.raises(model_manager.ProviderShutdownError) as raised:
         async with main.lifespan(app):
             if startup_failure:

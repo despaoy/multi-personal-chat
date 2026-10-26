@@ -96,47 +96,31 @@ def generation_environment(monkeypatch, provider):
     from db.schemas import MessageRequest
     from inference import model_manager as mm
     from services import turn_completion
-
     runtime = TurnCompletionRuntime(capacity=1)
-    monkeypatch.setattr(turn_completion, "get_turn_completion_runtime", lambda: runtime)
-    manager = SimpleNamespace(
-        _current_provider=SimpleNamespace(value=provider),
-        set_lora_adapter=lambda _: None,
-        get_status=lambda: dict(currentProvider=provider, providers={provider: dict(modelName="unit-model")}),
-    )
-    connection = SimpleNamespace(name=provider, base_url="https://completion.invalid/v1", model="unit-model")
+    monkeypatch.setattr(turn_completion, 'get_turn_completion_runtime', lambda: runtime)
+    manager = SimpleNamespace(_current_provider=SimpleNamespace(value=provider), set_lora_adapter=lambda _: None, get_status=lambda: dict(currentProvider=provider, providers={provider: dict(modelName='unit-model')}))
+    connection = SimpleNamespace(name=provider, base_url='https://completion.invalid/v1', model='unit-model')
     connection.snapshot = lambda: connection
-    connection.get_status = lambda: {"modelName": "unit-model"}
-    connection.async_complete = AsyncMock(side_effect=AssertionError("This admission control must not invoke a provider"))
+    connection.get_status = lambda: {'modelName': 'unit-model'}
+    connection.async_complete = AsyncMock(side_effect=AssertionError('This admission control must not invoke a provider'))
     manager.get_current_provider = lambda: connection
-    monkeypatch.setattr(mm, "get_model_manager", lambda: manager)
-    monkeypatch.setattr(gen, "response_cache", None)
-    monkeypatch.setattr(gen, "circuit_breaker_registry", None)
-    monkeypatch.setattr(gen, "db", SimpleNamespace(config={}, loras=[]))
-    monkeypatch.setattr(gen, "get_llm_semaphore", lambda: asyncio.Semaphore(1))
-    monkeypatch.setattr(gen, "get_vllm_client", AsyncMock(return_value=SimpleNamespace(generate=AsyncMock()) if provider == 'vllm' else None))
-    prepared = SimpleNamespace(
-        memory_operation_receipt=None, character_id="tsukiyashiro_kisaki",
-        compiled=SimpleNamespace(profile_context="", dynamic_context="", reference_context=""),
-        history=(),
-    )
+    monkeypatch.setattr(mm, 'get_model_manager', lambda *, database=None: manager)
+    monkeypatch.setattr(gen, 'response_cache', None)
+    monkeypatch.setattr(gen, 'circuit_breaker_registry', None)
+    monkeypatch.setattr(gen, 'db', SimpleNamespace(config={}, loras=[]))
+    monkeypatch.setattr(gen, 'get_llm_semaphore', lambda: asyncio.Semaphore(1))
+    monkeypatch.setattr(gen, 'get_vllm_client', AsyncMock(return_value=SimpleNamespace(generate=AsyncMock()) if provider == 'vllm' else None))
+    prepared = SimpleNamespace(memory_operation_receipt=None, character_id='tsukiyashiro_kisaki', compiled=SimpleNamespace(profile_context='', dynamic_context='', reference_context=''), history=())
     preparation = AsyncMock(return_value=prepared)
     storage = AsyncMock(return_value=True)
-    generation = AsyncMock(
-        return_value=ChatAnswer(reply='真实单元输出', used_rag=False, model_invoked=True, metadata=dict(warnings=['检索提示'], answerMode='unit', confidence=0.3, citations=[]))
-    )
-    monkeypatch.setattr(gen, "_prepare_character_turn", preparation)
+    generation = AsyncMock(return_value=ChatAnswer(reply='真实单元输出', used_rag=False, model_invoked=True, metadata=dict(warnings=['检索提示'], answerMode='unit', confidence=0.3, citations=[])))
+    monkeypatch.setattr(gen, '_prepare_character_turn', preparation)
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', generation)
-    monkeypatch.setattr(gen, "_save_message", storage)
-    monkeypatch.setattr(gen, "_persist_completion_feedback", AsyncMock(return_value=True))
-    request = MessageRequest(
-        message="朋友陶弈本人收到完整书面预约，回执EN-935-V，有效、未参加、未出发。",
-        characterId="tsukiyashiro_kisaki",
-        sourceMessageId="target",
-        sessionId="scope-owned",
-    )
+    monkeypatch.setattr(gen, '_save_message', storage)
+    monkeypatch.setattr(gen, '_persist_completion_feedback', AsyncMock(return_value=True))
+    request = MessageRequest(message='朋友陶弈本人收到完整书面预约，回执EN-935-V，有效、未参加、未出发。', characterId='tsukiyashiro_kisaki', sourceMessageId='target', sessionId='scope-owned')
     request._source_received_at = datetime.now(timezone.utc)
-    return gen, runtime, request, preparation, generation, storage
+    return (gen, runtime, request, preparation, generation, storage)
 
 
 @pytest.mark.asyncio

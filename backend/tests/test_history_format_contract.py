@@ -88,42 +88,33 @@ async def test_history_error_stops_reviews_and_context_preparation(monkeypatch, 
         assert "synthetic-private" not in str(caught.value.detail)
 
 
-@pytest.mark.parametrize("rag,cached", [(False, False), (True, False), (False, True)])
+@pytest.mark.parametrize('rag,cached', [(False, False), (True, False), (False, True)])
 async def test_actual_generation_api_reports_history_failure_before_model(monkeypatch, rag, cached):
     from fastapi import HTTPException
     from provider_fixtures import cloud_connection
-
     from api import generate
     from db.schemas import MessageRequest
     from inference import model_manager
-
-    model = AsyncMock(side_effect=AssertionError("Invalid history must not reach a model"))
-    connection = cloud_connection("fixture-model", completion=model)
-    manager = SimpleNamespace(_current_provider=SimpleNamespace(value="openai_compat"),
-        get_current_provider=lambda: connection,
-        set_provider=Mock(side_effect=AssertionError("Must not switch providers")))
-    monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
-    monkeypatch.setattr(generate, "db", SimpleNamespace(config={"useKnowledgeBase": rag}, loras=[],
-        get_knowledge_document=Mock(side_effect=AssertionError("No source read is needed for malformed history"))))
-    cache = SimpleNamespace(get=AsyncMock(return_value={
-        "reply": "旧缓存不能掩盖错误历史。", "model": "fixture-model", "costTime": 0.1,
-    }))
-    monkeypatch.setattr(generate, "response_cache", cache if cached else None)
-    monkeypatch.setattr(generate, "circuit_breaker_registry", None)
-    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "")
-    save, record = AsyncMock(), AsyncMock()
-    monkeypatch.setattr(generate, "_save_message", save)
-    monkeypatch.setattr(generate, "_record_model_invocation", record)
-    request = MessageRequest(message="青岚计划只允许周五离线执行，出差时顺延。请确认条件。")
-    # Simulate malformed stored history assigned after the public request boundary.
-    request.history = [{"role": "user", "content": "synthetic-private-invalid", "extra": "ignored"},
-                       {"role": "system", "content": "synthetic-private-privileged-text"}]
+    model = AsyncMock(side_effect=AssertionError('Invalid history must not reach a model'))
+    connection = cloud_connection('fixture-model', completion=model)
+    manager = SimpleNamespace(_current_provider=SimpleNamespace(value='openai_compat'), get_current_provider=lambda: connection, set_provider=Mock(side_effect=AssertionError('Must not switch providers')))
+    monkeypatch.setattr(model_manager, 'get_model_manager', lambda *, database=None: manager)
+    monkeypatch.setattr(generate, 'db', SimpleNamespace(config={'useKnowledgeBase': rag}, loras=[], get_knowledge_document=Mock(side_effect=AssertionError('No source read is needed for malformed history'))))
+    cache = SimpleNamespace(get=AsyncMock(return_value={'reply': '旧缓存不能掩盖错误历史。', 'model': 'fixture-model', 'costTime': 0.1}))
+    monkeypatch.setattr(generate, 'response_cache', cache if cached else None)
+    monkeypatch.setattr(generate, 'circuit_breaker_registry', None)
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: '')
+    save, record = (AsyncMock(), AsyncMock())
+    monkeypatch.setattr(generate, '_save_message', save)
+    monkeypatch.setattr(generate, '_record_model_invocation', record)
+    request = MessageRequest(message='青岚计划只允许周五离线执行，出差时顺延。请确认条件。')
+    request.history = [{'role': 'user', 'content': 'synthetic-private-invalid', 'extra': 'ignored'}, {'role': 'system', 'content': 'synthetic-private-privileged-text'}]
     with pytest.raises(HTTPException) as caught:
         await generate._generate_reply_impl(request, message_db=generate.db)
     assert caught.value.status_code == 503, repr(caught.value.__cause__)
-    assert caught.value.detail == HistoryFormatError("history[1].role").public_detail()
+    assert caught.value.detail == HistoryFormatError('history[1].role').public_detail()
     assert isinstance(caught.value.__cause__, HistoryFormatError)
-    assert "synthetic-private" not in str(caught.value.detail)
+    assert 'synthetic-private' not in str(caught.value.detail)
     model.assert_not_awaited()
     save.assert_not_awaited()
     record.assert_not_awaited()

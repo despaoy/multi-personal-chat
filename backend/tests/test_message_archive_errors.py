@@ -113,22 +113,18 @@ async def test_timed_out_or_cancelled_thread_is_not_claimed_rolled_back(database
 
 @pytest.fixture
 async def generation(monkeypatch):
-    manager = SimpleNamespace(_current_provider=SimpleNamespace(value="openai_compat"),
-        set_lora_adapter=lambda _: None,
-        get_status=lambda: {"currentProvider": "openai_compat", "providers": {"openai_compat": {"modelName": "fixture-model"}}})
-    connection = cloud_connection("fixture-model")
+    manager = SimpleNamespace(_current_provider=SimpleNamespace(value='openai_compat'), set_lora_adapter=lambda _: None, get_status=lambda: {'currentProvider': 'openai_compat', 'providers': {'openai_compat': {'modelName': 'fixture-model'}}})
+    connection = cloud_connection('fixture-model')
     manager.get_current_provider = lambda: connection
-    monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
-    monkeypatch.setattr(generate, "response_cache", None)
-    monkeypatch.setattr(generate, "circuit_breaker_registry", None)
-    monkeypatch.setattr(generate, "get_llm_semaphore", lambda: asyncio.Semaphore(1))
-    prepared = SimpleNamespace(memory_operation_receipt=None, character_id="tsukiyashiro_kisaki",
-        compiled=SimpleNamespace(profile_context="", dynamic_context="", reference_context=""), history=())
-    monkeypatch.setattr(generate, "_prepare_character_turn", AsyncMock(return_value=prepared))
+    monkeypatch.setattr(model_manager, 'get_model_manager', lambda *, database=None: manager)
+    monkeypatch.setattr(generate, 'response_cache', None)
+    monkeypatch.setattr(generate, 'circuit_breaker_registry', None)
+    monkeypatch.setattr(generate, 'get_llm_semaphore', lambda: asyncio.Semaphore(1))
+    prepared = SimpleNamespace(memory_operation_receipt=None, character_id='tsukiyashiro_kisaki', compiled=SimpleNamespace(profile_context='', dynamic_context='', reference_context=''), history=())
+    monkeypatch.setattr(generate, '_prepare_character_turn', AsyncMock(return_value=prepared))
     runtime = turn_completion.TurnCompletionRuntime(capacity=1)
-    monkeypatch.setattr(turn_completion, "get_turn_completion_runtime", lambda: runtime)
-    service = SimpleNamespace(complete_turn=AsyncMock(return_value=_TurnOutcome(
-        source_capture="recorded", memory_enrichment_status="skipped")))
+    monkeypatch.setattr(turn_completion, 'get_turn_completion_runtime', lambda: runtime)
+    service = SimpleNamespace(complete_turn=AsyncMock(return_value=_TurnOutcome(source_capture='recorded', memory_enrichment_status='skipped')))
     model = AsyncMock(return_value=ChatAnswer(reply=REPLY, used_rag=False, model_invoked=True, metadata={}))
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', model)
     yield SimpleNamespace(runtime=runtime, service=service, model=model)

@@ -197,47 +197,36 @@ def complete_bundle(source_path):
     }
 
 
-async def test_actual_ask_stream_rejects_corruption_after_fully_cited_body_and_closes_upstream(
-    stream_rig, monkeypatch, tmp_path,
-):
+async def test_actual_ask_stream_rejects_corruption_after_fully_cited_body_and_closes_upstream(stream_rig, monkeypatch, tmp_path):
     from db.database import SQLiteDB
-
     rig = stream_rig
-    rig.events = frames("malformed_json")
-    source_path = tmp_path / "fiction-complete-source.txt"
-    source_path.write_text(SOURCE, encoding="utf-8")
+    rig.events = frames('malformed_json')
+    source_path = tmp_path / 'fiction-complete-source.txt'
+    source_path.write_text(SOURCE, encoding='utf-8')
     retrieved = []
 
     def retrieve(query, *, domain_id, top_k, filters):
-        assert query == QUERY and domain_id == "fiction-archive" and top_k == 1 and filters is None
-        assert source_path.read_text(encoding="utf-8") == SOURCE
+        assert query == QUERY and domain_id == 'fiction-archive' and (top_k == 1) and (filters is None)
+        assert source_path.read_text(encoding='utf-8') == SOURCE
         retrieved.append(query)
         return complete_bundle(source_path)
-
     service = GroundedAnswerService(retriever=retrieve)
-    provider = SimpleNamespace(name="vllm", get_status=lambda: {"modelName": "fiction-vllm-model"})
-    manager = SimpleNamespace(
-        _current_provider=SimpleNamespace(value="vllm"), get_current_provider=lambda: provider,
-    )
-    monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
-    monkeypatch.setattr(providers, "get_vllm_client", AsyncMock(return_value=rig.client))
-    monkeypatch.setattr(ask, "get_grounded_answer_service", AsyncMock(return_value=service))
-    request = AskRequest(message=QUERY, domainId="fiction-archive", topK=1, temperature=.2,
-                         maxTokens=256, topP=.9, wantCitations=True)
-    response = await ask.ask_stream(
-        request, SimpleNamespace(is_disconnected=AsyncMock(return_value=False)),
-        current_user={"user_id": 901, "username": "synthetic", "role": "user"},
-        database=SQLiteDB(tmp_path / "ask-accounting.sqlite"),
-    )
+    provider = SimpleNamespace(name='vllm', get_status=lambda: {'modelName': 'fiction-vllm-model'})
+    manager = SimpleNamespace(_current_provider=SimpleNamespace(value='vllm'), get_current_provider=lambda: provider)
+    monkeypatch.setattr(model_manager, 'get_model_manager', lambda *, database=None: manager)
+    monkeypatch.setattr(providers, 'get_vllm_client', AsyncMock(return_value=rig.client))
+    monkeypatch.setattr(ask, 'get_grounded_answer_service', AsyncMock(return_value=service))
+    request = AskRequest(message=QUERY, domainId='fiction-archive', topK=1, temperature=0.2, maxTokens=256, topP=0.9, wantCitations=True)
+    response = await ask.ask_stream(request, SimpleNamespace(is_disconnected=AsyncMock(return_value=False)), current_user={'user_id': 901, 'username': 'synthetic', 'role': 'user'}, database=SQLiteDB(tmp_path / 'ask-accounting.sqlite'))
     events = []
     async for chunk in response.body_iterator:
         text = chunk.decode() if isinstance(chunk, bytes) else chunk
-        assert text.startswith("data: ")
+        assert text.startswith('data: ')
         events.append(json.loads(text[6:]))
-    assert [item["type"] for item in events] == ["meta", "error"]
+    assert [item['type'] for item in events] == ['meta', 'error']
     assert retrieved == [QUERY]
-    wire = rig.requests[0]["messages"]
-    assert QUERY in wire[-1]["content"] and SOURCE in wire[-1]["content"]
+    wire = rig.requests[0]['messages']
+    assert QUERY in wire[-1]['content'] and SOURCE in wire[-1]['content']
     await assert_outcome(rig, success=False)
 
 

@@ -42,93 +42,61 @@ QUERY = "核对我保存的虚构排练记录的时间、否定和例外；保�
 
 async def arrange_provider_budget(tmp_path, monkeypatch):
     """Return a real default-factory rig; do not assume any cache repair."""
-    profiles = tmp_path / "profiles"
+    profiles = tmp_path / 'profiles'
     profiles.mkdir()
-    (profiles / "fixture.json").write_text(json.dumps({
-        "character_id": ROLE, "display_name": "虚构预算核对角色",
-        "identity": "保留引述主体、时间、否定与例外的虚构资料核对角色",
-        "values": ["完整记录优先，不补写经历"],
-    }, ensure_ascii=False), encoding="utf-8")
+    (profiles / 'fixture.json').write_text(json.dumps({'character_id': ROLE, 'display_name': '虚构预算核对角色', 'identity': '保留引述主体、时间、否定与例外的虚构资料核对角色', 'values': ['完整记录优先，不补写经历']}, ensure_ascii=False), encoding='utf-8')
     registry = profile_registry.CharacterProfileRegistry(profiles)
     registry.load_profiles()
-    monkeypatch.setattr(profile_registry, "_default_registry", registry)
-    monkeypatch.setattr(character_context, "_default_service", None)
-    for name, value in {
-        "OPENAI_COMPAT_CONTEXT_WINDOW_TOKENS": "65536", "VLLM_MAX_MODEL_LEN": "8192",
-        "CONTEXTUAL_MEMORY_SELECTION_ENABLED": "true", "CAHM_SEMANTIC_MEMORY_ENABLED": "false",
-        "CONTEXTUAL_DECISION_POLICY_ENABLED": "false", "DYNAMIC_CONTEXT_SEMANTIC_REVIEW_ENABLED": "false",
-        "MEMORY_SOURCE_RECALL_ENABLED": "false", "CHARACTER_INDEPENDENT_TASKS_ENABLED": "false",
-    }.items():
+    monkeypatch.setattr(profile_registry, '_default_registry', registry)
+    monkeypatch.setattr(character_context, '_default_service', None)
+    for name, value in {'OPENAI_COMPAT_CONTEXT_WINDOW_TOKENS': '65536', 'VLLM_MAX_MODEL_LEN': '8192', 'CONTEXTUAL_MEMORY_SELECTION_ENABLED': 'true', 'CAHM_SEMANTIC_MEMORY_ENABLED': 'false', 'CONTEXTUAL_DECISION_POLICY_ENABLED': 'false', 'DYNAMIC_CONTEXT_SEMANTIC_REVIEW_ENABLED': 'false', 'MEMORY_SOURCE_RECALL_ENABLED': 'false', 'CHARACTER_INDEPENDENT_TASKS_ENABLED': 'false'}.items():
         monkeypatch.setenv(name, value)
-    default_db = SQLiteDB(tmp_path / "default-budget.sqlite")
-    custom_db = SQLiteDB(tmp_path / "custom-budget.sqlite")
+    default_db = SQLiteDB(tmp_path / 'default-budget.sqlite')
+    custom_db = SQLiteDB(tmp_path / 'custom-budget.sqlite')
     circuit_registry = CircuitBreakerRegistry()
-    scope = UserScope("web", "web-character", OWNER, OWNER, "private")
+    scope = UserScope('web', 'web-character', OWNER, OWNER, 'private')
     stamp = datetime.now(timezone.utc) - timedelta(days=1)
     from repositories.character_memory import DatabaseCharacterMemoryRepository
-
     for database in (default_db, custom_db):
-        database.update_config(dict(useKnowledgeBase=False, temperature=.2, maxTokens=256, topP=1.0))
+        database.update_config(dict(useKnowledgeBase=False, temperature=0.2, maxTokens=256, topP=1.0))
         repository = DatabaseCharacterMemoryRepository(database)
-        assert await repository.capture_source(
-            ROLE, scope, source_message_id="fiction-rehearsal-source", body=BODY, observed_at=stamp,
-        ) == "recorded"
-        await repository.append_claim(
-            ROLE, scope, MemoryItem("", "user_fact", "虚构排练引文：" + BODY, .9),
-            memory_key="fiction_rehearsal_quote", confidence=.99, evidence=(BODY,),
-            source_message_id="fiction-rehearsal-source", observed_at=stamp.isoformat(),
-            metadata={"content_semantics": "quoted_source", "speaker_role": "user",
-                      "described_subject": "not_resolved"},
-        )
-    rig = SimpleNamespace(
-        database=default_db, custom_db=custom_db, scope=scope,
-        reviews=[], answers=[], review_hold=None, registry=circuit_registry,
-    )
+        assert await repository.capture_source(ROLE, scope, source_message_id='fiction-rehearsal-source', body=BODY, observed_at=stamp) == 'recorded'
+        await repository.append_claim(ROLE, scope, MemoryItem('', 'user_fact', '虚构排练引文：' + BODY, 0.9), memory_key='fiction_rehearsal_quote', confidence=0.99, evidence=(BODY,), source_message_id='fiction-rehearsal-source', observed_at=stamp.isoformat(), metadata={'content_semantics': 'quoted_source', 'speaker_role': 'user', 'described_subject': 'not_resolved'})
+    rig = SimpleNamespace(database=default_db, custom_db=custom_db, scope=scope, reviews=[], answers=[], review_hold=None, registry=circuit_registry)
 
     async def completion(messages, **params):
         try:
-            payload = json.loads(messages[-1]["content"])
+            payload = json.loads(messages[-1]['content'])
         except json.JSONDecodeError:
             payload = None
-        if isinstance(payload, dict) and "required_ids" in payload:
-            assert payload["query"] == QUERY
-            assert len(payload["candidates"]) == len(payload["required_ids"]) == 1
-            assert payload["candidates"][0]["evidence"] == [BODY]
-            assert params["temperature"] == 0.0 and params["max_tokens"] == 2048
+        if isinstance(payload, dict) and 'required_ids' in payload:
+            assert payload['query'] == QUERY
+            assert len(payload['candidates']) == len(payload['required_ids']) == 1
+            assert payload['candidates'][0]['evidence'] == [BODY]
+            assert params['temperature'] == 0.0 and params['max_tokens'] == 2048
             kind = get_request_context().provider_name
-            rig.reviews.append({"provider": kind, "payload": payload})
+            rig.reviews.append({'provider': kind, 'payload': payload})
             if rig.review_hold is not None and rig.review_hold[0] == kind:
                 _kind, entered, release = rig.review_hold
                 entered.set()
                 await release.wait()
-            return json.dumps({"decisions": [
-                {"id": identity, "label": "use"} for identity in payload["required_ids"]
-            ]}), 0.0
-        wire = unescape("\n".join(message["content"] for message in messages))
+            return (json.dumps({'decisions': [{'id': identity, 'label': 'use'} for identity in payload['required_ids']]}), 0.0)
+        wire = unescape('\n'.join((message['content'] for message in messages)))
         assert QUERY in wire and BODY in wire
-        rig.answers.append({"wire": wire, "params": params, "context": get_request_context()})
-        return BODY, 0.0
-
-    connection = cloud_connection("fiction-budget-model", completion=completion)
-    manager = SimpleNamespace(
-        _current_provider=model_manager.ModelProvider.VLLM,
-        get_current_provider=lambda: connection if manager._current_provider == model_manager.ModelProvider.OPENAI_COMPAT
-            else SimpleNamespace(name=manager._current_provider.value),
-    )
+        rig.answers.append({'wire': wire, 'params': params, 'context': get_request_context()})
+        return (BODY, 0.0)
+    connection = cloud_connection('fiction-budget-model', completion=completion)
+    manager = SimpleNamespace(_current_provider=model_manager.ModelProvider.VLLM, get_current_provider=lambda: connection if manager._current_provider == model_manager.ModelProvider.OPENAI_COMPAT else SimpleNamespace(name=manager._current_provider.value))
     rig.manager = manager
-    monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
-    # Every selected review transport has a complete, explicit unit client.
-    monkeypatch.setattr("inference.review_client.get_context_review_client",
-                        AsyncMock(return_value=OpenAICompatibleReviewClient(connection)))
-    monkeypatch.setattr(adapter, "db", default_db)
-    monkeypatch.setattr(generate, "db", default_db)
-    monkeypatch.setattr(generate, "response_cache", None)
-    monkeypatch.setattr(generate, "circuit_breaker_registry", circuit_registry)
-    monkeypatch.setattr(generate, "get_llm_semaphore", lambda: asyncio.Semaphore(4))
-    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "只核对所给完整虚构记录，保留引述属性。")
-    # Explicitly disable the independent post-reply semantic writer; its
-    # interpreter is outside this budget-factory test. Actual counter writes run.
-    monkeypatch.setattr("character.memory_llm.get_memory_enrichment_scheduler", lambda: SimpleNamespace(enabled=False))
+    monkeypatch.setattr(model_manager, 'get_model_manager', lambda *, database=None: manager)
+    monkeypatch.setattr('inference.review_client.get_context_review_client', AsyncMock(return_value=OpenAICompatibleReviewClient(connection)))
+    monkeypatch.setattr(adapter, 'db', default_db)
+    monkeypatch.setattr(generate, 'db', default_db)
+    monkeypatch.setattr(generate, 'response_cache', None)
+    monkeypatch.setattr(generate, 'circuit_breaker_registry', circuit_registry)
+    monkeypatch.setattr(generate, 'get_llm_semaphore', lambda: asyncio.Semaphore(4))
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: '只核对所给完整虚构记录，保留引述属性。')
+    monkeypatch.setattr('character.memory_llm.get_memory_enrichment_scheduler', lambda: SimpleNamespace(enabled=False))
     return rig
 
 

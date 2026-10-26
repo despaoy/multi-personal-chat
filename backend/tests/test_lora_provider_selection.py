@@ -62,30 +62,24 @@ def test_adapter_lookup_propagates_the_original_read_failure(monkeypatch, stage)
 def install_api(monkeypatch, provider):
     from api import generate
     from inference import model_manager
-
-    setter, inactive = Mock(), Mock()
-    manager = SimpleNamespace(
-        _current_provider=SimpleNamespace(value=provider), set_lora_adapter=setter,
-        set_provider=Mock(side_effect=AssertionError("A request must not change the configured provider")),
-        _providers={model_manager.ModelProvider.TRANSFORMERS_PEFT: SimpleNamespace(set_lora_adapter=inactive)},
-        get_status=lambda: dict(currentProvider=provider, providers={provider: dict(modelName="controlled-selected-model")}),
-    )
-    row = dict(id="registered-adapter", name="controlled-adapter", status="active")
-    connection = cloud_connection("controlled-selected-model")
+    setter, inactive = (Mock(), Mock())
+    manager = SimpleNamespace(_current_provider=SimpleNamespace(value=provider), set_lora_adapter=setter, set_provider=Mock(side_effect=AssertionError('A request must not change the configured provider')), _providers={model_manager.ModelProvider.TRANSFORMERS_PEFT: SimpleNamespace(set_lora_adapter=inactive)}, get_status=lambda: dict(currentProvider=provider, providers={provider: dict(modelName='controlled-selected-model')}))
+    row = dict(id='registered-adapter', name='controlled-adapter', status='active')
+    connection = cloud_connection('controlled-selected-model')
     connection.name = provider
     connection.set_lora_adapter = setter
     manager.get_current_provider = lambda: connection
     manager._providers[model_manager.ModelProvider(provider)] = connection
-    monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
-    monkeypatch.setattr(generate, "db", SimpleNamespace(config={}, loras=[row]))
-    monkeypatch.setattr(generate, "response_cache", None)
-    monkeypatch.setattr(generate, "circuit_breaker_registry", None)
-    monkeypatch.setattr(generate, "get_lora_character_id", lambda _: None)
-    monkeypatch.setattr(generate, "get_llm_semaphore", lambda: asyncio.Semaphore(1))
+    monkeypatch.setattr(model_manager, 'get_model_manager', lambda *, database=None: manager)
+    monkeypatch.setattr(generate, 'db', SimpleNamespace(config={}, loras=[row]))
+    monkeypatch.setattr(generate, 'response_cache', None)
+    monkeypatch.setattr(generate, 'circuit_breaker_registry', None)
+    monkeypatch.setattr(generate, 'get_lora_character_id', lambda _: None)
+    monkeypatch.setattr(generate, 'get_llm_semaphore', lambda: asyncio.Semaphore(1))
     generation = AsyncMock(return_value=ChatAnswer(reply='根据完整当前输入回答。', used_rag=False, model_invoked=True, metadata={}))
     save = AsyncMock(return_value=True)
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', generation)
-    monkeypatch.setattr(generate, "_save_message", save)
+    monkeypatch.setattr(generate, '_save_message', save)
     return SimpleNamespace(api=generate, manager=manager, generation=generation, save=save, inactive=inactive)
 
 

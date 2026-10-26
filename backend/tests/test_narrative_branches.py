@@ -293,30 +293,20 @@ def test_gateway_rejects_branch_instead_of_ignoring():
 
 
 def test_character_mismatch_rejected_before_provider_call(repo, monkeypatch):
-    # This test covers adapter ownership, independently of semantic strategy selection.
-    monkeypatch.setenv("CONTEXTUAL_DECISION_POLICY_ENABLED", "false")
-
+    monkeypatch.setenv('CONTEXTUAL_DECISION_POLICY_ENABLED', 'false')
     import api.generate as gen
     from inference import model_manager as mm
-
     branch = create(repo)
-    request = MessageRequest(message="继续", branchId=branch["id"], loraName="wrong")
-    _, _, prepared = asyncio.run(prepare_branch(request, "1", repo))
-    database = SimpleNamespace(config={}, loras=[{"name": "wrong", "status": "inactive"}])
-    monkeypatch.setattr(
-        mm, "get_model_manager", lambda: SimpleNamespace(_current_provider=SimpleNamespace(value="vllm"), get_current_provider=lambda: SimpleNamespace(name="vllm"))
-    )
+    request = MessageRequest(message='继续', branchId=branch['id'], loraName='wrong')
+    _, _, prepared = asyncio.run(prepare_branch(request, '1', repo))
+    database = SimpleNamespace(config={}, loras=[{'name': 'wrong', 'status': 'inactive'}])
+    monkeypatch.setattr(mm, 'get_model_manager', lambda *, database=None: SimpleNamespace(_current_provider=SimpleNamespace(value='vllm'), get_current_provider=lambda: SimpleNamespace(name='vllm')))
     with pytest.raises(HTTPException) as exc:
-        asyncio.run(
-            gen._generate_reply_impl(
-                request, {"user_id": 1}, message_db=database, prepared_override=prepared, persist_message=False
-            )
-        )
+        asyncio.run(gen._generate_reply_impl(request, {'user_id': 1}, message_db=database, prepared_override=prepared, persist_message=False))
     assert exc.value.status_code == 422
 
 
 def test_full_web_generation_and_canonical_return(repo, monkeypatch):
-
     import api.generate as gen
     from api.narrative import router as narrative_router
     from app.dependencies import get_current_user
@@ -325,6 +315,7 @@ def test_full_web_generation_and_canonical_return(repo, monkeypatch):
     from services.character_context import build_character_context_service
 
     class Runtime:
+
         def __bool__(self):
             return False
 
@@ -338,70 +329,50 @@ def test_full_web_generation_and_canonical_return(repo, monkeypatch):
             return await job()
 
     class ForbiddenCache:
+
         async def get(self, *args):
-            pytest.fail("stateful generation consulted cache")
+            pytest.fail('stateful generation consulted cache')
 
         async def set(self, *args, **kwargs):
-            pytest.fail("stateful generation wrote cache")
-
+            pytest.fail('stateful generation wrote cache')
     seen = []
 
-
     async def model(request, *args, **kwargs):
-        seen.append(kwargs["prepared_character_turn"])
+        seen.append(kwargs['prepared_character_turn'])
         return ChatAnswer(reply='独立回答', used_rag=False, model_invoked=True, metadata={})
-
-    monkeypatch.setenv("NARRATIVE_BRANCHES_ENABLED", "true")
-    monkeypatch.setenv("MEMORY_LLM_ENABLED", "false")
-    monkeypatch.setattr(
-        mm, "get_model_manager", lambda: SimpleNamespace(_current_provider=SimpleNamespace(value="vllm"), get_current_provider=lambda: SimpleNamespace(name="vllm"))
-    )
-    monkeypatch.setattr(gen, "get_vllm_client", AsyncMock(return_value=SimpleNamespace(generate=AsyncMock())))
+    monkeypatch.setenv('NARRATIVE_BRANCHES_ENABLED', 'true')
+    monkeypatch.setenv('MEMORY_LLM_ENABLED', 'false')
+    monkeypatch.setattr(mm, 'get_model_manager', lambda *, database=None: SimpleNamespace(_current_provider=SimpleNamespace(value='vllm'), get_current_provider=lambda: SimpleNamespace(name='vllm')))
+    monkeypatch.setattr(gen, 'get_vllm_client', AsyncMock(return_value=SimpleNamespace(generate=AsyncMock())))
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', model)
-    monkeypatch.setattr(gen, "response_cache", ForbiddenCache())
+    monkeypatch.setattr(gen, 'response_cache', ForbiddenCache())
     runtime = Runtime()
     app = FastAPI()
     app.state.runtime_container = RuntimeContainer(repo.db, lambda: False, runtime)
     app.include_router(gen.router)
     app.include_router(narrative_router)
-    app.dependency_overrides[get_current_user] = lambda: {"user_id": 1}
-    app.dependency_overrides[gen.get_request_chat_generation_service] = lambda: gen._build_chat_generation_service(
-        runtime, build_character_context_service(repo.db), message_db=repo.db
-    )
+    app.dependency_overrides[get_current_user] = lambda: {'user_id': 1}
+    app.dependency_overrides[gen.get_request_chat_generation_service] = lambda: gen._build_chat_generation_service(runtime, build_character_context_service(repo.db), message_db=repo.db)
     client = TestClient(app)
     branch = create(repo)
-    forged = client.post(
-        "/api/generate",
-        json={
-            "message": "伪造历史",
-            "platform": "web",
-            "adapter": "narrative:" + branch["character_id"],
-            "senderId": "2",
-        },
-    )
+    forged = client.post('/api/generate', json={'message': '伪造历史', 'platform': 'web', 'adapter': 'narrative:' + branch['character_id'], 'senderId': '2'})
     assert forged.status_code == 422
-    r = client.post(
-        "/api/generate",
-        json={"message": "分支私有内容", "platform": "web", "branchId": branch["id"], "traceId": "full"},
-    )
+    r = client.post('/api/generate', json={'message': '分支私有内容', 'platform': 'web', 'branchId': branch['id'], 'traceId': 'full'})
     assert r.status_code == 200, r.text
-    assert r.json()["branchId"] == branch["id"]
+    assert r.json()['branchId'] == branch['id']
     assert seen[-1].compiled.branch_context
-    assert len(repo.history("1", branch["id"])) == 1
-    assert repo.rows("SELECT * FROM character_relationships") == []
-    for message in ("原作问题", "继续原作问题"):
-        r = client.post(
-            "/api/narrative-branches/canonical/generate",
-            json={"message": message, "character_id": branch["character_id"]},
-        )
+    assert len(repo.history('1', branch['id'])) == 1
+    assert repo.rows('SELECT * FROM character_relationships') == []
+    for message in ('原作问题', '继续原作问题'):
+        r = client.post('/api/narrative-branches/canonical/generate', json={'message': message, 'character_id': branch['character_id']})
         assert r.status_code == 200, r.text
         assert not seen[-1].compiled.branch_context
-        assert "分支私有内容" not in str(seen[-1].history)
-    assert any(m["content"] == "原作问题" for m in seen[-1].history)
-    assert len(repo.rows("SELECT * FROM character_relationships")) == 1
-    history = client.get("/api/narrative-branches/canonical/messages", params={"character_id": branch["character_id"]})
+        assert '分支私有内容' not in str(seen[-1].history)
+    assert any((m['content'] == '原作问题' for m in seen[-1].history))
+    assert len(repo.rows('SELECT * FROM character_relationships')) == 1
+    history = client.get('/api/narrative-branches/canonical/messages', params={'character_id': branch['character_id']})
     assert history.status_code == 200
-    assert len(history.json()["messages"]) == 2
+    assert len(history.json()['messages']) == 2
 
 
 @pytest.mark.parametrize("value,enabled", [("true", True), (" ON ", True), ("1", True), ("false", False), ("off", False), ("0", False), (None, False)])
@@ -433,7 +404,7 @@ def test_invalid_branch_setting_is_not_reported_as_disabled(monkeypatch, value):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("failure", [None, "snapshot", "prepare", "budget"])
+@pytest.mark.parametrize('failure', [None, 'snapshot', 'prepare', 'budget'])
 async def test_canonical_preparation_and_generation_share_one_model_context(monkeypatch, failure):
     from api import narrative, generate
     from app.runtime import RuntimeContainer
@@ -441,25 +412,21 @@ async def test_canonical_preparation_and_generation_share_one_model_context(monk
     from inference.request_context import get_request_context
     from inference.provider_context import get_provider_context_budget
     from services import character_context
-
     events = []
     from character.context_builder import MemoryContextBudgetError
-
-    error = (MemoryContextBudgetError("isolated budget failure") if failure == "budget"
-             else RuntimeError("isolated context preparation failure"))
-    provider = SimpleNamespace(name="openai_compat", base_url="https://isolated.invalid/v1", model="isolated-model", api_key="")
-    manager = SimpleNamespace(_current_provider=SimpleNamespace(value="openai_compat"), get_current_provider=lambda: provider)
+    error = MemoryContextBudgetError('isolated budget failure') if failure == 'budget' else RuntimeError('isolated context preparation failure')
+    provider = SimpleNamespace(name='openai_compat', base_url='https://isolated.invalid/v1', model='isolated-model', api_key='')
+    manager = SimpleNamespace(_current_provider=SimpleNamespace(value='openai_compat'), get_current_provider=lambda: provider)
 
     def snapshot():
-        events.append("snapshot")
-        if failure == "snapshot":
+        events.append('snapshot')
+        if failure == 'snapshot':
             raise error
-        manager._current_provider.value = "vllm"
+        manager._current_provider.value = 'vllm'
         return provider
-
     provider.snapshot = snapshot
-    monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
-    monkeypatch.setenv("OPENAI_COMPAT_CONTEXT_WINDOW_TOKENS", "32768")
+    monkeypatch.setattr(model_manager, 'get_model_manager', lambda *, database=None: manager)
+    monkeypatch.setenv('OPENAI_COMPAT_CONTEXT_WINDOW_TOKENS', '32768')
     database = object()
     captured = []
     prepared = object()
@@ -469,59 +436,55 @@ async def test_canonical_preparation_and_generation_share_one_model_context(monk
         assert get_request_context() is not None
         captured.append(get_request_context())
         assert get_provider_context_budget().window_tokens == 32768
-        events.append("build")
+        events.append('build')
 
         async def prepare(turn, character_id):
-            assert turn.message == "核对已提供的完整记录，不推断实际办理结果。"
-            assert character_id == "isolated-character"
-            assert (turn.platform, turn.adapter, turn.sender_id, turn.conversation_id, turn.conversation_type) == (
-                "web", "narrative:isolated-character", "1", "canonical:isolated-character", "private",
-            )
+            assert turn.message == '核对已提供的完整记录，不推断实际办理结果。'
+            assert character_id == 'isolated-character'
+            assert (turn.platform, turn.adapter, turn.sender_id, turn.conversation_id, turn.conversation_type) == ('web', 'narrative:isolated-character', '1', 'canonical:isolated-character', 'private')
             assert turn.history == () and turn.received_at is None
             assert get_request_context() is captured[0]
-            events.append("prepare")
-            if failure in {"prepare", "budget"}:
+            events.append('prepare')
+            if failure in {'prepare', 'budget'}:
                 raise error
             return prepared
-
         return SimpleNamespace(prepare_turn=prepare)
 
     async def reply(request, user, **kwargs):
         assert get_request_context() is captured[0]
-        assert kwargs["prepared_override"] is prepared
-        assert kwargs["message_db"] is database
-        events.append("generate")
-        return GenerateResponse(reply="隔离测试回答", model="isolated-model", costTime=0)
+        assert kwargs['prepared_override'] is prepared
+        assert kwargs['message_db'] is database
+        events.append('generate')
+        return GenerateResponse(reply='隔离测试回答', model='isolated-model', costTime=0)
 
     async def submit(job, **kwargs):
         return await job()
-
     runtime = SimpleNamespace(check_rate_limits=AsyncMock(), priority_for=lambda *args: 1, submit=submit)
     app = FastAPI()
     app.state.runtime_container = RuntimeContainer(database, lambda: False, runtime)
-    monkeypatch.setattr(narrative, "validate_character", lambda _: None)
-    monkeypatch.setattr(character_context, "build_character_context_service", build)
-    monkeypatch.setattr(generate, "_generate_reply_impl", reply)
-    body = narrative.CanonicalMessage(character_id="isolated-character", message="核对已提供的完整记录，不推断实际办理结果。")
+    monkeypatch.setattr(narrative, 'validate_character', lambda _: None)
+    monkeypatch.setattr(character_context, 'build_character_context_service', build)
+    monkeypatch.setattr(generate, '_generate_reply_impl', reply)
+    body = narrative.CanonicalMessage(character_id='isolated-character', message='核对已提供的完整记录，不推断实际办理结果。')
     assert get_request_context() is None
-    if failure == "snapshot":
+    if failure == 'snapshot':
         with pytest.raises(HTTPException) as caught:
-            await narrative.canonical_generate(body, SimpleNamespace(app=app), {"user_id": 1})
+            await narrative.canonical_generate(body, SimpleNamespace(app=app), {'user_id': 1})
         assert caught.value.status_code == 503 and caught.value.__cause__ is error
-        assert events == ["snapshot"]
-    elif failure in {"prepare", "budget"}:
+        assert events == ['snapshot']
+    elif failure in {'prepare', 'budget'}:
         with pytest.raises(HTTPException) as caught:
-            await narrative.canonical_generate(body, SimpleNamespace(app=app), {"user_id": 1})
+            await narrative.canonical_generate(body, SimpleNamespace(app=app), {'user_id': 1})
         assert caught.value.status_code == 503 and caught.value.__cause__ is error
-        assert events == ["snapshot", "build", "prepare"]
+        assert events == ['snapshot', 'build', 'prepare']
         assert str(error) not in str(caught.value.detail)
-        if failure == "budget":
-            assert caught.value.detail["stage"] == "memory_context"
-            assert caught.value.detail["reason"] == "selected_evidence_budget_exceeded"
+        if failure == 'budget':
+            assert caught.value.detail['stage'] == 'memory_context'
+            assert caught.value.detail['reason'] == 'selected_evidence_budget_exceeded'
     else:
-        response = await narrative.canonical_generate(body, SimpleNamespace(app=app), {"user_id": 1})
-        assert response.model == "isolated-model"
-        assert events == ["snapshot", "build", "prepare", "generate"]
+        response = await narrative.canonical_generate(body, SimpleNamespace(app=app), {'user_id': 1})
+        assert response.model == 'isolated-model'
+        assert events == ['snapshot', 'build', 'prepare', 'generate']
     assert get_request_context() is None
 
 

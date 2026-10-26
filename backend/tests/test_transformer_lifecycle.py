@@ -26,34 +26,19 @@ TOKENS = {None: 10, "adapter-a": 20, "adapter-b": 30}
 
 def arrange_transformer_lifecycle(tmp_path, monkeypatch):
     """Use real local paths and the actual provider, replacing external ML only."""
-    base_path = tmp_path / "base-model"
+    base_path = tmp_path / 'base-model'
     base_path.mkdir()
-    for name in ("config.json", "tokenizer_config.json", "tokenizer.json", "generation_config.json"):
-        (base_path / name).write_text("{}", encoding="utf-8")
-    (base_path / "model.safetensors").write_bytes(b"synthetic-base-weights-never-read")
+    for name in ('config.json', 'tokenizer_config.json', 'tokenizer.json', 'generation_config.json'):
+        (base_path / name).write_text('{}', encoding='utf-8')
+    (base_path / 'model.safetensors').write_bytes(b'synthetic-base-weights-never-read')
     adapters = {}
-    for label in ("adapter-a", "adapter-b"):
+    for label in ('adapter-a', 'adapter-b'):
         path = tmp_path / label
         path.mkdir()
-        (path / "adapter_config.json").write_text("{}", encoding="utf-8")
-        (path / "adapter_model.safetensors").write_bytes(b"synthetic-adapter-weights-never-read")
+        (path / 'adapter_config.json').write_text('{}', encoding='utf-8')
+        (path / 'adapter_model.safetensors').write_bytes(b'synthetic-adapter-weights-never-read')
         adapters[label] = path
-
-    rig = SimpleNamespace(
-        base_path=base_path,
-        adapters=adapters,
-        faults={},
-        tokenizer_calls=[],
-        base_calls=[],
-        adapter_calls=[],
-        evaluations=[],
-        generations=[],
-        generation_options=[],
-        template_options=[],
-        bases=[],
-        cuda_available=False,
-        cache_clear_calls=0,
-    )
+    rig = SimpleNamespace(base_path=base_path, adapters=adapters, faults={}, tokenizer_calls=[], base_calls=[], adapter_calls=[], evaluations=[], generations=[], generation_options=[], template_options=[], bases=[], cuda_available=False, cache_clear_calls=0)
 
     def step(stage):
         failures = rig.faults.get(stage, [])
@@ -71,22 +56,22 @@ def arrange_transformer_lifecycle(tmp_path, monkeypatch):
 
         def apply_chat_template(self, messages, **kwargs):
             rig.template_options.append(dict(kwargs))
-            assert messages[-1]["role"] == "user" and messages[-1]["content"] == "Complete isolated request."
+            assert messages[-1]['role'] == 'user' and messages[-1]['content'] == 'Complete isolated request.'
             return SimpleNamespace(input_ids=Tensor())
 
         def decode(self, tokens, **kwargs):
-            label = next(label for label, token in TOKENS.items() if tokens == [token])
+            label = next((label for label, token in TOKENS.items() if tokens == [token]))
             return REPLIES[label]
 
     class BaseModel:
-        device = "cpu"
+        device = 'cpu'
 
         def __init__(self):
             self.adapter = None
 
         def eval(self):
-            rig.evaluations.append(("base", self))
-            step("base_eval")
+            rig.evaluations.append(('base', self))
+            step('base_eval')
             return self
 
         def generate(self, input_ids, **kwargs):
@@ -95,13 +80,14 @@ def arrange_transformer_lifecycle(tmp_path, monkeypatch):
             return [[1, 2, TOKENS[self.adapter]]]
 
     class AdapterModel:
+
         def __init__(self, base):
             self.base_model = SimpleNamespace(model=base)
             self.device = base.device
 
         def eval(self):
             rig.evaluations.append((self.base_model.model.adapter, self))
-            step("adapter_eval")
+            step('adapter_eval')
             return self
 
         def generate(self, *args, **kwargs):
@@ -109,12 +95,12 @@ def arrange_transformer_lifecycle(tmp_path, monkeypatch):
 
     def tokenizer_loader(path, **kwargs):
         rig.tokenizer_calls.append((path, kwargs))
-        step("tokenizer")
+        step('tokenizer')
         return Tokenizer()
 
     def base_loader(path, **kwargs):
         rig.base_calls.append((path, kwargs))
-        step("base_load")
+        step('base_load')
         model = BaseModel()
         rig.bases.append(model)
         return model
@@ -124,36 +110,18 @@ def arrange_transformer_lifecycle(tmp_path, monkeypatch):
         if not path.is_dir():
             raise FileNotFoundError(path)
         rig.adapter_calls.append((base, path, kwargs))
-        # PEFT may mutate the supplied base before a later loading failure.
         base.adapter = path.name
-        step("adapter_load")
+        step('adapter_load')
         return AdapterModel(base)
 
     def clear_cuda_cache():
         rig.cache_clear_calls += 1
-        step("cache_clear")
-
-    monkeypatch.setitem(sys.modules, "torch", SimpleNamespace(
-        float16="synthetic-float16",
-        long="synthetic-long",
-        no_grad=nullcontext,
-        tensor=lambda value, **kwargs: Tensor(),
-        cuda=SimpleNamespace(
-            memory_allocated=lambda: 0,
-            empty_cache=clear_cuda_cache,
-            is_available=lambda: rig.cuda_available,
-        ),
-    ))
-    monkeypatch.setitem(sys.modules, "transformers", SimpleNamespace(
-        AutoTokenizer=SimpleNamespace(from_pretrained=tokenizer_loader),
-        AutoModelForCausalLM=SimpleNamespace(from_pretrained=base_loader),
-        BitsAndBytesConfig=lambda **kwargs: SimpleNamespace(**kwargs),
-    ))
-    monkeypatch.setitem(sys.modules, "peft", SimpleNamespace(
-        PeftModel=SimpleNamespace(from_pretrained=adapter_loader),
-    ))
-    monkeypatch.setenv("BASE_MODEL_PATH", str(base_path))
-    monkeypatch.setattr(model_manager, "_get_db_config", lambda: {"temperature": 0.2, "maxTokens": 32})
+        step('cache_clear')
+    monkeypatch.setitem(sys.modules, 'torch', SimpleNamespace(float16='synthetic-float16', long='synthetic-long', no_grad=nullcontext, tensor=lambda value, **kwargs: Tensor(), cuda=SimpleNamespace(memory_allocated=lambda: 0, empty_cache=clear_cuda_cache, is_available=lambda: rig.cuda_available)))
+    monkeypatch.setitem(sys.modules, 'transformers', SimpleNamespace(AutoTokenizer=SimpleNamespace(from_pretrained=tokenizer_loader), AutoModelForCausalLM=SimpleNamespace(from_pretrained=base_loader), BitsAndBytesConfig=lambda **kwargs: SimpleNamespace(**kwargs)))
+    monkeypatch.setitem(sys.modules, 'peft', SimpleNamespace(PeftModel=SimpleNamespace(from_pretrained=adapter_loader)))
+    monkeypatch.setenv('BASE_MODEL_PATH', str(base_path))
+    monkeypatch.setattr(model_manager, '_get_db_config', lambda _owner_database=None: {'temperature': 0.2, 'maxTokens': 32})
     rig.provider = model_manager.TransformersPeftProvider()
     return rig
 

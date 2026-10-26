@@ -39,23 +39,17 @@ def request(label):
 
 @pytest.fixture
 async def circuit_rig(tmp_path, monkeypatch):
-    database = SQLiteDB(tmp_path / "strict-circuit.sqlite")
-    database.update_config(dict(useKnowledgeBase=False, temperature=.2, maxTokens=128, topP=1.0))
+    database = SQLiteDB(tmp_path / 'strict-circuit.sqlite')
+    database.update_config(dict(useKnowledgeBase=False, temperature=0.2, maxTokens=128, topP=1.0))
     registry = CircuitBreakerRegistry()
     semaphore = asyncio.Semaphore(4)
-    rig = SimpleNamespace(
-        database=database, registry=registry, semaphore=semaphore,
-        calls=[], fault=None, hold=None, active=0,
-        entered=asyncio.Event(), cancelled=asyncio.Event(),
-    )
+    rig = SimpleNamespace(database=database, registry=registry, semaphore=semaphore, calls=[], fault=None, hold=None, active=0, entered=asyncio.Event(), cancelled=asyncio.Event())
 
     async def complete(messages, **params):
-        # Preserve the real compiler; this boundary must receive the complete
-        # fictional question, its negation and exception on every actual call.
-        visible = unescape("\n".join(message["content"] for message in messages))
+        visible = unescape('\n'.join((message['content'] for message in messages)))
         assert FACTS in visible
-        assert any(message["role"] == "system" for message in messages)
-        assert params["temperature"] == .2 and params["max_tokens"] == 128 and params["top_p"] == 1.0
+        assert any((message['role'] == 'system' for message in messages))
+        assert params['temperature'] == 0.2 and params['max_tokens'] == 128 and (params['top_p'] == 1.0)
         rig.calls.append(dict(messages=[dict(message) for message in messages], params=dict(params), provider_fee=0))
         rig.active += 1
         rig.entered.set()
@@ -64,27 +58,23 @@ async def circuit_rig(tmp_path, monkeypatch):
                 await rig.hold.wait()
             if rig.fault is not None:
                 raise rig.fault
-            return REPLY, 0.0
+            return (REPLY, 0.0)
         except asyncio.CancelledError:
             rig.cancelled.set()
             raise
         finally:
             rig.active -= 1
-
-    connection = cloud_connection("fiction-circuit-model", completion=complete)
-    manager = SimpleNamespace(
-        _current_provider=SimpleNamespace(value="openai_compat"),
-        get_current_provider=lambda: connection,
-    )
-    rig.circuit_name = f"model_generate:{(await resolve_request_context(manager)).connection_id}"
-    monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
-    monkeypatch.setattr(generate, "db", database)
-    monkeypatch.setattr(generate, "response_cache", None)
-    monkeypatch.setattr(generate, "circuit_breaker_registry", registry)
-    monkeypatch.setattr(generate, "get_llm_semaphore", lambda: semaphore)
-    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "只依据完整给定题设；保留时间、否定和例外。")
+    connection = cloud_connection('fiction-circuit-model', completion=complete)
+    manager = SimpleNamespace(_current_provider=SimpleNamespace(value='openai_compat'), get_current_provider=lambda: connection)
+    rig.circuit_name = f'model_generate:{(await resolve_request_context(manager)).connection_id}'
+    monkeypatch.setattr(model_manager, 'get_model_manager', lambda *, database=None: manager)
+    monkeypatch.setattr(generate, 'db', database)
+    monkeypatch.setattr(generate, 'response_cache', None)
+    monkeypatch.setattr(generate, 'circuit_breaker_registry', registry)
+    monkeypatch.setattr(generate, 'get_llm_semaphore', lambda: semaphore)
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: '只依据完整给定题设；保留时间、否定和例外。')
     monkeypatch.setattr(chat_answer, 'get_provider_context_budget', lambda: SimpleNamespace(window_tokens=65536, evidence_max_chars=0))
-    monkeypatch.setenv("CHARACTER_INDEPENDENT_TASKS_ENABLED", "false")
+    monkeypatch.setenv('CHARACTER_INDEPENDENT_TASKS_ENABLED', 'false')
     try:
         yield rig
     finally:

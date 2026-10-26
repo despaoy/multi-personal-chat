@@ -15,22 +15,12 @@ from inference.model_readiness import check_model_readiness
 
 @pytest.fixture
 def providers(monkeypatch):
-    monkeypatch.setattr(model_manager, "_get_db_config", lambda: {
-        "openaiCompatBaseUrl": "https://fiction.example", "openaiCompatApiKey": "fiction-readiness-key",
-        "openaiCompatModel": "fiction-model",
-    })
-    return {
-        "openai_compat": model_manager.OpenAICompatProvider(),
-        "ollama": model_manager.OllamaProvider(),
-        "llama_cpp": model_manager.LlamaCppProvider(),
-        "transformers_peft": model_manager.TransformersPeftProvider(),
-        "mock": model_manager.MockProvider(),
-        "vllm": model_manager.VLLMProvider(),
-    }
+    monkeypatch.setattr(model_manager, '_get_db_config', lambda _owner_database=None: {'openaiCompatBaseUrl': 'https://fiction.example', 'openaiCompatApiKey': 'fiction-readiness-key', 'openaiCompatModel': 'fiction-model'})
+    return {'openai_compat': model_manager.OpenAICompatProvider(), 'ollama': model_manager.OllamaProvider(), 'llama_cpp': model_manager.LlamaCppProvider(), 'transformers_peft': model_manager.TransformersPeftProvider(), 'mock': model_manager.MockProvider(), 'vllm': model_manager.VLLMProvider()}
 
 
 def select(monkeypatch, provider):
-    monkeypatch.setattr(model_manager, "get_model_manager", lambda: SimpleNamespace(get_current_provider=lambda: provider))
+    monkeypatch.setattr(model_manager, 'get_model_manager', lambda *, database=None: SimpleNamespace(get_current_provider=lambda: provider))
 
 
 def install_http(monkeypatch, provider, handler):
@@ -44,22 +34,19 @@ def install_http(monkeypatch, provider, handler):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("base", ["https://fiction.example", "https://fiction.example/v1/"])
+@pytest.mark.parametrize('base', ['https://fiction.example', 'https://fiction.example/v1/'])
 async def test_openai_readiness_uses_refreshed_generation_configuration(monkeypatch, providers, base):
-    provider = providers["openai_compat"]
-    monkeypatch.setattr(model_manager, "_get_db_config", lambda: {
-        "openaiCompatBaseUrl": base, "openaiCompatApiKey": "fiction-readiness-key", "openaiCompatModel": "fiction-model",
-    })
+    provider = providers['openai_compat']
+    monkeypatch.setattr(model_manager, '_get_db_config', lambda _owner_database=None: {'openaiCompatBaseUrl': base, 'openaiCompatApiKey': 'fiction-readiness-key', 'openaiCompatModel': 'fiction-model'})
     requests = []
 
     def handler(request):
         requests.append(request)
-        assert str(request.url) == "https://fiction.example/v1/models"
-        assert request.method == "GET" and request.content == b""
-        assert request.headers["Authorization"] == "Bearer fiction-readiness-key"
-        assert request.extensions["timeout"]["read"] == 3.0
-        return httpx.Response(200, json={"object": "list", "data": [{"id": "fiction-model", "object": "model"}]})
-
+        assert str(request.url) == 'https://fiction.example/v1/models'
+        assert request.method == 'GET' and request.content == b''
+        assert request.headers['Authorization'] == 'Bearer fiction-readiness-key'
+        assert request.extensions['timeout']['read'] == 3.0
+        return httpx.Response(200, json={'object': 'list', 'data': [{'id': 'fiction-model', 'object': 'model'}]})
     select(monkeypatch, provider)
     install_http(monkeypatch, provider, handler)
     assert await check_model_readiness() is True
@@ -119,18 +106,17 @@ async def test_remote_failure_and_timeout_are_explicit_and_cancelled(monkeypatch
 
 
 def test_missing_key_and_configuration_read_failure_propagate(monkeypatch, providers):
-    provider = providers["openai_compat"]
-    monkeypatch.delenv("OPENAI_COMPAT_API_KEY", raising=False)
-    monkeypatch.setattr(model_manager, "_get_db_config", lambda: {"openaiCompatApiKey": ""})
+    provider = providers['openai_compat']
+    monkeypatch.delenv('OPENAI_COMPAT_API_KEY', raising=False)
+    monkeypatch.setattr(model_manager, '_get_db_config', lambda _owner_database=None: {'openaiCompatApiKey': ''})
     select(monkeypatch, provider)
-    with pytest.raises(ValueError, match="API key"):
+    with pytest.raises(ValueError, match='API key'):
         check_model_readiness()
 
-    def failed_config():
-        raise OSError("fiction-database-outage")
-
-    monkeypatch.setattr(model_manager, "_get_db_config", failed_config)
-    with pytest.raises(OSError, match="fiction-database-outage"):
+    def failed_config(_owner_database=None):
+        raise OSError('fiction-database-outage')
+    monkeypatch.setattr(model_manager, '_get_db_config', failed_config)
+    with pytest.raises(OSError, match='fiction-database-outage'):
         check_model_readiness()
 
 
@@ -176,14 +162,14 @@ async def test_vllm_uses_chat_initialization_gate(monkeypatch, providers, client
 
 
 def test_check_tracks_runtime_selection_without_loading_local_weights(monkeypatch, providers):
-    current = [providers["mock"]]
-    monkeypatch.setattr(model_manager, "get_model_manager", lambda: SimpleNamespace(get_current_provider=lambda: current[0]))
+    current = [providers['mock']]
+    monkeypatch.setattr(model_manager, 'get_model_manager', lambda *, database=None: SimpleNamespace(get_current_provider=lambda: current[0]))
     assert check_model_readiness() is False
-    current[0] = providers["transformers_peft"]
+    current[0] = providers['transformers_peft']
     assert check_model_readiness() is False
     current[0]._loaded = True
     assert check_model_readiness() is True
-    current[0] = providers["mock"]
+    current[0] = providers['mock']
     assert check_model_readiness() is False
     assert not inspect.isawaitable(check_model_readiness())
 
@@ -237,26 +223,24 @@ async def test_other_remote_failure_is_not_ready(monkeypatch, providers, name):
 
 @pytest.mark.asyncio
 async def test_concurrent_cloud_readiness_keeps_each_resolved_connection(monkeypatch, providers):
-    provider = providers["openai_compat"]
+    provider = providers['openai_compat']
     original = (provider.base_url, provider.model, provider.api_key)
     select(monkeypatch, provider)
     current = {}
-    monkeypatch.setattr(model_manager, "_get_db_config", lambda: dict(current))
+    monkeypatch.setattr(model_manager, '_get_db_config', lambda _owner_database=None: dict(current))
     requests = []
 
     def handler(request):
         host = request.url.host
-        requests.append((host, request.headers["Authorization"]))
-        return httpx.Response(200, json={"data": [{"id": host.split(".")[0]}]})
-
+        requests.append((host, request.headers['Authorization']))
+        return httpx.Response(200, json={'data': [{'id': host.split('.')[0]}]})
     install_http(monkeypatch, provider, handler)
     checks = []
-    for label in ("first", "second"):
-        current.update(openaiCompatBaseUrl=f"https://{label}.invalid", openaiCompatModel=label,
-                       openaiCompatApiKey=f"synthetic-{label}")
+    for label in ('first', 'second'):
+        current.update(openaiCompatBaseUrl=f'https://{label}.invalid', openaiCompatModel=label, openaiCompatApiKey=f'synthetic-{label}')
         checks.append(check_model_readiness())
     assert await asyncio.gather(*checks) == [True, True]
-    assert requests == [("first.invalid", "Bearer synthetic-first"), ("second.invalid", "Bearer synthetic-second")]
+    assert requests == [('first.invalid', 'Bearer synthetic-first'), ('second.invalid', 'Bearer synthetic-second')]
     assert (provider.base_url, provider.model, provider.api_key) == original
 
 

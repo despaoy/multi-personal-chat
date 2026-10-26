@@ -89,13 +89,8 @@ def test_small_reference_budget_rejects_selected_plan_instead_of_omitting_it():
 def test_native_cloud_service_propagates_reference_budget(monkeypatch):
     from inference import model_manager
     from services.character_context import build_character_context_service
-
-    monkeypatch.setattr(
-        model_manager,
-        "get_model_manager",
-        lambda: SimpleNamespace(_current_provider=SimpleNamespace(value="openai_compat")),
-    )
-    monkeypatch.setenv("OPENAI_COMPAT_CONTEXT_WINDOW_TOKENS", "65536")
+    monkeypatch.setattr(model_manager, 'get_model_manager', lambda *, database=None: SimpleNamespace(_current_provider=SimpleNamespace(value='openai_compat')))
+    monkeypatch.setenv('OPENAI_COMPAT_CONTEXT_WINDOW_TOKENS', '65536')
     service = build_character_context_service(object())
     assert service._reference_max_chars == 32768
 

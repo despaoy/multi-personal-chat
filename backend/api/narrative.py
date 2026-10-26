@@ -92,7 +92,7 @@ async def canonical_generate(body: CanonicalMessage, request: Request, user=Depe
                     reply=prior[0]["reply"], model=prior[0]["modelName"], costTime=prior[0]["costTime"]
                 )
         try:
-            context = await resolve_request_context(get_model_manager())
+            context = await resolve_request_context(get_model_manager(database=container.db))
         except Exception as exc:
             raise HTTPException(503, "模型配置读取失败，请检查配置及模型状态后重试") from exc
         with use_request_context(context):

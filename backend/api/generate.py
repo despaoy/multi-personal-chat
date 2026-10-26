@@ -187,7 +187,7 @@ async def _generate_reply_impl(
     context = get_request_context()
     if context is None:
         try:
-            context = await resolve_request_context(get_model_manager())
+            context = await resolve_request_context(get_model_manager(database=message_db))
         except Exception as exc:
             raise HTTPException(503, "模型配置读取失败，请检查配置及模型状态后重试") from exc
     started_at = time.time()

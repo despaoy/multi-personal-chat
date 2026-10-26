@@ -18,12 +18,9 @@ pytestmark = pytest.mark.usefixtures("literal_grounded_query")
 
 def _install_ask_scope_fixture(monkeypatch):
     from inference import model_manager
-
-    connection = cloud_connection("test")
-    manager = SimpleNamespace(
-        _current_provider=SimpleNamespace(value="openai_compat"), get_current_provider=lambda: connection,
-    )
-    monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
+    connection = cloud_connection('test')
+    manager = SimpleNamespace(_current_provider=SimpleNamespace(value='openai_compat'), get_current_provider=lambda: connection)
+    monkeypatch.setattr(model_manager, 'get_model_manager', lambda *, database=None: manager)
 
 
 def _bundle() -> dict[str, Any]:
@@ -159,41 +156,36 @@ async def test_stream_only_emits_validated_answer_and_closes_provider_stream():
 async def test_api_generation_adapters_resolve_vllm_only_on_first_generation(monkeypatch):
     from api import ask as ask_api
     from app import providers as model_dependencies
-
     resolutions = 0
 
     class FakeClient:
+
         async def generate(self, **kwargs: Any):
-            if not kwargs.get("stream"):
-                return "完成"
+            if not kwargs.get('stream'):
+                return '完成'
 
             async def chunks():
-                yield "流"
-                yield "式"
-
+                yield '流'
+                yield '式'
             return chunks()
 
     async def get_client():
         nonlocal resolutions
         resolutions += 1
         return FakeClient()
-
     from types import SimpleNamespace
-
     from inference import model_manager
-
-    provider = SimpleNamespace(name="vllm", get_status=lambda: {"modelName": "local-test-model"})
-    manager = SimpleNamespace(_current_provider=SimpleNamespace(value="vllm"), get_current_provider=lambda: provider)
-    monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
-    monkeypatch.setattr(model_dependencies, "get_vllm_client", get_client)
+    provider = SimpleNamespace(name='vllm', get_status=lambda: {'modelName': 'local-test-model'})
+    manager = SimpleNamespace(_current_provider=SimpleNamespace(value='vllm'), get_current_provider=lambda: provider)
+    monkeypatch.setattr(model_manager, 'get_model_manager', lambda *, database=None: manager)
+    monkeypatch.setattr(model_dependencies, 'get_vllm_client', get_client)
     context = await resolve_request_context(manager)
     generate, generate_stream, _model_id, _identity = await ask_api._resolve_generate_adapters(context)
     assert resolutions == 0
-
-    assert await generate(messages=[], temperature=0.2, max_tokens=64, top_p=0.9) == "完成"
+    assert await generate(messages=[], temperature=0.2, max_tokens=64, top_p=0.9) == '完成'
     assert resolutions == 1
     chunks = [chunk async for chunk in generate_stream(messages=[], temperature=0.2, max_tokens=64, top_p=0.9)]
-    assert chunks == ["流", "式"]
+    assert chunks == ['流', '式']
     assert resolutions == 1
 
 

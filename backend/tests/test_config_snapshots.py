@@ -116,24 +116,22 @@ def test_invalidation_waits_for_old_load_then_prevents_stale_refill():
 
 @pytest.mark.asyncio
 async def test_api_save_invalidates_actual_snapshot_used_by_the_model(monkeypatch, tmp_path):
-    database = SQLiteDB(tmp_path / "config.db")
-    database.update_config({"openaiCompatBaseUrl": "https://fiction.example", "openaiCompatApiKey": "fiction-private-key",
-                            "openaiCompatModel": "old-model"})
-    monkeypatch.setattr(config_api, "db", database)
-    monkeypatch.setattr(adapter, "db", database)
-    monkeypatch.setenv("MODEL_PROVIDER", "openai_compat")
-    first = await config_api.get_config(current_user={"isAdmin": True})
-    assert first["cached"] is False and "fiction-private-key" not in str(first)
-    assert (await config_api.get_config(current_user={"isAdmin": True}))["cached"] is True
+    database = SQLiteDB(tmp_path / 'config.db')
+    database.update_config({'openaiCompatBaseUrl': 'https://fiction.example', 'openaiCompatApiKey': 'fiction-private-key', 'openaiCompatModel': 'old-model'})
+    monkeypatch.setattr(adapter, 'db', database)
+    monkeypatch.setenv('MODEL_PROVIDER', 'openai_compat')
+    first = await config_api.get_config(current_user={'isAdmin': True}, database=database)
+    assert first['cached'] is False and 'fiction-private-key' not in str(first)
+    assert (await config_api.get_config(current_user={'isAdmin': True}, database=database))['cached'] is True
     manager = model_manager.ModelManager(base_dir=tmp_path)
-    monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
+    monkeypatch.setattr(model_manager, 'get_model_manager', lambda *, database=None: manager)
     try:
-        request = SimpleNamespace(json=AsyncMock(return_value={"openaiCompatModel": "new-model"}))
-        result = await config_api.update_config(request, current_user={"isAdmin": True})
-        assert result["success"] and manager.get_current_provider().model == "new-model"
-        assert model_manager._get_db_config()["openaiCompatModel"] == "new-model"
-        assert (await config_api.get_config(current_user={"isAdmin": True}))["config"]["openaiCompatModel"] == "new-model"
-        assert first["config"]["openaiCompatModel"] == "old-model"
+        request = SimpleNamespace(json=AsyncMock(return_value={'openaiCompatModel': 'new-model'}))
+        result = await config_api.update_config(request, current_user={'isAdmin': True}, database=database)
+        assert result['success'] and manager.get_current_provider().model == 'new-model'
+        assert model_manager._get_db_config()['openaiCompatModel'] == 'new-model'
+        assert (await config_api.get_config(current_user={'isAdmin': True}, database=database))['config']['openaiCompatModel'] == 'new-model'
+        assert first['config']['openaiCompatModel'] == 'old-model'
     finally:
         manager.shutdown()
         database.close_connection()
@@ -141,15 +139,15 @@ async def test_api_save_invalidates_actual_snapshot_used_by_the_model(monkeypatc
 
 @pytest.mark.asyncio
 async def test_config_api_read_failure_returns_error_without_empty_success(monkeypatch):
-    failure = OSError("fiction-private-config-error")
+    failure = OSError('fiction-private-config-error')
 
     class Database:
+
         @property
         def config(self):
             raise failure
-
-    monkeypatch.setattr(config_api, "db", Database())
+    database = Database()
     with pytest.raises(HTTPException) as error:
-        await config_api.get_config(current_user={"isAdmin": True})
+        await config_api.get_config(current_user={'isAdmin': True}, database=database)
     assert error.value.status_code == 503 and error.value.__cause__ is failure
-    assert "fiction-private" not in str(error.value.detail)
+    assert 'fiction-private' not in str(error.value.detail)

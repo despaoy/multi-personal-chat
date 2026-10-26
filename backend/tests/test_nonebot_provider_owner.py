@@ -24,7 +24,7 @@ def lora_backend(bot_module, monkeypatch):
     monkeypatch.setattr(bot_module, 'db', SimpleNamespace(get_loras=reader))
     monkeypatch.setattr(bot_module, 'config', SimpleNamespace(SUPERUSERS=['1001'], BOT_NAME='合成机器人', REPLY_DELAY=-100))
     provider = SimpleNamespace(name='vllm')
-    monkeypatch.setattr(model_manager, 'get_model_manager', lambda: SimpleNamespace(get_current_provider=lambda: provider))
+    monkeypatch.setattr(model_manager, 'get_model_manager', lambda *, database=None: SimpleNamespace(get_current_provider=lambda: provider))
     client = SimpleNamespace(list_loras=AsyncMock(return_value=['hutao']))
     getter = AsyncMock(return_value=client)
     monkeypatch.setattr(vllm_client, 'get_enabled_vllm_client', getter)

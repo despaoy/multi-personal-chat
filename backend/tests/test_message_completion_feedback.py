@@ -154,111 +154,66 @@ def test_missing_or_branch_authority_never_writes(database, changes):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("provider", ["vllm", "openai_compat"])
-@pytest.mark.parametrize("mode", ["failed", "recorded", "feedback_store_failed", "completion_exception"])
+@pytest.mark.parametrize('provider', ['vllm', 'openai_compat'])
+@pytest.mark.parametrize('mode', ['failed', 'recorded', 'feedback_store_failed', 'completion_exception'])
 async def test_both_consumers_use_actual_saved_row_and_keep_visible_failure(monkeypatch, database, provider, mode, caplog):
     import asyncio
-
     from api import generate as gen
     from inference import model_manager as mm
-
-    owner = "owner-" + uuid.uuid4().hex
-    request = MessageRequest(
-        message=BODY,
-        characterId="tsukiyashiro_kisaki",
-        platform="web",
-        adapter="web-character",
-        senderId=owner,
-        sourceMessageId="new-" + uuid.uuid4().hex,
-        sessionId=owner,
-        conversationId=owner,
-        sessionType="private",
-        traceId="trace-" + uuid.uuid4().hex,
-    )
-    manager = SimpleNamespace(
-        _current_provider=SimpleNamespace(value=provider),
-        set_lora_adapter=lambda _: None,
-        get_status=lambda: dict(currentProvider=provider, providers={provider: dict(modelName="unit-model")}),
-    )
-    connection = cloud_connection("unit-model")
+    owner = 'owner-' + uuid.uuid4().hex
+    request = MessageRequest(message=BODY, characterId='tsukiyashiro_kisaki', platform='web', adapter='web-character', senderId=owner, sourceMessageId='new-' + uuid.uuid4().hex, sessionId=owner, conversationId=owner, sessionType='private', traceId='trace-' + uuid.uuid4().hex)
+    manager = SimpleNamespace(_current_provider=SimpleNamespace(value=provider), set_lora_adapter=lambda _: None, get_status=lambda: dict(currentProvider=provider, providers={provider: dict(modelName='unit-model')}))
+    connection = cloud_connection('unit-model')
     manager.get_current_provider = lambda: connection
-    monkeypatch.setattr(mm, "get_model_manager", lambda: manager)
-    monkeypatch.setattr(gen, "response_cache", None)
-    monkeypatch.setattr(gen, "circuit_breaker_registry", None)
-    monkeypatch.setattr(gen, "db", database)
-    monkeypatch.setattr(gen, "get_llm_semaphore", lambda: asyncio.Semaphore(1))
-    monkeypatch.setattr(gen, "get_vllm_client", AsyncMock(return_value=SimpleNamespace(generate=AsyncMock()) if provider == 'vllm' else None))
-    meta = dict(warnings=["原有检索提示"], answerMode="unit", confidence=0.3, citations=[])
+    monkeypatch.setattr(mm, 'get_model_manager', lambda *, database=None: manager)
+    monkeypatch.setattr(gen, 'response_cache', None)
+    monkeypatch.setattr(gen, 'circuit_breaker_registry', None)
+    monkeypatch.setattr(gen, 'db', database)
+    monkeypatch.setattr(gen, 'get_llm_semaphore', lambda: asyncio.Semaphore(1))
+    monkeypatch.setattr(gen, 'get_vllm_client', AsyncMock(return_value=SimpleNamespace(generate=AsyncMock()) if provider == 'vllm' else None))
+    meta = dict(warnings=['原有检索提示'], answerMode='unit', confidence=0.3, citations=[])
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', AsyncMock(return_value=ChatAnswer(reply='原始模型内容', used_rag=False, model_invoked=True, metadata=meta)))
-    prepared = SimpleNamespace(
-        memory_operation_receipt=None, character_id=request.characterId,
-        compiled=SimpleNamespace(profile_context="", dynamic_context="", reference_context=""),
-        history=(),
-    )
-    monkeypatch.setattr(gen, "_prepare_character_turn", AsyncMock(return_value=prepared))
-    service = SimpleNamespace(
-        complete_turn=AsyncMock(
-            return_value=_TurnOutcome(
-                source_capture="recorded" if mode == "recorded" else "failed", memory_enrichment_status="skipped"
-            )
-        )
-    )
+    prepared = SimpleNamespace(memory_operation_receipt=None, character_id=request.characterId, compiled=SimpleNamespace(profile_context='', dynamic_context='', reference_context=''), history=())
+    monkeypatch.setattr(gen, '_prepare_character_turn', AsyncMock(return_value=prepared))
+    service = SimpleNamespace(complete_turn=AsyncMock(return_value=_TurnOutcome(source_capture='recorded' if mode == 'recorded' else 'failed', memory_enrichment_status='skipped')))
     writer = database.update_message_feedback
     receipts = []
 
     def observe(receipt, *, warning):
         receipts.append(dict(receipt))
-        if mode == "feedback_store_failed":
-            raise RuntimeError("private-store-error: " + receipt["message"])
+        if mode == 'feedback_store_failed':
+            raise RuntimeError('private-store-error: ' + receipt['message'])
         return writer(receipt, warning=warning)
-
-    monkeypatch.setattr(database, "update_message_feedback", observe)
-    if mode == "completion_exception":
+    monkeypatch.setattr(database, 'update_message_feedback', observe)
+    if mode == 'completion_exception':
         from fastapi import HTTPException
-
-        failure = TimeoutError("synthetic-private-terminal-error")
+        failure = TimeoutError('synthetic-private-terminal-error')
         service.complete_turn.side_effect = failure
         accounting = AsyncMock()
-        monkeypatch.setattr(gen, "_record_model_invocation", accounting)
+        monkeypatch.setattr(gen, '_record_model_invocation', accounting)
         with pytest.raises(HTTPException) as caught:
-            await gen._generate_reply_impl(request, persist_message=True, enable_rag=False,
-                record_invocation=True, character_service=service, message_db=database)
-        assert caught.value.status_code == 503 and caught.value.detail["stage"] == "turn_completion"
-        assert caught.value.detail["modelInvoked"] is True and caught.value.detail["messageSaved"] is True
-        assert caught.value.__cause__ is failure and "synthetic-private" not in str(caught.value.detail)
-        stored = [r for r in database.get_messages(limit=1000) if r["traceId"] == request.traceId]
-        assert len(stored) == 1 and stored[0]["message"] == BODY and stored[0]["reply"] == "原始模型内容"
-        assert history(database, stored[0])[-1]["content"] == "原始模型内容" and receipts == []
+            await gen._generate_reply_impl(request, persist_message=True, enable_rag=False, record_invocation=True, character_service=service, message_db=database)
+        assert caught.value.status_code == 503 and caught.value.detail['stage'] == 'turn_completion'
+        assert caught.value.detail['modelInvoked'] is True and caught.value.detail['messageSaved'] is True
+        assert caught.value.__cause__ is failure and 'synthetic-private' not in str(caught.value.detail)
+        stored = [r for r in database.get_messages(limit=1000) if r['traceId'] == request.traceId]
+        assert len(stored) == 1 and stored[0]['message'] == BODY and (stored[0]['reply'] == '原始模型内容')
+        assert history(database, stored[0])[-1]['content'] == '原始模型内容' and receipts == []
         accounting.assert_awaited_once()
         service.complete_turn.assert_awaited_once()
         return
-    result = await gen._generate_reply_impl(
-        request,
-        persist_message=True,
-        enable_rag=False,
-        record_invocation=False,
-        character_service=service,
-        message_db=database,
-    )
-    stored = [r for r in database.get_messages(limit=1000) if r["traceId"] == request.traceId]
-    assert len(stored) == 1 and stored[0]["message"] == BODY and result.warnings[0] == "原有检索提示"
-    assert result.confidence == 0.3 and result.citations == [] and meta["warnings"] == ["原有检索提示"]
-    if mode == "recorded":
-        assert result.reply == stored[0]["reply"] == "原始模型内容" and receipts == []
+    result = await gen._generate_reply_impl(request, persist_message=True, enable_rag=False, record_invocation=False, character_service=service, message_db=database)
+    stored = [r for r in database.get_messages(limit=1000) if r['traceId'] == request.traceId]
+    assert len(stored) == 1 and stored[0]['message'] == BODY and (result.warnings[0] == '原有检索提示')
+    assert result.confidence == 0.3 and result.citations == [] and (meta['warnings'] == ['原有检索提示'])
+    if mode == 'recorded':
+        assert result.reply == stored[0]['reply'] == '原始模型内容' and receipts == []
     else:
-        assert (
-            receipts[0]["id"] == str(stored[0]["id"])
-            and receipts[0]["senderId"] == owner
-            and receipts[0]["reply"] == "原始模型内容"
-        )
-        assert "保存失败" in result.reply and result.warnings[-1] in result.reply
-        if mode == "failed":
-            assert stored[0]["reply"] == result.reply and history(database, stored[0])[-1]["content"] == result.reply
+        assert receipts[0]['id'] == str(stored[0]['id']) and receipts[0]['senderId'] == owner and (receipts[0]['reply'] == '原始模型内容')
+        assert '保存失败' in result.reply and result.warnings[-1] in result.reply
+        if mode == 'failed':
+            assert stored[0]['reply'] == result.reply and history(database, stored[0])[-1]['content'] == result.reply
         else:
-            assert (
-                stored[0]["reply"] == "原始模型内容"
-                and "刷新后可能看不到" in result.reply
-                and "private-store-error" not in result.reply
-            )
-            assert "保存提示存档未能确认" in caplog.text and "RuntimeError" in caplog.text
-            assert "private-store-error" not in caplog.text and BODY not in caplog.text
+            assert stored[0]['reply'] == '原始模型内容' and '刷新后可能看不到' in result.reply and ('private-store-error' not in result.reply)
+            assert '保存提示存档未能确认' in caplog.text and 'RuntimeError' in caplog.text
+            assert 'private-store-error' not in caplog.text and BODY not in caplog.text

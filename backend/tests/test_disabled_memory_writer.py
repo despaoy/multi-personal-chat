@@ -41,13 +41,9 @@ async def disabled_writer(tmp_path, monkeypatch, no_live_context_review):
     """Use a real disabled scheduler, never a fake disabled outcome."""
     from inference import model_manager
     from knowledge.retrieval_core import embedding
-
-    for key in ("CONTEXTUAL_MEMORY_SELECTION_ENABLED", "CONTEXTUAL_DECISION_POLICY_ENABLED",
-                "DYNAMIC_CONTEXT_SEMANTIC_REVIEW_ENABLED", "MEMORY_SOURCE_RECALL_ENABLED"):
-        monkeypatch.setenv(key, "false")
-    database = SQLiteDB(tmp_path / "disabled-writer.sqlite")
-    # Track actual to_thread connections solely to close them after all owned
-    # tasks are drained; no SQLite call is replaced with a synthetic result.
+    for key in ('CONTEXTUAL_MEMORY_SELECTION_ENABLED', 'CONTEXTUAL_DECISION_POLICY_ENABLED', 'DYNAMIC_CONTEXT_SEMANTIC_REVIEW_ENABLED', 'MEMORY_SOURCE_RECALL_ENABLED'):
+        monkeypatch.setenv(key, 'false')
+    database = SQLiteDB(tmp_path / 'disabled-writer.sqlite')
     connections = {}
     actual_connection = database._get_connection
 
@@ -55,31 +51,24 @@ async def disabled_writer(tmp_path, monkeypatch, no_live_context_review):
         result = actual_connection()
         connections[id(result)] = result
         return result
-
-    monkeypatch.setattr(database, "_get_connection", connection)
-    config = MemoryLlmConfig.from_env({"MEMORY_LLM_ENABLED": "false"})
+    monkeypatch.setattr(database, '_get_connection', connection)
+    config = MemoryLlmConfig.from_env({'MEMORY_LLM_ENABLED': 'false'})
     assert config.enabled is False
-    memory_model = AsyncMock(side_effect=AssertionError("disabled memory must not invoke a model"))
+    memory_model = AsyncMock(side_effect=AssertionError('disabled memory must not invoke a model'))
     completion = SimpleNamespace(complete=memory_model, close=AsyncMock())
     scheduler = MemoryEnrichmentScheduler(config=config, completion=completion)
-    monkeypatch.setattr("character.memory_llm.get_memory_enrichment_scheduler", lambda: scheduler)
-    rule_writer = AsyncMock(side_effect=AssertionError("disabled memory must not invoke the automatic rule writer"))
-    monkeypatch.setattr("character.rule_memory_writer.write_rule_memory", rule_writer)
-    embedding_factory = Mock(side_effect=AssertionError("this test must not construct an embedding model"))
-    monkeypatch.setattr(embedding, "get_default_embedding_provider", embedding_factory)
-
-    connection_fixture = cloud_connection("fiction-reply-model")
-    local_model = AsyncMock(side_effect=AssertionError("this test must not invoke a local model"))
-    manager = SimpleNamespace(_current_provider=SimpleNamespace(value="openai_compat"),
-        get_current_provider=lambda: connection_fixture, async_generate=local_model,
-        set_lora_adapter=lambda _: None,
-        get_status=lambda: dict(currentProvider="openai_compat",
-            providers={"openai_compat": dict(modelName="fiction-reply-model")}))
-    monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
-
+    monkeypatch.setattr('character.memory_llm.get_memory_enrichment_scheduler', lambda: scheduler)
+    rule_writer = AsyncMock(side_effect=AssertionError('disabled memory must not invoke the automatic rule writer'))
+    monkeypatch.setattr('character.rule_memory_writer.write_rule_memory', rule_writer)
+    embedding_factory = Mock(side_effect=AssertionError('this test must not construct an embedding model'))
+    monkeypatch.setattr(embedding, 'get_default_embedding_provider', embedding_factory)
+    connection_fixture = cloud_connection('fiction-reply-model')
+    local_model = AsyncMock(side_effect=AssertionError('this test must not invoke a local model'))
+    manager = SimpleNamespace(_current_provider=SimpleNamespace(value='openai_compat'), get_current_provider=lambda: connection_fixture, async_generate=local_model, set_lora_adapter=lambda _: None, get_status=lambda: dict(currentProvider='openai_compat', providers={'openai_compat': dict(modelName='fiction-reply-model')}))
+    monkeypatch.setattr(model_manager, 'get_model_manager', lambda *, database=None: manager)
     runtime = turn_completion.TurnCompletionRuntime(capacity=1)
-    monkeypatch.setattr(turn_completion, "get_turn_completion_runtime", lambda: runtime)
-    monkeypatch.setattr(dm, "get_turn_completion_runtime", lambda: runtime)
+    monkeypatch.setattr(turn_completion, 'get_turn_completion_runtime', lambda: runtime)
+    monkeypatch.setattr(dm, 'get_turn_completion_runtime', lambda: runtime)
     repo = DatabaseCharacterMemoryRepository(database)
     service = CharacterContextService(object(), repo, object())
     actual_complete = service.complete_turn
@@ -89,13 +78,10 @@ async def disabled_writer(tmp_path, monkeypatch, no_live_context_review):
         outcome = await actual_complete(*args, **kwargs)
         outcomes.append(outcome)
         return outcome
-
-    monkeypatch.setattr(service, "complete_turn", complete)
-    rig = SimpleNamespace(database=database, repo=repo, service=service, scheduler=scheduler,
-        runtime=runtime, outcomes=outcomes, memory_model=memory_model, rule_writer=rule_writer,
-        provider=connection_fixture, local_model=local_model, embedding_factory=embedding_factory)
+    monkeypatch.setattr(service, 'complete_turn', complete)
+    rig = SimpleNamespace(database=database, repo=repo, service=service, scheduler=scheduler, runtime=runtime, outcomes=outcomes, memory_model=memory_model, rule_writer=rule_writer, provider=connection_fixture, local_model=local_model, embedding_factory=embedding_factory)
     try:
-        assert extract_memories(BODY)  # Complete former-fallback trigger premise.
+        assert extract_memories(BODY)
         yield rig
     finally:
         await runtime.shutdown(timeout=2)

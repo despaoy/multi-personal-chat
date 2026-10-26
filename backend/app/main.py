@@ -131,6 +131,7 @@ async def lifespan(app: FastAPI):
     _clear_lifespan_resource_references(_cfg)
     container = get_runtime_container(app)
     database = container.db
+    database._model_manager = getattr(database, "_model_manager", None)
     postgres_mode = bool(container.is_pg_mode())
 
     validate_or_raise_for_startup(container.startup_env)
@@ -192,7 +193,7 @@ async def lifespan(app: FastAPI):
             ("HTTP 客户端池", _cfg.http_client_pool, "close"),
             ("备份调度器", _cfg.backup_mgr, "stop_scheduled_backup"),
             ("PostgreSQL 适配器", database if postgres_mode else None, "close"),
-            ("模型管理器", "inference.model_manager", "_model_manager.shutdown"),
+            ("模型管理器", database, "_model_manager.shutdown"),
             ("vLLM 客户端", "inference.vllm_client", "close_shared_vllm_client"),
             ("熔断器注册表", _cfg.circuit_breaker_registry, "clear"),
             ("async Redis 客户端", "cache.redis_client", "close_async_redis"),
@@ -368,7 +369,7 @@ def create_app(container: RuntimeContainer | None = None) -> FastAPI:
     application.state.runtime_container = runtime_container
     application.state.readiness_probe = ReadinessProbe(
         database_check=lambda: get_runtime_container(application).db.execute_sql("SELECT 1"),
-        model_check=runtime_container.model_check or check_model_readiness,
+        model_check=runtime_container.model_check or (lambda: check_model_readiness(runtime_container.db)),
         model_required=True,
     )
     _install_middleware(application, runtime_container.startup_env)

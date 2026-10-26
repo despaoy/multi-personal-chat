@@ -33,16 +33,14 @@ def database(tmp_path):
 
 @pytest.fixture
 def generation(monkeypatch, database):
-    manager = SimpleNamespace(_current_provider=SimpleNamespace(value="openai_compat"),
-        set_lora_adapter=Mock(), get_status=lambda: {"currentProvider": "openai_compat",
-            "providers": {"openai_compat": {"modelName": "fixture-model"}}})
-    connection = cloud_connection("fixture-model")
+    manager = SimpleNamespace(_current_provider=SimpleNamespace(value='openai_compat'), set_lora_adapter=Mock(), get_status=lambda: {'currentProvider': 'openai_compat', 'providers': {'openai_compat': {'modelName': 'fixture-model'}}})
+    connection = cloud_connection('fixture-model')
     manager.get_current_provider = lambda: connection
-    monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
-    monkeypatch.setattr(generate, "db", database)
-    monkeypatch.setattr(generate, "response_cache", None)
-    monkeypatch.setattr(generate, "circuit_breaker_registry", None)
-    monkeypatch.setattr(generate, "get_llm_semaphore", lambda: asyncio.Semaphore(1))
+    monkeypatch.setattr(model_manager, 'get_model_manager', lambda *, database=None: manager)
+    monkeypatch.setattr(generate, 'db', database)
+    monkeypatch.setattr(generate, 'response_cache', None)
+    monkeypatch.setattr(generate, 'circuit_breaker_registry', None)
+    monkeypatch.setattr(generate, 'get_llm_semaphore', lambda: asyncio.Semaphore(1))
     model = AsyncMock(return_value=ChatAnswer(reply=REPLY, used_rag=False, model_invoked=True, metadata={}))
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', model)
     return model

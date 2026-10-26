@@ -10,7 +10,7 @@ from inference.generation_request import GenerationRequest
 from inference.provider_context import get_provider_context_budget
 
 
-def selected(name="vllm"):
+def selected(name='vllm', *, database=None):
     return SimpleNamespace(_current_provider=SimpleNamespace(value=name))
 
 

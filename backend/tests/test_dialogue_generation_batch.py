@@ -68,63 +68,55 @@ def mapped_messages(batch):
 
 @pytest.fixture
 def rig(monkeypatch, tmp_path):
-    state = dict(is_generating=False, cancel_requested=False, progress=0, total=0,
-                 batch_num=0, total_batches=0, generated_count=0, new_dialogues=[],
-                 all_generated_dialogues=[], started_at=None)
-    monkeypatch.setattr(training, "generation_state", state)
-    search = AsyncMock(return_value="")
-    monkeypatch.setattr(training, "search_character_info", search)
+    state = dict(is_generating=False, cancel_requested=False, progress=0, total=0, batch_num=0, total_batches=0, generated_count=0, new_dialogues=[], all_generated_dialogues=[], started_at=None)
+    monkeypatch.setattr(training, 'generation_state', state)
+    search = AsyncMock(return_value='')
+    monkeypatch.setattr(training, 'search_character_info', search)
     context = SimpleNamespace(state=state, search=search, batches=[], requested=[], defect=None, fail_at=1)
 
     async def model(**kwargs):
         ordinal = len(context.requested) + 1
-        count, turns, batch = complete_prompt_batch(kwargs["prompt"], ordinal)
-        assert kwargs["session_history"] == []
-        assert kwargs["max_tokens_override"] == (2048 if turns <= 2 else 4096 if turns <= 5 else 6144)
+        count, turns, batch = complete_prompt_batch(kwargs['prompt'], ordinal)
+        assert kwargs['session_history'] == []
+        assert kwargs['max_tokens_override'] == (2048 if turns <= 2 else 4096 if turns <= 5 else 6144)
         context.requested.append((count, turns))
         context.batches.append(deepcopy(batch))
         if context.defect and ordinal == context.fail_at:
-            if context.defect == "provider_rejection":
+            if context.defect == 'provider_rejection':
                 raise ProviderResponseError(context.upstream_status)
-            if context.defect == "provider_exception":
-                raise RuntimeError("SYNTHETIC_UPSTREAM_PRIVATE_FAILURE")
-            if context.defect == "provider_http_error":
-                raise HTTPException(status_code=503, detail="合成模型服务不可用")
-            if context.defect == "extra_item":
+            if context.defect == 'provider_exception':
+                raise RuntimeError('SYNTHETIC_UPSTREAM_PRIVATE_FAILURE')
+            if context.defect == 'provider_http_error':
+                raise HTTPException(status_code=503, detail='合成模型服务不可用')
+            if context.defect == 'extra_item':
                 batch.append(deepcopy(batch[0]))
-            elif context.defect == "extra_turn":
-                batch[0]["conversations"].extend(deepcopy(batch[0]["conversations"][:2]))
-            elif context.defect == "missing_message":
-                batch[0]["conversations"].pop()
-            elif context.defect == "wrong_role":
-                batch[0]["conversations"][1]["role"] = "user"
-            elif context.defect == "non_string_content":
-                batch[0]["conversations"][0]["content"] = {"private": MARKER}
-            elif context.defect == "non_text":
-                return batch, 0.25
+            elif context.defect == 'extra_turn':
+                batch[0]['conversations'].extend(deepcopy(batch[0]['conversations'][:2]))
+            elif context.defect == 'missing_message':
+                batch[0]['conversations'].pop()
+            elif context.defect == 'wrong_role':
+                batch[0]['conversations'][1]['role'] = 'user'
+            elif context.defect == 'non_string_content':
+                batch[0]['conversations'][0]['content'] = {'private': MARKER}
+            elif context.defect == 'non_text':
+                return (batch, 0.25)
             raw = json.dumps(batch, ensure_ascii=False)
-            if context.defect == "wrapped":
-                raw = "解释：" + MARKER + "\n" + raw + "\n结束解释"
-            elif context.defect == "fenced":
-                raw = "```json\n" + raw + "\n```"
-            return raw, 0.25
-        return json.dumps(batch, ensure_ascii=False), 0.25
-
-    manager = SimpleNamespace(
-        _current_provider=SimpleNamespace(value="openai_compat"),
-        async_generate=AsyncMock(side_effect=model),
-        generate=Mock(side_effect=AssertionError("Synchronous model generation is forbidden")),
-    )
-    provider = cloud_connection("fixture-dialogue-model")
+            if context.defect == 'wrapped':
+                raw = '解释：' + MARKER + '\n' + raw + '\n结束解释'
+            elif context.defect == 'fenced':
+                raw = '```json\n' + raw + '\n```'
+            return (raw, 0.25)
+        return (json.dumps(batch, ensure_ascii=False), 0.25)
+    manager = SimpleNamespace(_current_provider=SimpleNamespace(value='openai_compat'), async_generate=AsyncMock(side_effect=model), generate=Mock(side_effect=AssertionError('Synchronous model generation is forbidden')))
+    provider = cloud_connection('fixture-dialogue-model')
     provider.async_generate = manager.async_generate
     manager.get_current_provider = lambda: provider
-    monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
+    monkeypatch.setattr(model_manager, 'get_model_manager', lambda *, database=None: manager)
     context.manager = manager
     app = FastAPI()
-    app.state.runtime_container = RuntimeContainer(
-        db=SQLiteDB(tmp_path / "dialogue-accounting.sqlite"), is_pg_mode=lambda: False)
+    app.state.runtime_container = RuntimeContainer(db=SQLiteDB(tmp_path / 'dialogue-accounting.sqlite'), is_pg_mode=lambda: False)
     app.include_router(training.router)
-    app.dependency_overrides[get_current_admin] = lambda: {"id": 901, "role": "admin"}
+    app.dependency_overrides[get_current_admin] = lambda: {'id': 901, 'role': 'admin'}
     context.app = app
     return context
 

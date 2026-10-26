@@ -19,9 +19,8 @@ FACTS = "虚构题设：3张票，每张2元，共6元；尚未付款，下雨�
 
 @pytest.fixture
 def installed(monkeypatch):
-    state = SimpleNamespace(active=0, maximum=0, selected=None, calls=[], fault=None,
-        entered=asyncio.Event(), release=None, capacity_reached=asyncio.Event(), expected_capacity=None)
-    provider = SimpleNamespace(name="openai_compat", base_url="https://native.invalid/v1", model="fixture-cloud")
+    state = SimpleNamespace(active=0, maximum=0, selected=None, calls=[], fault=None, entered=asyncio.Event(), release=None, capacity_reached=asyncio.Event(), expected_capacity=None)
+    provider = SimpleNamespace(name='openai_compat', base_url='https://native.invalid/v1', model='fixture-cloud')
 
     async def complete(messages, **kwargs):
         state.active += 1
@@ -37,47 +36,39 @@ def installed(monkeypatch):
                 await asyncio.sleep(0.01)
             if state.fault:
                 raise state.fault
-            return messages[-1]["content"], 0.01
+            return (messages[-1]['content'], 0.01)
         finally:
             state.active -= 1
-
     provider.async_complete = complete
     provider.snapshot = lambda: provider
-    provider.get_status = lambda: {"modelName": "fixture-cloud"}
+    provider.get_status = lambda: {'modelName': 'fixture-cloud'}
+
     async def local(messages, **kwargs):
         before = state.selected
-        assert messages[0] == {"role": "system", "content": "保留完整题设。"}
-        assert kwargs == {"temperature": 0.1, "max_tokens": 128, "top_p": 1, "lora_name": None}
+        assert messages[0] == {'role': 'system', 'content': '保留完整题设。'}
+        assert kwargs == {'temperature': 0.1, 'max_tokens': 128, 'top_p': 1, 'lora_name': None}
         result = await complete(messages, **kwargs)
         assert state.selected == before
         return result
-
-    manager = SimpleNamespace(_current_provider=SimpleNamespace(value="openai_compat"),
-        get_current_provider=lambda: provider,
-        set_lora_adapter=Mock(side_effect=lambda path: setattr(state, "selected", path)),
-        get_status=lambda: {"currentProvider": manager._current_provider.value,
-            "providers": {"openai_compat": {"modelName": "fixture-cloud"}, "transformers_peft": {"modelName": "fixture-local"}}})
-    local_provider = SimpleNamespace(name="transformers_peft", async_complete=local,
-        set_lora_adapter=manager.set_lora_adapter, get_status=lambda: {"modelName": "fixture-local"})
-    manager._providers = {model_manager.ModelProvider.OPENAI_COMPAT: provider,
-        model_manager.ModelProvider.TRANSFORMERS_PEFT: local_provider}
+    manager = SimpleNamespace(_current_provider=SimpleNamespace(value='openai_compat'), get_current_provider=lambda: provider, set_lora_adapter=Mock(side_effect=lambda path: setattr(state, 'selected', path)), get_status=lambda: {'currentProvider': manager._current_provider.value, 'providers': {'openai_compat': {'modelName': 'fixture-cloud'}, 'transformers_peft': {'modelName': 'fixture-local'}}})
+    local_provider = SimpleNamespace(name='transformers_peft', async_complete=local, set_lora_adapter=manager.set_lora_adapter, get_status=lambda: {'modelName': 'fixture-local'})
+    manager._providers = {model_manager.ModelProvider.OPENAI_COMPAT: provider, model_manager.ModelProvider.TRANSFORMERS_PEFT: local_provider}
     manager.get_current_provider = lambda: manager._providers[model_manager.ModelProvider(manager._current_provider.value)]
-    monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
-    database = SimpleNamespace(config={"useKnowledgeBase": False}, loras=[])
-    monkeypatch.setattr(generate, "db", database)
-    monkeypatch.setattr(generate, "response_cache", None)
-    monkeypatch.setattr(generate, "circuit_breaker_registry", None)
-    monkeypatch.setattr(generate, "get_lora_character_id", lambda _: None)
+    monkeypatch.setattr(model_manager, 'get_model_manager', lambda *, database=None: manager)
+    database = SimpleNamespace(config={'useKnowledgeBase': False}, loras=[])
+    monkeypatch.setattr(generate, 'db', database)
+    monkeypatch.setattr(generate, 'response_cache', None)
+    monkeypatch.setattr(generate, 'circuit_breaker_registry', None)
+    monkeypatch.setattr(generate, 'get_lora_character_id', lambda _: None)
     semaphore = asyncio.Semaphore(2)
-    monkeypatch.setattr(generate, "get_llm_semaphore", lambda: semaphore)
-    monkeypatch.setattr(generate, "get_lora_path_by_id", lambda name, **kwargs: "/fiction/" + name)
+    monkeypatch.setattr(generate, 'get_llm_semaphore', lambda: semaphore)
+    monkeypatch.setattr(generate, 'get_lora_path_by_id', lambda name, **kwargs: '/fiction/' + name)
 
     async def compiled(request, lora_name, *, model_generate, **kwargs):
-        text = await model_generate(messages=[{"role": "system", "content": "保留完整题设。"},
-            {"role": "user", "content": request.message}], temperature=0.1, max_tokens=128, top_p=1)
+        text = await model_generate(messages=[{'role': 'system', 'content': '保留完整题设。'}, {'role': 'user', 'content': request.message}], temperature=0.1, max_tokens=128, top_p=1)
         return ChatAnswer(reply=text, used_rag=False, model_invoked=True, metadata={})
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', compiled)
-    return state, manager, database, semaphore
+    return (state, manager, database, semaphore)
 
 
 async def receive(index=0, lora="default"):

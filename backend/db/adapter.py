@@ -4,7 +4,8 @@
 - USE_POSTGRESQL=true，或未显式设置且 DATABASE_URL 为 PostgreSQL URL → PostgreSQL
 - USE_POSTGRESQL=false → SQLite
 
-所有 API 层应通过 `from db.adapter import db` 获取数据库实例。
+API 层通过 `app.dependencies.get_request_database` 获取当前应用数据库；
+独立任务可使用本模块的默认实例。
 """
 import logging
 import os

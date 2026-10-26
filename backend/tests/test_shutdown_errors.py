@@ -152,12 +152,12 @@ async def test_shutdown_closes_model_first_created_while_draining_background_wor
     model = SimpleNamespace(shutdown=AsyncMock())
 
     async def finish_memory_work():
-        model_manager._model_manager = model
+        database._model_manager = model
 
     monkeypatch.setattr("character.memory_llm.shutdown_memory_enrichment", finish_memory_work)
-    app, _ = lifecycle.application()
+    app, database = lifecycle.application()
     async with main.lifespan(app):
-        assert model_manager._model_manager is None
+        assert database._model_manager is None
     model.shutdown.assert_awaited_once()
     lifecycle.getter.assert_not_called()
 

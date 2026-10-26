@@ -26,31 +26,28 @@ ENDPOINT = '/api/training/generate-dialogues'
 
 @pytest.fixture
 async def dialogue_usage(tmp_path, monkeypatch):
-    database = SQLiteDB(tmp_path/'dialogue-usage.sqlite')
-    config = {'openaiCompatBaseUrl': 'https://api.deepseek.com', 'openaiCompatApiKey': 'synthetic-only',
-              'openaiCompatModel': 'deepseek-flash', 'temperature': .2, 'maxTokens': 512}
-    monkeypatch.setattr(model_manager, '_get_db_config', lambda: dict(config))
+    database = SQLiteDB(tmp_path / 'dialogue-usage.sqlite')
+    config = {'openaiCompatBaseUrl': 'https://api.deepseek.com', 'openaiCompatApiKey': 'synthetic-only', 'openaiCompatModel': 'deepseek-flash', 'temperature': 0.2, 'maxTokens': 512}
+    monkeypatch.setattr(model_manager, '_get_db_config', lambda _owner_database=None: dict(config))
     provider = model_manager.OpenAICompatProvider()
-    monkeypatch.setattr(model_manager, 'get_model_manager', lambda: SimpleNamespace(get_current_provider=lambda: provider))
-    state = dict(is_generating=False, cancel_requested=False, progress=0, total=0, batch_num=0,
-                 total_batches=0, generated_count=0, new_dialogues=[], all_generated_dialogues=[], started_at=None)
+    monkeypatch.setattr(model_manager, 'get_model_manager', lambda *, database=None: SimpleNamespace(get_current_provider=lambda: provider))
+    state = dict(is_generating=False, cancel_requested=False, progress=0, total=0, batch_num=0, total_batches=0, generated_count=0, new_dialogues=[], all_generated_dialogues=[], started_at=None)
     monkeypatch.setattr(training, 'generation_state', state)
     lock = asyncio.Lock()
     monkeypatch.setattr(training, 'get_generation_state_lock', lambda: lock)
     monkeypatch.setattr(training, '_dialogue_generation_task', None)
     search = AsyncMock(return_value=RESEARCH)
     monkeypatch.setattr(training, 'search_character_info', search)
-    rig = SimpleNamespace(database=database, state=state, requests=[], batches=[], mode='success',
-                          entered=asyncio.Event(), release=asyncio.Event(), tasks=[], search=search)
+    rig = SimpleNamespace(database=database, state=state, requests=[], batches=[], mode='success', entered=asyncio.Event(), release=asyncio.Event(), tasks=[], search=search)
+
     async def respond(request):
         wire = json.loads(request.content)
         prompt = wire['messages'][-1]['content']
         assert DESCRIPTION in prompt and RESEARCH in prompt
-        assert wire['model'] == 'deepseek-flash' and wire['temperature'] == .2
-        ordinal = len(rig.requests)+1
+        assert wire['model'] == 'deepseek-flash' and wire['temperature'] == 0.2
+        ordinal = len(rig.requests) + 1
         count, turns, batch = complete_prompt_batch(prompt, ordinal)
-        rig.requests.append({'wire': wire, 'count': count, 'turns': turns,
-                             'prompt_sha256': hashlib.sha256(prompt.encode()).hexdigest()})
+        rig.requests.append({'wire': wire, 'count': count, 'turns': turns, 'prompt_sha256': hashlib.sha256(prompt.encode()).hexdigest()})
         rig.batches.append(batch)
         if ordinal == 2 and rig.mode == 'hold_second':
             rig.entered.set()
@@ -59,8 +56,8 @@ async def dialogue_usage(tmp_path, monkeypatch):
             return httpx.Response(503, json={'error': {'message': 'synthetic private rejection'}})
         if ordinal == 2 and rig.mode == 'invalid_second':
             batch[0]['conversations'].pop()
-        return httpx.Response(200, json={'choices': [{'finish_reason': 'stop', 'message': {'content': json.dumps(batch,ensure_ascii=False)}}],
-            'usage': {'prompt_tokens': 100, 'completion_tokens': 20, 'total_tokens': 120}})
+        return httpx.Response(200, json={'choices': [{'finish_reason': 'stop', 'message': {'content': json.dumps(batch, ensure_ascii=False)}}], 'usage': {'prompt_tokens': 100, 'completion_tokens': 20, 'total_tokens': 120}})
+
     @asynccontextmanager
     async def acquire(_self, timeout):
         async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
@@ -71,17 +68,17 @@ async def dialogue_usage(tmp_path, monkeypatch):
     application.include_router(training.router)
     application.dependency_overrides[get_current_admin] = lambda: {'user_id': 901, 'username': 'synthetic', 'role': 'admin'}
     rig.app = application
+
     async def post(count=2):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=application), base_url='http://isolated.test') as client:
-            return await client.post(ENDPOINT, json={'character_description': DESCRIPTION,'num_dialogues': count,
-                'style': '合成谨慎风格','custom_prompt': '保留时间、否定与雨天例外。'})
+            return await client.post(ENDPOINT, json={'character_description': DESCRIPTION, 'num_dialogues': count, 'style': '合成谨慎风格', 'custom_prompt': '保留时间、否定与雨天例外。'})
     rig.post = post
     try:
         yield rig
     finally:
         rig.release.set()
         task = training._dialogue_generation_task
-        if task is not None and not task.done():
+        if task is not None and (not task.done()):
             task.cancel()
             await asyncio.gather(task, return_exceptions=True)
 

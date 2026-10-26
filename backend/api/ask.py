@@ -137,7 +137,7 @@ async def ask(
     """知识问答（非流式）。"""
     from inference.model_manager import get_model_manager
 
-    context = await resolve_request_context(get_model_manager())
+    context = await resolve_request_context(get_model_manager(database=database))
     generate, _stream, model_id, cache_identity = await _resolve_generate_adapters(context)
 
     start = time.perf_counter()
@@ -198,7 +198,7 @@ async def ask_stream(
     """
     from inference.model_manager import get_model_manager
 
-    context = await resolve_request_context(get_model_manager())
+    context = await resolve_request_context(get_model_manager(database=database))
     generate, generate_stream, model_id, _cache_identity = await _resolve_generate_adapters(context)
     debug = request.debug and current_user.get("role") == "admin"
 

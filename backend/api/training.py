@@ -633,7 +633,7 @@ async def _run_dialogue_generation(request, database, batch_plan):
         from inference.model_manager import get_model_manager
         from inference.request_context import resolve_request_context
 
-        context = await resolve_request_context(get_model_manager())
+        context = await resolve_request_context(get_model_manager(database=database))
         provider = context.provider
         if context.provider_name == "mock":
             raise HTTPException(status_code=400, detail="当前模型提供商为 mock 模式，无法调用大模型生成对话。请在设置中配置有效的模型提供商（如 DeepSeek API）。")
