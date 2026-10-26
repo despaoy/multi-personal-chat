@@ -29,7 +29,6 @@ def publication(tmp_path, monkeypatch):
     monkeypatch.setattr(index_lifecycle, "_vector_index_revision", None)
     monkeypatch.setattr(vectors.VectorDatabase, "_check_gpu_availability", lambda self: False)
     vector = vectors.VectorDatabase(str(tmp_path / "vectors"))
-    monkeypatch.setattr(vector, "_model", object())
     encode = Mock(side_effect=lambda texts: np.tile(np.eye(1, 384, dtype=np.float32), (len(texts), 1)))
     monkeypatch.setattr(vector, "_get_embeddings_batch", encode)
     monkeypatch.setattr(vector, "_get_embedding", lambda text: np.eye(1, 384, dtype=np.float32)[0])

@@ -16,7 +16,7 @@ POLICY = (
     "related_candidate_not_admitted表示匹配候选没有进入最终请求；这些状态都不能证明所有范围不存在资料。"
     "object_scope_unverified或object_scope_unresolved表示对象依据尚未核对或指代未解，不能宣称资料不相关或全范围不存在。"
     "object_scope_partial表示该任务只取得部分对象的对应可见依据，object_scope_not_admitted表示对应对象证明尚未进入请求；逐对象保留已有依据，缺口不补齐。"
-    "fact_coverage按所问事实方面核对实际可见引用；partial_fact_evidence只覆盖部分，fact_evidence_unverified或fact_review_unavailable不证明事实已全。明确负向事实可以有依据，未载明不等于事实否定；已知字段保留，未知字段不补齐。fact_evidence_admitted中的assertion=negative表示实际接纳的明确否定内容，不表示证据无效或字段未知。应保留对应原文的否定，例如明确不收费应说明不收费，不能写作费用未知；预约不得免除材料应保留不豁免，不能写作例外未知。"
+    "fact_coverage按所问事实方面核对实际可见引用；partial_fact_evidence只覆盖部分，fact_evidence_unverified不证明事实已全。明确负向事实可以有依据，未载明不等于事实否定；已知字段保留，未知字段不补齐。fact_evidence_admitted中的assertion=negative表示实际接纳的明确否定内容，不表示证据无效或字段未知。应保留对应原文的否定，例如明确不收费应说明不收费，不能写作费用未知；预约不得免除材料应保留不豁免，不能写作例外未知。"
     "不同子任务的依据不能互相担保。仍应保留可见私人记忆、用户材料和其他独立任务所支持的内容，"
     "未得到相应公共依据的事实保持未知，不借私人偏好或相似资料补齐。"
 )
@@ -422,8 +422,11 @@ def render_public_tasks(retrieval):
         fact_rows = fact_coverage["tasks"].get(task["index"], []) if fact_coverage is not None else []
         if task_status == "related_candidate_admitted" and fact_coverage is not None:
             admitted_facts = sum(r["status"] == "fact_evidence_admitted" for r in fact_rows)
-            task_status = "fact_review_unavailable" if fact_coverage["review_status"] != "reviewed" else "partial_fact_evidence" if fact_rows and 0 < admitted_facts < len(fact_rows) else "fact_evidence_unverified" if not fact_rows or not admitted_facts else task_status
-        rows.append(dict(query=task["query"], task_id=task["index"], task_granularity="literal_partition" if isinstance(task["index"], str) else "segment_unverified", dependency_coverage="verified_expected_segments" if expected else "unverified", object_scope="source_object_evidence_verified" if object_rows and admitted_objects == len(object_rows) else "partial_source_object_evidence_verified" if admitted_objects else "unverified", status=task_status, semantic_coverage="unverified", object_coverage=object_rows, fact_scope="question_first_aspects_reviewed" if fact_coverage is not None and fact_coverage["review_status"] == "reviewed" else "unverified", fact_coverage=fact_rows))
+            if fact_rows and 0 < admitted_facts < len(fact_rows):
+                task_status = "partial_fact_evidence"
+            elif not fact_rows or not admitted_facts:
+                task_status = "fact_evidence_unverified"
+        rows.append(dict(query=task["query"], task_id=task["index"], task_granularity="literal_partition" if isinstance(task["index"], str) else "segment_unverified", dependency_coverage="verified_expected_segments" if expected else "unverified", object_scope="source_object_evidence_verified" if object_rows and admitted_objects == len(object_rows) else "partial_source_object_evidence_verified" if admitted_objects else "unverified", status=task_status, semantic_coverage="unverified", object_coverage=object_rows, fact_scope="question_first_aspects_reviewed" if fact_coverage is not None else "unverified", fact_coverage=fact_rows))
     if retrieval.public_domain_branches:
         from knowledge.public_domains import validate_domain_plan
 

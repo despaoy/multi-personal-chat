@@ -67,8 +67,8 @@ async def arrange_generic_plan(tmp_path, monkeypatch):
             vectors.append(item)
         return np.asarray(vectors, dtype=np.float32)
 
-    monkeypatch.setattr(vector, "_model", object())
-    monkeypatch.setattr(vector_db, "sentence_transformer_embeddings", lambda _model, texts, **options: encode(texts, **options))
+    provider = SimpleNamespace(embed_texts=encode)
+    monkeypatch.setattr(vector_db, "get_default_embedding_provider", lambda: provider)
     monkeypatch.setattr(vector_db, "get_vector_db", lambda: vector)
     monkeypatch.setattr(rag_helper, "get_vector_db", lambda: vector)
     assert index_lifecycle._ensure_vector_index() is True

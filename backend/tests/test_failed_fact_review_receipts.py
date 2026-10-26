@@ -279,7 +279,7 @@ async def test_failed_review_propagates_before_later_stages(tmp_path, failure):
 
 
 @pytest.mark.parametrize("stage", ["scope", "facts"])
-async def test_unavailable_received_text_never_promotes_graph_or_assessments(stage):
+async def test_unavailable_receipts_are_errors_with_or_without_asserted_data(stage):
     result, received, _ = await run_reviews()
     receipt = deepcopy(result["public_task_review"])
     payload = receipt["object_scope_input"]
@@ -288,9 +288,10 @@ async def test_unavailable_received_text_never_promotes_graph_or_assessments(sta
         payload["fact_scope_review"] = dict(
             review_status="unavailable", reason="invalid_or_incomplete_fact_scope", raw=received["scope"], scope=None
         )
-        assert validate_fact_scope(payload, scopes) is None
+        with pytest.raises(ValueError, match="Fact scope changed"):
+            validate_fact_scope(payload, scopes)
         payload["fact_scope_review"]["scope"] = json.loads(received["scope"])
-        with pytest.raises(ValueError, match="asserted graph"):
+        with pytest.raises(ValueError, match="Fact scope changed"):
             validate_fact_scope(payload, scopes)
     else:
         fact_receipt = dict(
@@ -303,17 +304,12 @@ async def test_unavailable_received_text_never_promotes_graph_or_assessments(sta
         fact_receipt["input_sha256"] = scope_input_digest(
             fact_input(payload, receipt["scoped_decisions"], receipt["decisions"])
         )
-        settled = settle_fact_coverage(
-            RetrievalResult(status="ok"),
-            payload,
-            scopes,
-            receipt["scoped_decisions"],
-            receipt["decisions"],
-            fact_receipt,
-        )
-        assert settled == dict(review_status="unavailable", tasks={})
+        with pytest.raises(ValueError, match="Fact coverage changed"):
+            settle_fact_coverage(
+                RetrievalResult(status="ok"), payload, scopes, receipt["scoped_decisions"], receipt["decisions"], fact_receipt
+            )
         fact_receipt["assessments"] = json.loads(received["facts"])
-        with pytest.raises(ValueError, match="asserted proof"):
+        with pytest.raises(ValueError, match="Fact coverage changed"):
             settle_fact_coverage(
                 RetrievalResult(status="ok"),
                 payload,
@@ -334,7 +330,7 @@ async def test_unavailable_diagnostic_rejects_non_text_payload(stage):
         payload["fact_scope_review"] = dict(
             review_status="unavailable", reason="invalid", raw={"fake": "data"}, scope=None
         )
-        with pytest.raises(ValueError, match="asserted graph"):
+        with pytest.raises(ValueError, match="Fact scope changed"):
             validate_fact_scope(payload, scopes)
     else:
         review = dict(
@@ -344,7 +340,7 @@ async def test_unavailable_diagnostic_rejects_non_text_payload(stage):
             raw={"fake": "data"},
             assessments=None,
         )
-        with pytest.raises(ValueError, match="asserted proof"):
+        with pytest.raises(ValueError, match="Fact coverage changed"):
             settle_fact_coverage(
                 RetrievalResult(status="ok"), payload, scopes, receipt["scoped_decisions"], receipt["decisions"], review
             )

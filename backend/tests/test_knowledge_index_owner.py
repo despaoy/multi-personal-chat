@@ -22,7 +22,6 @@ async def test_committed_document_change_uses_one_index_publication(tmp_path,mon
     monkeypatch.setattr(vectors.VectorDatabase,'_check_gpu_availability',lambda self:False)
     vector=vectors.VectorDatabase(str(tmp_path/'vectors'))
     encode=Mock(side_effect=lambda texts:np.tile(np.eye(1,384,dtype=np.float32),(len(texts),1)))
-    monkeypatch.setattr(vector,'_model',object())
     monkeypatch.setattr(vector,'_get_embeddings_batch',encode)
     getter=Mock(return_value=vector)
     monkeypatch.setattr(vectors,'get_vector_db',getter)

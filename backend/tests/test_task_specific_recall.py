@@ -80,8 +80,8 @@ async def arrange(tmp_path, monkeypatch):
             values.append(item)
         return np.asarray(values, dtype=np.float32)
 
-    monkeypatch.setattr(vector, "_model", object())
-    monkeypatch.setattr(vector_db, "sentence_transformer_embeddings", lambda _model, texts, **options: encode(texts, **options))
+    provider = SimpleNamespace(embed_texts=encode)
+    monkeypatch.setattr(vector_db, "get_default_embedding_provider", lambda: provider)
     monkeypatch.setattr(vector_db, "get_vector_db", lambda: vector)
     monkeypatch.setattr(rag_helper, "get_vector_db", lambda: vector)
     assert index_lifecycle._ensure_vector_index()

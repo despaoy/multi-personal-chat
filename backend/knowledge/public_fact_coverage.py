@@ -99,15 +99,6 @@ def validate_fact_scope(payload, scopes):
         return None
     if not isinstance(receipt, dict) or set(receipt) != {"review_status", "reason", "raw", "scope"}:
         raise ValueError("Invalid fact scope receipt")
-    if receipt["review_status"] == "unavailable":
-        if (
-            receipt["scope"] is not None
-            or (receipt["raw"] is not None and not isinstance(receipt["raw"], str))
-            or not isinstance(receipt["reason"], str)
-            or not receipt["reason"]
-        ):
-            raise ValueError("Unavailable fact scope contains an asserted graph")
-        return None
     if (
         receipt["review_status"] != "reviewed"
         or receipt["reason"]
@@ -140,14 +131,17 @@ def fact_input(payload, scoped, decisions):
             dict(
                 aspect_id=aspect["aspect_id"],
                 source_ids=sorted(
-                    sid for sid, tasks in accepted.items()
+                    sid
+                    for sid, tasks in accepted.items()
                     if aspect["task_id"] in tasks and (sid, aspect["object_id"]) in object_proofs
                 ),
             )
             for aspect in scope["aspects"]
         ]
     return {
-        **payload, "approved_scoped_decisions": scoped, "approved_decisions": decisions,
+        **payload,
+        "approved_scoped_decisions": scoped,
+        "approved_decisions": decisions,
         "aspect_allowed_sources": limits,
     }
 
@@ -242,8 +236,11 @@ async def review_fact_evidence(payload, scopes, scoped, decisions, reviewer, win
     ]
     raw = await bounded_review(messages, reviewer, window_tokens, 2048)
     return dict(
-        review_status="reviewed", reason="", raw=raw,
-        assessments=parse_fact_evidence(raw, payload, scopes, scoped, decisions), input_sha256=digest,
+        review_status="reviewed",
+        reason="",
+        raw=raw,
+        assessments=parse_fact_evidence(raw, payload, scopes, scoped, decisions),
+        input_sha256=digest,
     )
 
 
@@ -260,15 +257,6 @@ def settle_fact_coverage(retrieval, payload, scopes, scoped, decisions, receipt)
         or scope_input_digest(fact_input(payload, scoped, decisions)) != receipt["input_sha256"]
     ):
         raise ValueError("Fact coverage discarded complete original review inputs")
-    if receipt["review_status"] == "unavailable":
-        if (
-            (receipt["raw"] is not None and not isinstance(receipt["raw"], str))
-            or receipt["assessments"] is not None
-            or not isinstance(receipt["reason"], str)
-            or not receipt["reason"]
-        ):
-            raise ValueError("Unavailable fact evidence contains asserted proof")
-        return dict(review_status="unavailable", tasks={})
     if (
         receipt["review_status"] != "reviewed"
         or receipt["reason"]
