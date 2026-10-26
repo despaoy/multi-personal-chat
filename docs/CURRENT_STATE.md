@@ -1,5 +1,13 @@
 # 当前实现与阅读入口
 
+## 2026-10-26：移除检索链已无使用方的声明
+
+核对通用向量库、独立知识问答、流式API、缓存、数据模型与现有调用后，删除未被读取的VectorDatabase.EMBEDDING_CACHE_SIZE常量，以及FailureKind中的七个旧系统失败成员：RETRIEVAL_UNAVAILABLE、PROVIDER_UNAVAILABLE、GENERATION_TIMEOUT、INVALID_MODEL_OUTPUT、INVALID_CITATION、CLIENT_CANCELLED、INTERNAL_ERROR。逐名扫描所有已跟踪的相关代码、文档与配置，修改前每项仅在其定义处出现；真实系统故障已通过异常或SSE error上报，这些旧枚举没有正式生成方。
+
+保留现用NO_DOMAIN、NO_RETRIEVAL、LOW_CONFIDENCE和CONTEXT_BUDGET_EXCEEDED及其原值，说明收敛为知识域/证据业务原因。FailureKind类仍导出，正式API的failure_kind字符串字段、正常弃答、缓存快照与错误协议保持原样；没有按枚举重建历史缓存或从请求解析枚举的路径。引用已移除成员的外部Python脚本需迁移，仓库内没有此类调用；没有兼容别名、新字段或默认值。
+
+本阶段两个产品文件净减少8行，未增加或修改测试。只执行现有的29项直接关联检查，涵盖正常有证据回答、低置信度/无域结果、检索与模型失败、引用错误、流式取消/超时及API错误收尾，全部通过、零跳过。将八个删除声明及一处枚举说明按既定差异还原后，两个文件完整语法树与原版本一致，包含39个函数/方法；模型请求、索引读写与数值处理均未改变。语法、基础Ruff、模型契约模块完整lint/格式、仓库完整性及差异检查通过，没有付费模型调用或手动全量回归。上一提交1022e9c6的[整体CI](https://github.com/despaoy/multi-personal-chat/actions/runs/40252692607)已全部成功，后端10,975通过、1跳过、8警告，前端与容器构建成功。
+
 ## 2026-10-26：显式记忆操作与回答共用本轮时间
 
 复核Web接收、显式删除、上下文召回和完成回写链后发现：删除请求不预留新的事实来源，没有上游时间时，prepare_interactive_turn为操作记录当前时间，随后prepare_turn又取一次当前时间。若操作跨过新年，同一请求中的“去年”会从2024年变为2025年；已有可信接收时间的路径不受影响。隔离SQLite复现中，两个完整年度事实均存在且能分别召回；无上游时间的交互路径选错时间，保留可信接收时间的对照正常。

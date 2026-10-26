@@ -152,7 +152,6 @@ class VectorDatabase:
     """
 
     EMBEDDING_DIM = 384
-    EMBEDDING_CACHE_SIZE = 2000
 
     def __init__(self, db_path: str = "data/vector_db", index_config: Optional[IndexConfig] = None):
         """初始化向量数据库。

@@ -29,19 +29,12 @@ class AnswerMode(str, Enum):  # noqa: UP042 - runtime 仍兼容 Python 3.10
 
 
 class FailureKind(str, Enum):  # noqa: UP042 - runtime 仍兼容 Python 3.10
-    """失败分类（对外简洁，内部日志结构化）。"""
+    """知识域与证据不足原因；系统故障沿异常链上报。"""
 
     NO_DOMAIN = "no_domain"
     NO_RETRIEVAL = "no_retrieval"
-    RETRIEVAL_UNAVAILABLE = "retrieval_unavailable"
     LOW_CONFIDENCE = "low_confidence"
-    PROVIDER_UNAVAILABLE = "provider_unavailable"
-    GENERATION_TIMEOUT = "generation_timeout"
-    INVALID_MODEL_OUTPUT = "invalid_model_output"
-    INVALID_CITATION = "invalid_citation"
     CONTEXT_BUDGET_EXCEEDED = "context_budget_exceeded"
-    CLIENT_CANCELLED = "client_cancelled"
-    INTERNAL_ERROR = "internal_error"
 
 
 @dataclass(frozen=True)
