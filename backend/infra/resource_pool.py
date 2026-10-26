@@ -8,7 +8,7 @@ import asyncio
 import logging
 import sqlite3
 import time
-from contextlib import AsyncExitStack, ExitStack, asynccontextmanager
+from contextlib import ExitStack, asynccontextmanager
 from dataclasses import dataclass
 from typing import Any, AsyncIterator, Dict, List, Optional
 
@@ -258,205 +258,58 @@ class ConnectionPool:
 
 
 class HttpClientPool:
-    """httpx异步客户端池。
+    """共享一个HTTP客户端；借用名额限制请求并发，连接回收由httpx负责。"""
 
-    复用HTTP连接，支持最大连接数限制和连接健康检查。
-    需要httpx库支持。
-
-    使用示例::
-
-        pool = HttpClientPool(max_connections=100)
-
-        async with pool.acquire() as client:
-            resp = await client.get("https://example.com")
-
-        await pool.close()
-    """
-
-    def __init__(
-        self,
-        max_connections: int = 100,
-        idle_timeout: float = 60.0,
-        health_check_interval: float = 30.0,
-        request_timeout: float = 30.0,
-    ) -> None:
-        """初始化HTTP客户端池。
-
-        Args:
-            max_connections: 最大连接数。
-            idle_timeout: 空闲客户端超时时间（秒）。
-            health_check_interval: 健康检查间隔（秒）。
-            request_timeout: 单次HTTP请求超时时间（秒）。
-                LLM 推理场景需设置为 120.0 或更高，默认 30.0 仅适用于
-                短促的 API 调用（如 RAG 检索）。
-        """
+    def __init__(self, max_connections: int = 100, *, request_timeout: float = 30.0) -> None:
         self._max_connections = max_connections
-        self._idle_timeout = idle_timeout
-        self._health_check_interval = health_check_interval
         self._request_timeout = request_timeout
-        self._clients: List[Any] = []  # httpx.AsyncClient instances
-        self._client_info: Dict[int, Dict[str, Any]] = {}
+        self._client: httpx.AsyncClient | None = None
         self._semaphore = asyncio.Semaphore(max_connections)
-        self._lock = asyncio.Lock()
         self._closed = False
         self._total_acquired = 0
         self._total_released = 0
-        self._total_recycled = 0
-        self._health_task: Optional[asyncio.Task] = None
-        logger.info(
-            "HTTP客户端池初始化: max_connections=%d, idle_timeout=%.1fs, request_timeout=%.1fs",
-            max_connections,
-            idle_timeout,
-            request_timeout,
-        )
-
-    def _create_client(self) -> Any:
-        """创建新的httpx异步客户端。
-
-        Returns:
-            httpx.AsyncClient 实例。
-        """
-        client = httpx.AsyncClient(
-            timeout=httpx.Timeout(self._request_timeout),
-            limits=httpx.Limits(
-                max_connections=self._max_connections,
-                max_keepalive_connections=self._max_connections // 2,
-            ),
-        )
-        now = time.monotonic()
-        self._client_info[id(client)] = {
-            "created_at": now,
-            "last_used_at": now,
-            "in_use": False,
-        }
-        return client
+        logger.info("HTTP客户端初始化: max_connections=%d, request_timeout=%.1fs", max_connections, request_timeout)
 
     @asynccontextmanager
-    async def acquire(self) -> AsyncIterator[Any]:
-        """获取一个HTTP客户端，使用完毕自动归还。
-
-        Yields:
-            httpx.AsyncClient 实例。
-
-        Raises:
-            RuntimeError: 客户端池已关闭。
-        """
+    async def acquire(self) -> AsyncIterator[httpx.AsyncClient]:
+        """借用共享客户端；失败、取消和正常结束均归还请求名额。"""
         if self._closed:
             raise RuntimeError("HTTP客户端池已关闭")
-
-        await self._semaphore.acquire()
-        client: Optional[Any] = None
-
-        try:
-            async with self._lock:
-                # 尝试获取空闲客户端
-                for c in self._clients:
-                    info = self._client_info.get(id(c))
-                    if info and not info["in_use"]:
-                        info["in_use"] = True
-                        info["last_used_at"] = time.monotonic()
-                        client = c
-                        break
-
-                # 没有可用客户端则创建新的
-                if client is None:
-                    client = self._create_client()
-                    self._clients.append(client)
-
-                self._total_acquired += 1
-
-            try:
-                yield client
-            finally:
-                info = self._client_info.get(id(client))
-                if info:
-                    info["in_use"] = False
-                    info["last_used_at"] = time.monotonic()
-                self._total_released += 1
-        finally:
-            self._semaphore.release()
-
-    async def _reclaim_idle(self) -> None:
-        """回收空闲超时的HTTP客户端。"""
-        async with self._lock:
-            now = time.monotonic()
-            to_remove: List[Any] = []
-            for c in self._clients:
-                info = self._client_info.get(id(c))
-                if info and not info["in_use"] and (now - info["last_used_at"]) > self._idle_timeout:
-                    to_remove.append(c)
-
-            for c in to_remove:
-                self._clients.remove(c)
-                self._client_info.pop(id(c), None)
-                try:
-                    await c.aclose()
-                except Exception:
-                    pass
-                self._total_recycled += 1
-
-            if to_remove:
-                logger.debug("回收了 %d 个空闲HTTP客户端", len(to_remove))
-
-    async def _health_check_loop(self) -> None:
-        """定期健康检查和空闲客户端回收。"""
-        while not self._closed:
-            await asyncio.sleep(self._health_check_interval)
+        async with self._semaphore:
+            # 关闭可能发生在等待名额期间。
             if self._closed:
-                break
+                raise RuntimeError("HTTP客户端池已关闭")
+            if self._client is None:
+                self._client = httpx.AsyncClient(
+                    timeout=httpx.Timeout(self._request_timeout),
+                    limits=httpx.Limits(
+                        max_connections=self._max_connections,
+                        max_keepalive_connections=self._max_connections // 2,
+                    ),
+                )
+            self._total_acquired += 1
             try:
-                await self._reclaim_idle()
-            except Exception as exc:
-                logger.error("HTTP客户端池健康检查异常: %s", exc)
-
-    async def start(self) -> None:
-        """启动客户端池的健康检查循环。"""
-        if self._health_task is None or self._health_task.done():
-            self._health_task = asyncio.create_task(self._health_check_loop())
-            logger.info("HTTP客户端池健康检查已启动")
+                yield self._client
+            finally:
+                self._total_released += 1
 
     async def close(self) -> None:
-        """关闭客户端池，释放所有客户端。"""
+        """关闭唯一持有的客户端；错误交给应用统一清理边界。"""
         self._closed = True
-        if self._health_task is not None:
-            self._health_task.cancel()
-            try:
-                await self._health_task
-            except asyncio.CancelledError:
-                pass
-
-        async with self._lock:
-            try:
-                async with AsyncExitStack() as cleanup:
-                    for client in reversed(self._clients):
-                        cleanup.push_async_callback(client.aclose)
-            finally:
-                self._clients.clear()
-                self._client_info.clear()
-        logger.info("HTTP客户端池已关闭，共回收 %d 个客户端", self._total_recycled)
+        client, self._client = self._client, None
+        if client is not None:
+            await client.aclose()
+        logger.info("HTTP客户端已关闭")
 
     def get_pool_stats(self) -> Dict[str, Any]:
-        """返回客户端池使用统计。
-
-        Returns:
-            客户端池统计信息字典。
-        """
-        in_use = sum(
-            1 for info in self._client_info.values() if info.get("in_use", False)
-        )
-        idle = len(self._clients) - in_use
         return {
             "type": "http_client",
             "max_connections": self._max_connections,
-            "total_clients": len(self._clients),
-            "in_use": in_use,
-            "idle": idle,
-            "idle_timeout": self._idle_timeout,
             "request_timeout": self._request_timeout,
+            "active_requests": self._total_acquired - self._total_released,
+            "client_initialized": self._client is not None,
             "total_acquired": self._total_acquired,
             "total_released": self._total_released,
-            "total_recycled": self._total_recycled,
-            "httpx_available": True,
             "closed": self._closed,
         }
 

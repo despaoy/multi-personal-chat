@@ -80,11 +80,173 @@ async def test_pool_close_attempts_every_resource_and_propagates_failure(tmp_pat
         pool._pool = [SimpleNamespace(conn=SimpleNamespace(close=lambda i=i: close(i))) for i in range(3)]
     else:
         pool = HttpClientPool()
-        pool._clients = [SimpleNamespace(aclose=lambda i=i: aclose(i)) for i in range(3)]
+        pool._client = SimpleNamespace(aclose=lambda: aclose(1))
     with pytest.raises(OSError) as caught:
         await pool.close()
     assert caught.value is failure
-    assert closed == [0, 1, 2]
+    assert closed == ([0, 1, 2] if kind == "sqlite" else [1])
     assert pool._closed
-    assert not (pool._pool if kind == "sqlite" else pool._clients)
+    assert not (pool._pool if kind == "sqlite" else pool._client)
     await pool.close()
+
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("transport_fails", [False, True])
+async def test_http_pool_shares_one_client_and_releases_bounded_requests(monkeypatch, transport_fails):
+    import asyncio
+    import json
+    from unittest.mock import Mock
+
+    import httpx
+    from infra import resource_pool
+
+    entered = []
+    ready, fourth = asyncio.Event(), asyncio.Event()
+    release = [asyncio.Event() for _ in range(4)]
+    failure = httpx.ConnectError("controlled transport failure")
+
+    async def transport(request):
+        payload = json.loads(request.content)
+        index = payload["index"]
+        assert payload["message"] == "周三下班后喝茶，工作日早晨不喝；出差时只喝白水。"
+        assert request.headers["authorization"] == f"Bearer synthetic-{index}"
+        entered.append(index)
+        if len(entered) == 3:
+            ready.set()
+        if index == 3:
+            fourth.set()
+        await release[index].wait()
+        if transport_fails and index == 1:
+            raise failure
+        return httpx.Response(200, json=payload)
+
+    original = httpx.AsyncClient
+    created = []
+
+    def client(**kwargs):
+        instance = original(transport=httpx.MockTransport(transport), **kwargs)
+        created.append(instance)
+        return instance
+
+    factory = Mock(side_effect=client)
+    monkeypatch.setattr(resource_pool.httpx, "AsyncClient", factory)
+    pool = resource_pool.HttpClientPool(max_connections=3, request_timeout=7)
+
+    async def post(index):
+        async with pool.acquire() as borrowed:
+            response = await borrowed.post(
+                "https://synthetic.invalid/completion",
+                headers={"authorization": f"Bearer synthetic-{index}"},
+                json={"index": index, "message": "周三下班后喝茶，工作日早晨不喝；出差时只喝白水。"},
+            )
+            return response.json()["index"]
+
+    tasks = [asyncio.create_task(post(index)) for index in range(4)]
+    try:
+        await asyncio.wait_for(ready.wait(), 5)
+        assert len(created) == factory.call_count == 1
+        assert entered == [0, 1, 2] and not tasks[3].done()
+        assert pool.get_pool_stats()["active_requests"] == 3
+        release[0].set()
+        await asyncio.wait_for(fourth.wait(), 5)
+        assert pool.get_pool_stats()["active_requests"] == 3
+        for gate in release:
+            gate.set()
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        assert results == ([0, failure, 2, 3] if transport_fails else [0, 1, 2, 3])
+        assert factory.call_count == 1
+        stats = pool.get_pool_stats()
+        assert stats["active_requests"] == 0 and stats["total_acquired"] == stats["total_released"] == 4
+        assert stats["client_initialized"] is True and not stats["closed"]
+    finally:
+        for gate in release:
+            gate.set()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        await pool.close()
+    assert all(instance.is_closed for instance in created)
+    assert pool.get_pool_stats()["client_initialized"] is False
+
+
+@pytest.mark.asyncio
+async def test_http_pool_close_rejects_waiter_without_reopening_client(monkeypatch):
+    import asyncio
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock, Mock
+
+    from infra import resource_pool
+
+    owned = SimpleNamespace(aclose=AsyncMock())
+    factory = Mock(return_value=owned)
+    monkeypatch.setattr(resource_pool.httpx, "AsyncClient", factory)
+    pool = resource_pool.HttpClientPool(max_connections=1)
+    waiting = asyncio.Event()
+
+    async def borrower():
+        waiting.set()
+        async with pool.acquire():
+            return "incorrectly reopened"
+
+    async with pool.acquire() as first:
+        assert first is owned
+        task = asyncio.create_task(borrower())
+        await waiting.wait()
+        assert not task.done()
+        await pool.close()
+        with pytest.raises(RuntimeError, match="已关闭"):
+            async with pool.acquire():
+                pytest.fail("closed pool must not admit another borrower")
+    try:
+        with pytest.raises(RuntimeError, match="已关闭"):
+            await task
+        owned.aclose.assert_awaited_once()
+        assert factory.call_count == 1
+    finally:
+        await pool.close()
+
+
+@pytest.mark.asyncio
+async def test_http_pool_cancelled_request_releases_slot_and_keeps_client(monkeypatch):
+    import asyncio
+    from unittest.mock import Mock
+
+    import httpx
+    from infra import resource_pool
+
+    entered = asyncio.Event()
+    stop = asyncio.Event()
+
+    async def transport(request):
+        if request.url.path == "/cancel":
+            entered.set()
+            await stop.wait()
+        return httpx.Response(200, json={"ok": True})
+
+    owned = httpx.AsyncClient(transport=httpx.MockTransport(transport))
+    factory = Mock(return_value=owned)
+    monkeypatch.setattr(resource_pool.httpx, "AsyncClient", factory)
+    pool = resource_pool.HttpClientPool(max_connections=1)
+
+    async def request():
+        async with pool.acquire() as client:
+            await client.get("https://synthetic.invalid/cancel")
+
+    task = asyncio.create_task(request())
+    try:
+        await asyncio.wait_for(entered.wait(), 5)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert pool.get_pool_stats()["active_requests"] == 0
+        async with pool.acquire() as client:
+            assert client is owned
+            response = await client.get("https://synthetic.invalid/healthy")
+            assert response.json() == {"ok": True}
+        stats = pool.get_pool_stats()
+        assert stats["active_requests"] == 0 and stats["total_acquired"] == stats["total_released"] == 2
+        assert factory.call_count == 1
+    finally:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        await pool.close()
+    assert owned.is_closed
