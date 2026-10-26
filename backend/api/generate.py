@@ -977,10 +977,10 @@ async def _persist_completion_feedback(receipt: dict, warning: str, *, database)
                 timeout=_DB_WRITE_TIMEOUT,
             )
         )
-    except Exception:
+    except Exception as exc:
         # Preserve visible current feedback even when history storage is
         # unknown; never regenerate the model or replace an unrelated row.
-        logger.warning("保存提示存档未能确认", exc_info=True)
+        logger.warning("保存提示存档未能确认 type=%s", type(exc).__name__)
         return False
 
 

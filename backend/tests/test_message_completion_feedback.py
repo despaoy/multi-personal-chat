@@ -156,7 +156,7 @@ def test_missing_or_branch_authority_never_writes(database, changes):
 @pytest.mark.asyncio
 @pytest.mark.parametrize("provider", ["vllm", "openai_compat"])
 @pytest.mark.parametrize("mode", ["failed", "recorded", "feedback_store_failed", "completion_exception"])
-async def test_both_consumers_use_actual_saved_row_and_keep_visible_failure(monkeypatch, database, provider, mode):
+async def test_both_consumers_use_actual_saved_row_and_keep_visible_failure(monkeypatch, database, provider, mode, caplog):
     import asyncio
 
     from api import generate as gen
@@ -209,7 +209,7 @@ async def test_both_consumers_use_actual_saved_row_and_keep_visible_failure(monk
     def observe(receipt, *, warning):
         receipts.append(dict(receipt))
         if mode == "feedback_store_failed":
-            raise RuntimeError("private-store-error")
+            raise RuntimeError("private-store-error: " + receipt["message"])
         return writer(receipt, warning=warning)
 
     monkeypatch.setattr(database, "update_message_feedback", observe)
@@ -260,3 +260,5 @@ async def test_both_consumers_use_actual_saved_row_and_keep_visible_failure(monk
                 and "刷新后可能看不到" in result.reply
                 and "private-store-error" not in result.reply
             )
+            assert "保存提示存档未能确认" in caplog.text and "RuntimeError" in caplog.text
+            assert "private-store-error" not in caplog.text and BODY not in caplog.text
