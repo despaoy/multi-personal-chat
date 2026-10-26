@@ -74,7 +74,6 @@ def lifecycle(monkeypatch, tmp_path):
 
     monkeypatch.setattr(main, "validate_or_raise_for_startup", lambda env: None)
     monkeypatch.setattr(main, "HttpClientPool", lambda *a, **k: allocate("http", *a, **k))
-    monkeypatch.setattr(main, "ConnectionPool", lambda *a, **k: allocate("sqlite", *a, **k))
     monkeypatch.setattr(main, "BackupManager", lambda *a, **k: allocate("backup", *a, **k))
     monkeypatch.setattr(main, "AccessControlManager", lambda *a, **k: allocate("access", *a, **k))
     monkeypatch.setattr(model_manager, "_model_manager", None)
@@ -124,11 +123,10 @@ def lifecycle(monkeypatch, tmp_path):
     ("fail_at", "closed"),
     [
         ("http", []),
-        ("sqlite", ["http"]),
-        ("backup", ["sqlite", "http"]),
-        ("backup-start", ["sqlite", "http", "backup"]),
-        ("access", ["sqlite", "http", "backup"]),
-        ("worker", ["sqlite", "http", "backup"]),
+        ("backup", ["http"]),
+        ("backup-start", ["http", "backup"]),
+        ("access", ["http", "backup"]),
+        ("worker", ["http", "backup"]),
     ],
 )
 async def test_startup_error_propagates_and_closes_preceding_allocations(lifecycle, fail_at, closed):
@@ -147,7 +145,7 @@ async def test_startup_error_propagates_and_closes_preceding_allocations(lifecyc
 
 
 @pytest.mark.parametrize("backup_dir", ["", "scheduled", "/tmp/owned-startup-test-backups"])
-async def test_sqlite_resources_share_selected_database_and_close_on_exit(lifecycle, backup_dir):
+async def test_sqlite_backup_uses_selected_database_and_closes_on_exit(lifecycle, backup_dir):
     rig = lifecycle
     app, db = rig.application(backup_dir=backup_dir)
     async with rig.main.lifespan(app):
@@ -155,20 +153,19 @@ async def test_sqlite_resources_share_selected_database_and_close_on_exit(lifecy
         expected_backup = Path(backup_dir) if backup_dir else path.parent / "backups"
         if not expected_backup.is_absolute():
             expected_backup = path.parent / expected_backup
-        assert rig.allocations["sqlite"].args == (str(path),)
         assert rig.allocations["backup"].args == (str(path),)
         assert rig.allocations["backup"].kwargs["backup_dir"] == str(expected_backup)
         assert rig.allocations["access"].args == (db,)
-    assert rig.events == ["sqlite", "http", "backup"]
+    assert rig.events == ["http", "backup"]
     rig.getter.assert_not_called()
 
 
-async def test_postgresql_needs_no_sqlite_path_pool_or_backup(lifecycle):
+async def test_postgresql_needs_no_sqlite_path_or_backup(lifecycle):
     rig = lifecycle
     app, db = rig.application(postgres=True, db_path=False)
     async with rig.main.lifespan(app):
         assert set(rig.allocations) == {"http", "access"}
-        assert rig.config.connection_pool is rig.config.backup_mgr is None
+        assert rig.config.backup_mgr is None
     assert rig.events == ["http"]
     db.close.assert_awaited_once()
     rig.getter.assert_not_called()
@@ -196,7 +193,7 @@ async def test_shutdown_closes_existing_model_and_preserves_request_failure(life
     assert raised.value is rig.failure
     model.shutdown.assert_awaited_once()
     rig.getter.assert_not_called()
-    assert rig.events == ["sqlite", "http", "backup"]
+    assert rig.events == ["http", "backup"]
 
 
 async def test_web_startup_does_not_connect_unrelated_deduplication_redis(lifecycle, monkeypatch):
@@ -212,4 +209,4 @@ async def test_web_startup_does_not_connect_unrelated_deduplication_redis(lifecy
         assert lifecycle.config.http_client_pool is not None
     sync_pool.assert_not_called()
     async_pool.assert_not_called()
-    assert lifecycle.events == ["sqlite", "http", "backup"]
+    assert lifecycle.events == ["http", "backup"]

@@ -51,7 +51,7 @@ async def get_enhanced_status(current_user: dict = Depends(get_current_admin)):
     active = {
         **available,
         "loadBalancer": vllm_stats is not None,
-        "resourcePool": _app_config.connection_pool is not None or _app_config.http_client_pool is not None,
+        "resourcePool": _app_config.http_client_pool is not None,
         "backupManager": _app_config.backup_mgr is not None,
         "encryption": encryption_mgr is not None,
         "accessControl": _app_config.access_control_mgr is not None,
@@ -71,11 +71,6 @@ async def get_enhanced_stats(current_user: dict = Depends(get_current_admin)):
     vllm_stats = await _get_vllm_load_balancer_stats()
     if vllm_stats is not None:
         stats["loadBalancer"] = vllm_stats
-    # C-F1 fix: 动态访问 lifespan 中赋值的单例
-    _cp = _app_config.connection_pool
-    if _cp:
-        stats["connectionPool"] = _cp.get_pool_stats()
-
     _hcp = _app_config.http_client_pool
     if _hcp:
         stats["httpClientPool"] = _hcp.get_pool_stats()

@@ -49,7 +49,7 @@ async def test_missing_cleanup_module_does_not_skip_remaining_resources(lifecycl
         async with main.lifespan(app):
             pass
     assert raised.value is failure
-    assert lifecycle.events == ["sqlite", "http", "backup"]
+    assert lifecycle.events == ["http", "backup"]
     assert all(getattr(lifecycle.config, name) is None for name in main._LIFESPAN_RESOURCE_NAMES)
 
 
@@ -73,7 +73,7 @@ async def test_all_cleanup_runs_and_multiple_errors_keep_original_startup_failur
     assert first in chain
     if startup_failure:
         assert lifecycle.failure in chain
-    assert lifecycle.events == ["sqlite", "http", "backup"]
+    assert lifecycle.events == ["http", "backup"]
     assert all(getattr(lifecycle.config, name) is None for name in main._LIFESPAN_RESOURCE_NAMES)
     assert "资源清理完成" not in caplog.text
 
@@ -86,7 +86,7 @@ async def test_cleanup_cancellation_propagates_after_attempting_later_resources(
         async with main.lifespan(app):
             pass
     assert raised.value is failure
-    assert lifecycle.events == ["sqlite", "http", "backup"]
+    assert lifecycle.events == ["http", "backup"]
 
 
 async def test_normal_shutdown_keeps_dependency_order(lifecycle, monkeypatch, caplog):

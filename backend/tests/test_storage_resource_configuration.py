@@ -58,37 +58,27 @@ def test_postgres_mapping_errors_do_not_switch_record_protocol(monkeypatch):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("kind", ["sqlite", "http"])
-async def test_pool_close_attempts_every_resource_and_propagates_failure(tmp_path, kind):
+async def test_http_pool_close_propagates_failure():
     from types import SimpleNamespace
 
-    from infra.resource_pool import ConnectionPool, HttpClientPool
+    from infra.resource_pool import HttpClientPool
 
     closed = []
     failure = OSError("synthetic close failure")
 
-    def close(index):
-        closed.append(index)
-        if index == 1:
-            raise failure
+    async def aclose():
+        closed.append(1)
+        raise failure
 
-    async def aclose(index):
-        close(index)
-
-    if kind == "sqlite":
-        pool = ConnectionPool(str(tmp_path / "pool.db"))
-        pool._pool = [SimpleNamespace(conn=SimpleNamespace(close=lambda i=i: close(i))) for i in range(3)]
-    else:
-        pool = HttpClientPool()
-        pool._client = SimpleNamespace(aclose=lambda: aclose(1))
+    pool = HttpClientPool()
+    pool._client = SimpleNamespace(aclose=aclose)
     with pytest.raises(OSError) as caught:
         await pool.close()
     assert caught.value is failure
-    assert closed == ([0, 1, 2] if kind == "sqlite" else [1])
+    assert closed == [1]
     assert pool._closed
-    assert not (pool._pool if kind == "sqlite" else pool._client)
+    assert not pool._client
     await pool.close()
-
 
 
 @pytest.mark.asyncio

@@ -44,7 +44,7 @@ from services.model_usage import UsageRecordingError  # noqa: E402
 from infra.deployment import validate_or_raise_for_startup
 from infra.access_control import AccessControlManager
 from infra.backup_manager import BackupManager
-from infra.resource_pool import ConnectionPool, HttpClientPool
+from infra.resource_pool import HttpClientPool
 from infra.bounded_executor import BoundedThreadExecutor
 from infra.environment import read_bool
 
@@ -115,7 +115,6 @@ from api.user_data import router as user_data_router
 # 应用生命周期
 # ═══════════════════════════════════════════
 _LIFESPAN_RESOURCE_NAMES = (
-    "connection_pool",
     "http_client_pool",
     "backup_mgr",
     "access_control_mgr",
@@ -153,11 +152,10 @@ async def lifespan(app: FastAPI):
             logger.critical(f"❌ 数据库初始化失败，服务无法启动: {e}", exc_info=True)
             raise RuntimeError(f"数据库初始化失败: {e}") from e
 
-        # Both SQLite resources must use the database selected by the runtime container.
+        # SQLite backups use the database selected by the runtime container.
         db_file = Path(database.db_path).expanduser().resolve() if not postgres_mode else None
         _cfg.http_client_pool = HttpClientPool(max_connections=100, request_timeout=120.0)
         if not postgres_mode:
-            _cfg.connection_pool = ConnectionPool(str(db_file), max_size=20)
             configured_backup_dir = container.startup_env.get("BACKUP_DIR", "").strip()
             backup_dir = Path(configured_backup_dir).expanduser() if configured_backup_dir else db_file.parent / "backups"
             if not backup_dir.is_absolute():
@@ -191,7 +189,6 @@ async def lifespan(app: FastAPI):
             ("后台长期记忆任务", "character.memory_llm", "shutdown_memory_enrichment"),
             ("知识库扫描", container.knowledge_scan_executor, "shutdown"),
             ("readiness probe", getattr(app.state, "readiness_probe", None), "shutdown"),
-            ("SQLite 连接池", _cfg.connection_pool, "close"),
             ("HTTP 客户端池", _cfg.http_client_pool, "close"),
             ("备份调度器", _cfg.backup_mgr, "stop_scheduled_backup"),
             ("PostgreSQL 适配器", database if postgres_mode else None, "close"),

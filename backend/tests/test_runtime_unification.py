@@ -601,7 +601,6 @@ async def test_enhanced_cache_endpoints_use_async_cache_contract(monkeypatch):
     cache = Cache()
     monkeypatch.setattr(enhanced, "response_cache", cache)
     monkeypatch.setattr(enhanced, "_get_vllm_load_balancer_stats", no_vllm_stats)
-    monkeypatch.setattr(enhanced._app_config, "connection_pool", None)
     monkeypatch.setattr(enhanced._app_config, "http_client_pool", None)
     monkeypatch.setattr(enhanced._app_config, "backup_mgr", None)
     monkeypatch.setattr(enhanced._app_config, "access_control_mgr", None)

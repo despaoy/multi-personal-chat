@@ -168,7 +168,6 @@ async def test_enhanced_status_distinguishes_available_code_from_active_resource
     monkeypatch.setattr(enhanced, "_get_vllm_load_balancer_stats", no_vllm_stats)
     monkeypatch.setattr(enhanced._app_config, "backup_mgr", None)
     monkeypatch.setattr(enhanced._app_config, "access_control_mgr", None)
-    monkeypatch.setattr(enhanced._app_config, "connection_pool", None)
     monkeypatch.setattr(enhanced._app_config, "http_client_pool", None)
 
     result = await enhanced.get_enhanced_status({"role": "admin"})
@@ -178,6 +177,11 @@ async def test_enhanced_status_distinguishes_available_code_from_active_resource
     assert result["enhancedFeatures"]["backupManager"] is False
     assert result["enhancedFeatures"]["accessControl"] is False
     assert result["enhancedFeatures"]["loadBalancer"] is False
+    assert result["availableFeatures"]["resourcePool"] is True
+    assert result["enhancedFeatures"]["resourcePool"] is False
+    monkeypatch.setattr(enhanced._app_config, "http_client_pool", object())
+    active = await enhanced.get_enhanced_status({"role": "admin"})
+    assert active["enhancedFeatures"]["resourcePool"] is True
 
 
 @pytest.mark.asyncio

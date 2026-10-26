@@ -154,7 +154,6 @@ service_start_time = datetime.now()
 # 增强模块全局实例
 # ============================================
 
-connection_pool = None  # 在lifespan中初始化
 http_client_pool = None  # 在lifespan中初始化
 circuit_breaker_registry = global_registry
 backup_mgr = None  # 在lifespan中初始化

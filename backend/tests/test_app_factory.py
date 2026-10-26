@@ -158,7 +158,6 @@ def test_lifespan_resource_references_are_cleared_between_application_runs() -> 
     from app.main import _clear_lifespan_resource_references
 
     config = SimpleNamespace(
-        connection_pool=object(),
         http_client_pool=object(),
         backup_mgr=object(),
         access_control_mgr=object(),
@@ -167,7 +166,6 @@ def test_lifespan_resource_references_are_cleared_between_application_runs() -> 
 
     _clear_lifespan_resource_references(config)
 
-    assert config.connection_pool is None
     assert config.http_client_pool is None
     assert config.backup_mgr is None
     assert config.access_control_mgr is None
