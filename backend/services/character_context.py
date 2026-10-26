@@ -438,7 +438,9 @@ class CharacterContextService:
 
         记忆失败通过回执明确反馈，并保留已完成数量；已生成回复由调用方保留。
         """
-        outcome = _TurnOutcome()
+        outcome = _TurnOutcome(
+            stage=prepared.relationship.stage, preferred_address=prepared.relationship.preferred_address
+        )
 
         # 1. 交互计数 +1
         try:
@@ -458,90 +460,107 @@ class CharacterContextService:
                 outcome.memory_enrichment_mode = "explicit_operation"
                 outcome.memory_enrichment_status = str(prepared.memory_operation_receipt.get("status", "unknown"))
                 outcome.source_capture = str(prepared.memory_operation_receipt.get("source_capture", ""))
-            else:
-                note_command = parse_command(turn.message)
-                extracted = () if note_command else extract_memories(turn.message, reference_time=prepared.received_at)
-                from character.memory_llm import (
-                    classify_memory_write_mode,
-                    get_memory_enrichment_scheduler,
-                    is_memory_erasure_request,
+                return outcome
+            note_command = parse_command(turn.message)
+            extracted = () if note_command else extract_memories(turn.message, reference_time=prepared.received_at)
+            from character.memory_llm import (
+                classify_memory_write_mode,
+                get_memory_enrichment_scheduler,
+                is_memory_erasure_request,
+            )
+
+            scheduler = get_memory_enrichment_scheduler()
+            from character.natural_relationship import hypothetical_source_only, quoted_source_only
+
+            ordinary_quote = quoted_source_only(turn.message)
+            erasure_request = is_memory_erasure_request(turn.message)
+            source_only = (
+                (hypothetical_source_only(turn.message) or ordinary_quote) and not extracted and not erasure_request
+            )
+            if note_command:
+                saved = await save_note(
+                    self._memory_repo,
+                    prepared.character_id,
+                    prepared.user_scope,
+                    note_command,
+                    source_message_id or None,
                 )
-
-                scheduler = get_memory_enrichment_scheduler()
-                from character.natural_relationship import hypothetical_source_only, quoted_source_only
-
-                ordinary_quote = quoted_source_only(turn.message)
-                erasure_request = is_memory_erasure_request(turn.message)
-                source_only = (hypothetical_source_only(turn.message) or ordinary_quote) and not extracted and not erasure_request
-                if note_command:
-                    saved = await save_note(self._memory_repo, prepared.character_id, prepared.user_scope,
-                                            note_command, source_message_id or None)
-                    outcome.memory_enrichment_status = "relationship_note_saved" if saved else "no_change"
-                elif relationship_write_blocked(turn.message) and not extracted and not source_only and not (ordinary_quote and erasure_request):
-                    outcome.memory_enrichment_status = "skipped_fiction_or_note"
-                elif scheduler.enabled:
-                    outcome.memory_enrichment_mode = classify_memory_write_mode(turn.message)
-                    # Keep authorized complete speech durable even when semantic
-                    # enrichment is full. Pending identity metadata is not speech.
-                    if memory_write_allowed(turn.message) and not is_memory_erasure_request(turn.message):
-                        outcome.source_capture = "failed"
-                        outcome.memory_enrichment_status = "source_capture_failed"
-                        if not source_message_id:
-                            raise ValueError("Memory source capture requires source_message_id")
-                        outcome.source_capture = await self._memory_repo.capture_source(
-                            prepared.character_id, prepared.user_scope,
-                            source_message_id=source_message_id, body=turn.message,
-                            observed_at=prepared.received_at,
-                        )
-                        if outcome.source_capture not in {"recorded", "stale", "revoked", "conflict"}:
-                            raise ValueError("Source capture did not confirm persistence")
-                    if outcome.source_capture in {"stale", "revoked", "conflict"}:
-                        outcome.memory_enrichment_status = "source_" + outcome.source_capture
-                    else:
-                        outcome.memory_enrichment_scheduled = scheduler.schedule(
-                            repository=self._memory_repo,
-                            character_id=prepared.character_id,
-                            user_scope=prepared.user_scope,
-                            message=turn.message,
-                            rule_hints=extracted,
-                            history=prepared.history,
-                            source_message_id=source_message_id or None,
-                            # 只传递本轮真正注入回复上下文的 IDs。“刚才那条说错了”
-                            # 可据此定向纠错；reply 本身绝不进入记忆证据。
-                            feedback_target_ids=prepared.compiled.used_memory_ids,
-                            source_type="user",
-                            observed_at=prepared.received_at,
-                            source_only=source_only,
-                            **({"receipt": memory_receipt} if memory_receipt is not None else {}),
-                        )
-                        outcome.memory_enrichment_status = (
-                            "queued_hot"
-                            if outcome.memory_enrichment_scheduled and outcome.memory_enrichment_mode == "hot"
-                            else "buffered_idle"
-                            if outcome.memory_enrichment_scheduled
-                            else scheduler.status.last_outcome
-                        )
+                outcome.memory_enrichment_status = "relationship_note_saved" if saved else "no_change"
+            elif (
+                relationship_write_blocked(turn.message)
+                and not extracted
+                and not source_only
+                and not (ordinary_quote and erasure_request)
+            ):
+                outcome.memory_enrichment_status = "skipped_fiction_or_note"
+            elif scheduler.enabled:
+                outcome.memory_enrichment_mode = classify_memory_write_mode(turn.message)
+                # Keep authorized complete speech durable even when semantic
+                # enrichment is full. Pending identity metadata is not speech.
+                if memory_write_allowed(turn.message) and not is_memory_erasure_request(turn.message):
+                    outcome.source_capture = "failed"
+                    outcome.memory_enrichment_status = "source_capture_failed"
+                    if not source_message_id:
+                        raise ValueError("Memory source capture requires source_message_id")
+                    outcome.source_capture = await self._memory_repo.capture_source(
+                        prepared.character_id,
+                        prepared.user_scope,
+                        source_message_id=source_message_id,
+                        body=turn.message,
+                        observed_at=prepared.received_at,
+                    )
+                    if outcome.source_capture not in {"recorded", "stale", "revoked", "conflict"}:
+                        raise ValueError("Source capture did not confirm persistence")
+                if outcome.source_capture in {"stale", "revoked", "conflict"}:
+                    outcome.memory_enrichment_status = "source_" + outcome.source_capture
                 else:
-                    outcome.memory_enrichment_mode = "disabled"
-                    outcome.memory_enrichment_status = "disabled"
+                    outcome.memory_enrichment_scheduled = scheduler.schedule(
+                        repository=self._memory_repo,
+                        character_id=prepared.character_id,
+                        user_scope=prepared.user_scope,
+                        message=turn.message,
+                        rule_hints=extracted,
+                        history=prepared.history,
+                        source_message_id=source_message_id or None,
+                        # 只传递本轮真正注入回复上下文的 IDs。“刚才那条说错了”
+                        # 可据此定向纠错；reply 本身绝不进入记忆证据。
+                        feedback_target_ids=prepared.compiled.used_memory_ids,
+                        source_type="user",
+                        observed_at=prepared.received_at,
+                        source_only=source_only,
+                        **({"receipt": memory_receipt} if memory_receipt is not None else {}),
+                    )
+                    outcome.memory_enrichment_status = (
+                        "queued_hot"
+                        if outcome.memory_enrichment_scheduled and outcome.memory_enrichment_mode == "hot"
+                        else "buffered_idle"
+                        if outcome.memory_enrichment_scheduled
+                        else scheduler.status.last_outcome
+                    )
+            else:
+                outcome.memory_enrichment_mode = "disabled"
+                outcome.memory_enrichment_status = "disabled"
         except Exception as exc:
             if outcome.source_capture != "failed":
                 outcome.memory_enrichment_status = "failed"
-            logger.warning("角色长期记忆写入失败 character=%s type=%s",
-                           prepared.character_id, type(exc).__name__)
+            logger.warning("角色长期记忆写入失败 character=%s type=%s", prepared.character_id, type(exc).__name__)
 
         if memory_retry_only or outcome.source_capture in {"stale", "revoked", "conflict"}:
             return outcome
 
         # 3. 关系起点仅手动设置；次数只是统计，不自动升温。
         try:
-            stage = prepared.relationship.stage
-            address = (extract_preferred_address(turn.message)
-                       if memory_write_allowed(turn.message) and not relationship_write_blocked(turn.message) else None)
+            address = (
+                extract_preferred_address(turn.message)
+                if memory_write_allowed(turn.message) and not relationship_write_blocked(turn.message)
+                else None
+            )
             if address:
                 result = await self._memory_repo.set_address_from_turn(
-                    prepared.character_id, prepared.user_scope,
-                    source_message_id=source_message_id, observed_at=prepared.received_at,
+                    prepared.character_id,
+                    prepared.user_scope,
+                    source_message_id=source_message_id,
+                    observed_at=prepared.received_at,
                     address=address,
                 )
                 if result["status"] in {"stale", "revoked", "conflict"}:
@@ -549,9 +568,8 @@ class CharacterContextService:
                     return outcome
                 if result["status"] != "written":
                     raise ValueError("Address write did not confirm persistence")
-                stage = result["relationship"]["relationship_stage"]
-            outcome.stage = stage
-            outcome.preferred_address = address or prepared.relationship.preferred_address
+                outcome.stage = result["relationship"]["relationship_stage"]
+                outcome.preferred_address = address
         except Exception as exc:
             outcome.failed_writes += ("preferred_address",)
             logger.warning("角色关系更新失败 character=%s type=%s", prepared.character_id, type(exc).__name__)

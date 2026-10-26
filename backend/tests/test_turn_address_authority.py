@@ -250,3 +250,112 @@ async def test_final_address_rejection_overrides_earlier_semantic_success(databa
     finally:
         await dm.shutdown_delivery_memory()
         await runtime.shutdown(timeout=1)
+
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("operation_status", ["erased", "failed"])
+async def test_explicit_completion_never_reinterprets_erasure_as_address(database, monkeypatch, operation_status):
+    import json
+    from unittest.mock import AsyncMock
+
+    from api import generate
+    from character.memory_extractor import extract_preferred_address
+    from character.memory_llm import MemoryEnrichmentScheduler, MemoryLlmConfig, is_memory_erasure_request
+    from db.schemas import MessageRequest
+    from repositories.character_memory import relationship_from_record
+
+    fields, old_source, _ = source(database)
+    role, platform, adapter, sender, kind, conversation = fields
+    scope = build_user_scope(platform, adapter, sender, conversation, kind)
+    repository = DatabaseCharacterMemoryRepository(database)
+    message = "请从长期记忆中删除我让你叫我柚汀的那条原话记录。"
+    assert is_memory_erasure_request(message) and extract_preferred_address(message)
+    received = datetime.now(timezone.utc)
+    current_source = "operation-" + uuid.uuid4().hex
+
+    class Completion:
+        calls = 0
+
+        async def complete(self, messages):
+            self.calls += 1
+            payload = json.loads(messages[1]["content"])
+            assert old_source in {row["source_id"] for row in payload["source_erasure_candidates"]}
+            return (
+                json.dumps({"memories": [], "erase_source_ids": [old_source]})
+                if operation_status == "erased"
+                else "{invalid"
+            )
+
+        async def close(self):
+            pass
+
+    completion = Completion()
+    scheduler = MemoryEnrichmentScheduler(config=MemoryLlmConfig(True, "unit-only", "unit-only"), completion=completion)
+    try:
+        receipt = await scheduler.schedule_and_wait(
+            repository=repository,
+            character_id=role,
+            user_scope=scope,
+            message=message,
+            rule_hints=(),
+            source_message_id=current_source,
+            observed_at=received,
+        )
+        assert receipt["status"] == operation_status
+        relationship = relationship_from_record(await repository.get_relationship_record(role, scope))
+        before = database.get_character_relationship(*fields)
+        prepared = SimpleNamespace(
+            character_id=role,
+            user_scope=scope,
+            received_at=received,
+            memory_operation_receipt=receipt,
+            relationship=relationship,
+            history=(),
+            compiled=SimpleNamespace(used_memory_ids=()),
+        )
+        service = CharacterContextService(object(), repository, object(), source_recall_enabled=False)
+        writes = AsyncMock(wraps=repository.set_address_from_turn)
+        monkeypatch.setattr(repository, "set_address_from_turn", writes)
+        monkeypatch.setattr(
+            "character.memory_llm.get_memory_enrichment_scheduler",
+            lambda: pytest.fail("An executed operation must not initialize another writer"),
+        )
+        outcomes = []
+        complete_turn = service.complete_turn
+
+        async def complete(*args, **kwargs):
+            outcome = await complete_turn(*args, **kwargs)
+            outcomes.append(outcome)
+            return outcome
+
+        monkeypatch.setattr(service, "complete_turn", complete)
+        request = MessageRequest(
+            message=message,
+            characterId=role,
+            platform=platform,
+            adapter=adapter,
+            senderId=sender,
+            conversationId=conversation,
+            sessionId=conversation,
+            conversationType=kind,
+            sourceMessageId=current_source,
+        )
+        warning = await generate._complete_character_turn(prepared, request, character_service=service)
+        after = database.get_character_relationship(*fields)
+        assert after["preferred_address"] == before["preferred_address"] == "知禾"
+        assert after["relationship_stage"] == before["relationship_stage"] == "familiar"
+        assert after["summary"] == before["summary"] and after["interaction_count"] == before["interaction_count"] + 1
+        assert len(outcomes) == 1 and outcomes[0].memory_enrichment_status == receipt["status"]
+        assert outcomes[0].source_capture == receipt.get("source_capture", "")
+        assert (
+            outcomes[0].stage == relationship.stage and outcomes[0].preferred_address == relationship.preferred_address
+        )
+        assert not outcomes[0].failed_writes and not outcomes[0].memory_enrichment_scheduled
+        writes.assert_not_awaited()
+        assert (warning is None) if operation_status == "erased" else ("失败" in warning and "称呼" not in warning)
+        rows = await repository.list_sources(role, scope)
+        assert [row["source_message_id"] for row in rows] == ([] if operation_status == "erased" else [old_source])
+        assert completion.calls == 1
+    finally:
+        await scheduler.shutdown()
