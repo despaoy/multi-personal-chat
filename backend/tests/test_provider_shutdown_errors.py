@@ -120,7 +120,7 @@ async def test_real_manager_close_failure_reaches_lifespan_after_other_cleanup(
         assert lifecycle.failure in chain
     assert order == list(range(len(providers)))
     assert lifecycle.events == ["http", "backup"]
-    assert all(getattr(lifecycle.config, name) is None for name in main._LIFESPAN_RESOURCE_NAMES)
+    assert all(getattr(app.state.runtime_container, name) is None for name in main._LIFESPAN_RESOURCE_NAMES)
     assert "synthetic-private" not in caplog.text
     assert "资源清理完成" not in caplog.text
 

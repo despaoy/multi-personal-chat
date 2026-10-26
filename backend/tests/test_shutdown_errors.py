@@ -50,7 +50,7 @@ async def test_missing_cleanup_module_does_not_skip_remaining_resources(lifecycl
             pass
     assert raised.value is failure
     assert lifecycle.events == ["http", "backup"]
-    assert all(getattr(lifecycle.config, name) is None for name in main._LIFESPAN_RESOURCE_NAMES)
+    assert all(getattr(app.state.runtime_container, name) is None for name in main._LIFESPAN_RESOURCE_NAMES)
 
 
 @pytest.mark.parametrize("startup_failure", [False, True])
@@ -74,7 +74,7 @@ async def test_all_cleanup_runs_and_multiple_errors_keep_original_startup_failur
     if startup_failure:
         assert lifecycle.failure in chain
     assert lifecycle.events == ["http", "backup"]
-    assert all(getattr(lifecycle.config, name) is None for name in main._LIFESPAN_RESOURCE_NAMES)
+    assert all(getattr(app.state.runtime_container, name) is None for name in main._LIFESPAN_RESOURCE_NAMES)
     assert "资源清理完成" not in caplog.text
 
 
