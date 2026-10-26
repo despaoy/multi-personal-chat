@@ -266,7 +266,7 @@ class GroundedAnswerService:
             },
         )
 
-        if packet.answer_mode == AnswerMode.NO_RAG:
+        if packet.answer_mode in (AnswerMode.NO_RAG, AnswerMode.ABSTENTION):
             yield AnswerStreamEvent(type="delta", data={"text": self.abstention_reply})
             yield AnswerStreamEvent(type="citations", data={"citations": []})
             yield AnswerStreamEvent(
@@ -275,28 +275,11 @@ class GroundedAnswerService:
                     answer=self.abstention_reply,
                     packet=packet,
                     decision=decision,
-                    warnings=["abstention:no_domain"],
-                    timings=timings,
-                    start=start,
-                    model_invoked=False,
-                    model_id=model_id,
-                ),
-            )
-            return
-
-        if packet.answer_mode == AnswerMode.ABSTENTION:
-            yield AnswerStreamEvent(type="delta", data={"text": self.abstention_reply})
-            yield AnswerStreamEvent(type="citations", data={"citations": []})
-            yield AnswerStreamEvent(
-                type="done",
-                data=self._done_payload(
-                    answer=self.abstention_reply,
-                    packet=packet,
-                    decision=decision,
-                    warnings=[
-                        *packet.warnings,
-                        f"abstention:{packet.abstention_reason}",
-                    ],
+                    warnings=(
+                        ["abstention:no_domain"]
+                        if packet.answer_mode == AnswerMode.NO_RAG
+                        else [*packet.warnings, f"abstention:{packet.abstention_reason}"]
+                    ),
                     timings=timings,
                     start=start,
                     model_invoked=False,
@@ -430,37 +413,22 @@ class GroundedAnswerService:
 
         metadata = self._retrieval_metadata(packet, decision, model_id=model_id)
 
-        if packet.answer_mode == AnswerMode.NO_RAG:
-            metadata["abstention_reason"] = FailureKind.NO_DOMAIN.value
+        if packet.answer_mode in (AnswerMode.NO_RAG, AnswerMode.ABSTENTION):
+            no_domain = packet.answer_mode == AnswerMode.NO_RAG
+            if no_domain:
+                metadata["abstention_reason"] = FailureKind.NO_DOMAIN.value
             return GroundedAnswerResult(
                 answer=self.abstention_reply,
                 answer_mode=AnswerMode.ABSTENTION,
-                domain_id=None,
+                domain_id=None if no_domain else packet.domain_id,
                 citations=[],
-                confidence=None,
+                confidence=None if no_domain else packet.retrieval_confidence,
                 abstained=True,
-                warnings=["abstention:no_domain"],
-                failure_kind=FailureKind.NO_DOMAIN.value,
-                used_rag=False,
-                model_invoked=False,
-                model_id=model_id,
-                retrieval_metadata=metadata,
-                timings=timings,
-            )
-
-        if packet.answer_mode == AnswerMode.ABSTENTION:
-            # abstention：结构上不调用模型（防绕过）；无答案也返回正常结构
-            reason = packet.abstention_reason
-            return GroundedAnswerResult(
-                answer=self.abstention_reply,
-                answer_mode=AnswerMode.ABSTENTION,
-                domain_id=packet.domain_id,
-                citations=[],
-                confidence=packet.retrieval_confidence,
-                abstained=True,
-                warnings=[*packet.warnings, f"abstention:{reason}"],
-                failure_kind="",
-                used_rag=True,
+                warnings=["abstention:no_domain"]
+                if no_domain
+                else [*packet.warnings, f"abstention:{packet.abstention_reason}"],
+                failure_kind=FailureKind.NO_DOMAIN.value if no_domain else "",
+                used_rag=not no_domain,
                 model_invoked=False,
                 model_id=model_id,
                 retrieval_metadata=metadata,
