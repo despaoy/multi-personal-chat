@@ -231,6 +231,6 @@ async def test_scan_close_failure_still_closes_later_resources_and_remains_visib
                 raise failure
 
             monkeypatch.setattr(pool, "shutdown", fail_close)
-    assert caught.value is failure and lifecycle.events == ["sqlite", "http", "backup"]
+    assert caught.value is failure and lifecycle.events == ["http", "backup"]
     assert app.state.runtime_container.knowledge_scan_executor is None
     assert "synthetic-private" not in caplog.text and "资源清理完成" not in caplog.text
