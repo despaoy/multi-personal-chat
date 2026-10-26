@@ -35,9 +35,9 @@ async def test_refused_memory_is_pending_then_recovers_without_repeating_turn(tm
 
     current = {'scheduler': scheduler()}
     schedulers = [current['scheduler']]
-    monkeypatch.setattr('character.memory_llm.get_memory_enrichment_scheduler', lambda: current['scheduler'])
+    monkeypatch.setattr('character.memory_llm.get_memory_enrichment_scheduler', lambda _owner_database=None: current['scheduler'])
     runtime = TurnCompletionRuntime(1)
-    monkeypatch.setattr(dm, 'get_turn_completion_runtime', lambda: runtime)
+    monkeypatch.setattr(dm, 'get_turn_completion_runtime', lambda _owner_database=None: runtime)
     monkeypatch.setattr(dm, 'POLL_SECONDS', 3600)
     slot = runtime.reserve()  # Keep the automatic loop parked during explicit job steps.
     worker = dm.DeliveryMemoryWorker(database, CharacterContextService(object(), repo, object()))

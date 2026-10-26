@@ -193,7 +193,7 @@ async def run_receipt_probe(client, args, proof, fixture, cloud_calls, *, databa
                 "sessionType": "private",
             },
         )
-        assert await get_memory_enrichment_scheduler().flush_memory(timeout=45)
+        assert await get_memory_enrichment_scheduler(database).flush_memory(timeout=45)
         proof["generation"].append(
             {
                 "id": fixture["cases"][0]["id"],

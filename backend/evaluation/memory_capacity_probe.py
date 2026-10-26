@@ -31,7 +31,7 @@ async def run_capacity_probe(
 ):
     fields = ("tsukiyashiro_kisaki", "web", "web-character", identity, "private", identity)
     warmup, target, cold = fixture["cases"][-3:]
-    scheduler = get_memory_enrichment_scheduler()
+    scheduler = get_memory_enrichment_scheduler(database)
     assert scheduler._capacity == 1 and scheduler._idle_seconds == 0
     held = asyncio.Event()
     release = asyncio.Event()

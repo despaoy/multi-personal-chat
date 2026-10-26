@@ -395,7 +395,7 @@ async def _generate_reply_body(
         from services.turn_completion import CompletionUnavailable, get_turn_completion_runtime
 
         try:
-            completion_slot = get_turn_completion_runtime().reserve()
+            completion_slot = get_turn_completion_runtime(message_db).reserve()
         except CompletionUnavailable:
             raise HTTPException(
                 503,
@@ -452,7 +452,7 @@ async def _generate_reply_body(
         from character.memory_llm import get_memory_enrichment_scheduler
 
         memory_write_enabled = bool(
-            persist_message and not request.branchId and get_memory_enrichment_scheduler().enabled
+            persist_message and not request.branchId and get_memory_enrichment_scheduler(message_db).enabled
         )
 
     completion_warning = None
@@ -675,6 +675,7 @@ async def _generate_reply_body(
                     request,
                     character_service=character_service,
                     completion_slot=completion_slot,
+                    message_db=message_db,
                 )
             except Exception as exc:
                 logger.warning("回写处理失败 traceId=%s type=%s", request.traceId, type(exc).__name__)
@@ -988,7 +989,7 @@ async def _persist_completion_feedback(receipt: dict, warning: str, *, database)
 
 
 async def _complete_character_turn(
-    prepared, request: MessageRequest, *, character_service=None, completion_slot=None
+    prepared, request: MessageRequest, *, character_service=None, completion_slot=None, message_db=None
 ) -> str | None:
     """生成成功后回写；保留已生成内容，向调用方返回独立的保存提示。
 
@@ -1005,7 +1006,7 @@ async def _complete_character_turn(
         turn_input = _character_turn_input(request)
         service = character_service or get_default_character_context_service()
 
-        outcome = await get_turn_completion_runtime().run(
+        outcome = await get_turn_completion_runtime(message_db).run(
             lambda: service.complete_turn(
                 prepared,
                 turn_input,

@@ -16,7 +16,7 @@ async def test_response_deadline_retains_exact_write_and_later_stage(monkeypatch
     from services import turn_completion
 
     runtime = TurnCompletionRuntime()
-    monkeypatch.setattr(turn_completion, "get_turn_completion_runtime", lambda: runtime)
+    monkeypatch.setattr(turn_completion, "get_turn_completion_runtime", lambda _owner_database=None: runtime)
     monkeypatch.setattr(gen, "_DB_WRITE_TIMEOUT", 0.005)
     release = asyncio.Event()
     seen = []
@@ -186,11 +186,11 @@ async def test_global_shutdown_does_not_reopen_during_dependency_teardown(monkey
     from services import turn_completion
 
     runtime = TurnCompletionRuntime()
-    monkeypatch.setattr(turn_completion, "_runtime", runtime)
-    await turn_completion.shutdown_turn_completions()
-    assert turn_completion.get_turn_completion_runtime() is runtime and runtime.closed
+    database = SimpleNamespace(_turn_completion_runtime=runtime)
+    await turn_completion.shutdown_turn_completions(database)
+    assert turn_completion.get_turn_completion_runtime(database) is runtime and runtime.closed
     with pytest.raises(RuntimeError, match="unavailable"):
-        await turn_completion.get_turn_completion_runtime().run(asyncio.Event().wait, timeout=1)
+        await turn_completion.get_turn_completion_runtime(database).run(asyncio.Event().wait, timeout=1)
     assert runtime.active == 0
 
 
@@ -199,10 +199,10 @@ async def test_explicit_start_reopens_only_drained_lifecycle(monkeypatch):
     from services import turn_completion
 
     runtime = TurnCompletionRuntime()
-    monkeypatch.setattr(turn_completion, "_runtime", runtime)
-    await turn_completion.shutdown_turn_completions()
-    turn_completion.start_turn_completions()
-    reopened = turn_completion.get_turn_completion_runtime()
+    database = SimpleNamespace(_turn_completion_runtime=runtime)
+    await turn_completion.shutdown_turn_completions(database)
+    turn_completion.start_turn_completions(database)
+    reopened = turn_completion.get_turn_completion_runtime(database)
     assert reopened is not runtime and not reopened.closed
     done = []
 
@@ -210,7 +210,7 @@ async def test_explicit_start_reopens_only_drained_lifecycle(monkeypatch):
         done.append(True)
 
     await reopened.run(work, timeout=1)
-    await turn_completion.shutdown_turn_completions()
+    await turn_completion.shutdown_turn_completions(database)
     assert done == [True] and reopened.closed and reopened.active == 0
 
 

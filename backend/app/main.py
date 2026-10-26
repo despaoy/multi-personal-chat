@@ -58,7 +58,7 @@ def _initialize_database(database) -> None:
     database.execute_sql("SELECT 1")
 
 
-async def _close_resource(label: str, resource, method_name: str) -> None:
+async def _close_resource(label: str, resource, method_name: str, *args) -> None:
     """Close an owned resource or lazy module callback; report failures to the exit stack."""
     try:
         if isinstance(resource, str):
@@ -69,9 +69,9 @@ async def _close_resource(label: str, resource, method_name: str) -> None:
             resource = getattr(resource, attribute)
         method = resource
         if inspect.iscoroutinefunction(method):
-            result = await method()
+            result = await method(*args)
         else:
-            result = await asyncio.to_thread(method)
+            result = await asyncio.to_thread(method, *args)
         if inspect.isawaitable(result):
             await result
     except Exception as exc:
@@ -80,12 +80,12 @@ async def _close_resource(label: str, resource, method_name: str) -> None:
 
 
 @asynccontextmanager
-async def _closing_resource(label: str, resource, method_name: str):
+async def _closing_resource(label: str, resource, method_name: str, *args):
     """Use exit contexts so successive close failures retain earlier exceptions."""
     try:
         yield
     finally:
-        await _close_resource(label, resource, method_name)
+        await _close_resource(label, resource, method_name, *args)
 
 
 # ── 导入所有 API 路由 ──
@@ -136,8 +136,9 @@ async def lifespan(app: FastAPI):
     validate_or_raise_for_startup(container.startup_env)
     from character.memory_llm import MemoryLlmConfig
 
-    MemoryLlmConfig.from_env(container.startup_env)
+    memory_config = MemoryLlmConfig.from_env(container.startup_env)
     database._model_manager = getattr(database, "_model_manager", None)
+    database._memory_llm_config = memory_config
     try:
         logger.info("🚀 MultiPersonal Chat System后端服务启动中（增强版）...")
 
@@ -171,7 +172,7 @@ async def lifespan(app: FastAPI):
 
         from services.turn_completion import start_turn_completions
 
-        start_turn_completions()
+        start_turn_completions(database)
         from services.delivery_memory import ensure_delivery_memory_worker
 
         ensure_delivery_memory_worker(database)
@@ -185,9 +186,9 @@ async def lifespan(app: FastAPI):
             ("LoRA 训练任务", "training.task_manager", "shutdown_simple_lora_trainer"),
             ("RAG 意图任务", "api.knowledge", "shutdown_intent_tasks"),
             ("推理调度器", container.inference_runtime, "shutdown"),
-            ("交付记忆任务", "services.delivery_memory", "shutdown_delivery_memory"),
-            ("角色回写任务", "services.turn_completion", "shutdown_turn_completions"),
-            ("后台长期记忆任务", "character.memory_llm", "shutdown_memory_enrichment"),
+            ("交付记忆任务", "services.delivery_memory", "shutdown_delivery_memory", database),
+            ("角色回写任务", "services.turn_completion", "shutdown_turn_completions", database),
+            ("后台长期记忆任务", "character.memory_llm", "shutdown_memory_enrichment", database),
             ("知识库扫描", container.knowledge_scan_executor, "shutdown"),
             ("readiness probe", getattr(app.state, "readiness_probe", None), "shutdown"),
             ("HTTP 客户端池", container.http_client_pool, "close"),

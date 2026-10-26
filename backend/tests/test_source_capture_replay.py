@@ -143,7 +143,7 @@ async def test_complete_turn_and_scheduler_both_capture_but_index_original_only_
     scheduler = MemoryEnrichmentScheduler(config=MemoryLlmConfig(
         enabled=True, base_url="http://fixture.invalid/v1", model="fiction-local-writer", idle_seconds=0),
         completion=completion)
-    monkeypatch.setattr("character.memory_llm.get_memory_enrichment_scheduler", lambda: scheduler)
+    monkeypatch.setattr("character.memory_llm.get_memory_enrichment_scheduler", lambda _owner_database=None: scheduler)
     service = CharacterContextService(object(), repo, object())
     receipt = asyncio.get_running_loop().create_future()
     start = len(probe.sql)

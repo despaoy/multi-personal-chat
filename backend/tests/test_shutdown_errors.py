@@ -103,7 +103,7 @@ async def test_normal_shutdown_keeps_dependency_order(lifecycle, monkeypatch, ca
     ]
     for name, label in operations:
 
-        async def close(label=label):
+        async def close(*_resource_owner, label=label):
             order.append(label)
 
         monkeypatch.setattr(name, close)
@@ -151,7 +151,7 @@ async def test_shutdown_closes_model_first_created_while_draining_background_wor
 
     model = SimpleNamespace(shutdown=AsyncMock())
 
-    async def finish_memory_work():
+    async def finish_memory_work(_resource_owner):
         database._model_manager = model
 
     monkeypatch.setattr("character.memory_llm.shutdown_memory_enrichment", finish_memory_work)
@@ -198,7 +198,7 @@ async def test_live_generation_exits_before_its_memory_dependencies_close(lifecy
         finally:
             cancelled.set()
 
-    async def close_memory():
+    async def close_memory(_owner_database):
         assert cancelled.is_set(), "memory closed while generation still running"
         assert runtime.stats()["active"] == 0
 

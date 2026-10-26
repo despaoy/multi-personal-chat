@@ -40,7 +40,7 @@ async def run_late_capture_probe(
     proof["eligible_rule_hints"] = [asdict(item) for item in extract_memories(case["message"])]
     assert len(case["message"]) > 150 and proof["eligible_rule_hints"]
     proof["native_payloads"] = []
-    scheduler = get_memory_enrichment_scheduler()
+    scheduler = get_memory_enrichment_scheduler(database)
     started = threading.Event()
     finished = threading.Event()
     sync_attempts = []

@@ -122,27 +122,35 @@ class TurnCompletionRuntime:
         await asyncio.sleep(0)
 
 
-_runtime: TurnCompletionRuntime | None = None
+def get_turn_completion_runtime(database=None) -> TurnCompletionRuntime:
+    if database is None:
+        from db.adapter import db
 
-
-def get_turn_completion_runtime() -> TurnCompletionRuntime:
-    global _runtime
+        database = db
     loop = asyncio.get_running_loop()
-    if _runtime is None or (_runtime.loop is not loop and not _runtime.active and not _runtime.reserved):
-        _runtime = TurnCompletionRuntime()
-    return _runtime
+    runtime = getattr(database, "_turn_completion_runtime", None)
+    if runtime is None or (runtime.loop is not loop and not runtime.active and not runtime.reserved):
+        runtime = database._turn_completion_runtime = TurnCompletionRuntime()
+    return runtime
 
 
-def start_turn_completions() -> None:
-    global _runtime
-    runtime = get_turn_completion_runtime()
+def start_turn_completions(database=None) -> None:
+    if database is None:
+        from db.adapter import db
+
+        database = db
+    runtime = get_turn_completion_runtime(database)
     if runtime.closed:
         if runtime.active or runtime.reserved:
             raise RuntimeError("Completion runtime still draining")
-        _runtime = TurnCompletionRuntime()
+        database._turn_completion_runtime = TurnCompletionRuntime()
 
 
-async def shutdown_turn_completions() -> None:
-    runtime = _runtime
+async def shutdown_turn_completions(database=None) -> None:
+    if database is None:
+        from db.adapter import db
+
+        database = db
+    runtime = getattr(database, "_turn_completion_runtime", None)
     if runtime is not None:
         await runtime.shutdown()

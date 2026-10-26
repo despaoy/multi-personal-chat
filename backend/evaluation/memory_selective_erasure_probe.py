@@ -47,9 +47,9 @@ async def run_selective_erasure_probe(
     active = [r for r in database.loras if r["status"] == "active"]
     assert len(active) == 1 and get_lora_character_id(active[0]["name"]) == fields[0]
     proof["actual_inherited_role"] = dict(active_name=active[0]["name"], character_id=fields[0])
-    original = get_turn_completion_runtime()
+    original = get_turn_completion_runtime(database)
     proof["capacity"] = dict(capacity=original.capacity, active=original.active, reserved=original.reserved)
-    scheduler = get_memory_enrichment_scheduler()
+    scheduler = get_memory_enrichment_scheduler(database)
     token = secrets.token_urlsafe(48)
     os.environ.update(
         ASTRBOT_INTEGRATION_TOKEN=token,
@@ -251,7 +251,7 @@ async def run_selective_erasure_probe(
         await worker.wait_idle(timeout=120)
         proof["read_terminal_receipt"] = receipt(read_private)
         proof["owner_after_read"] = await snapshot()
-    await shutdown_delivery_memory()
+    await shutdown_delivery_memory(database)
     proof["delivery_worker_terminal"] = worker.task.done() and not worker.task.cancelled() and worker.active_key is None
     await original.shutdown(timeout=35)
     assert await scheduler.flush_memory(timeout=90)

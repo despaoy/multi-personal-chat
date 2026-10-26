@@ -592,6 +592,10 @@ async def test_complete_turn_passes_only_actual_injected_memory_ids(monkeypatch)
             return True
 
     class _Repository:
+        @property
+        def storage_owner(self):
+            return self
+
         async def capture_source(self, *args, **kwargs):
             return "recorded"
 
@@ -599,7 +603,7 @@ async def test_complete_turn_passes_only_actual_injected_memory_ids(monkeypatch)
             return 1
 
     scheduler = _Scheduler()
-    monkeypatch.setattr("character.memory_llm.get_memory_enrichment_scheduler", lambda: scheduler)
+    monkeypatch.setattr("character.memory_llm.get_memory_enrichment_scheduler", lambda _owner_database=None: scheduler)
     service = CharacterContextService(object(), _Repository(), object())
     prepared = PreparedCharacterTurn(
         character_id="kisaki",

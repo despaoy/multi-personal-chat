@@ -87,12 +87,12 @@ async def run_memory_race(
     proof["validation_barrier"] = (
         "Observe both actual validation outcomes, then release together; never bypass the implementation; distinct client sessions and same authenticated private source scope."
     )
-    assert await get_memory_enrichment_scheduler().flush_memory(timeout=90)
+    assert await get_memory_enrichment_scheduler(database).flush_memory(timeout=90)
     proof["scope_owner_sources_after"] = database.list_memory_sources(*scope_fields, limit=100)
     proof["scope_owner_claims_after"] = database.list_character_memory_claims(
         *scope_fields, limit=None, include_inactive=True
     )
-    proof["memory_status"] = asdict(get_memory_enrichment_scheduler().status)
+    proof["memory_status"] = asdict(get_memory_enrichment_scheduler(database).status)
     proof["queue_stats"] = runtime.stats()
     connection = await asyncpg.connect(user="boot", database=database_name, host=str(root / "socket"), port=25433)
     try:

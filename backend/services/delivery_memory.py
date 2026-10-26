@@ -163,7 +163,7 @@ class DeliveryMemoryWorker:
     async def _loop(self):
         while not self.closed:
             try:
-                runtime = get_turn_completion_runtime()
+                runtime = get_turn_completion_runtime(self.database)
                 slot = runtime.reserve()
             except CompletionUnavailable:
                 await self._pause()
@@ -366,22 +366,20 @@ class DeliveryMemoryWorker:
             await asyncio.gather(self.task, return_exceptions=True)
 
 
-_workers: dict[int, DeliveryMemoryWorker] = {}
-
-
 def ensure_delivery_memory_worker(database, service=None):
-    worker = _workers.get(id(database))
+    worker = getattr(database, "_delivery_memory_worker", None)
     if worker is None:
-        worker = DeliveryMemoryWorker(database, service)
-        _workers[id(database)] = worker
+        worker = database._delivery_memory_worker = DeliveryMemoryWorker(database, service)
     worker.wakeup.set()
     return worker
 
 
-async def shutdown_delivery_memory():
-    workers = tuple(_workers.values())
-    for worker in workers:
-        worker.closed = True
-        worker.wakeup.set()
-    await asyncio.gather(*(worker.shutdown() for worker in workers))
-    _workers.clear()
+async def shutdown_delivery_memory(database=None):
+    if database is None:
+        from db.adapter import db
+
+        database = db
+    worker = getattr(database, "_delivery_memory_worker", None)
+    if worker is not None:
+        await worker.shutdown()
+        database._delivery_memory_worker = None

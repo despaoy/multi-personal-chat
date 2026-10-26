@@ -50,9 +50,9 @@ async def run_delivery_erasure_probe(
     active = [r for r in database.loras if r["status"] == "active"]
     assert len(active) == 1 and get_lora_character_id(active[0]["name"]) == fields[0]
     proof["actual_inherited_role"] = dict(active_name=active[0]["name"], character_id=fields[0], not_invented=True)
-    original = get_turn_completion_runtime()
+    original = get_turn_completion_runtime(database)
     assert original.capacity == 128 and original.active == original.reserved == 0
-    scheduler = get_memory_enrichment_scheduler()
+    scheduler = get_memory_enrichment_scheduler(database)
     proof["capacity"] = dict(capacity=original.capacity, changed=False)
     token = secrets.token_urlsafe(48)
     os.environ.update(
@@ -257,7 +257,7 @@ async def run_delivery_erasure_probe(
     proof["target_duplicate_receipt"] = receipt(target_reply)
     proof["owner_after_duplicate"] = await snapshot()
     proof["calls_after_late_ack"] = len(cloud_calls)
-    await shutdown_delivery_memory()
+    await shutdown_delivery_memory(database)
     proof["delivery_worker_terminal"] = worker.task.done() and not worker.task.cancelled() and worker.active_key is None
     await original.shutdown(timeout=35)
     assert await scheduler.flush_memory(timeout=90)

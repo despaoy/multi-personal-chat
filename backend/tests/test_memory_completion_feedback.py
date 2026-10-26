@@ -57,7 +57,7 @@ async def test_real_coroutine_timeout_is_unknown_not_failed(monkeypatch):
     from services import turn_completion
 
     runtime = turn_completion.TurnCompletionRuntime()
-    monkeypatch.setattr(turn_completion, "get_turn_completion_runtime", lambda: runtime)
+    monkeypatch.setattr(turn_completion, "get_turn_completion_runtime", lambda _owner_database=None: runtime)
     monkeypatch.setattr(gen, "_DB_WRITE_TIMEOUT", 0.01)
     started, release, finished = asyncio.Event(), asyncio.Event(), asyncio.Event()
 

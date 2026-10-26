@@ -16,12 +16,12 @@ def setup_service(monkeypatch, receipt):
                                     RelationshipState(), 0, 0, None)
     service = object.__new__(CharacterContextService)
     service._profiles = SimpleNamespace(get_profile=lambda character: object())
-    service._memory_repo = SimpleNamespace(increment_interaction=AsyncMock(return_value=1))
+    service._memory_repo = SimpleNamespace(storage_owner=object(), increment_interaction=AsyncMock(return_value=1))
     service._load_history = AsyncMock(return_value=[])
     service.prepare_turn = AsyncMock(return_value=prepared)
     worker = SimpleNamespace(enabled=True, schedule_and_wait=AsyncMock(return_value=receipt),
                              schedule=lambda **kwargs: pytest.fail('duplicate operation submitted'))
-    monkeypatch.setattr('character.memory_llm.get_memory_enrichment_scheduler', lambda: worker)
+    monkeypatch.setattr('character.memory_llm.get_memory_enrichment_scheduler', lambda _owner_database=None: worker)
     return service, worker
 
 
@@ -150,7 +150,7 @@ async def test_committed_erasure_receipt_survives_later_generation_failure(insta
     completion = Completion()
     scheduler = MemoryEnrichmentScheduler(config=MemoryLlmConfig(True, 'unit-only', 'unit-only'), completion=completion)
     service = CharacterContextService(profile_registry=get_default_profile_registry(), memory_repository=repository, message_repository=DatabaseMessageRepository(database), source_recall_enabled=False)
-    monkeypatch.setattr('character.memory_llm.get_memory_enrichment_scheduler', lambda: scheduler)
+    monkeypatch.setattr('character.memory_llm.get_memory_enrichment_scheduler', lambda _owner_database=None: scheduler)
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', actual_generate_chat_answer)
     monkeypatch.setattr(test_compiled_cloud_transport, 'ANSWER', '20。')
     installed.state.status = 503 if fault == 'provider' else 200

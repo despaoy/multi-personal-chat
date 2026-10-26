@@ -228,9 +228,9 @@ async def run_concurrency_probe(
     assert response.status_code == 200
     proof["after_generation"] = snapshot()
     await search("after_generation_current_scope")
-    scheduler = get_memory_enrichment_scheduler()
+    scheduler = get_memory_enrichment_scheduler(database)
     assert await scheduler.flush_memory(timeout=90)
-    completion = get_turn_completion_runtime()
+    completion = get_turn_completion_runtime(database)
     await completion.shutdown(timeout=35)
     assert await scheduler.flush_memory(timeout=90)
     proof["jobs_terminal"] = scheduler._processing == scheduler._inflight == 0

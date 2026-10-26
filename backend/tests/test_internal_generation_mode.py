@@ -21,7 +21,7 @@ from services.chat_answer import ChatAnswer
 async def completion_runtime(monkeypatch):
     from services import turn_completion
     runtime = turn_completion.TurnCompletionRuntime(capacity=1)
-    monkeypatch.setattr(turn_completion, "get_turn_completion_runtime", lambda: runtime)
+    monkeypatch.setattr(turn_completion, "get_turn_completion_runtime", lambda _owner_database=None: runtime)
     yield runtime
     await runtime.shutdown(timeout=1)
 
@@ -347,7 +347,7 @@ async def test_injected_character_service_reaches_prepare_and_complete(monkeypat
         seen['prepare_service'] = character_service
         return fake_prepared
 
-    async def fake_complete(prepared, request, *, character_service=None, completion_slot=None):
+    async def fake_complete(prepared, request, *, character_service=None, completion_slot=None, message_db=None):
         seen['complete_service'] = character_service
         assert completion_slot is not None
     monkeypatch.setattr(gen, '_prepare_character_turn', fake_prepare)

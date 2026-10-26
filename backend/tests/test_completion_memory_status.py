@@ -11,10 +11,10 @@ from db.schemas import MessageRequest
 
 @pytest.fixture
 def scenario(monkeypatch):
-    repo = SimpleNamespace(increment_interaction=AsyncMock(return_value=1),
+    repo = SimpleNamespace(storage_owner=object(), increment_interaction=AsyncMock(return_value=1),
                            capture_source=AsyncMock(return_value='recorded'))
     scheduler = SimpleNamespace(enabled=True, schedule=Mock(side_effect=OSError('private-storage-detail')))
-    monkeypatch.setattr('character.memory_llm.get_memory_enrichment_scheduler', lambda: scheduler)
+    monkeypatch.setattr('character.memory_llm.get_memory_enrichment_scheduler', lambda _owner_database=None: scheduler)
     prepared = SimpleNamespace(character_id='role', user_scope=UserScope('web', 'web-character', 'reader', 'reader', 'private'),
         received_at=datetime(2026, 10, 9, tzinfo=timezone.utc), relationship=RelationshipState(),
         memory_operation_receipt=None, history=(), compiled=SimpleNamespace(used_memory_ids=()))

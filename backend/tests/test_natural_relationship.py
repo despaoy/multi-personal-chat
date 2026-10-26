@@ -168,7 +168,7 @@ class EmptyMemory:
 async def test_current_turn_overlay_then_successful_persistence(repo, monkeypatch):
     from character import memory_llm
 
-    monkeypatch.setattr(memory_llm, "get_memory_enrichment_scheduler", lambda: SimpleNamespace(enabled=False))
+    monkeypatch.setattr(memory_llm, "get_memory_enrichment_scheduler", lambda _owner_database=None: SimpleNamespace(enabled=False))
     service = CharacterContextService(Profiles(), repo, None, memory_service=EmptyMemory())
     turn = TurnInput(
         "交流偏好：不要追问我的收入",
@@ -198,7 +198,7 @@ async def test_current_turn_overlay_then_successful_persistence(repo, monkeypatc
 async def test_fiction_does_not_fall_through_to_memory(repo, monkeypatch):
     from character import memory_llm
 
-    monkeypatch.setattr(memory_llm, "get_memory_enrichment_scheduler", lambda: SimpleNamespace(enabled=False))
+    monkeypatch.setattr(memory_llm, "get_memory_enrichment_scheduler", lambda _owner_database=None: SimpleNamespace(enabled=False))
     service = CharacterContextService(Profiles(), repo, None, memory_service=EmptyMemory())
     turn = TurnInput(
         "小说台词：我喜欢咖啡，叫我小明",

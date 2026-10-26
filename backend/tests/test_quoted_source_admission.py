@@ -98,7 +98,7 @@ async def test_actual_completion_captures_full_source_receipt_and_recall_without
     registry.load_profiles()
     service = CharacterContextService(registry, repo, DatabaseMessageRepository(database))
     scheduler = MemoryEnrichmentScheduler(config=MemoryLlmConfig(True, "unused", "unused"), completion=NoModel())
-    monkeypatch.setattr(memory_llm, "get_memory_enrichment_scheduler", lambda: scheduler)
+    monkeypatch.setattr(memory_llm, "get_memory_enrichment_scheduler", lambda _owner_database=None: scheduler)
     stamp = datetime.now(timezone.utc)
     turn = TurnInput(text, "web", "quote-test", "owner", "owner", "private", received_at=stamp)
     prepared = await service.prepare_turn(turn, "tsukiyashiro_kisaki")

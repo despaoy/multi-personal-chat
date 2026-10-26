@@ -98,7 +98,7 @@ async def arrange_provider_budget(tmp_path, monkeypatch):
     monkeypatch.setattr(generate, 'circuit_breaker_registry', circuit_registry)
     monkeypatch.setattr(generate, 'get_llm_semaphore', lambda: asyncio.Semaphore(4))
     monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: '只核对所给完整虚构记录，保留引述属性。')
-    monkeypatch.setattr('character.memory_llm.get_memory_enrichment_scheduler', lambda: SimpleNamespace(enabled=False))
+    monkeypatch.setattr('character.memory_llm.get_memory_enrichment_scheduler', lambda _owner_database=None: SimpleNamespace(enabled=False))
     return rig
 
 
@@ -233,7 +233,7 @@ async def test_queued_http_turn_uses_execution_provider_and_one_owning_service(b
     rig = budget_rig
     database = rig.database if database_kind == 'default' else rig.custom_db
     other_database = rig.custom_db if database_kind == 'default' else rig.database
-    monkeypatch.setattr('character.memory_llm.get_memory_enrichment_scheduler', lambda: SimpleNamespace(enabled=True, schedule=lambda **kwargs: False, status=SimpleNamespace(last_outcome='no_change')))
+    monkeypatch.setattr('character.memory_llm.get_memory_enrichment_scheduler', lambda _owner_database=None: SimpleNamespace(enabled=True, schedule=lambda **kwargs: False, status=SimpleNamespace(last_outcome='no_change')))
     queued, release = (asyncio.Event(), asyncio.Event())
     preparations, completions = ([], [])
     actual_prepare = character_context.CharacterContextService.prepare_turn

@@ -2105,24 +2105,31 @@ class MemoryEnrichmentScheduler:
         await self._completion.close()
 
 
-_default_scheduler: MemoryEnrichmentScheduler | None = None
+def get_memory_enrichment_scheduler(database=None) -> MemoryEnrichmentScheduler:
+    if database is None:
+        from db.adapter import db
 
-
-def get_memory_enrichment_scheduler() -> MemoryEnrichmentScheduler:
-    global _default_scheduler
-    if _default_scheduler is None:
-        config = MemoryLlmConfig.from_env()
-        _default_scheduler = MemoryEnrichmentScheduler(
+        database = db
+    scheduler = getattr(database, "_memory_enrichment_scheduler", None)
+    if scheduler is None:
+        config = getattr(database, "_memory_llm_config", None)
+        if config is None:
+            config = MemoryLlmConfig.from_env()
+        scheduler = MemoryEnrichmentScheduler(
             config=config,
             completion=OpenAICompatibleMemoryCompletion(config),
         )
-    return _default_scheduler
+        database._memory_enrichment_scheduler = scheduler
+    return scheduler
 
 
-async def shutdown_memory_enrichment() -> None:
-    global _default_scheduler
-    scheduler = _default_scheduler
+async def shutdown_memory_enrichment(database=None) -> None:
+    if database is None:
+        from db.adapter import db
+
+        database = db
+    scheduler = getattr(database, "_memory_enrichment_scheduler", None)
     if scheduler is not None:
         timeout = float(os.getenv("MEMORY_LLM_SHUTDOWN_TIMEOUT", "10"))
         await scheduler.shutdown(timeout=timeout)
-        _default_scheduler = None
+        database._memory_enrichment_scheduler = None

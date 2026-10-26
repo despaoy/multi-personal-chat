@@ -171,9 +171,9 @@ async def run_cross_process_probe(
     proof["after_generation"] = snapshot()
     await search("old_scope_after_update", fixture["knowledge_bases"][0])
     await search("new_scope_after_update", fixture["knowledge_bases"][1])
-    scheduler = get_memory_enrichment_scheduler()
+    scheduler = get_memory_enrichment_scheduler(database)
     assert await scheduler.flush_memory(timeout=90)
-    completion = get_turn_completion_runtime()
+    completion = get_turn_completion_runtime(database)
     await completion.shutdown(timeout=35)
     assert await scheduler.flush_memory(timeout=90)
     proof["jobs_terminal"] = scheduler._processing == scheduler._inflight == 0

@@ -34,7 +34,7 @@ async def setup(tmp_path, monkeypatch, request):
         assert scheduler.schedule(repository=repo, character_id="capacity-holder",
             user_scope=UserScope("test", "test", "holder", "holder", "private"),
             message="我喜欢红茶", rule_hints=[], immediate=False)
-    monkeypatch.setattr(memory_llm, 'get_memory_enrichment_scheduler', lambda: scheduler)
+    monkeypatch.setattr(memory_llm, 'get_memory_enrichment_scheduler', lambda _owner_database=None: scheduler)
     try:
         yield database, repo, service, scheduler, completion
     finally:

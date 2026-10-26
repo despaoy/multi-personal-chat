@@ -123,7 +123,7 @@ async def generation(monkeypatch):
     prepared = SimpleNamespace(memory_operation_receipt=None, character_id='tsukiyashiro_kisaki', compiled=SimpleNamespace(profile_context='', dynamic_context='', reference_context=''), history=())
     monkeypatch.setattr(generate, '_prepare_character_turn', AsyncMock(return_value=prepared))
     runtime = turn_completion.TurnCompletionRuntime(capacity=1)
-    monkeypatch.setattr(turn_completion, 'get_turn_completion_runtime', lambda: runtime)
+    monkeypatch.setattr(turn_completion, 'get_turn_completion_runtime', lambda _owner_database=None: runtime)
     service = SimpleNamespace(complete_turn=AsyncMock(return_value=_TurnOutcome(source_capture='recorded', memory_enrichment_status='skipped')))
     model = AsyncMock(return_value=ChatAnswer(reply=REPLY, used_rag=False, model_invoked=True, metadata={}))
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', model)

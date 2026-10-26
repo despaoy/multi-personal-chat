@@ -63,7 +63,7 @@ async def test_complete_turn_does_not_write_rejected_source_address(database, mo
         status=SimpleNamespace(last_outcome="write_gate"),
         schedule=lambda **_: pytest.fail("Stale source must not enqueue semantic work"),
     )
-    monkeypatch.setattr(memory_llm, "get_memory_enrichment_scheduler", lambda: scheduler)
+    monkeypatch.setattr(memory_llm, "get_memory_enrichment_scheduler", lambda _owner_database=None: scheduler)
     prepared = SimpleNamespace(
         character_id=fields[0],
         user_scope=scope,
@@ -135,7 +135,7 @@ async def test_source_rejection_overrides_earlier_semantic_success(database, mon
         "delivery_memory", key=key, owner=owner, expected=initial["response"], response=pending, expires_at=0
     )
     runtime = TurnCompletionRuntime(capacity=1)
-    monkeypatch.setattr(dm, "get_turn_completion_runtime", lambda: runtime)
+    monkeypatch.setattr(dm, "get_turn_completion_runtime", lambda _owner_database=None: runtime)
     monkeypatch.setattr(dm, "POLL_SECONDS", 0.01)
 
     async def complete(*_, memory_receipt, **kwargs):
@@ -148,7 +148,7 @@ async def test_source_rejection_overrides_earlier_semantic_success(database, mon
         row = database.integration_receipt("get", key=key)
         assert row["status"] == "delivered" and json.loads(row["response"])["memory_completion_state"] == "blocked"
     finally:
-        await dm.shutdown_delivery_memory()
+        await dm.shutdown_delivery_memory(database)
         await runtime.shutdown(timeout=1)
 
 
@@ -214,7 +214,7 @@ async def test_explicit_completion_never_reinterprets_erasure_as_address(databas
         service = CharacterContextService(object(), repository, object(), source_recall_enabled=False)
         monkeypatch.setattr(
             "character.memory_llm.get_memory_enrichment_scheduler",
-            lambda: pytest.fail("An executed operation must not initialize another writer"),
+            lambda _owner_database=None: pytest.fail("An executed operation must not initialize another writer"),
         )
         outcomes = []
         complete_turn = service.complete_turn
@@ -327,7 +327,7 @@ async def test_semantic_address_evidence_never_overwrites_default_setting(databa
         completion=completion,
         embedding_provider=SimpleNamespace(embed_texts=lambda texts: [[1.0, 0.0] for _ in texts]),
     )
-    monkeypatch.setattr(memory_llm, "get_memory_enrichment_scheduler", lambda: scheduler)
+    monkeypatch.setattr(memory_llm, "get_memory_enrichment_scheduler", lambda _owner_database=None: scheduler)
     service = CharacterContextService(
         get_default_profile_registry(), repo, DatabaseMessageRepository(database), source_recall_enabled=False
     )

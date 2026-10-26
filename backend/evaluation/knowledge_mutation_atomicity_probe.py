@@ -177,9 +177,9 @@ async def run_mutation_probe(
     assert response.status_code == 200
     (output / "partial.json").write_text(json.dumps(proof, ensure_ascii=False, indent=2, default=str))
     proof["after_generation"] = snapshot()
-    scheduler = get_memory_enrichment_scheduler()
+    scheduler = get_memory_enrichment_scheduler(database)
     assert await scheduler.flush_memory(timeout=90)
-    completion = get_turn_completion_runtime()
+    completion = get_turn_completion_runtime(database)
     await completion.shutdown(timeout=35)
     assert await scheduler.flush_memory(timeout=90)
     proof["jobs_terminal"] = scheduler._processing == scheduler._inflight == 0

@@ -179,7 +179,7 @@ async def test_actual_completion_routes_quoted_erasure_to_writer_and_preserves_o
         scheduler = MemoryEnrichmentScheduler(
             config=MemoryLlmConfig(True, "unused", "unused"), completion=writer, embedding_provider=NoEmbedding()
         )
-        monkeypatch.setattr(memory_llm, "get_memory_enrichment_scheduler", lambda: scheduler)
+        monkeypatch.setattr(memory_llm, "get_memory_enrichment_scheduler", lambda _owner_database=None: scheduler)
         turn = TurnInput(SOURCE, "web", "lifecycle-test", "owner", "owner", "private")
         prepared = await service.prepare_turn(turn, "tsukiyashiro_kisaki")
         receipt = asyncio.get_running_loop().create_future()

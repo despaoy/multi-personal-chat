@@ -58,12 +58,12 @@ async def test_invalid_deadline_preserves_buffered_work_timers_and_open_owner(op
 @pytest.mark.parametrize("setting", ["synthetic-invalid-number", "nan", "-1"])
 async def test_invalid_shutdown_setting_preserves_global_scheduler(monkeypatch, setting):
     worker = scheduler()
-    monkeypatch.setattr(memory, "_default_scheduler", worker)
+    database = SimpleNamespace(_memory_enrichment_scheduler=worker)
     monkeypatch.setenv("MEMORY_LLM_SHUTDOWN_TIMEOUT", setting)
     try:
         with pytest.raises(ValueError):
-            await memory.shutdown_memory_enrichment()
-        assert memory._default_scheduler is worker and not worker.status.closed
+            await memory.shutdown_memory_enrichment(database)
+        assert database._memory_enrichment_scheduler is worker and not worker.status.closed
         worker._completion.close.assert_not_awaited()
     finally:
         await worker.shutdown(timeout=0)
@@ -73,21 +73,21 @@ async def test_client_close_failure_retains_owner_until_explicit_successful_clea
     worker = scheduler()
     failure = OSError("synthetic-close-failure")
     worker._completion.close.side_effect = [failure, None]
-    monkeypatch.setattr(memory, "_default_scheduler", worker)
+    database = SimpleNamespace(_memory_enrichment_scheduler=worker)
     monkeypatch.setenv("MEMORY_LLM_SHUTDOWN_TIMEOUT", "0")
     with pytest.raises(OSError) as caught:
-        await memory.shutdown_memory_enrichment()
-    assert caught.value is failure and memory._default_scheduler is worker
+        await memory.shutdown_memory_enrichment(database)
+    assert caught.value is failure and database._memory_enrichment_scheduler is worker
     assert worker.status.closed and worker._completion.close.await_count == 1
-    await memory.shutdown_memory_enrichment()
-    assert memory._default_scheduler is None and worker._completion.close.await_count == 2
+    await memory.shutdown_memory_enrichment(database)
+    assert database._memory_enrichment_scheduler is None and worker._completion.close.await_count == 2
 
 
 @pytest.mark.parametrize("setting", ["0", "0.5"])
 async def test_valid_shutdown_deadline_closes_and_releases_global_owner(monkeypatch, setting):
     worker = scheduler()
-    monkeypatch.setattr(memory, "_default_scheduler", worker)
+    database = SimpleNamespace(_memory_enrichment_scheduler=worker)
     monkeypatch.setenv("MEMORY_LLM_SHUTDOWN_TIMEOUT", setting)
-    await memory.shutdown_memory_enrichment()
-    assert worker.status.closed and memory._default_scheduler is None
+    await memory.shutdown_memory_enrichment(database)
+    assert worker.status.closed and database._memory_enrichment_scheduler is None
     worker._completion.close.assert_awaited_once_with()

@@ -58,9 +58,9 @@ async def delivered_memory(tmp_path, monkeypatch):
         complete=AsyncMock(return_value=proposal(rig.body)), close=AsyncMock(),
     )
     rig.runtime = TurnCompletionRuntime(1)
-    monkeypatch.setattr(dm, "get_turn_completion_runtime", lambda: rig.runtime)
+    monkeypatch.setattr(dm, "get_turn_completion_runtime", lambda _owner_database=None: rig.runtime)
     monkeypatch.setattr(dm, "POLL_SECONDS", 3600)
-    monkeypatch.setattr("character.memory_llm.get_memory_enrichment_scheduler", lambda: rig.scheduler)
+    monkeypatch.setattr("character.memory_llm.get_memory_enrichment_scheduler", lambda _owner_database=None: rig.scheduler)
 
     async def open_worker():
         rig.repo = DatabaseCharacterMemoryRepository(rig.database)

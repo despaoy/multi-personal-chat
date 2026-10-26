@@ -64,7 +64,7 @@ async def test_actual_complete_stores_source_without_model_or_fact_writes(tmp_pa
     registry.load_profiles()
     service = CharacterContextService(registry, repo, DatabaseMessageRepository(database))
     scheduler = MemoryEnrichmentScheduler(config=MemoryLlmConfig(True, "unused", "unused"), completion=NoModel())
-    monkeypatch.setattr(memory_llm, "get_memory_enrichment_scheduler", lambda: scheduler)
+    monkeypatch.setattr(memory_llm, "get_memory_enrichment_scheduler", lambda _owner_database=None: scheduler)
     turn = TurnInput(text, "web", "test", "u", "u", "private")
     prepared = await service.prepare_turn(turn, "tsukiyashiro_kisaki")
     try:

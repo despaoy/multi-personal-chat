@@ -43,13 +43,13 @@ async def test_real_cloud_wire_uses_actual_write_path(installed, monkeypatch, tm
     database.update_config(installed.config)
     monkeypatch.setattr(generate, 'db', database)
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', actual_generation)
-    monkeypatch.setattr(memory_llm, 'get_memory_enrichment_scheduler', lambda: SimpleNamespace(enabled=enabled))
+    monkeypatch.setattr(memory_llm, 'get_memory_enrichment_scheduler', lambda _owner_database=None: SimpleNamespace(enabled=enabled))
     complete = AsyncMock(return_value=None)
     monkeypatch.setattr(generate, '_complete_character_turn', complete)
     value = replace(prepared(), character_id='tsukiyashiro_kisaki', user_scope=UserScope('web', 'web-character', 'synthetic-owner', 'synthetic-owner', 'private'))
     request = MessageRequest(message=QUERY, characterId=value.character_id, loraName='default', platform='web', adapter='web-character', sessionId='synthetic-capability', conversationId='synthetic-owner', senderId='synthetic-owner', userId='synthetic-owner', sourceMessageId='synthetic-source')
-    start_turn_completions()
-    runtime = get_turn_completion_runtime()
+    start_turn_completions(database)
+    runtime = get_turn_completion_runtime(database)
     try:
         response = await generate._generate_reply_impl(request, prepared_override=value, persist_message=persist, enable_rag=False, record_invocation=False, message_db=database)
         assert response.modelInvoked and len(installed.calls) == 1
@@ -62,5 +62,5 @@ async def test_real_cloud_wire_uses_actual_write_path(installed, monkeypatch, tm
         assert len(database.execute_sql('SELECT id FROM messages')) == int(persist)
         assert runtime.reserved == runtime.active == 0
     finally:
-        await shutdown_turn_completions()
+        await shutdown_turn_completions(database)
         database.close_connection()

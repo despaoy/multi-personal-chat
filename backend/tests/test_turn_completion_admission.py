@@ -97,7 +97,7 @@ def generation_environment(monkeypatch, provider):
     from inference import model_manager as mm
     from services import turn_completion
     runtime = TurnCompletionRuntime(capacity=1)
-    monkeypatch.setattr(turn_completion, 'get_turn_completion_runtime', lambda: runtime)
+    monkeypatch.setattr(turn_completion, 'get_turn_completion_runtime', lambda _owner_database=None: runtime)
     manager = SimpleNamespace(_current_provider=SimpleNamespace(value=provider), set_lora_adapter=lambda _: None, get_status=lambda: dict(currentProvider=provider, providers={provider: dict(modelName='unit-model')}))
     connection = SimpleNamespace(name=provider, base_url='https://completion.invalid/v1', model='unit-model')
     connection.snapshot = lambda: connection
@@ -228,7 +228,7 @@ async def test_counter_failure_reports_stage_without_private_diagnostic(monkeypa
     service._memory_repo = SimpleNamespace(
         increment_interaction=AsyncMock(side_effect=RuntimeError("synthetic-counter-failure")),
     )
-    monkeypatch.setattr(memory_llm, "get_memory_enrichment_scheduler", lambda: SimpleNamespace(enabled=False))
+    monkeypatch.setattr(memory_llm, "get_memory_enrichment_scheduler", lambda _owner_database=None: SimpleNamespace(enabled=False))
     scope = UserScope("web", "unit", "owner", "owner", "private")
     prepared = SimpleNamespace(
         character_id="role",

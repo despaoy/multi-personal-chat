@@ -229,7 +229,7 @@ class CharacterContextService:
         await asyncio.to_thread(self._profiles.get_profile, character_id)
         turn = replace(turn, received_at=turn.received_at or datetime.now(timezone.utc))
         history = tuple(turn.history) or tuple(await self._load_history(turn, user_scope, character_id))
-        receipt = await get_memory_enrichment_scheduler().schedule_and_wait(
+        receipt = await get_memory_enrichment_scheduler(self._memory_repo.storage_owner).schedule_and_wait(
             repository=self._memory_repo, character_id=character_id, user_scope=user_scope,
             message=turn.message, rule_hints=(), history=history,
             source_message_id=source_message_id or None, observed_at=turn.received_at,
@@ -468,7 +468,7 @@ class CharacterContextService:
                 is_memory_erasure_request,
             )
 
-            scheduler = get_memory_enrichment_scheduler()
+            scheduler = get_memory_enrichment_scheduler(self._memory_repo.storage_owner)
             from character.natural_relationship import hypothetical_source_only, quoted_source_only
 
             ordinary_quote = quoted_source_only(turn.message)

@@ -167,7 +167,7 @@ async def test_busy_ack_persists_then_automatic_worker_waits_for_exact_semantic_
     from api import integrations
 
     runtime = TurnCompletionRuntime(capacity=1)
-    monkeypatch.setattr(dm, "get_turn_completion_runtime", lambda: runtime)
+    monkeypatch.setattr(dm, "get_turn_completion_runtime", lambda _owner_database=None: runtime)
     monkeypatch.setattr(dm, "POLL_SECONDS", 0.01)
     key, owner, stored = generated(database)
     exact = asyncio.Event()
@@ -208,7 +208,7 @@ async def test_busy_ack_persists_then_automatic_worker_waits_for_exact_semantic_
         assert prepared.received_at == turn.received_at == datetime(2026, 10, 1, tzinfo=timezone.utc)
         assert prepared.history == ({"role": "user", "content": "生成时的原始历史"},)
         assert prepared.compiled.used_memory_ids == ("selected-before-delivery",) and reply == "原始模型回复"
-        worker = dm._workers[id(database)]
+        worker = database._delivery_memory_worker
         assert not kw["memory_receipt"].done()
         duplicate = await integrations.acknowledge_delivery(payload, request)
         assert duplicate["memoryStatus"] == "pending" and not duplicate["changed"] and len(calls) == 1
@@ -218,14 +218,14 @@ async def test_busy_ack_persists_then_automatic_worker_waits_for_exact_semantic_
         assert final["memoryStatus"] == "completed" and not final["changed"] and len(calls) == 1
     finally:
         occupied.release()
-        await dm.shutdown_delivery_memory()
+        await dm.shutdown_delivery_memory(database)
         await runtime.shutdown(timeout=1)
 
 
 @pytest.mark.asyncio
 async def test_started_restart_receipt_is_blocked_without_answer_regeneration(database, monkeypatch):
     runtime = TurnCompletionRuntime(capacity=1)
-    monkeypatch.setattr(dm, "get_turn_completion_runtime", lambda: runtime)
+    monkeypatch.setattr(dm, "get_turn_completion_runtime", lambda _owner_database=None: runtime)
     monkeypatch.setattr(dm, "POLL_SECONDS", 0.01)
     key, owner, stored = generated(database)
     deliver(database, key, owner, stored)
@@ -256,14 +256,14 @@ async def test_started_restart_receipt_is_blocked_without_answer_regeneration(da
         assert response["context"]["memory_completion"]["reason"] == "execution_outcome_unknown"
         assert json.loads(final["response"])["reply"]["replyText"] == "原始模型回复"
     finally:
-        await dm.shutdown_delivery_memory()
+        await dm.shutdown_delivery_memory(database)
         await runtime.shutdown(timeout=1)
 
 
 @pytest.mark.asyncio
 async def test_completion_write_failure_is_blocked_with_preserved_semantic_receipt(database, monkeypatch):
     runtime = TurnCompletionRuntime(2)
-    monkeypatch.setattr(dm, "get_turn_completion_runtime", lambda: runtime)
+    monkeypatch.setattr(dm, "get_turn_completion_runtime", lambda _owner_database=None: runtime)
     monkeypatch.setattr(dm, "POLL_SECONDS", 0.01)
     key, owner, stored = generated(database)
     deliver(database, key, owner, stored)
@@ -289,5 +289,5 @@ async def test_completion_write_failure_is_blocked_with_preserved_semantic_recei
         await worker.wait_idle(timeout=3)
         assert len(calls) == 1
     finally:
-        await dm.shutdown_delivery_memory()
+        await dm.shutdown_delivery_memory(database)
         await runtime.shutdown(timeout=1)

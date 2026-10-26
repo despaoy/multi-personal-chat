@@ -21,7 +21,7 @@ async def test_delivery_owner_drops_request_but_keeps_other_context(tmp_path, mo
     key, owner, stored = generated(database)
     deliver(database, key, owner, stored)
     runtime = TurnCompletionRuntime(1)
-    monkeypatch.setattr(dm, "get_turn_completion_runtime", lambda: runtime)
+    monkeypatch.setattr(dm, "get_turn_completion_runtime", lambda _owner_database=None: runtime)
     entered = asyncio.Event()
     release = asyncio.Event()
     observed = []

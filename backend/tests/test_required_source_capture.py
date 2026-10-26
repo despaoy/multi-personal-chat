@@ -48,11 +48,11 @@ async def test_completion_cannot_enqueue_without_confirmed_capture(monkeypatch, 
     from character.models import CompiledCharacterContext, RelationshipState
 
     scope = UserScope('test', 'capture', 'reader', 'reader', 'private')
-    repo = SimpleNamespace(increment_interaction=AsyncMock(return_value=1))
+    repo = SimpleNamespace(storage_owner=object(), increment_interaction=AsyncMock(return_value=1))
     if mode != 'missing_interface':
         repo.capture_source = AsyncMock(return_value=None)
     scheduler = SimpleNamespace(enabled=True, schedule=Mock())
-    monkeypatch.setattr('character.memory_llm.get_memory_enrichment_scheduler', lambda: scheduler)
+    monkeypatch.setattr('character.memory_llm.get_memory_enrichment_scheduler', lambda _owner_database=None: scheduler)
     service = CharacterContextService(object(), repo, object())
     prepared = PreparedCharacterTurn('role', scope, CompiledCharacterContext('', '', ''), (),
                                      RelationshipState(), 0, 0, None)

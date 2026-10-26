@@ -265,7 +265,7 @@ async def test_interactive_operation_keeps_one_clock_and_reloads_revoked_history
 
     monkeypatch.setattr(rig.context, "_load_history", history)
     worker = SimpleNamespace(schedule_and_wait=AsyncMock(side_effect=operation))
-    monkeypatch.setattr("character.memory_llm.get_memory_enrichment_scheduler", lambda: worker)
+    monkeypatch.setattr("character.memory_llm.get_memory_enrichment_scheduler", lambda _owner_database=None: worker)
     query = "请从记忆里删除我的电话号码，保留其他资料。" + QUERY
     assert is_memory_erasure_request(query)
     turn = replace(rig.turn, message=query, received_at=supplied_clock)

@@ -38,7 +38,7 @@ async def run_history_feedback_probe(
     key = source_identity(source_scope(*fields), source_id)["source_key"]
     assert database.memory_source_admission(*fields, source_message_id=source_id, body=case["message"]) == "new"
     assert len(case["message"]) > 150
-    scheduler = get_memory_enrichment_scheduler()
+    scheduler = get_memory_enrichment_scheduler(database)
     outcomes = []
     attempts = []
     original_complete = CharacterContextService.complete_turn
