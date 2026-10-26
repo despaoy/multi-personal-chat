@@ -7,6 +7,7 @@ import tempfile
 import time
 import uuid
 import zipfile
+from collections import Counter
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Depends
@@ -18,7 +19,7 @@ from pydantic import BaseModel
 from typing import Optional
 
 from db.adapter import db
-from db.schemas import DatasetUploadRequest, TrainingStartRequest, DialogueGenerateRequest
+from db.schemas import DatasetUploadRequest, TrainingStartRequest, DialogueGenerateRequest, SaveDialoguesRequest
 from app.config import generation_state, get_generation_state_lock
 from infra.input_validator import TRAINING_SCHEMA, InputValidator
 
@@ -818,27 +819,21 @@ async def force_reset_generation(current_user: dict = Depends(get_current_admin)
 # 已保存对话管理 API
 # ═══════════════════════════════════════════════════════════
 
-class SaveDialoguesRequest(BaseModel):
-    name: str
-    character_desc: str
-    style: Optional[str] = None
-    dialogues: list
-    turn_stats: Optional[dict] = None
-    scene_stats: Optional[dict] = None
-
-
 @router.get("/api/training/saved-dialogues")
-async def list_saved_dialogues(current_user: dict = Depends(get_current_admin)):
+async def list_saved_dialogues(current_user: dict = Depends(get_current_admin), database=Depends(get_request_database)):
     """列出所有已保存的对话"""
-    try:
-        rows = await run_db(db.execute_sql, '''
+    rows = await run_db(
+        database.execute_sql,
+        """
             SELECT id, name, character_desc, style, dialogue_count,
                    turn_stats, scene_stats, created_at, updated_at
             FROM saved_dialogues ORDER BY updated_at DESC
-        ''')
-        items = []
-        for row in rows:
-            items.append({
+        """,
+    )
+    items = []
+    for row in rows:
+        items.append(
+            {
                 "id": row["id"],
                 "name": row["name"],
                 "character_desc": row["character_desc"],
@@ -848,27 +843,31 @@ async def list_saved_dialogues(current_user: dict = Depends(get_current_admin)):
                 "scene_stats": json.loads(row["scene_stats"]) if row["scene_stats"] else None,
                 "created_at": row["created_at"],
                 "updated_at": row["updated_at"],
-            })
-        return {"success": True, "items": items}
-    except Exception as e:
-        logger.error(f"列出已保存对话失败: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+            }
+        )
+    return {"success": True, "items": items}
 
 
 @router.post("/api/training/saved-dialogues")
-async def save_dialogues(request: SaveDialoguesRequest, current_user: dict = Depends(get_current_admin)):
+async def save_dialogues(
+    request: SaveDialoguesRequest,
+    current_user: dict = Depends(get_current_admin),
+    database=Depends(get_request_database),
+):
     """保存对话数据
 
     s2 fix: saved_dialogues 表无 user_id 字段，无法做所有权校验。
     为防止 IDOR（任意用户删除/修改他人对话），统一限定 admin。
     """
-    try:
-        now = time.strftime("%Y-%m-%d %H:%M:%S")
-        result = await run_db(db.execute_sql_insert, '''
+    now = time.strftime("%Y-%m-%d %H:%M:%S")
+    result = await run_db(
+        database.execute_sql_insert,
+        """
             INSERT INTO saved_dialogues
             (name, character_desc, style, dialogue_count, dialogues_json, turn_stats, scene_stats, created_at, updated_at)
             VALUES (:name, :character_desc, :style, :dialogue_count, :dialogues_json, :turn_stats, :scene_stats, :created_at, :updated_at)
-        ''', {
+        """,
+        {
             "name": request.name,
             "character_desc": request.character_desc,
             "style": request.style,
@@ -878,152 +877,164 @@ async def save_dialogues(request: SaveDialoguesRequest, current_user: dict = Dep
             "scene_stats": json.dumps(request.scene_stats) if request.scene_stats else None,
             "created_at": now,
             "updated_at": now,
-        })
-        return {"success": True, "id": result["lastrowid"], "message": "保存成功"}
-    except Exception as e:
-        logger.error(f"保存对话失败: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        },
+    )
+    return {"success": True, "id": result["lastrowid"], "message": "保存成功"}
 
 
 @router.get("/api/training/saved-dialogues/{item_id}")
-async def get_saved_dialogue(item_id: int, current_user: dict = Depends(get_current_admin)):
+async def get_saved_dialogue(
+    item_id: int, current_user: dict = Depends(get_current_admin), database=Depends(get_request_database)
+):
     """获取单个已保存对话"""
-    try:
-        rows = await run_db(db.execute_sql, '''
+    rows = await run_db(
+        database.execute_sql,
+        """
             SELECT id, name, character_desc, style, dialogue_count,
                    dialogues_json, turn_stats, scene_stats, created_at, updated_at
             FROM saved_dialogues WHERE id = :item_id
-        ''', {"item_id": item_id})
-        if not rows:
-            raise HTTPException(status_code=404, detail="对话不存在")
-        row = rows[0]
-        return {
-            "success": True,
-            "id": row["id"],
-            "name": row["name"],
-            "character_desc": row["character_desc"],
-            "style": row["style"],
-            "dialogue_count": row["dialogue_count"],
-            "dialogues": json.loads(row["dialogues_json"]),
-            "turn_stats": json.loads(row["turn_stats"]) if row["turn_stats"] else None,
-            "scene_stats": json.loads(row["scene_stats"]) if row["scene_stats"] else None,
-            "created_at": row["created_at"],
-            "updated_at": row["updated_at"],
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"获取已保存对话失败: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        """,
+        {"item_id": item_id},
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail="对话不存在")
+    row = rows[0]
+    return {
+        "success": True,
+        "id": row["id"],
+        "name": row["name"],
+        "character_desc": row["character_desc"],
+        "style": row["style"],
+        "dialogue_count": row["dialogue_count"],
+        "dialogues": json.loads(row["dialogues_json"]),
+        "turn_stats": json.loads(row["turn_stats"]) if row["turn_stats"] else None,
+        "scene_stats": json.loads(row["scene_stats"]) if row["scene_stats"] else None,
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+    }
 
 
 @router.delete("/api/training/saved-dialogues/{item_id}")
-async def delete_saved_dialogue(item_id: int, current_user: dict = Depends(get_current_admin)):
+async def delete_saved_dialogue(
+    item_id: int, current_user: dict = Depends(get_current_admin), database=Depends(get_request_database)
+):
     """删除已保存对话
 
     s2 fix: IDOR 防护，限定 admin。
     """
-    try:
-        rowcount = await run_db(db.execute_sql, 'DELETE FROM saved_dialogues WHERE id = :item_id', {"item_id": item_id})
-        if rowcount == 0:
-            raise HTTPException(status_code=404, detail="对话不存在")
-        return {"success": True, "message": "删除成功"}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"删除已保存对话失败: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    rowcount = await run_db(
+        database.execute_sql, "DELETE FROM saved_dialogues WHERE id = :item_id", {"item_id": item_id}
+    )
+    if rowcount == 0:
+        raise HTTPException(status_code=404, detail="对话不存在")
+    return {"success": True, "message": "删除成功"}
 
 
 @router.delete("/api/training/saved-dialogues/{item_id}/dialogues/{dialogue_index}")
-async def delete_dialogue_from_saved(item_id: int, dialogue_index: int, current_user: dict = Depends(get_current_admin)):
+async def delete_dialogue_from_saved(
+    item_id: int,
+    dialogue_index: int,
+    current_user: dict = Depends(get_current_admin),
+    database=Depends(get_request_database),
+):
     """从已保存对话中删除单条对话
 
     s2 fix: IDOR 防护，限定 admin。
     """
-    try:
-        rows = await run_db(db.execute_sql, 'SELECT dialogues_json FROM saved_dialogues WHERE id = :item_id', {"item_id": item_id})
-        if not rows:
-            raise HTTPException(status_code=404, detail="对话不存在")
+    rows = await run_db(
+        database.execute_sql, "SELECT dialogues_json FROM saved_dialogues WHERE id = :item_id", {"item_id": item_id}
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail="对话不存在")
 
-        dialogues = json.loads(rows[0]["dialogues_json"])
-        if dialogue_index < 0 or dialogue_index >= len(dialogues):
-            raise HTTPException(status_code=400, detail="索引越界")
+    dialogues = json.loads(rows[0]["dialogues_json"])
+    if dialogue_index < 0 or dialogue_index >= len(dialogues):
+        raise HTTPException(status_code=400, detail="索引越界")
 
-        dialogues.pop(dialogue_index)
-        now = time.strftime("%Y-%m-%d %H:%M:%S")
-        await run_db(db.execute_sql, '''
+    dialogues.pop(dialogue_index)
+    turn_stats = Counter(str(len(item.get("conversations") or [])) for item in dialogues)
+    scene_stats = Counter(item.get("scene") or "未知" for item in dialogues)
+    now = time.strftime("%Y-%m-%d %H:%M:%S")
+    await run_db(
+        database.execute_sql,
+        """
             UPDATE saved_dialogues
-            SET dialogues_json = :dialogues_json, dialogue_count = :dialogue_count, updated_at = :updated_at
+            SET dialogues_json = :dialogues_json, dialogue_count = :dialogue_count,
+            turn_stats = :turn_stats, scene_stats = :scene_stats, updated_at = :updated_at
             WHERE id = :item_id
-        ''', {
+        """,
+        {
             "dialogues_json": json.dumps(dialogues, ensure_ascii=False),
             "dialogue_count": len(dialogues),
+            "turn_stats": json.dumps(turn_stats),
+            "scene_stats": json.dumps(scene_stats),
             "updated_at": now,
             "item_id": item_id,
-        })
-        return {"success": True, "message": "删除成功", "remaining_count": len(dialogues)}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"删除单条对话失败: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        },
+    )
+    return {"success": True, "message": "删除成功", "remaining_count": len(dialogues)}
 
 
 @router.post("/api/training/saved-dialogues/{item_id}/create-dataset")
-async def create_dataset_from_saved(item_id: int, dataset_name: Optional[str] = None, current_user: dict = Depends(get_current_admin)):
+async def create_dataset_from_saved(
+    item_id: int,
+    dataset_name: Optional[str] = None,
+    current_user: dict = Depends(get_current_admin),
+    database=Depends(get_request_database),
+):
     """从已保存对话创建训练数据集
 
     s2 fix: IDOR 防护，限定 admin。
     """
-    try:
-        rows = await run_db(db.execute_sql, 'SELECT name, dialogues_json FROM saved_dialogues WHERE id = :item_id', {"item_id": item_id})
-        if not rows:
-            raise HTTPException(status_code=404, detail="对话不存在")
+    rows = await run_db(
+        database.execute_sql,
+        "SELECT name, dialogues_json FROM saved_dialogues WHERE id = :item_id",
+        {"item_id": item_id},
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail="对话不存在")
 
-        saved_name = rows[0]["name"]
-        dialogues = json.loads(rows[0]["dialogues_json"])
-        # 清理文件名中的非法字符（Windows不允许 / \ : * ? " < > |）
-        raw_name = dataset_name or f"{saved_name}_dataset"
-        ds_name = _validate_resource_name(raw_name, "数据集名称")
+    saved_name = rows[0]["name"]
+    dialogues = json.loads(rows[0]["dialogues_json"])
+    # 清理文件名中的非法字符（Windows不允许 / \ : * ? " < > |）
+    raw_name = dataset_name or f"{saved_name}_dataset"
+    ds_name = _validate_resource_name(raw_name, "数据集名称")
 
-        # 转换为训练数据格式
-        training_data = []
-        for d in dialogues:
-            convs = d.get("conversations", [])
-            if convs:
-                training_data.append({
+    # 转换为训练数据格式
+    training_data = []
+    for d in dialogues:
+        convs = d.get("conversations", [])
+        if convs:
+            training_data.append(
+                {
                     "conversations": convs,
                     "system": d.get("system", ""),
-                })
-
-        if not training_data:
-            raise HTTPException(status_code=400, detail="没有有效的对话数据可创建数据集")
-
-        # 使用 preprocessor 创建标准数据集目录结构（与 list_datasets 兼容）
-        try:
-            from training.preprocessor import get_dataset_preprocessor
-            preprocessor = get_dataset_preprocessor()
-            dataset_dir, stats = preprocessor.prepare_training_data(
-                raw_data=training_data,
-                output_name=ds_name,
-                min_samples=1,
+                }
             )
-        except ValueError as ve:
-            # preprocessor 校验失败时给出更友好的错误
-            raise HTTPException(status_code=400, detail=str(ve))
 
-        return {
-            "success": True,
-            "dataset": {
-                "name": ds_name,
-                "path": str(dataset_dir),
-                "count": stats.get("total_samples", len(training_data)),
-                "stats": stats,
-            }
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"创建数据集失败: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    if not training_data:
+        raise HTTPException(status_code=400, detail="没有有效的对话数据可创建数据集")
+
+    # 使用 preprocessor 创建标准数据集目录结构（与 list_datasets 兼容）
+    try:
+        from training.preprocessor import get_dataset_preprocessor
+
+        preprocessor = get_dataset_preprocessor()
+        dataset_dir, stats = preprocessor.prepare_training_data(
+            raw_data=training_data,
+            output_name=ds_name,
+            min_samples=1,
+        )
+    except ValueError as ve:
+        # preprocessor 校验失败时给出更友好的错误
+        raise HTTPException(status_code=400, detail=str(ve))
+
+    return {
+        "success": True,
+        "dataset": {
+            "name": ds_name,
+            "path": str(dataset_dir),
+            "count": stats["total_samples"],
+            "stats": stats,
+        },
+    }
