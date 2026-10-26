@@ -131,13 +131,13 @@ async def lifespan(app: FastAPI):
     _clear_lifespan_resource_references(_cfg)
     container = get_runtime_container(app)
     database = container.db
-    database._model_manager = getattr(database, "_model_manager", None)
     postgres_mode = bool(container.is_pg_mode())
 
     validate_or_raise_for_startup(container.startup_env)
     from character.memory_llm import MemoryLlmConfig
 
     MemoryLlmConfig.from_env(container.startup_env)
+    database._model_manager = getattr(database, "_model_manager", None)
     try:
         logger.info("🚀 MultiPersonal Chat System后端服务启动中（增强版）...")
 
