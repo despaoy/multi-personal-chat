@@ -2,7 +2,7 @@
 
 from knowledge import chat_retrieval
 
-from knowledge import index_lifecycle
+from knowledge.index_lifecycle import default_knowledge_index as index_lifecycle
 
 import copy
 from threading import RLock
@@ -144,14 +144,13 @@ def test_abstained_candidates_never_gain_source_support():
 
 async def test_database_revision_change_during_retrieval_rejects_expanded_evidence(monkeypatch):
     from knowledge import rag_helper, vector_db
-
     anchor = row(0)
     database = vector([anchor, row(1)])
     revision = [77]
-    monkeypatch.setattr(index_lifecycle, "_ensure_vector_index", lambda: True)
-    monkeypatch.setattr(index_lifecycle, "_vector_index_revision", 77)
-    monkeypatch.setattr(index_lifecycle, "_get_rebuild_revision", lambda: revision[0])
-    monkeypatch.setattr(vector_db, "get_vector_db", lambda: database)
+    monkeypatch.setattr(index_lifecycle, '_ensure_vector_index', lambda: True)
+    monkeypatch.setattr(index_lifecycle, '_vector_index_revision', 77)
+    monkeypatch.setattr(index_lifecycle, '_get_rebuild_revision', lambda: revision[0])
+    monkeypatch.setattr(vector_db, 'get_vector_db', lambda: database)
 
     def retrieve(*args, **kwargs):
         revision[0] += 1
@@ -159,8 +158,7 @@ async def test_database_revision_change_during_retrieval_rejects_expanded_eviden
 
     class Helper:
         retrieve_with_citations = staticmethod(retrieve)
-
-    monkeypatch.setattr(rag_helper, "get_rag_helper", Helper)
-    monkeypatch.setenv("CORRECTIVE_RAG_ENABLED", "false")
-    with pytest.raises(RuntimeError, match="authority changed"):
-        await chat_retrieval.retrieve_chat_knowledge("完整规程", 3, {"knowledge_base_id": 7})
+    monkeypatch.setattr(rag_helper, 'get_rag_helper', Helper)
+    monkeypatch.setenv('CORRECTIVE_RAG_ENABLED', 'false')
+    with pytest.raises(RuntimeError, match='authority changed'):
+        await chat_retrieval.retrieve_chat_knowledge('完整规程', 3, {'knowledge_base_id': 7}, database=index_lifecycle.db)

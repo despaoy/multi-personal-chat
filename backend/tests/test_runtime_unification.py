@@ -350,57 +350,41 @@ async def test_composite_rate_limit_refunds_earlier_scopes(monkeypatch):
 @pytest.mark.asyncio
 async def test_vllm_generation_reuses_one_rag_result(monkeypatch, semantic_plan, controlled_public_bundle):
     from db.schemas import MessageRequest
-
     calls = 0
     captured = {}
 
-    async def retrieve(query, top_k, filters):
+    async def retrieve(query, top_k, filters, *, database):
         nonlocal calls
         calls += 1
-        return {
-            "results": [{"id": "controlled-source", "title": "source", "content": "evidence", "score": 0.9}],
-            "citations": [{"source_id": "controlled-source", "source_title": "source"}],
-            "confidence": 0.9,
-            "abstained": False,
-            "domains": ["tsukiyashiro_kisaki"],
-        }
+        return {'results': [{'id': 'controlled-source', 'title': 'source', 'content': 'evidence', 'score': 0.9}], 'citations': [{'source_id': 'controlled-source', 'source_title': 'source'}], 'confidence': 0.9, 'abstained': False, 'domains': ['tsukiyashiro_kisaki']}
 
     class Client:
+
         async def generate(self, **kwargs):
             if not captured:
                 captured.update(kwargs)
-                return "answer"
+                return 'answer'
             import json
-
-            payload = json.loads(kwargs["messages"][-1]["content"])
-            assert payload["answer"] == "answer" and "evidence" in payload["sources"][0]["body"]
+            payload = json.loads(kwargs['messages'][-1]['content'])
+            assert payload['answer'] == 'answer' and 'evidence' in payload['sources'][0]['body']
             return '{"citations": []}'
-
     monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieve)
-    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "system")
-
-    semantic_plan("question", {"public_knowledge": [0]})
-    request = MessageRequest(message="question", sessionId="session")
-    _chat_result_meta = await chat_answer.generate_chat_answer(
-        request,
-        None,
-        runtime_config={"useKnowledgeBase": True},
-        model_generate=Client().generate,
-    )
-    reply, used_rag, meta = _chat_result_meta.reply, _chat_result_meta.used_rag, _chat_result_meta.metadata
-
-    assert reply == "answer"
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: 'system')
+    semantic_plan('question', {'public_knowledge': [0]})
+    request = MessageRequest(message='question', sessionId='session')
+    _chat_result_meta = await chat_answer.generate_chat_answer(request, None, runtime_config={'useKnowledgeBase': True}, model_generate=Client().generate)
+    reply, used_rag, meta = (_chat_result_meta.reply, _chat_result_meta.used_rag, _chat_result_meta.metadata)
+    assert reply == 'answer'
     assert used_rag is True
     assert calls == 1
-    # This answer does not use a source marker, so it must not claim a citation.
-    assert meta["citations"] == []
-    assert meta["answerMode"] == "grounded_answer"
-    assert meta["domainId"] == "tsukiyashiro_kisaki"
-    assert "evidence" in captured["messages"][-1]["content"]
-    assert '<retrieved_evidence trust="untrusted"' in captured["messages"][-1]["content"]
-    assert "<user_query>" in captured["messages"][-1]["content"]
-    assert "【事实与安全边界】" in captured["messages"][0]["content"]
-    assert "【检索证据约束】" in captured["messages"][0]["content"]
+    assert meta['citations'] == []
+    assert meta['answerMode'] == 'grounded_answer'
+    assert meta['domainId'] == 'tsukiyashiro_kisaki'
+    assert 'evidence' in captured['messages'][-1]['content']
+    assert '<retrieved_evidence trust="untrusted"' in captured['messages'][-1]['content']
+    assert '<user_query>' in captured['messages'][-1]['content']
+    assert '【事实与安全边界】' in captured['messages'][0]['content']
+    assert '【检索证据约束】' in captured['messages'][0]['content']
 
 
 @pytest.mark.asyncio
@@ -438,64 +422,45 @@ async def test_vllm_generation_omits_rag_policy_without_evidence(monkeypatch):
     assert "【检索证据】" not in last_content
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("outcome", ["character reply", "", "error"])
+@pytest.mark.parametrize('outcome', ['character reply', '', 'error'])
 async def test_vllm_rag_abstention_generates_character_uncertainty(monkeypatch, outcome, semantic_plan, controlled_public_bundle):
     from db.schemas import MessageRequest
-
     captured = {}
 
-    async def retrieve(query, top_k, filters):
-        return {
-            "results": [{"content": "UNRELIABLE_FACT"}],
-            "context_text": "UNRELIABLE_FACT",
-            "citations": [{"id": "unreliable-source"}],
-            "confidence": 0.1,
-            "abstained": True,
-        }
+    async def retrieve(query, top_k, filters, *, database):
+        return {'results': [{'content': 'UNRELIABLE_FACT'}], 'context_text': 'UNRELIABLE_FACT', 'citations': [{'id': 'unreliable-source'}], 'confidence': 0.1, 'abstained': True}
 
     class Client:
+
         async def generate(self, **kwargs):
             captured.update(kwargs)
-            if outcome == "error":
-                raise RuntimeError("model unavailable")
+            if outcome == 'error':
+                raise RuntimeError('model unavailable')
             return outcome
-
     monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieve)
-    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "system")
-
-    semantic_plan("unknown question", {"public_knowledge": [0]})
-    if outcome != "character reply":
-        expected = RuntimeError if outcome == "error" else ValueError
-        with pytest.raises(expected, match="model unavailable|non-empty text"):
-            await chat_answer.generate_chat_answer(
-                MessageRequest(message="unknown question", sessionId="session"),
-                "character-adapter", runtime_config={"useKnowledgeBase": True},
-                model_generate=Client().generate,
-            )
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: 'system')
+    semantic_plan('unknown question', {'public_knowledge': [0]})
+    if outcome != 'character reply':
+        expected = RuntimeError if outcome == 'error' else ValueError
+        with pytest.raises(expected, match='model unavailable|non-empty text'):
+            await chat_answer.generate_chat_answer(MessageRequest(message='unknown question', sessionId='session'), 'character-adapter', runtime_config={'useKnowledgeBase': True}, model_generate=Client().generate)
         assert captured
         return
-
-    _chat_result_meta = await chat_answer.generate_chat_answer(
-        MessageRequest(message="unknown question", sessionId="session"),
-        "character-adapter",
-        runtime_config={"useKnowledgeBase": True},
-        model_generate=Client().generate,
-    )
-    reply, used_rag, meta = _chat_result_meta.reply, _chat_result_meta.used_rag, _chat_result_meta.metadata
-
-    assert reply == "character reply"
+    _chat_result_meta = await chat_answer.generate_chat_answer(MessageRequest(message='unknown question', sessionId='session'), 'character-adapter', runtime_config={'useKnowledgeBase': True}, model_generate=Client().generate)
+    reply, used_rag, meta = (_chat_result_meta.reply, _chat_result_meta.used_rag, _chat_result_meta.metadata)
+    assert reply == 'character reply'
     assert used_rag is True
-    assert meta["abstained"] is True
+    assert meta['abstained'] is True
     assert _chat_result_meta.model_invoked is True
-    assert meta["answerMode"] == "abstention"
-    assert meta["citations"] == []
-    assert captured["lora_name"] == "character-adapter"
-    assert "system" in captured["messages"][0]["content"]
-    assert "【本轮证据不足】" in captured["messages"][0]["content"]
-    assert "不得猜测或补编" in captured["messages"][0]["content"]
-    assert "UNRELIABLE_FACT" not in str(captured["messages"])
-    assert "unknown question" in captured["messages"][-1]["content"]
-    assert "generationError" not in meta
+    assert meta['answerMode'] == 'abstention'
+    assert meta['citations'] == []
+    assert captured['lora_name'] == 'character-adapter'
+    assert 'system' in captured['messages'][0]['content']
+    assert '【本轮证据不足】' in captured['messages'][0]['content']
+    assert '不得猜测或补编' in captured['messages'][0]['content']
+    assert 'UNRELIABLE_FACT' not in str(captured['messages'])
+    assert 'unknown question' in captured['messages'][-1]['content']
+    assert 'generationError' not in meta
 
 @pytest.mark.asyncio
 async def test_inference_timeout_cancels_model_task_without_killing_worker(monkeypatch):

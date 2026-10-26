@@ -1,6 +1,6 @@
 """A separate authenticated writer against the disposable reader database."""
 
-from knowledge import index_lifecycle
+from knowledge.index_lifecycle import default_knowledge_index as index_lifecycle
 
 import asyncio
 import json

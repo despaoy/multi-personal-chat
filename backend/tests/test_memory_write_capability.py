@@ -37,34 +37,29 @@ def test_backend_state_controls_capability_without_promoting_user_text(enabled):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("enabled,persist", [(True, True),(False, True),(True, False),(False, False)])
+@pytest.mark.parametrize('enabled,persist', [(True, True), (False, True), (True, False), (False, False)])
 async def test_real_cloud_wire_uses_actual_write_path(installed, monkeypatch, tmp_path, enabled, persist):
-    database = SQLiteDB(tmp_path / "capability.sqlite")
+    database = SQLiteDB(tmp_path / 'capability.sqlite')
     database.update_config(installed.config)
-    monkeypatch.setattr(generate,"db",database)
-    monkeypatch.setattr(chat_answer, "public_knowledge_db", generate.db)
-    monkeypatch.setattr(chat_answer,'generate_chat_answer',actual_generation)
-    monkeypatch.setattr(memory_llm,"get_memory_enrichment_scheduler",lambda:SimpleNamespace(enabled=enabled))
+    monkeypatch.setattr(generate, 'db', database)
+    monkeypatch.setattr(chat_answer, 'generate_chat_answer', actual_generation)
+    monkeypatch.setattr(memory_llm, 'get_memory_enrichment_scheduler', lambda: SimpleNamespace(enabled=enabled))
     complete = AsyncMock(return_value=None)
-    monkeypatch.setattr(generate,"_complete_character_turn",complete)
-    value = replace(prepared(),character_id="tsukiyashiro_kisaki",
-        user_scope=UserScope("web","web-character","synthetic-owner","synthetic-owner","private"))
-    request = MessageRequest(message=QUERY,characterId=value.character_id,loraName="default",
-        platform="web",adapter="web-character",sessionId="synthetic-capability",conversationId="synthetic-owner",
-        senderId="synthetic-owner",userId="synthetic-owner",sourceMessageId="synthetic-source")
+    monkeypatch.setattr(generate, '_complete_character_turn', complete)
+    value = replace(prepared(), character_id='tsukiyashiro_kisaki', user_scope=UserScope('web', 'web-character', 'synthetic-owner', 'synthetic-owner', 'private'))
+    request = MessageRequest(message=QUERY, characterId=value.character_id, loraName='default', platform='web', adapter='web-character', sessionId='synthetic-capability', conversationId='synthetic-owner', senderId='synthetic-owner', userId='synthetic-owner', sourceMessageId='synthetic-source')
     start_turn_completions()
     runtime = get_turn_completion_runtime()
     try:
-        response = await generate._generate_reply_impl(request,prepared_override=value,persist_message=persist,
-            enable_rag=False,record_invocation=False,message_db=database)
+        response = await generate._generate_reply_impl(request, prepared_override=value, persist_message=persist, enable_rag=False, record_invocation=False, message_db=database)
         assert response.modelInvoked and len(installed.calls) == 1
-        messages = installed.calls[0]["body"]["messages"]
-        system = messages[0]["content"]
+        messages = installed.calls[0]['body']['messages']
+        system = messages[0]['content']
         assert (MEMORY_WRITE_CAPABILITY_POLICY in system) is (enabled and persist)
         assert (MEMORY_WRITE_DISABLED_POLICY in system) is not (enabled and persist)
-        assert QUERY in messages[-1]["content"]
+        assert QUERY in messages[-1]['content']
         assert complete.await_count == int(persist)
-        assert len(database.execute_sql("SELECT id FROM messages")) == int(persist)
+        assert len(database.execute_sql('SELECT id FROM messages')) == int(persist)
         assert runtime.reserved == runtime.active == 0
     finally:
         await shutdown_turn_completions()

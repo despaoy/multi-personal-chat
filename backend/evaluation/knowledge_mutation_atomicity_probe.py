@@ -2,7 +2,7 @@
 
 from knowledge import chat_retrieval
 
-from knowledge import index_lifecycle
+from knowledge.index_lifecycle import default_knowledge_index as index_lifecycle
 
 import asyncio
 import hashlib

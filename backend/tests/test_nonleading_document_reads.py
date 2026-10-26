@@ -2,7 +2,7 @@
 
 from knowledge import chat_retrieval
 
-from knowledge import index_lifecycle
+from knowledge.index_lifecycle import default_knowledge_index as index_lifecycle
 
 from threading import RLock
 from types import SimpleNamespace
@@ -47,45 +47,27 @@ def test_quoted_negative_ambiguous_or_incomplete_tasks_do_not_grant_reads(query)
 async def test_nonleading_read_resolves_exact_originals_after_semantic_abstention(monkeypatch):
     from knowledge import rag_helper, vector_db
     from knowledge.multiscale_rag import runtime
-
-    docs = [
-        dict(id=i, title=t, knowledge_base_id=7, category="演练", content=f"{t}的完整条件、例外及限定。")
-        for i, t in enumerate(["紫茶规则", "合成角色偏好"], 1)
-    ]
-    records = [d | dict(id=f"doc_{d['id']}_chunk_0", document_id=d["id"], chunk_index=0) for d in docs]
-    indexed = SimpleNamespace(
-        _lock=RLock(),
-        cache_generation=11,
-        snapshot_validated=True,
-        metadata=records,
-        _match_filters=lambda record, filters: True,
-    )
-    monkeypatch.setattr(
-        runtime,
-        "get_multiscale_rag_service",
-        lambda: pytest.fail("Explicit independent reads cannot be replaced by curated lore"),
-    )
-    monkeypatch.setattr(index_lifecycle, "_ensure_vector_index", lambda: True)
-    monkeypatch.setattr(index_lifecycle, "_vector_index_revision", 77)
-    monkeypatch.setattr(index_lifecycle, "_get_rebuild_revision", lambda: 77)
-    monkeypatch.setattr(vector_db, "get_vector_db", lambda: indexed)
-    monkeypatch.setattr(chat_retrieval, "db", SimpleNamespace(get_knowledge_document=lambda identity: docs[identity - 1]))
-    monkeypatch.setenv("CORRECTIVE_RAG_ENABLED", "false")
-    query = "请记住我喜欢紫茶。\n读取《紫茶规则》《合成角色偏好》。核对条件及例外。"
+    docs = [dict(id=i, title=t, knowledge_base_id=7, category='演练', content=f'{t}的完整条件、例外及限定。') for i, t in enumerate(['紫茶规则', '合成角色偏好'], 1)]
+    records = [d | dict(id=f"doc_{d['id']}_chunk_0", document_id=d['id'], chunk_index=0) for d in docs]
+    indexed = SimpleNamespace(_lock=RLock(), cache_generation=11, snapshot_validated=True, metadata=records, _match_filters=lambda record, filters: True)
+    monkeypatch.setattr(runtime, 'get_multiscale_rag_service', lambda: pytest.fail('Explicit independent reads cannot be replaced by curated lore'))
+    monkeypatch.setattr(index_lifecycle, '_ensure_vector_index', lambda: True)
+    monkeypatch.setattr(index_lifecycle, '_vector_index_revision', 77)
+    monkeypatch.setattr(index_lifecycle, '_get_rebuild_revision', lambda: 77)
+    monkeypatch.setattr(vector_db, 'get_vector_db', lambda: indexed)
+    monkeypatch.setattr(index_lifecycle, 'db', SimpleNamespace(get_knowledge_document=lambda identity: docs[identity - 1]))
+    monkeypatch.setattr(index_lifecycle.db, '_knowledge_index', index_lifecycle, raising=False)
+    monkeypatch.setenv('CORRECTIVE_RAG_ENABLED', 'false')
+    query = '请记住我喜欢紫茶。\n读取《紫茶规则》《合成角色偏好》。核对条件及例外。'
 
     def retrieve(actual, **kwargs):
-        assert actual == query and kwargs["filters"] is None
+        assert actual == query and kwargs['filters'] is None
         return dict(results=[], confidence=0.0, abstained=True)
-
-    monkeypatch.setattr(
-        rag_helper,
-        "get_rag_helper",
-        lambda: SimpleNamespace(retrieve_with_citations=retrieve, build_citations=lambda records: []),
-    )
-    result = await chat_retrieval.retrieve_chat_knowledge(query, 3, None)
-    assert result["requested_source_titles"] == ["紫茶规则", "合成角色偏好"]
-    assert [p["original_body"] for p in result["original_source_packets"]] == [d["content"] for d in docs]
-    assert all(p["original_source_receipt"]["authority_revision"] == 77 for p in result["source_coverage"])
+    monkeypatch.setattr(rag_helper, 'get_rag_helper', lambda: SimpleNamespace(retrieve_with_citations=retrieve, build_citations=lambda records: []))
+    result = await chat_retrieval.retrieve_chat_knowledge(query, 3, None, database=index_lifecycle.db)
+    assert result['requested_source_titles'] == ['紫茶规则', '合成角色偏好']
+    assert [p['original_body'] for p in result['original_source_packets']] == [d['content'] for d in docs]
+    assert all((p['original_source_receipt']['authority_revision'] == 77 for p in result['source_coverage']))
 
 
 @pytest.mark.parametrize(

@@ -42,52 +42,41 @@ class Cache(ResponseCache):
 
 @pytest.fixture
 def installed(monkeypatch):
-    stored = {
-        "openaiCompatBaseUrl": "https://api.deepseek.com", "openaiCompatApiKey": "fiction-key",
-        "openaiCompatModel": "fixture-model", "temperature": 1.6, "maxTokens": 999,
-    }
-    monkeypatch.setattr(model_manager, "_get_db_config", lambda: dict(stored))
+    stored = {'openaiCompatBaseUrl': 'https://api.deepseek.com', 'openaiCompatApiKey': 'fiction-key', 'openaiCompatModel': 'fixture-model', 'temperature': 1.6, 'maxTokens': 999}
+    monkeypatch.setattr(model_manager, '_get_db_config', lambda: dict(stored))
     provider = model_manager.OpenAICompatProvider()
     manager = model_manager.ModelManager.__new__(model_manager.ModelManager)
     manager._current_provider = model_manager.ModelProvider.OPENAI_COMPAT
     manager._providers = {model_manager.ModelProvider.OPENAI_COMPAT: provider}
-    manager.async_generate = AsyncMock(side_effect=AssertionError("Compiled cloud messages must not re-enter legacy generation"))
-    monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
-    runtime_config = {"useKnowledgeBase": False, "temperature": 0.83, "maxTokens": 173}
-    monkeypatch.setattr(generate, "db", SimpleNamespace(config=runtime_config, loras=[]))
-    monkeypatch.setattr(chat_answer, "public_knowledge_db", generate.db)
-    monkeypatch.setattr(generate, "response_cache", None)
-    monkeypatch.setattr(generate, "circuit_breaker_registry", None)
-    monkeypatch.setattr(generate, "get_llm_semaphore", lambda: asyncio.Semaphore(1))
-    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "只依据本题完整资料；保留时间、否定和例外。")
+    manager.async_generate = AsyncMock(side_effect=AssertionError('Compiled cloud messages must not re-enter legacy generation'))
+    monkeypatch.setattr(model_manager, 'get_model_manager', lambda: manager)
+    runtime_config = {'useKnowledgeBase': False, 'temperature': 0.83, 'maxTokens': 173}
+    monkeypatch.setattr(generate, 'db', SimpleNamespace(config=runtime_config, loras=[]))
+    monkeypatch.setattr(generate, 'response_cache', None)
+    monkeypatch.setattr(generate, 'circuit_breaker_registry', None)
+    monkeypatch.setattr(generate, 'get_llm_semaphore', lambda: asyncio.Semaphore(1))
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: '只依据本题完整资料；保留时间、否定和例外。')
     monkeypatch.setattr(chat_answer, 'get_provider_context_budget', lambda: SimpleNamespace(window_tokens=65536, evidence_max_chars=0))
     calls = []
-    state = SimpleNamespace(status=200, finish="stop", failure=None, on_request=None)
+    state = SimpleNamespace(status=200, finish='stop', failure=None, on_request=None)
 
     def respond(request):
         if state.failure is not None:
             raise state.failure
-        calls.append(dict(body=json.loads(request.content), endpoint=str(request.url), auth=request.headers["Authorization"]))
+        calls.append(dict(body=json.loads(request.content), endpoint=str(request.url), auth=request.headers['Authorization']))
         if state.on_request is not None:
             state.on_request()
-        return httpx.Response(state.status, json={"usage": {"prompt_tokens": 100, "completion_tokens": 20, "total_tokens": 120}, "choices": [{"finish_reason": state.finish, "message": {"content": ANSWER}}]})
+        return httpx.Response(state.status, json={'usage': {'prompt_tokens': 100, 'completion_tokens': 20, 'total_tokens': 120}, 'choices': [{'finish_reason': state.finish, 'message': {'content': ANSWER}}]})
 
     @asynccontextmanager
     async def acquire(_self, timeout):
         async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
             yield client
-
-    monkeypatch.setattr(model_manager.OpenAICompatProvider, "_acquire_http_client", acquire)
+    monkeypatch.setattr(model_manager.OpenAICompatProvider, '_acquire_http_client', acquire)
 
     async def compiled(request, lora_name, *, model_generate, runtime_config, **kwargs):
-        result = await generate_character_response(GenerationRequest(
-            message=request.message, persona_prompt="只依据本题完整资料；保留时间、否定和例外。",
-            retrieval=RetrievalResult(status="ok", evidence=QUERY) if state.evidence else RetrievalResult(),
-            temperature=runtime_config["temperature"], max_tokens=runtime_config["maxTokens"],
-            top_p=runtime_config["topP"], context_window_tokens=65536,
-        ), model_generate)
+        result = await generate_character_response(GenerationRequest(message=request.message, persona_prompt='只依据本题完整资料；保留时间、否定和例外。', retrieval=RetrievalResult(status='ok', evidence=QUERY) if state.evidence else RetrievalResult(), temperature=runtime_config['temperature'], max_tokens=runtime_config['maxTokens'], top_p=runtime_config['topP'], context_window_tokens=65536), model_generate)
         return ChatAnswer(reply=result.reply, used_rag=result.plan.retrieval.has_evidence, model_invoked=result.model_invoked, metadata={})
-
     state.evidence = False
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', compiled)
     return SimpleNamespace(provider=provider, manager=manager, stored=stored, config=runtime_config, calls=calls, state=state)

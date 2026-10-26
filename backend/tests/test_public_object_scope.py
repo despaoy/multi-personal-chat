@@ -219,97 +219,59 @@ async def test_scope_row_order_does_not_change_bound_objects():
 @pytest.mark.asyncio
 async def test_actual_api_uses_verified_object_links_and_retains_private_answer(monkeypatch):
     from types import SimpleNamespace
-
     from api import generate
     from character.models import CompiledCharacterContext
     from db.schemas import MessageRequest
     from knowledge import public_task_evidence, retrieval_query_plan
     from knowledge.retrieval_query_plan import RetrievalQueryPlan
-
     await positive()
     calls = []
 
     async def planner(_query, **_context):
-        return RetrievalQueryPlan(status="applied", dependencies=dependencies(), public_obligations=obligations())
+        return RetrievalQueryPlan(status='applied', dependencies=dependencies(), public_obligations=obligations())
 
     async def retrieve(*_args, **_kwargs):
         return deepcopy(bundle())
 
     async def review(messages):
-        payload = json.loads(messages[-1]["content"])
-        if set(payload) - {"scope_policy", "reference_context"} == {"query", "public_tasks"}:
-            calls.append("scope")
-            return open_scope_response(messages, scopes()["scopes"])
-        if set(payload) == {"query", "public_tasks", "object_scopes"}:
-            calls.append("fact_scope")
-            return json.dumps(
-                dict(
-                    tasks=[
-                        dict(task_id="public:1:0", aspects=[dict(object_id="query-object:0", query_quote="费用")]),
-                        dict(task_id="public:1:1", aspects=[dict(object_id="query-object:1", query_quote="时长")]),
-                    ]
-                )
-            )
-        if "source_span_catalog" not in payload:
-            calls.append("identity")
-            return json.dumps(
-                dict(
-                    sources=[dict(source_id=row["source_id"], purpose="rules") for row in payload["sources"]],
-                    relations=[],
-                )
-            )
-        calls.append("source")
+        payload = json.loads(messages[-1]['content'])
+        if set(payload) - {'scope_policy', 'reference_context'} == {'query', 'public_tasks'}:
+            calls.append('scope')
+            return open_scope_response(messages, scopes()['scopes'])
+        if set(payload) == {'query', 'public_tasks', 'object_scopes'}:
+            calls.append('fact_scope')
+            return json.dumps(dict(tasks=[dict(task_id='public:1:0', aspects=[dict(object_id='query-object:0', query_quote='费用')]), dict(task_id='public:1:1', aspects=[dict(object_id='query-object:1', query_quote='时长')])]))
+        if 'source_span_catalog' not in payload:
+            calls.append('identity')
+            return json.dumps(dict(sources=[dict(source_id=row['source_id'], purpose='rules') for row in payload['sources']], relations=[]))
+        calls.append('source')
         value = source_reply()
-        # Reproduce the actual faulty proposal: one source proposes both objects.
-        value["decisions"][0]["task_ids"].append("public:1:1")
+        value['decisions'][0]['task_ids'].append('public:1:1')
         return literal_span_response(payload, value)
 
     async def facts(_messages):
-        calls.append("fact_evidence")
-        return json.dumps(
-            dict(
-                assessments=[
-                    dict(
-                        aspect_id="fact-aspect:0",
-                        evidence=[dict(source_id="doc_1", source_quote="青桥延期费用为31元", assertion="affirmative")],
-                    ),
-                    dict(aspect_id="fact-aspect:1", evidence=[]),
-                ]
-            )
-        )
+        calls.append('fact_evidence')
+        return json.dumps(dict(assessments=[dict(aspect_id='fact-aspect:0', evidence=[dict(source_id='doc_1', source_quote='青桥延期费用为31元', assertion='affirmative')]), dict(aspect_id='fact-aspect:1', evidence=[])]))
 
     async def model(**kwargs):
-        assert kwargs["max_tokens"] == 2048
-        wire = unescape(kwargs["messages"][-1]["content"])
-        assert PRIVATE in wire and bundle()["original_source_packets"][0]["original_body"] in wire
-        assert "object_scope_unverified" in wire
-        return "已有私人偏好及前者费用可答，后者时长本次没有对应依据。"
-
-    monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
+        assert kwargs['max_tokens'] == 2048
+        wire = unescape(kwargs['messages'][-1]['content'])
+        assert PRIVATE in wire and bundle()['original_source_packets'][0]['original_body'] in wire
+        assert 'object_scope_unverified' in wire
+        return '已有私人偏好及前者费用可答，后者时长本次没有对应依据。'
+    monkeypatch.setattr(retrieval_query_plan, 'plan_retrieval', planner)
     monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieve)
     install_public_source_reader(monkeypatch, generate, bundle())
     from knowledge import public_fact_coverage
-
-    monkeypatch.setattr(public_fact_coverage, "_review_facts", facts)
-    monkeypatch.setattr(public_task_evidence, "_review", review)
-    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "人物规则")
-    context = CompiledCharacterContext("", "", PRIVATE, used_memory_ids=("fiction-private",))
+    monkeypatch.setattr(public_fact_coverage, '_review_facts', facts)
+    monkeypatch.setattr(public_task_evidence, '_review', review)
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: '人物规则')
+    context = CompiledCharacterContext('', '', PRIVATE, used_memory_ids=('fiction-private',))
     prepared = SimpleNamespace(compiled=context, history=())
-    _chat_result_meta = await chat_answer.generate_chat_answer(
-        MessageRequest(message=QUERY),
-        None,
-        prepared_character_turn=prepared,
-        runtime_config=dict(maxTokens=2048, useKnowledgeBase=True),
-        model_generate=model,
-    )
-    _, used, meta = _chat_result_meta.reply, _chat_result_meta.used_rag, _chat_result_meta.metadata
-    assert (
-        calls == ["scope", "fact_scope", "source", "fact_evidence"]
-        and used
-        and meta["abstained"]
-        and meta["answerMode"] == "partial_answer"
-    )
-    assert "partial_public_evidence" in meta["warnings"]
+    _chat_result_meta = await chat_answer.generate_chat_answer(MessageRequest(message=QUERY), None, prepared_character_turn=prepared, runtime_config=dict(maxTokens=2048, useKnowledgeBase=True), model_generate=model, message_db=generate.db)
+    _, used, meta = (_chat_result_meta.reply, _chat_result_meta.used_rag, _chat_result_meta.metadata)
+    assert calls == ['scope', 'fact_scope', 'source', 'fact_evidence'] and used and meta['abstained'] and (meta['answerMode'] == 'partial_answer')
+    assert 'partial_public_evidence' in meta['warnings']
 
 
 @pytest.mark.asyncio

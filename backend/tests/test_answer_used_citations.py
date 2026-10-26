@@ -127,24 +127,22 @@ async def test_api_propagates_budget_abstention_instead_of_claiming_grounded_ans
     from inference.provider_context import ProviderContextBudget
 
     class Client:
+
         async def generate(self, **kwargs):
-            assert "<retrieved_evidence" not in kwargs["messages"][-1]["content"]
-            return "目前无法核实课程编号。"
+            assert '<retrieved_evidence' not in kwargs['messages'][-1]['content']
+            return '目前无法核实课程编号。'
 
-    async def retrieve(query, top_k, filters):
-        return {"results": [{"id": "oversized", "content": "完整原始资料" * 2000}],
-                "citations": [{"source_id": "oversized"}], "confidence": 0.9, "abstained": False}
-
+    async def retrieve(query, top_k, filters, *, database):
+        return {'results': [{'id': 'oversized', 'content': '完整原始资料' * 2000}], 'citations': [{'source_id': 'oversized'}], 'confidence': 0.9, 'abstained': False}
     monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieve)
-    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "persona")
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: 'persona')
     monkeypatch.setattr(chat_answer, 'get_provider_context_budget', lambda: ProviderContextBudget(8192))
-    semantic_plan("课程编号", {"public_knowledge": [0]})
-    _chat_result_meta = await chat_answer.generate_chat_answer(MessageRequest(message="课程编号"), None,
-        runtime_config={"useKnowledgeBase": True, "maxTokens": 128}, model_generate=Client().generate)
-    _, _, meta = _chat_result_meta.reply, _chat_result_meta.used_rag, _chat_result_meta.metadata
-    assert meta["abstained"] is True
-    assert meta["answerMode"] == "abstention"
-    assert meta["citations"] == []
+    semantic_plan('课程编号', {'public_knowledge': [0]})
+    _chat_result_meta = await chat_answer.generate_chat_answer(MessageRequest(message='课程编号'), None, runtime_config={'useKnowledgeBase': True, 'maxTokens': 128}, model_generate=Client().generate)
+    _, _, meta = (_chat_result_meta.reply, _chat_result_meta.used_rag, _chat_result_meta.metadata)
+    assert meta['abstained'] is True
+    assert meta['answerMode'] == 'abstention'
+    assert meta['citations'] == []
 
 
 def test_citation_preparation_keeps_uncited_and_uncitable_source_bodies():

@@ -20,21 +20,18 @@ from tests.test_native_generation_concurrency import installed as installed
 
 @pytest.fixture
 def control(monkeypatch):
-    monkeypatch.setenv("OPENAI_COMPAT_CONTEXT_WINDOW_TOKENS", "65536")
-    monkeypatch.setenv("RAG_CITATIONS_ENABLED", "true")
-    monkeypatch.setenv("CHARACTER_INDEPENDENT_TASKS_ENABLED", "false")
-    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "合成角色：准确回应当前问题。")
-    source = Mock(side_effect=AssertionError("No public source read is expected"))
-    monkeypatch.setattr(generate, "db", SimpleNamespace(get_knowledge_document=source))
-    monkeypatch.setattr(chat_answer, "public_knowledge_db", generate.db)
-    rag = AsyncMock(side_effect=AssertionError("Disabled or invalid configuration must not retrieve"))
+    monkeypatch.setenv('OPENAI_COMPAT_CONTEXT_WINDOW_TOKENS', '65536')
+    monkeypatch.setenv('RAG_CITATIONS_ENABLED', 'true')
+    monkeypatch.setenv('CHARACTER_INDEPENDENT_TASKS_ENABLED', 'false')
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: '合成角色：准确回应当前问题。')
+    source = Mock(side_effect=AssertionError('No public source read is expected'))
+    monkeypatch.setattr(generate, 'db', SimpleNamespace(get_knowledge_document=source))
+    rag = AsyncMock(side_effect=AssertionError('Disabled or invalid configuration must not retrieve'))
     monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', rag)
-    provider = cloud_connection("boolean-config-control")
-    context = InferenceRequestContext("openai_compat", provider,
-                                      text_token_counter("openai_compat", provider.base_url, provider.model))
-    model = AsyncMock(return_value="你好，很高兴见到你。")
-    request = MessageRequest(message="请用一句话打招呼。", platform="web", adapter="boolean-config",
-                             senderId="fiction-owner", conversationId="fiction-owner", conversationType="private")
+    provider = cloud_connection('boolean-config-control')
+    context = InferenceRequestContext('openai_compat', provider, text_token_counter('openai_compat', provider.base_url, provider.model))
+    model = AsyncMock(return_value='你好，很高兴见到你。')
+    request = MessageRequest(message='请用一句话打招呼。', platform='web', adapter='boolean-config', senderId='fiction-owner', conversationId='fiction-owner', conversationType='private')
     with use_request_context(context):
         yield SimpleNamespace(request=request, model=model, rag=rag, source=source, provider=provider)
     provider.async_complete.assert_not_awaited()

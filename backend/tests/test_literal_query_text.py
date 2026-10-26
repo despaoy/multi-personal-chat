@@ -1,6 +1,8 @@
 """Literal teaching examples remain data through validation, model transport and storage."""
 
-from knowledge import index_lifecycle
+from app.runtime import RuntimeContainer
+
+from knowledge.index_lifecycle import default_knowledge_index as index_lifecycle
 import httpx
 import pytest
 from fastapi import FastAPI
@@ -24,42 +26,41 @@ COURSE_TEXTS = (*SQL_TEXTS,
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("message", COURSE_TEXTS)
+@pytest.mark.parametrize('message', COURSE_TEXTS)
 async def test_literal_course_text_reaches_compiled_provider_unchanged(installed, message):
     app = FastAPI()
+    app.state.runtime_container = RuntimeContainer(db=index_lifecycle.db, is_pg_mode=lambda: False, startup_env={})
     app.add_middleware(InputValidationMiddleware)
-    app.add_middleware(SecurityMiddleware, api_keys=["synthetic-text-key"])
+    app.add_middleware(SecurityMiddleware, api_keys=['synthetic-text-key'])
 
-    @app.post("/api/generate")
+    @app.post('/api/generate')
     async def reply(request: MessageRequest):
         return await generate._generate_reply_impl(request, persist_message=False, record_invocation=False, message_db=generate.db)
-
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://synthetic") as client:
-        response = await client.post("/api/generate", json={"message": message, "loraName": "default"},
-                                     headers={"X-API-Key": "synthetic-text-key"})
-    assert response.status_code == 200 and response.json()["modelInvoked"]
-    assert len(installed.calls) == 1 and message in installed.calls[0]["body"]["messages"][-1]["content"]
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://synthetic') as client:
+        response = await client.post('/api/generate', json={'message': message, 'loraName': 'default'}, headers={'X-API-Key': 'synthetic-text-key'})
+    assert response.status_code == 200 and response.json()['modelInvoked']
+    assert len(installed.calls) == 1 and message in installed.calls[0]['body']['messages'][-1]['content']
     installed.manager.async_generate.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("content", SQL_TEXTS)
+@pytest.mark.parametrize('content', SQL_TEXTS)
 async def test_sql_example_is_preserved_as_document_and_bound_parameter(tmp_path, monkeypatch, content):
-    database = SQLiteDB(tmp_path / "literal-text.sqlite")
-    monkeypatch.setattr(knowledge, "db", database)
-    monkeypatch.setattr(index_lifecycle, "db", database)
-    monkeypatch.setattr(index_lifecycle, "_vector_index_revision", None)
+    database = SQLiteDB(tmp_path / 'literal-text.sqlite')
+    monkeypatch.setattr(index_lifecycle, 'db', database)
+    monkeypatch.setattr(index_lifecycle.db, '_knowledge_index', index_lifecycle, raising=False)
+    monkeypatch.setattr(index_lifecycle, '_vector_index_revision', None)
     try:
-        database.add_message(dict(sessionId="sentinel", message="隔离保留记录", reply="必须保留", modelName="synthetic"))
-        request = KnowledgeDocumentCreate(title="SQL课程：UNION SELECT", content=content, category="课程")
-        result = await knowledge.create_knowledge_document(request, {"role": "admin"})
-        assert result["success"]
-        document = database.get_knowledge_document(result["document"]["id"])
-        assert document["title"] == request.title and document["content"] == content
-        assert "".join(row["content"] for row in database.get_knowledge_chunks(document["id"])) == content
-        database.update_config({"course_note": content})
-        assert database.get_config_value("course_note") == content
+        database.add_message(dict(sessionId='sentinel', message='隔离保留记录', reply='必须保留', modelName='synthetic'))
+        request = KnowledgeDocumentCreate(title='SQL课程：UNION SELECT', content=content, category='课程')
+        result = await knowledge.create_knowledge_document(request, {'role': 'admin'}, database=index_lifecycle.db)
+        assert result['success']
+        document = database.get_knowledge_document(result['document']['id'])
+        assert document['title'] == request.title and document['content'] == content
+        assert ''.join((row['content'] for row in database.get_knowledge_chunks(document['id']))) == content
+        database.update_config({'course_note': content})
+        assert database.get_config_value('course_note') == content
         assert len(database.get_messages(limit=10)) == 1
-        assert database.get_messages(limit=10)[0]["message"] == "隔离保留记录"
+        assert database.get_messages(limit=10)[0]['message'] == '隔离保留记录'
     finally:
         database.close_connection()

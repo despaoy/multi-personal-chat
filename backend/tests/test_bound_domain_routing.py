@@ -2,7 +2,7 @@
 
 from knowledge import chat_retrieval
 
-from knowledge import index_lifecycle
+from knowledge.index_lifecycle import default_knowledge_index as index_lifecycle
 
 import json
 from types import SimpleNamespace
@@ -79,36 +79,34 @@ async def bound_scope(query=QUERY, names=("岚",)):
 
 async def test_proven_single_character_scope_uses_complete_curated_original(tmp_path, monkeypatch):
     rig = setup_scope(tmp_path, monkeypatch)
-    result = await chat_retrieval.retrieve_chat_knowledge(QUERY, 1, None, question_binding=await bound_scope())
-    assert result["domains"] == [rig.config.domain_id]
-    assert result["curated_source_catalog"]["sources"][0]["excerpt"]["text"] == BODY
-    assert result["query_analysis"]["matched_domains"] == [rig.config.domain_id]
+    result = await chat_retrieval.retrieve_chat_knowledge(QUERY, 1, None, question_binding=await bound_scope(), database=index_lifecycle.db)
+    assert result['domains'] == [rig.config.domain_id]
+    assert result['curated_source_catalog']['sources'][0]['excerpt']['text'] == BODY
+    assert result['query_analysis']['matched_domains'] == [rig.config.domain_id]
     rig.generic.assert_not_called()
 
 
-@pytest.mark.parametrize("defect", ["vector", "declined"])
+@pytest.mark.parametrize('defect', ['vector', 'declined'])
 async def test_required_curated_failure_never_changes_authority(tmp_path, monkeypatch, defect):
     rig = setup_scope(tmp_path, monkeypatch)
-    if defect == "vector":
-        failure = OSError("Synthetic required embedding unavailable")
+    if defect == 'vector':
+        failure = OSError('Synthetic required embedding unavailable')
         rig.embedding.embed_query = Mock(side_effect=failure)
         expected = OSError
     else:
-        monkeypatch.setattr(rig.runtime, "retrieve_with_citations", lambda *args, **kwargs: None)
+        monkeypatch.setattr(rig.runtime, 'retrieve_with_citations', lambda *args, **kwargs: None)
         expected = RuntimeError
     with pytest.raises(expected):
-        await chat_retrieval.retrieve_chat_knowledge(QUERY, 1, None, question_binding=await bound_scope())
+        await chat_retrieval.retrieve_chat_knowledge(QUERY, 1, None, question_binding=await bound_scope(), database=index_lifecycle.db)
     rig.generic.assert_not_called()
 
 
 async def test_whole_business_name_is_not_its_embedded_character_alias(tmp_path, monkeypatch):
     rig = setup_scope(tmp_path, monkeypatch)
-    monkeypatch.setattr(
-        rig.runtime, "retrieve_with_citations", Mock(side_effect=AssertionError("Curated source not requested"))
-    )
-    query = "核对岚展期的公开办理规则。"
+    monkeypatch.setattr(rig.runtime, 'retrieve_with_citations', Mock(side_effect=AssertionError('Curated source not requested')))
+    query = '核对岚展期的公开办理规则。'
     with pytest.raises(GenericRouteReached):
-        await chat_retrieval.retrieve_chat_knowledge(query, 1, None, question_binding=await bound_scope(query, ("岚展期",)))
+        await chat_retrieval.retrieve_chat_knowledge(query, 1, None, question_binding=await bound_scope(query, ('岚展期',)), database=index_lifecycle.db)
     rig.runtime.retrieve_with_citations.assert_not_called()
     rig.generic.assert_called_once()
 
@@ -173,20 +171,19 @@ def test_ambiguous_automatic_domains_keep_the_original_query(tmp_path):
 
 async def test_invalid_curated_container_never_changes_authority(tmp_path, monkeypatch):
     rig = setup_scope(tmp_path, monkeypatch)
-    monkeypatch.setattr(rig.runtime, "retrieve_with_citations", lambda *args, **kwargs: [])
-    with pytest.raises(TypeError, match="expected a dictionary"):
-        await chat_retrieval.retrieve_chat_knowledge(QUERY, 1, None, question_binding=await bound_scope())
+    monkeypatch.setattr(rig.runtime, 'retrieve_with_citations', lambda *args, **kwargs: [])
+    with pytest.raises(TypeError, match='expected a dictionary'):
+        await chat_retrieval.retrieve_chat_knowledge(QUERY, 1, None, question_binding=await bound_scope(), database=index_lifecycle.db)
     rig.generic.assert_not_called()
 
 
 async def test_healthy_empty_curated_index_is_ordinary_abstention(tmp_path, monkeypatch):
     from knowledge.multiscale_rag.runtime import _memory_index
-
     rig = setup_scope(tmp_path, monkeypatch)
     rig.service.retriever.index = _memory_index(rig.config.domain_id, [], np.zeros((0, 384), dtype=np.float32))
-    result = await chat_retrieval.retrieve_chat_knowledge(QUERY, 1, None, question_binding=await bound_scope())
-    assert result["abstained"] and result["results"] == []
-    assert result["domains"] == [rig.config.domain_id]
+    result = await chat_retrieval.retrieve_chat_knowledge(QUERY, 1, None, question_binding=await bound_scope(), database=index_lifecycle.db)
+    assert result['abstained'] and result['results'] == []
+    assert result['domains'] == [rig.config.domain_id]
     assert rig.embedding.calls == []
     rig.generic.assert_not_called()
 
@@ -221,30 +218,19 @@ async def test_unresolved_mixed_task_searches_available_curated_domain_without_i
 
 async def test_history_bound_single_character_scope_keeps_current_original(tmp_path, monkeypatch):
     from knowledge.public_question_binding import bound_retrieval_query
-
     rig = setup_scope(tmp_path, monkeypatch)
-    query = "核对该角色的登记记录，保留否定及末尾例外。"
-    history = [dict(role="user", content="原作角色岚是本次核对对象，请只使用公开资料。")]
-    deps = parse_dependencies(
-        dict(
-            private_memory=[],
-            current_input=[],
-            control=[],
-            unresolved_source=[],
-            public_knowledge=list(range(len(query_segments(query)))),
-        ),
-        query,
-    )
+    query = '核对该角色的登记记录，保留否定及末尾例外。'
+    history = [dict(role='user', content='原作角色岚是本次核对对象，请只使用公开资料。')]
+    deps = parse_dependencies(dict(private_memory=[], current_input=[], control=[], unresolved_source=[], public_knowledge=list(range(len(query_segments(query))))), query)
 
     async def review(messages):
-        payload = json.loads(messages[-1]["content"])
-        assert payload["query"] == query and "reference_context" in payload
-        return open_scope_response(messages, [dict(task_id=task["id"], objects=["岚"]) for task in payload["public_tasks"]])
-
+        payload = json.loads(messages[-1]['content'])
+        assert payload['query'] == query and 'reference_context' in payload
+        return open_scope_response(messages, [dict(task_id=task['id'], objects=['岚']) for task in payload['public_tasks']])
     binding = await resolve_question_binding(deps, query, window_tokens=65536, history=history, reviewer=review, with_retrieval_scope=True)
     retrieval_query = bound_retrieval_query(binding, query)
-    assert retrieval_query == "岚\n" + query
-    result = await chat_retrieval.retrieve_chat_knowledge(retrieval_query, 1, None, question_binding=binding)
-    assert result["curated_source_catalog"]["sources"][0]["excerpt"]["text"] == BODY
-    assert binding["input"]["query"] == query
+    assert retrieval_query == '岚\n' + query
+    result = await chat_retrieval.retrieve_chat_knowledge(retrieval_query, 1, None, question_binding=binding, database=index_lifecycle.db)
+    assert result['curated_source_catalog']['sources'][0]['excerpt']['text'] == BODY
+    assert binding['input']['query'] == query
     rig.generic.assert_not_called()

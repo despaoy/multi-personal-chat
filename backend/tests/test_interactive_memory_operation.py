@@ -116,10 +116,8 @@ async def test_context_failure_preserves_executed_memory_operation_receipt(monke
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("fault", ["success", "provider", "archive"])
-async def test_committed_erasure_receipt_survives_later_generation_failure(
-    installed, publication_database, monkeypatch, fault,
-):
+@pytest.mark.parametrize('fault', ['success', 'provider', 'archive'])
+async def test_committed_erasure_receipt_survives_later_generation_failure(installed, publication_database, monkeypatch, fault):
     import json
     from datetime import datetime, timedelta, timezone
     from fastapi import HTTPException
@@ -132,72 +130,57 @@ async def test_committed_erasure_receipt_survives_later_generation_failure(
     from repositories.messages import DatabaseMessageRepository
     from services import chat_answer
     import test_compiled_cloud_transport
-
     database = publication_database
     repository = DatabaseCharacterMemoryRepository(database)
-    character = "tsukiyashiro_kisaki"
-    scope = build_user_scope("web", "erasure-fixture", "synthetic-owner", "synthetic-owner", "private")
-    await repository.capture_source(character, scope, source_message_id="old",
-        body="我喜欢测试红茶。", observed_at=datetime.now(timezone.utc)-timedelta(days=1))
+    character = 'tsukiyashiro_kisaki'
+    scope = build_user_scope('web', 'erasure-fixture', 'synthetic-owner', 'synthetic-owner', 'private')
+    await repository.capture_source(character, scope, source_message_id='old', body='我喜欢测试红茶。', observed_at=datetime.now(timezone.utc) - timedelta(days=1))
 
     class Completion:
         calls = 0
 
         async def complete(self, messages):
             self.calls += 1
-            payload = json.loads(messages[1]["content"])
-            assert any(row["source_id"] == "old" for row in payload["source_erasure_candidates"])
+            payload = json.loads(messages[1]['content'])
+            assert any((row['source_id'] == 'old' for row in payload['source_erasure_candidates']))
             return '{"memories":[],"erase_source_ids":["old"]}'
 
         async def close(self):
             pass
-
     completion = Completion()
-    scheduler = MemoryEnrichmentScheduler(config=MemoryLlmConfig(True, "unit-only", "unit-only"),
-        completion=completion)
-    service = CharacterContextService(profile_registry=get_default_profile_registry(),
-        memory_repository=repository, message_repository=DatabaseMessageRepository(database),
-        source_recall_enabled=False)
-    monkeypatch.setattr("character.memory_llm.get_memory_enrichment_scheduler", lambda: scheduler)
-    monkeypatch.setattr(chat_answer, "generate_chat_answer", actual_generate_chat_answer)
-    monkeypatch.setattr(chat_answer, "public_knowledge_db", database)
-    monkeypatch.setattr(test_compiled_cloud_transport, "ANSWER", "20。")
-    installed.state.status = 503 if fault == "provider" else 200
-    if fault == "archive":
-        monkeypatch.setattr(database, "add_message", Mock(side_effect=OSError("synthetic-private-archive-fault")))
-    request = MessageRequest(message="请从长期记忆中删除我喜欢测试红茶的记录，同时计算12+8。",
-        characterId=character, loraName="default", platform="web", adapter="erasure-fixture",
-        senderId="synthetic-owner", userId="synthetic-owner", conversationId="synthetic-owner",
-        sessionId="synthetic-owner", sourceMessageId="current-erasure", traceId="synthetic-erasure-trace")
+    scheduler = MemoryEnrichmentScheduler(config=MemoryLlmConfig(True, 'unit-only', 'unit-only'), completion=completion)
+    service = CharacterContextService(profile_registry=get_default_profile_registry(), memory_repository=repository, message_repository=DatabaseMessageRepository(database), source_recall_enabled=False)
+    monkeypatch.setattr('character.memory_llm.get_memory_enrichment_scheduler', lambda: scheduler)
+    monkeypatch.setattr(chat_answer, 'generate_chat_answer', actual_generate_chat_answer)
+    monkeypatch.setattr(test_compiled_cloud_transport, 'ANSWER', '20。')
+    installed.state.status = 503 if fault == 'provider' else 200
+    if fault == 'archive':
+        monkeypatch.setattr(database, 'add_message', Mock(side_effect=OSError('synthetic-private-archive-fault')))
+    request = MessageRequest(message='请从长期记忆中删除我喜欢测试红茶的记录，同时计算12+8。', characterId=character, loraName='default', platform='web', adapter='erasure-fixture', senderId='synthetic-owner', userId='synthetic-owner', conversationId='synthetic-owner', sessionId='synthetic-owner', sourceMessageId='current-erasure', traceId='synthetic-erasure-trace')
     try:
-        if fault == "success":
-            result = await generate._generate_reply_impl(request, enable_rag=False, message_db=database,
-                character_service=service)
-            assert "已删除" in result.reply and result.reply.endswith("20。")
+        if fault == 'success':
+            result = await generate._generate_reply_impl(request, enable_rag=False, message_db=database, character_service=service)
+            assert '已删除' in result.reply and result.reply.endswith('20。')
         else:
             with pytest.raises(HTTPException) as caught:
-                await generate._generate_reply_impl(request, enable_rag=False, message_db=database,
-                    character_service=service)
+                await generate._generate_reply_impl(request, enable_rag=False, message_db=database, character_service=service)
             assert caught.value.__cause__ is not None
-            assert "synthetic-private" not in str(caught.value.detail)
+            assert 'synthetic-private' not in str(caught.value.detail)
         assert completion.calls == 1 and len(installed.calls) == 1
         assert await repository.list_sources(character, scope) == []
         assert len(database.execute_sql('SELECT id FROM model_invocations')) == 1
-        assert len(database.execute_sql('SELECT id FROM messages')) == int(fault == "success")
-        if fault != "success":
-            if fault == "provider":
+        assert len(database.execute_sql('SELECT id FROM messages')) == int(fault == 'success')
+        if fault != 'success':
+            if fault == 'provider':
                 assert caught.value.status_code == 502
-                assert caught.value.detail["upstreamStatus"] == 503
+                assert caught.value.detail['upstreamStatus'] == 503
             else:
                 assert caught.value.status_code == 503
-                assert caught.value.detail["stage"] == "message_archive"
-                # A storage exception cannot prove that a thread rolled back.
-                assert caught.value.detail["messageSaved"] is None
-            assert "memoryOperation" in caught.value.detail, {
-                "http_status": caught.value.status_code, "fields": sorted(caught.value.detail),
-            }
-            assert "已确认执行删除" in caught.value.detail["memoryOperation"]
-            assert "已确认完成的操作数：1" in caught.value.detail["memoryOperation"]
-            assert "记忆操作回执" in caught.value.detail["message"]
+                assert caught.value.detail['stage'] == 'message_archive'
+                assert caught.value.detail['messageSaved'] is None
+            assert 'memoryOperation' in caught.value.detail, {'http_status': caught.value.status_code, 'fields': sorted(caught.value.detail)}
+            assert '已确认执行删除' in caught.value.detail['memoryOperation']
+            assert '已确认完成的操作数：1' in caught.value.detail['memoryOperation']
+            assert '记忆操作回执' in caught.value.detail['message']
     finally:
         await scheduler.shutdown(timeout=2)

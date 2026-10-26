@@ -115,7 +115,7 @@ def _prune(retrieval, granted):
 
 
 def make_public_context_revalidator(read_document):
-    """Bind to the same database reader used by generic retrieval, not a caller DB."""
+    """Bind to the same owned database reader used by generic retrieval."""
 
     async def revalidate(request):
         retrieval = request.retrieval

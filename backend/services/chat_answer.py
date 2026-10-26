@@ -5,7 +5,6 @@ import os
 from dataclasses import dataclass
 from typing import Any
 
-from db.adapter import db as public_knowledge_db
 from db.schemas import MessageRequest
 from inference.generation_request import GenerationRequest as CharacterGenerationRequest
 from inference.generation_request import RetrievalResult, generate_character_response
@@ -90,7 +89,9 @@ async def generate_chat_answer(
             rag_message = request.message
             budget = get_provider_context_budget()
             query_plan = await plan_retrieval(
-                rag_message, history=effective_history, context_budget=budget.review,
+                rag_message,
+                history=effective_history,
+                context_budget=budget.review,
             )
             dependency_groups = dict(query_plan.dependencies.groups)
             if not query_plan.needs_public_retrieval:
@@ -108,24 +109,28 @@ async def generate_chat_answer(
                 question_binding = None
                 if dependency_groups["public_knowledge"]:
                     question_binding = await resolve_question_binding(
-                        query_plan.dependencies, rag_message,
+                        query_plan.dependencies,
+                        rag_message,
                         window_tokens=budget.window_tokens,
                         public_obligations=query_plan.public_obligations,
                         with_retrieval_scope=True,
-                        **({"history": effective_history, "context_budget": budget.review}
-                           if effective_history else {}),
+                        **(
+                            {"history": effective_history, "context_budget": budget.review} if effective_history else {}
+                        ),
                     )
                 retrieval_query = bound_retrieval_query(question_binding, rag_message)
                 binding_options = {"question_binding": question_binding} if question_binding is not None else {}
                 retrieval_timeout = _rag_retrieval_timeout()
                 bundle = await asyncio.wait_for(
-                    retrieve_chat_knowledge(retrieval_query, 3, filters, **binding_options),
+                    retrieve_chat_knowledge(retrieval_query, 3, filters, database=message_db, **binding_options),
                     timeout=retrieval_timeout,
                 )
                 from knowledge.public_task_evidence import review_public_candidates
 
                 bundle = await review_public_candidates(
-                    bundle, query_plan.dependencies, rag_message,
+                    bundle,
+                    query_plan.dependencies,
+                    rag_message,
                     window_tokens=budget.window_tokens,
                     public_obligations=query_plan.public_obligations,
                     question_binding=question_binding,
@@ -156,7 +161,11 @@ async def generate_chat_answer(
                     task_query=retrieval_query,
                     public_curated_review=bundle.get("public_curated_review") or {},
                     public_task_review=bundle.get("public_task_review") or {},
-                    public_task_query=rag_message if bundle.get("public_task_review") or bundle.get("public_curated_review") or bundle.get("public_domain_branches") else "",
+                    public_task_query=rag_message
+                    if bundle.get("public_task_review")
+                    or bundle.get("public_curated_review")
+                    or bundle.get("public_domain_branches")
+                    else "",
                     public_dependency_indices=tuple(dependency_groups["public_knowledge"]),
                 )
                 if bundle.get("abstained", False):
@@ -180,9 +189,8 @@ async def generate_chat_answer(
                         from knowledge.evidence_packets import document_evidence_packets
 
                         # Citation display cannot decide which source text reaches the model.
-                        evidence_packets = (
-                            document_evidence_packets(bundle.get("results", []))
-                            + tuple(bundle.get("original_source_packets") or ())
+                        evidence_packets = document_evidence_packets(bundle.get("results", [])) + tuple(
+                            bundle.get("original_source_packets") or ()
                         )
                         rag_context = "\n\n".join(packet["text"] for packet in evidence_packets)
                     retrieval = RetrievalResult(
@@ -217,8 +225,11 @@ async def generate_chat_answer(
                 errorType=type(e).__name__,
             )
             raise ChatRetrievalError(
-                detail=(e.public_detail() if isinstance(e, (RetrievalIndexError, QuestionBindingCapacityError)) else
-                        with_provider_error("检索或证据审核失败，请检查检索服务及审核模型状态后重试", e)),
+                detail=(
+                    e.public_detail()
+                    if isinstance(e, (RetrievalIndexError, QuestionBindingCapacityError))
+                    else with_provider_error("检索或证据审核失败，请检查检索服务及审核模型状态后重试", e)
+                ),
             ) from e
     else:
         budget = get_provider_context_budget()
@@ -240,9 +251,12 @@ async def generate_chat_answer(
             memory_write_enabled=memory_write_enabled,
             reply_guard=getattr(prepared_character_turn, "reply_guard", None),
             private_context_revalidator=make_private_context_revalidator(
-                prepared_character_turn, message_db,
+                prepared_character_turn,
+                message_db,
             ),
-            public_context_revalidator=make_public_context_revalidator(public_knowledge_db.get_knowledge_document),
+            public_context_revalidator=make_public_context_revalidator(
+                lambda identity: message_db.get_knowledge_document(identity)
+            ),
             lora_name=lora_name if lora_name != "default" else None,
             temperature=_temperature,
             max_tokens=_max_tokens,
@@ -285,7 +299,8 @@ async def generate_chat_answer(
         speech = getattr(context, "episodic_reference_context", "")
         private_visible = bool(reference and getattr(context, "used_memory_ids", ()) and reference in visible_message)
         private_visible = private_visible or bool(
-            speech and getattr(context, "memory_source_status", "not_checked") == "available"
+            speech
+            and getattr(context, "memory_source_status", "not_checked") == "available"
             and speech in visible_message
         )
         public_visible = any(
@@ -297,8 +312,7 @@ async def generate_chat_answer(
             for task in public_tasks
         )
         private_visible = bool(dependency_groups["private_memory"] and private_visible)
-        if (generation.model_invoked
-                and (public_visible or private_visible)):
+        if generation.model_invoked and (public_visible or private_visible):
             rag_meta["answerMode"] = "partial_answer"
         elif rag_meta.get("answerMode") == "grounded_answer":
             rag_meta["answerMode"] = "abstention"

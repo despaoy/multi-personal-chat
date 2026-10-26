@@ -6,6 +6,9 @@ status route and classifier prediction stay real. No language model or network.
 
 from __future__ import annotations
 
+from app.runtime import RuntimeContainer
+from types import SimpleNamespace
+
 import asyncio
 import json
 import shutil
@@ -138,18 +141,19 @@ def training_rig(monkeypatch, tmp_path):
 async def run_training_http():
     """Exercise real HTTP admission, owned task and the public status route."""
     app = FastAPI()
+    app.state.runtime_container = RuntimeContainer(db=SimpleNamespace(), is_pg_mode=lambda: False, startup_env={})
     app.include_router(knowledge.router)
-    app.dependency_overrides[get_current_admin] = lambda: {"role": "admin", "user_id": 901}
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://fixture.invalid") as client:
-        response = await client.post("/api/knowledge/train-intent", json={})
-        assert response.status_code == 200 and response.json()["success"] is True
+    app.dependency_overrides[get_current_admin] = lambda: {'role': 'admin', 'user_id': 901}
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://fixture.invalid') as client:
+        response = await client.post('/api/knowledge/train-intent', json={})
+        assert response.status_code == 200 and response.json()['success'] is True
         task = knowledge._intent_task
         if task is not None:
             await asyncio.wait_for(task, timeout=30)
-        response = await client.get("/api/knowledge/train-intent/status")
-        assert response.status_code == 200 and response.json()["success"] is True
-        status = response.json()["status"]
-        assert status["running"] is False
+        response = await client.get('/api/knowledge/train-intent/status')
+        assert response.status_code == 200 and response.json()['success'] is True
+        status = response.json()['status']
+        assert status['running'] is False
         return status
 
 
@@ -289,9 +293,7 @@ def test_classifier_decisions_are_not_overridden_by_rules_or_private_keyword_sho
     assert len(rig.encoded) == before + 1 and rig.encoded[-1] == (query,)
 
 
-async def test_cancelled_background_reload_cannot_publish_when_reader_thread_finishes(
-    training_rig, monkeypatch,
-):
+async def test_cancelled_background_reload_cannot_publish_when_reader_thread_finishes(training_rig, monkeypatch):
     rig = training_rig
     entered = threading.Event()
     release = threading.Event()
@@ -302,42 +304,40 @@ async def test_cancelled_background_reload_cannot_publish_when_reader_thread_fin
         entered.set()
         try:
             if not release.wait(10):
-                raise TimeoutError("isolated reader was not released")
-            # Finish the actual artifact/encoder read after the owner cancelled.
-            # The worker returns real artifacts but owns no global publication.
+                raise TimeoutError('isolated reader was not released')
             return actual_read(model_dir)
         finally:
             finished.set()
-
-    monkeypatch.setattr(detector, "_read_ml_model", blocked_read)
+    monkeypatch.setattr(detector, '_read_ml_model', blocked_read)
     app = FastAPI()
+    app.state.runtime_container = RuntimeContainer(db=SimpleNamespace(), is_pg_mode=lambda: False, startup_env={})
     app.include_router(knowledge.router)
-    app.dependency_overrides[get_current_admin] = lambda: {"role": "admin", "user_id": 901}
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://fixture.invalid") as client:
+    app.dependency_overrides[get_current_admin] = lambda: {'role': 'admin', 'user_id': 901}
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://fixture.invalid') as client:
         try:
-            response = await client.post("/api/knowledge/train-intent", json={})
-            assert response.status_code == 200 and response.json()["success"] is True
+            response = await client.post('/api/knowledge/train-intent', json={})
+            assert response.status_code == 200 and response.json()['success'] is True
             task = knowledge._intent_task
             assert task is not None
             assert await asyncio.wait_for(asyncio.to_thread(entered.wait, 5), timeout=6)
-            assert trainer.get_training_status()["stage"] == "reload" and saved_files(rig)
+            assert trainer.get_training_status()['stage'] == 'reload' and saved_files(rig)
             assert_unavailable()
             task.cancel()
             with pytest.raises(asyncio.CancelledError):
                 await task
-            response = await client.get("/api/knowledge/train-intent/status")
+            response = await client.get('/api/knowledge/train-intent/status')
             assert response.status_code == 200
-            cancelled_status = response.json()["status"]
-            assert cancelled_status["running"] is False and cancelled_status["stage"] == "cancelled"
-            assert cancelled_status["result"]["cancelled"] is True
+            cancelled_status = response.json()['status']
+            assert cancelled_status['running'] is False and cancelled_status['stage'] == 'cancelled'
+            assert cancelled_status['result']['cancelled'] is True
             assert_unavailable()
         finally:
             release.set()
             if entered.is_set():
                 assert await asyncio.wait_for(asyncio.to_thread(finished.wait, 5), timeout=6)
-        await asyncio.sleep(0)  # Deliver the completed executor future callback.
-        response = await client.get("/api/knowledge/train-intent/status")
-        assert response.status_code == 200 and response.json()["status"] == cancelled_status
+        await asyncio.sleep(0)
+        response = await client.get('/api/knowledge/train-intent/status')
+        assert response.status_code == 200 and response.json()['status'] == cancelled_status
     assert [source for source, _thread in rig.constructor_calls] == [str(rig.source)] * 2
-    assert not any("意图检测器已重载" in line for line in trainer.get_training_status()["logs"])
+    assert not any(('意图检测器已重载' in line for line in trainer.get_training_status()['logs']))
     assert_unavailable()

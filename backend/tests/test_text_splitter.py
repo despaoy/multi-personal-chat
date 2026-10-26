@@ -1,6 +1,6 @@
 """Original evidence coverage, bounded windows and real public publication."""
 
-from knowledge import index_lifecycle
+from knowledge.index_lifecycle import default_knowledge_index as index_lifecycle
 
 import io
 import zipfile
@@ -55,39 +55,33 @@ def test_readable_boundary_is_used_without_changing_source(separator):
     assert_slices(source, chunks, 60, 10)
 
 
-@pytest.mark.parametrize("route", ["create", "update", "zip", "scan_root", "scan_folder"])
-@pytest.mark.parametrize("source", [
-    "  完整规定：只有本人携带书面确认才可申请。\r\n未确认不得付款。\r\n",
-    "申请人须本人携带身份证和书面确认且不得自动续借" * 55 + "。\r\n截至10月23日18点。",
-])
+@pytest.mark.parametrize('route', ['create', 'update', 'zip', 'scan_root', 'scan_folder'])
+@pytest.mark.parametrize('source', ['  完整规定：只有本人携带书面确认才可申请。\r\n未确认不得付款。\r\n', '申请人须本人携带身份证和书面确认且不得自动续借' * 55 + '。\r\n截至10月23日18点。'])
 async def test_public_paths_preserve_bounded_evidence_through_real_index(publication, route, source):
     rig = publication
-    admin = {"role": "admin"}
-    if route in {"create", "update"}:
-        result = await knowledge.create_knowledge_document(KnowledgeDocumentCreate(
-            title="完整规则", content=source if route == "create" else "待替换旧正文",
-            knowledge_base_id=rig.kb["id"], folder_id=rig.folder["id"]), admin)
-        if route == "update":
-            result = await knowledge.update_knowledge_document(result["document"]["id"],
-                KnowledgeDocumentUpdate(content=source), admin)
-    elif route == "zip":
+    admin = {'role': 'admin'}
+    if route in {'create', 'update'}:
+        result = await knowledge.create_knowledge_document(KnowledgeDocumentCreate(title='完整规则', content=source if route == 'create' else '待替换旧正文', knowledge_base_id=rig.kb['id'], folder_id=rig.folder['id']), admin, database=index_lifecycle.db)
+        if route == 'update':
+            result = await knowledge.update_knowledge_document(result['document']['id'], KnowledgeDocumentUpdate(content=source), admin, database=index_lifecycle.db)
+    elif route == 'zip':
         buffer = io.BytesIO()
-        with zipfile.ZipFile(buffer, "w") as archive:
-            archive.writestr("适用条件/完整规则.txt", source)
+        with zipfile.ZipFile(buffer, 'w') as archive:
+            archive.writestr('适用条件/完整规则.txt', source)
         buffer.seek(0)
-        result = await knowledge.upload_zip(rig.kb["id"], UploadFile(filename="完整规则.zip", file=buffer), admin)
+        result = await knowledge.upload_zip(rig.kb['id'], UploadFile(filename='完整规则.zip', file=buffer), admin, database=index_lifecycle.db)
     else:
-        target = rig.root / "完整资料"
-        folder = target / "适用条件" if route == "scan_folder" else target
+        target = rig.root / '完整资料'
+        folder = target / '适用条件' if route == 'scan_folder' else target
         folder.mkdir(parents=True)
-        (folder / "完整规则.txt").write_bytes(source.encode())
-        result = await knowledge.import_scanned_directory("完整资料", rig.kb["id"], admin)
-    assert result["success"]
+        (folder / '完整规则.txt').write_bytes(source.encode())
+        result = await knowledge.import_scanned_directory('完整资料', rig.kb['id'], admin, database=index_lifecycle.db)
+    assert result['success']
     doc, = rig.db.get_knowledge_documents()
-    chunks = [row["content"] for row in rig.db.get_knowledge_chunks(doc["id"])]
-    assert doc["content"] == source and doc["chunkCount"] == len(chunks)
+    chunks = [row['content'] for row in rig.db.get_knowledge_chunks(doc['id'])]
+    assert doc['content'] == source and doc['chunkCount'] == len(chunks)
     assert_slices(source, chunks, 600, 100)
     assert index_lifecycle._ensure_vector_index()
     prefix = f"[{rig.kb['name']}/{doc['category'] or ''}] {doc['title']}: "
-    assert [row["content"] for row in rig.vector.metadata] == [prefix + chunk for chunk in chunks]
-    assert all(row["document_id"] == doc["id"] and row["knowledge_base_id"] == rig.kb["id"] for row in rig.vector.metadata)
+    assert [row['content'] for row in rig.vector.metadata] == [prefix + chunk for chunk in chunks]
+    assert all((row['document_id'] == doc['id'] and row['knowledge_base_id'] == rig.kb['id'] for row in rig.vector.metadata))

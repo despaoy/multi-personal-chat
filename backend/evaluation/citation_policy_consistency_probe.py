@@ -1,6 +1,6 @@
 """Two new citation questions against unchanged, verified parent documents."""
 
-from knowledge import index_lifecycle
+from knowledge.index_lifecycle import default_knowledge_index as index_lifecycle
 
 import hashlib
 import json

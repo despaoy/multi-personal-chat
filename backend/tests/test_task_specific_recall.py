@@ -4,7 +4,7 @@ from services import chat_answer
 
 from knowledge import chat_retrieval
 
-from knowledge import index_lifecycle
+from knowledge.index_lifecycle import default_knowledge_index as index_lifecycle
 
 import json
 from copy import deepcopy
@@ -38,115 +38,103 @@ pytestmark = pytest.mark.usefixtures("no_live_context_review")
 
 
 async def arrange(tmp_path, monkeypatch):
-    groups = {kind: [0] if kind == "public_knowledge" else [1] if kind == "control" else [] for kind in KINDS}
+    groups = {kind: [0] if kind == 'public_knowledge' else [1] if kind == 'control' else [] for kind in KINDS}
     dependencies = parse_dependencies(groups, QUERY)
-    obligations = parse_public_partitions([dict(segment_id=0, cuts=["另核对松檐馆"])], dependencies, QUERY)
+    obligations = parse_public_partitions([dict(segment_id=0, cuts=['另核对松檐馆'])], dependencies, QUERY)
 
     async def review(messages):
-        payload = json.loads(messages[-1]["content"])
-        assert payload["query"] == QUERY and len(payload["public_tasks"]) == 2
-        return open_scope_response(messages, [dict(task_id=task["id"], objects=[NAME]) for task in payload["public_tasks"]])
-
-    binding = await resolve_question_binding(dependencies, QUERY, window_tokens=65536,
-        public_obligations=obligations, reviewer=review)
-    database = SQLiteDB(tmp_path / "same-object.sqlite")
-    base = database.create_knowledge_base("虚构松檐馆规程", "仅隔离链路控制")
-    documents = [database.save_knowledge_document(dict(title=body.split("：")[0], content=body,
-        category="规程", knowledge_base_id=base["id"]), chunks=[body]) for body in BODIES]
-    monkeypatch.setenv("RERANKER_ENABLED", "false")
-    monkeypatch.setattr(knowledge, "db", database)
-    monkeypatch.setattr(index_lifecycle, "db", database)
-    monkeypatch.setattr(chat_answer, 'public_knowledge_db', database)
-    monkeypatch.setattr(chat_retrieval, "db", database)
-    monkeypatch.setattr(index_lifecycle, "_vector_index_revision", None)
-    monkeypatch.setattr(vector_db.VectorDatabase, "_check_gpu_availability", lambda _: False)
-    vector = vector_db.VectorDatabase(str(tmp_path / "vectors"), vector_db.IndexConfig(index_type="flat"))
+        payload = json.loads(messages[-1]['content'])
+        assert payload['query'] == QUERY and len(payload['public_tasks']) == 2
+        return open_scope_response(messages, [dict(task_id=task['id'], objects=[NAME]) for task in payload['public_tasks']])
+    binding = await resolve_question_binding(dependencies, QUERY, window_tokens=65536, public_obligations=obligations, reviewer=review)
+    database = SQLiteDB(tmp_path / 'same-object.sqlite')
+    base = database.create_knowledge_base('虚构松檐馆规程', '仅隔离链路控制')
+    documents = [database.save_knowledge_document(dict(title=body.split('：')[0], content=body, category='规程', knowledge_base_id=base['id']), chunks=[body]) for body in BODIES]
+    monkeypatch.setenv('RERANKER_ENABLED', 'false')
+    monkeypatch.setattr(index_lifecycle, 'db', database)
+    monkeypatch.setattr(index_lifecycle.db, '_knowledge_index', index_lifecycle, raising=False)
+    monkeypatch.setattr(index_lifecycle, 'db', database)
+    monkeypatch.setattr(index_lifecycle.db, '_knowledge_index', index_lifecycle, raising=False)
+    monkeypatch.setattr(index_lifecycle, '_vector_index_revision', None)
+    monkeypatch.setattr(vector_db.VectorDatabase, '_check_gpu_availability', lambda _: False)
+    vector = vector_db.VectorDatabase(str(tmp_path / 'vectors'), vector_db.IndexConfig(index_type='flat'))
 
     def encode(texts, **kwargs):
-        # The controlled model can resolve either single business, including
-        # the deposit-return synonym. The mixed question/name remains broad.
         values = []
         for text in texts:
-            refund_only = "保证金返还" in text or ("押金退回" in text and "新卡办理" not in text)
+            refund_only = '保证金返还' in text or ('押金退回' in text and '新卡办理' not in text)
             item = np.zeros(384, dtype=np.float32)
             if refund_only:
                 item[1] = 1
-            elif "照片要求" in text or "代领材料" in text:
-                item[0], item[2] = .25, np.sqrt(1 - .25 ** 2)
-            elif "新卡办理" in text and "押金退回" not in text:
+            elif '照片要求' in text or '代领材料' in text:
+                item[0], item[2] = (0.25, np.sqrt(1 - 0.25 ** 2))
+            elif '新卡办理' in text and '押金退回' not in text:
                 item[0] = 1
             else:
                 item[2] = 1
             values.append(item)
         return np.asarray(values, dtype=np.float32)
-
     provider = SimpleNamespace(embed_texts=encode)
-    monkeypatch.setattr(vector_db, "get_default_embedding_provider", lambda: provider)
-    monkeypatch.setattr(vector_db, "get_vector_db", lambda: vector)
-    monkeypatch.setattr(rag_helper, "get_vector_db", lambda: vector)
+    monkeypatch.setattr(vector_db, 'get_default_embedding_provider', lambda: provider)
+    monkeypatch.setattr(vector_db, 'get_vector_db', lambda: vector)
+    monkeypatch.setattr(rag_helper, 'get_vector_db', lambda: vector)
     assert index_lifecycle._ensure_vector_index()
     helper = rag_helper.RAGHelper()
-    monkeypatch.setattr(rag_helper, "get_rag_helper", lambda: helper)
+    monkeypatch.setattr(rag_helper, 'get_rag_helper', lambda: helper)
     for task, document in zip(obligations, (documents[0], documents[-1]), strict=True):
-        rows = helper.retrieve_context(NAME + "\n" + task["query"], top_k=1, enable_rerank=False, use_cache=False)
-        assert rows[0]["document_id"] == document["id"], "Atomic business must be retrievable before testing the chain"
+        rows = helper.retrieve_context(NAME + '\n' + task['query'], top_k=1, enable_rerank=False, use_cache=False)
+        assert rows[0]['document_id'] == document['id'], 'Atomic business must be retrievable before testing the chain'
     vector.clear_cache()
-    budget = get_provider_context_budget(manager=SimpleNamespace(_current_provider=SimpleNamespace(value="openai_compat")),
-        env={"OPENAI_COMPAT_CONTEXT_WINDOW_TOKENS": "65536"})
+    budget = get_provider_context_budget(manager=SimpleNamespace(_current_provider=SimpleNamespace(value='openai_compat')), env={'OPENAI_COMPAT_CONTEXT_WINDOW_TOKENS': '65536'})
     monkeypatch.setattr(chat_answer, 'get_provider_context_budget', lambda: budget)
-    monkeypatch.setattr(chat_retrieval, "get_provider_context_budget", lambda: budget)
-    curated = Mock(side_effect=AssertionError("These bound businesses are not curated character evidence"))
-    monkeypatch.setattr(runtime, "get_multiscale_rag_service", lambda: SimpleNamespace(
-        config=KnowledgeDomainConfig("fixture-curated", tmp_path, lambda _: []), retrieve_with_citations=curated, is_warm=lambda: True))
+    monkeypatch.setattr(chat_retrieval, 'get_provider_context_budget', lambda: budget)
+    curated = Mock(side_effect=AssertionError('These bound businesses are not curated character evidence'))
+    monkeypatch.setattr(runtime, 'get_multiscale_rag_service', lambda: SimpleNamespace(config=KnowledgeDomainConfig('fixture-curated', tmp_path, lambda _: []), retrieve_with_citations=curated, is_warm=lambda: True))
     searches = []
     actual = vector.hybrid_search
 
     def search(question, **kwargs):
         searches.append(question)
         return actual(question, **kwargs)
-
-    monkeypatch.setattr(vector, "hybrid_search", search)
-    return SimpleNamespace(database=database, binding=binding, obligations=obligations,
-        documents=documents, searches=searches, curated=curated)
+    monkeypatch.setattr(vector, 'hybrid_search', search)
+    return SimpleNamespace(database=database, binding=binding, obligations=obligations, documents=documents, searches=searches, curated=curated)
 
 
-@pytest.mark.parametrize("top_k", [1, 3])
+@pytest.mark.parametrize('top_k', [1, 3])
 async def test_same_object_businesses_retain_both_full_sources(tmp_path, monkeypatch, top_k):
     rig = await arrange(tmp_path, monkeypatch)
     try:
-        bundle = await chat_retrieval.retrieve_chat_knowledge(QUERY, top_k, None, question_binding=rig.binding)
-        retained = {packet["original_body"] for packet in bundle["original_source_packets"]}
+        bundle = await chat_retrieval.retrieve_chat_knowledge(QUERY, top_k, None, question_binding=rig.binding, database=index_lifecycle.db)
+        retained = {packet['original_body'] for packet in bundle['original_source_packets']}
         assert BODIES[0] in retained and BODIES[-1] in retained
         assert rig.searches[0] == QUERY
-        assert any("押金退回" in text and "新卡办理" not in text for text in rig.searches[1:])
-        assert any("新卡办理" in text and "押金退回" not in text for text in rig.searches[1:])
-        assert all(record["original_source_receipt"]["authority"] == "fresh_knowledge_document_read"
-                   for record in bundle["source_coverage"])
+        assert any(('押金退回' in text and '新卡办理' not in text for text in rig.searches[1:]))
+        assert any(('新卡办理' in text and '押金退回' not in text for text in rig.searches[1:]))
+        assert all((record['original_source_receipt']['authority'] == 'fresh_knowledge_document_read' for record in bundle['source_coverage']))
         rig.curated.assert_not_called()
     finally:
         rig.database.close_connection()
 
 
-@pytest.mark.parametrize("defect", ["object_only", "missing", "proof", "order"])
+@pytest.mark.parametrize('defect', ['object_only', 'missing', 'proof', 'order'])
 async def test_task_receipts_preserve_complete_queries_and_their_binding(tmp_path, monkeypatch, defect):
     from inference.task_evidence_coverage import validate_task_candidates
-
     rig = await arrange(tmp_path, monkeypatch)
     try:
-        bundle = await chat_retrieval.retrieve_chat_knowledge(QUERY, 3, None, question_binding=rig.binding)
-        records = bundle["task_candidate_coverage"]
+        bundle = await chat_retrieval.retrieve_chat_knowledge(QUERY, 3, None, question_binding=rig.binding, database=index_lifecycle.db)
+        records = bundle['task_candidate_coverage']
         checked = validate_task_candidates(records, query=QUERY)
-        assert len(checked) == 3 and all(row["reference_binding"] == rig.binding for row in checked[1:])
-        assert all(row["semantic_coverage"] == "unverified" for row in checked)
+        assert len(checked) == 3 and all((row['reference_binding'] == rig.binding for row in checked[1:]))
+        assert all((row['semantic_coverage'] == 'unverified' for row in checked))
         changed = deepcopy(records)
-        if defect == "object_only":
-            changed[1]["query"] = NAME
-        elif defect == "missing":
+        if defect == 'object_only':
+            changed[1]['query'] = NAME
+        elif defect == 'missing':
             changed = changed[:-1]
-        elif defect == "proof":
-            changed[1]["reference_binding"]["input_sha256"] = "0" * 64
+        elif defect == 'proof':
+            changed[1]['reference_binding']['input_sha256'] = '0' * 64
         else:
-            changed[1]["query"], changed[2]["query"] = changed[2]["query"], changed[1]["query"]
+            changed[1]['query'], changed[2]['query'] = (changed[2]['query'], changed[1]['query'])
         with pytest.raises(ValueError):
             validate_task_candidates(changed, query=QUERY)
     finally:
@@ -210,22 +198,19 @@ async def test_bound_businesses_reject_separate_query_hints_before_search(tmp_pa
 
 async def test_capacity_error_reaches_generation_as_actionable_failure(monkeypatch, semantic_plan):
     from unittest.mock import AsyncMock
-
     from db.schemas import MessageRequest
     from knowledge import public_question_binding
     from knowledge.public_question_binding import QuestionBindingCapacityError
-
-    query = "核对松檐馆的全部公共业务。"
+    query = '核对松檐馆的全部公共业务。'
     semantic_plan(query, dict(public_knowledge=[0]))
-    failure = QuestionBindingCapacityError("Complete public task views exceed retrieval capacity")
+    failure = QuestionBindingCapacityError('Complete public task views exceed retrieval capacity')
     retrieve = AsyncMock(side_effect=failure)
     model = AsyncMock()
-    monkeypatch.setattr(public_question_binding, "resolve_question_binding", AsyncMock(return_value=None))
+    monkeypatch.setattr(public_question_binding, 'resolve_question_binding', AsyncMock(return_value=None))
     monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieve)
     monkeypatch.setattr(chat_answer, '_rag_retrieval_timeout', lambda: 30.0)
     with pytest.raises(chat_answer.ChatRetrievalError) as caught:
-        await chat_answer.generate_chat_answer(MessageRequest(message=query), None,
-            runtime_config={"useKnowledgeBase": True}, model_generate=model)
+        await chat_answer.generate_chat_answer(MessageRequest(message=query), None, runtime_config={'useKnowledgeBase': True}, model_generate=model)
     assert caught.value.http_status == 503 and caught.value.detail == failure.public_detail()
     assert caught.value.__cause__ is failure
     model.assert_not_awaited()

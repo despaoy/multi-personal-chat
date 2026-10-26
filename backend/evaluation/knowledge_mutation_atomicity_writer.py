@@ -1,6 +1,6 @@
 """An independent authenticated writer against the disposable probe DB."""
 
-from knowledge import index_lifecycle
+from knowledge.index_lifecycle import default_knowledge_index as index_lifecycle
 
 import asyncio
 import json

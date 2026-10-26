@@ -1,6 +1,8 @@
 """Real batch imports report confirmed work, errors and unknown writes honestly."""
 
-from knowledge import index_lifecycle
+from app.runtime import RuntimeContainer
+
+from knowledge.index_lifecycle import default_knowledge_index as index_lifecycle
 
 import asyncio
 import io
@@ -24,25 +26,26 @@ ROUTES = ["zip", "scan_root", "scan_folder"]
 
 @pytest.fixture
 def imports(tmp_path, monkeypatch):
-    db = SQLiteDB(tmp_path / "source.sqlite")
-    kb = db.create_knowledge_base("完整合成登记库")
-    db.create_knowledge_folder(kb["id"], "适用条件")
-    monkeypatch.setattr(knowledge, "db", db)
-    monkeypatch.setattr(index_lifecycle, "db", db)
-    root = tmp_path / "knowledge_bases"
-    monkeypatch.setattr(knowledge, "KNOWLEDGE_BASES_DIR", root)
+    db = SQLiteDB(tmp_path / 'source.sqlite')
+    kb = db.create_knowledge_base('完整合成登记库')
+    db.create_knowledge_folder(kb['id'], '适用条件')
+    monkeypatch.setattr(index_lifecycle, 'db', db)
+    monkeypatch.setattr(index_lifecycle.db, '_knowledge_index', index_lifecycle, raising=False)
+    root = tmp_path / 'knowledge_bases'
+    monkeypatch.setattr(knowledge, 'KNOWLEDGE_BASES_DIR', root)
     opened = []
     original_zip = zipfile.ZipFile
 
     class TrackedZip(original_zip):
+
         def __init__(self, *args, **kwargs):
             super().__init__(*args, **kwargs)
             opened.append(self)
-
-    monkeypatch.setattr(zipfile, "ZipFile", TrackedZip)
+    monkeypatch.setattr(zipfile, 'ZipFile', TrackedZip)
     app = FastAPI()
+    app.state.runtime_container = RuntimeContainer(db=index_lifecycle.db, is_pg_mode=lambda: False, startup_env={})
     app.include_router(knowledge.router)
-    app.dependency_overrides[get_current_admin] = lambda: {"role": "admin"}
+    app.dependency_overrides[get_current_admin] = lambda: {'role': 'admin'}
     return SimpleNamespace(db=db, kb=kb, root=root, app=app, opened=opened)
 
 

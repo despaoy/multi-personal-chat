@@ -44,29 +44,24 @@ def test_unknown_foreign_and_external_profile_clauses_keep_retrieval(query):
 async def test_profile_routes_to_actual_generation_with_or_without_saved_records(monkeypatch, saved, semantic_plan):
     from knowledge import intent_detector
 
-    async def retrieval(*args):
+    async def retrieval(*args, database):
         pytest.fail('External knowledge cannot establish private user fields')
-
     calls = []
+
     async def model(**kwargs):
         calls.append(kwargs)
         return '你叫岚舟，目前住在舟山，大学专业是环境工程。' if saved else '当前没有可核对的个人资料。'
-
     monkeypatch.setattr(intent_detector, '_ML_AVAILABLE', False)
     monkeypatch.setattr(intent_detector, '_load_ml_model', lambda: pytest.fail('Personal dependency needs no classifier'))
     monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieval)
     monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: 'persona')
-    item = MemoryItem('profile', 'user_fact', '用户说自己叫岚舟', memory_key='user_name',
-                      evidence=('我叫岚舟。',), source_message_ids=('source',))
-    ctx = CompiledCharacterContext('', '', '我叫岚舟。我目前住在舟山。我的大学专业是环境工程。' if saved else '',
-        ('profile',) if saved else (), memory_status='available' if saved else 'no_match',
-        memory_packets=(item,) if saved else (), memory_field_presence=tuple((f, saved) for f in ('name', 'residence', 'major')))
-    prepared = SimpleNamespace(compiled=ctx, history=({'role':'user','content':'今天整理了资料。'},), reply_guard=None)
-    semantic_plan(QUERY, {"private_memory": [0], "control": [1]})
-    _chat_result_meta = await chat_answer.generate_chat_answer(MessageRequest(message=QUERY), None,
-        runtime_config={'useKnowledgeBase':True}, prepared_character_turn=prepared, model_generate=model)
-    reply, used_rag, meta = _chat_result_meta.reply, _chat_result_meta.used_rag, _chat_result_meta.metadata
-    assert reply and len(calls) == 1 and used_rag is False
+    item = MemoryItem('profile', 'user_fact', '用户说自己叫岚舟', memory_key='user_name', evidence=('我叫岚舟。',), source_message_ids=('source',))
+    ctx = CompiledCharacterContext('', '', '我叫岚舟。我目前住在舟山。我的大学专业是环境工程。' if saved else '', ('profile',) if saved else (), memory_status='available' if saved else 'no_match', memory_packets=(item,) if saved else (), memory_field_presence=tuple(((f, saved) for f in ('name', 'residence', 'major'))))
+    prepared = SimpleNamespace(compiled=ctx, history=({'role': 'user', 'content': '今天整理了资料。'},), reply_guard=None)
+    semantic_plan(QUERY, {'private_memory': [0], 'control': [1]})
+    _chat_result_meta = await chat_answer.generate_chat_answer(MessageRequest(message=QUERY), None, runtime_config={'useKnowledgeBase': True}, prepared_character_turn=prepared, model_generate=model)
+    reply, used_rag, meta = (_chat_result_meta.reply, _chat_result_meta.used_rag, _chat_result_meta.metadata)
+    assert reply and len(calls) == 1 and (used_rag is False)
     assert not meta.get('abstained') and meta.get('answerMode') != 'abstention'
     assert QUERY in calls[0]['messages'][-1]['content']
     assert '【本轮证据不足】' not in calls[0]['messages'][0]['content']
@@ -74,11 +69,12 @@ async def test_profile_routes_to_actual_generation_with_or_without_saved_records
 @pytest.mark.asyncio
 async def test_mixed_profile_keeps_actual_external_retrieval_and_uncertainty(monkeypatch, semantic_plan, controlled_public_bundle):
     from knowledge import intent_detector
+    retrieved, calls = ([], [])
 
-    retrieved, calls = [], []
-    async def retrieval(*args):
+    async def retrieval(*args, database):
         retrieved.append(args)
-        return {'context_text':'untrusted candidate', 'citations':[{'id':'rejected'}], 'abstained':True}
+        return {'context_text': 'untrusted candidate', 'citations': [{'id': 'rejected'}], 'abstained': True}
+
     async def model(**kwargs):
         calls.append(kwargs)
         return '你叫岚舟，原作人物的关系暂时无法核实。'
@@ -86,11 +82,10 @@ async def test_mixed_profile_keeps_actual_external_retrieval_and_uncertainty(mon
     monkeypatch.setattr(intent_detector, '_load_ml_model', lambda: None)
     monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieval)
     monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: 'persona')
-    query=QUERY+'月社妃和琉璃是什么关系？'
-    semantic_plan(query, {"private_memory": [0], "control": [1], "public_knowledge": [2]})
-    _chat_result_meta = await chat_answer.generate_chat_answer(MessageRequest(message=query),None,
-        runtime_config={'useKnowledgeBase':True},model_generate=model)
-    _, used_rag, meta = _chat_result_meta.reply, _chat_result_meta.used_rag, _chat_result_meta.metadata
-    assert len(retrieved)==len(calls)==1 and used_rag and meta['abstained']
-    assert meta['answerMode']=='abstention' and not meta['citations']
+    query = QUERY + '月社妃和琉璃是什么关系？'
+    semantic_plan(query, {'private_memory': [0], 'control': [1], 'public_knowledge': [2]})
+    _chat_result_meta = await chat_answer.generate_chat_answer(MessageRequest(message=query), None, runtime_config={'useKnowledgeBase': True}, model_generate=model)
+    _, used_rag, meta = (_chat_result_meta.reply, _chat_result_meta.used_rag, _chat_result_meta.metadata)
+    assert len(retrieved) == len(calls) == 1 and used_rag and meta['abstained']
+    assert meta['answerMode'] == 'abstention' and (not meta['citations'])
     assert query in calls[0]['messages'][-1]['content'] and 'untrusted candidate' not in str(calls)

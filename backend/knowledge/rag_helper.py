@@ -35,8 +35,9 @@ class RAGHelper:
     独立任务证据保留。
     """
 
-    def __init__(self):
+    def __init__(self, *, vector_provider=None):
         """初始化RAG辅助类，按显式配置加载重排器，检索时获取向量数据库。"""
+        self._vector_provider = vector_provider
         self.min_score_threshold = 0.05
         self.top_k = 5
 
@@ -103,16 +104,28 @@ class RAGHelper:
         views = literal_task_views(query, additional_queries)
         if views:
             return self._task_candidate_plan(
-                query, views, top_k=top_k, enable_rerank=enable_rerank,
-                filters=filters, use_cache=use_cache,
+                query,
+                views,
+                top_k=top_k,
+                enable_rerank=enable_rerank,
+                filters=filters,
+                use_cache=use_cache,
             ).results
 
-        vector_db = get_vector_db()
+        vector_db = self._vector_provider() if self._vector_provider is not None else get_vector_db()
         vector_generation = vector_db.cache_generation
         cache_key = json.dumps(
-            [query, top_k, enable_rerank and self.enable_reranking, self.min_score_threshold,
-             self.recall_multiplier, filters or {}, vector_generation],
-            ensure_ascii=False, sort_keys=True,
+            [
+                query,
+                top_k,
+                enable_rerank and self.enable_reranking,
+                self.min_score_threshold,
+                self.recall_multiplier,
+                filters or {},
+                vector_generation,
+            ],
+            ensure_ascii=False,
+            sort_keys=True,
         )
         if use_cache:
             cached = self._get_from_cache(cache_key)
@@ -120,10 +133,16 @@ class RAGHelper:
                 logger.info("RAG缓存命中")
                 return cached
 
-        recall_results = [dict(row) for row in vector_db.hybrid_search(
-            query, top_k=top_k * self.recall_multiplier,
-            threshold=self.min_score_threshold, keyword_weight=0.3, filters=filters or None,
-        )]
+        recall_results = [
+            dict(row)
+            for row in vector_db.hybrid_search(
+                query,
+                top_k=top_k * self.recall_multiplier,
+                threshold=self.min_score_threshold,
+                keyword_weight=0.3,
+                filters=filters or None,
+            )
+        ]
         if not recall_results:
             logger.info("RAG检索未找到相关文档")
             return []
@@ -146,26 +165,38 @@ class RAGHelper:
             self._add_to_cache(cache_key, results)
         return results
 
-    def _task_candidate_plan(self, query, views, *, top_k, enable_rerank, filters, use_cache, threshold=0.3, question_binding=None):
+    def _task_candidate_plan(
+        self, query, views, *, top_k, enable_rerank, filters, use_cache, threshold=0.3, question_binding=None
+    ):
         from knowledge.task_retrieval import collect_task_candidates
 
         resolved_filters = copy.deepcopy(filters)
 
         def snapshot():
-            index = get_vector_db()
+            index = self._vector_provider() if self._vector_provider is not None else get_vector_db()
             return id(index), index.cache_generation
 
         def retrieve(question, *, top_k, filters):
             # Every validated task keeps the caller's explicit scope.
             return self.retrieve_context(
-                question, top_k=top_k, enable_rerank=enable_rerank,
-                filters=filters, use_cache=use_cache,
+                question,
+                top_k=top_k,
+                enable_rerank=enable_rerank,
+                filters=filters,
+                use_cache=use_cache,
             )
 
         return collect_task_candidates(
-            query, views, top_k=self.top_k if top_k is None else top_k, filters=resolved_filters,
-            retrieve=retrieve, confidence=self.compute_confidence,
-            stable_key=_stable_result_key, snapshot=snapshot, threshold=threshold, question_binding=question_binding,
+            query,
+            views,
+            top_k=self.top_k if top_k is None else top_k,
+            filters=resolved_filters,
+            retrieve=retrieve,
+            confidence=self.compute_confidence,
+            stable_key=_stable_result_key,
+            snapshot=snapshot,
+            threshold=threshold,
+            question_binding=question_binding,
         )
 
     @staticmethod
@@ -181,11 +212,12 @@ class RAGHelper:
             raise ValueError(message)
         return max(0.0, min(1.0, score))
 
-    def compute_confidence(self, results: list[dict[str, Any]]) -> float:
+    @staticmethod
+    def compute_confidence(results: list[dict[str, Any]]) -> float:
         """Estimate confidence from absolute retrieval scores, not min-max rank scores."""
         if not results:
             return 0.0
-        scores = [self._absolute_score(result) for result in results[:3]]
+        scores = [RAGHelper._absolute_score(result) for result in results[:3]]
         top_score = scores[0]
         support_score = sum(scores) / len(scores)
         return round(0.7 * top_score + 0.3 * support_score, 4)
@@ -241,8 +273,13 @@ class RAGHelper:
         task_coverage = ()
         if views:
             plan = self._task_candidate_plan(
-                query, views, top_k=top_k, enable_rerank=True,
-                filters=filters, use_cache=True, threshold=threshold,
+                query,
+                views,
+                top_k=top_k,
+                enable_rerank=True,
+                filters=filters,
+                use_cache=True,
+                threshold=threshold,
                 **({"question_binding": question_binding} if question_binding is not None else {}),
             )
             results, task_coverage = plan.results, plan.coverage

@@ -1,6 +1,6 @@
 """Only persisted cross-worker authority, loaded evidence and cache freshness."""
 
-from knowledge import index_lifecycle
+from knowledge.index_lifecycle import default_knowledge_index as index_lifecycle
 
 from copy import deepcopy
 from threading import RLock
@@ -50,29 +50,20 @@ class RecordingVector:
 @pytest.fixture
 def readers(tmp_path, monkeypatch):
     from knowledge import vector_db as vector_module
-
-    path = tmp_path / "shared.db"
+    path = tmp_path / 'shared.db'
     reader = SQLiteDB(path)
     writer = SQLiteDB(path)
-    old = reader.create_knowledge_base("旧库", "")
-    new = reader.create_knowledge_base("新库", "")
-    body = "完整课程规则。普通雨照常，红色暴雨停课。末尾仍须书面确认。"
-    doc = reader.save_knowledge_document(
-        dict(
-            title="旧标题",
-            content=body,
-            category="旧类",
-            knowledge_base_id=old["id"],
-        ),
-        chunks=[body],
-    )
+    old = reader.create_knowledge_base('旧库', '')
+    new = reader.create_knowledge_base('新库', '')
+    body = '完整课程规则。普通雨照常，红色暴雨停课。末尾仍须书面确认。'
+    doc = reader.save_knowledge_document(dict(title='旧标题', content=body, category='旧类', knowledge_base_id=old['id']), chunks=[body])
     vector = RecordingVector()
-    monkeypatch.setattr(knowledge, "db", reader)
-    monkeypatch.setattr(index_lifecycle, "db", reader)
-    monkeypatch.setattr(vector_module, "get_vector_db", lambda: vector)
-    monkeypatch.setattr(index_lifecycle, "_vector_index_revision", None)
+    monkeypatch.setattr(index_lifecycle, 'db', reader)
+    monkeypatch.setattr(index_lifecycle.db, '_knowledge_index', index_lifecycle, raising=False)
+    monkeypatch.setattr(vector_module, 'get_vector_db', lambda: vector)
+    monkeypatch.setattr(index_lifecycle, '_vector_index_revision', None)
     assert index_lifecycle._ensure_vector_index()
-    return reader, writer, doc, new, vector
+    return (reader, writer, doc, new, vector)
 
 
 def external_update(writer, doc, change, complete=False):
@@ -216,30 +207,27 @@ def test_corrupt_local_identity_cannot_pass_global_complete_count(readers, monke
 
 async def test_missing_count_row_cannot_authorize_empty_index(readers, monkeypatch):
     from unittest.mock import Mock
-
     from db.schemas import KnowledgeSearchRequest
     from fastapi import HTTPException
-
     reader, writer, doc, new, vector = readers
-    external_update(writer, doc, dict(title="完整新规则"))
+    external_update(writer, doc, dict(title='完整新规则'))
     before = deepcopy(vector.metadata)
     revision = index_lifecycle._get_rebuild_revision()
     clear = Mock(wraps=vector.clear_all)
-    monkeypatch.setattr(vector, "clear_all", clear)
+    monkeypatch.setattr(vector, 'clear_all', clear)
     execute = reader.execute_sql
 
     def missing_aggregate(query, params=None):
-        if query.startswith("SELECT COUNT(*) AS cnt"):
+        if query.startswith('SELECT COUNT(*) AS cnt'):
             return []
         return execute(query, params)
-
-    monkeypatch.setattr(reader, "execute_sql", missing_aggregate)
-    request = KnowledgeSearchRequest(query="完整课程规则、红色暴雨例外及书面确认条件")
+    monkeypatch.setattr(reader, 'execute_sql', missing_aggregate)
+    request = KnowledgeSearchRequest(query='完整课程规则、红色暴雨例外及书面确认条件')
     with pytest.raises(HTTPException) as caught:
-        await knowledge.search_knowledge(request, {"role": "admin"})
+        await knowledge.search_knowledge(request, {'role': 'admin'}, database=index_lifecycle.db)
     assert caught.value.status_code == 503 and isinstance(caught.value.__cause__, IndexError)
     clear.assert_not_called()
     assert vector.metadata == before and index_lifecycle._vector_index_revision is None
-    assert index_lifecycle._read_rebuild_status()[0] == "dirty"
+    assert index_lifecycle._read_rebuild_status()[0] == 'dirty'
     assert index_lifecycle._get_rebuild_revision() == revision
-    assert reader.get_knowledge_chunks(doc["id"])[0]["content"] == doc["content"]
+    assert reader.get_knowledge_chunks(doc['id'])[0]['content'] == doc['content']

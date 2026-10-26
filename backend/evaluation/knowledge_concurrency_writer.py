@@ -1,6 +1,6 @@
 """Actual authenticated writes; a gate delays a real revision read unchanged."""
 
-from knowledge import index_lifecycle
+from knowledge.index_lifecycle import default_knowledge_index as index_lifecycle
 
 import asyncio
 import json

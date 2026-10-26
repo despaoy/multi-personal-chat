@@ -1,6 +1,6 @@
 """Document transactions own revisions; one rebuild path publishes the index."""
 
-from knowledge import index_lifecycle
+from knowledge.index_lifecycle import default_knowledge_index as index_lifecycle
 from unittest.mock import Mock
 
 import numpy as np
@@ -12,50 +12,50 @@ from db.schemas import KnowledgeDocumentUpdate
 from knowledge import vector_db as vectors
 
 
-@pytest.mark.parametrize('operation',['update','delete'])
-@pytest.mark.parametrize('fail_rebuild',[False,True])
-async def test_committed_document_change_uses_one_index_publication(tmp_path,monkeypatch,operation,fail_rebuild):
-    db=SQLiteDB(tmp_path/'source.sqlite')
-    monkeypatch.setattr(knowledge,'db',db)
-    monkeypatch.setattr(index_lifecycle,'db',db)
-    monkeypatch.setattr(index_lifecycle,'_vector_index_revision',None)
-    monkeypatch.setattr(vectors.VectorDatabase,'_check_gpu_availability',lambda self:False)
-    vector=vectors.VectorDatabase(str(tmp_path/'vectors'))
-    encode=Mock(side_effect=lambda texts:np.tile(np.eye(1,384,dtype=np.float32),(len(texts),1)))
-    monkeypatch.setattr(vector,'_get_embeddings_batch',encode)
-    getter=Mock(return_value=vector)
-    monkeypatch.setattr(vectors,'get_vector_db',getter)
-    source='完整旧规则：10月12日14点在一楼办理，必须携带书面确认。'
-    updated='完整新规则：10月19日15点在二楼办理，必须携带书面确认。'
-    row=db.save_knowledge_document(dict(title='合成规则',content=source),chunks=[source])
+@pytest.mark.parametrize('operation', ['update', 'delete'])
+@pytest.mark.parametrize('fail_rebuild', [False, True])
+async def test_committed_document_change_uses_one_index_publication(tmp_path, monkeypatch, operation, fail_rebuild):
+    db = SQLiteDB(tmp_path / 'source.sqlite')
+    monkeypatch.setattr(index_lifecycle, 'db', db)
+    monkeypatch.setattr(index_lifecycle.db, '_knowledge_index', index_lifecycle, raising=False)
+    monkeypatch.setattr(index_lifecycle, '_vector_index_revision', None)
+    monkeypatch.setattr(vectors.VectorDatabase, '_check_gpu_availability', lambda self: False)
+    vector = vectors.VectorDatabase(str(tmp_path / 'vectors'))
+    encode = Mock(side_effect=lambda texts: np.tile(np.eye(1, 384, dtype=np.float32), (len(texts), 1)))
+    monkeypatch.setattr(vector, '_get_embeddings_batch', encode)
+    getter = Mock(return_value=vector)
+    monkeypatch.setattr(vectors, 'get_vector_db', getter)
+    source = '完整旧规则：10月12日14点在一楼办理，必须携带书面确认。'
+    updated = '完整新规则：10月19日15点在二楼办理，必须携带书面确认。'
+    row = db.save_knowledge_document(dict(title='合成规则', content=source), chunks=[source])
     assert index_lifecycle._ensure_vector_index()
-    calls=encode.call_count
+    calls = encode.call_count
     getter.reset_mock()
-    revision=index_lifecycle._get_rebuild_revision()
-    if operation=='update':
-        result=await knowledge.update_knowledge_document(row['id'],KnowledgeDocumentUpdate(content=updated),dict(role='admin'))
-        assert ''.join(c['content'] for c in db.get_knowledge_chunks(row['id']))==updated
+    revision = index_lifecycle._get_rebuild_revision()
+    if operation == 'update':
+        result = await knowledge.update_knowledge_document(row['id'], KnowledgeDocumentUpdate(content=updated), dict(role='admin'), database=index_lifecycle.db)
+        assert ''.join((c['content'] for c in db.get_knowledge_chunks(row['id']))) == updated
     else:
-        result=await knowledge.delete_knowledge_document(row['id'],dict(role='admin'))
+        result = await knowledge.delete_knowledge_document(row['id'], dict(role='admin'), database=index_lifecycle.db)
         assert db.get_knowledge_document(row['id']) is None
-    assert result['success'] and index_lifecycle._get_rebuild_revision()==revision+1
-    assert index_lifecycle._read_rebuild_status()[0]=='dirty' and index_lifecycle._vector_index_revision is None
+    assert result['success'] and index_lifecycle._get_rebuild_revision() == revision + 1
+    assert index_lifecycle._read_rebuild_status()[0] == 'dirty' and index_lifecycle._vector_index_revision is None
     getter.assert_not_called()
-    assert encode.call_count==calls
+    assert encode.call_count == calls
     if fail_rebuild:
-        failure=OSError('synthetic publication failure')
-        monkeypatch.setattr(vector,'clear_all',Mock(side_effect=failure))
+        failure = OSError('synthetic publication failure')
+        monkeypatch.setattr(vector, 'clear_all', Mock(side_effect=failure))
         with pytest.raises(OSError) as raised:
             index_lifecycle._ensure_vector_index()
         assert raised.value is failure
-        assert index_lifecycle._read_rebuild_status()[0]!='complete' and index_lifecycle._vector_index_revision is None
-        assert index_lifecycle._read_rebuild_status()[0]==('building' if operation=='update' else 'dirty')
+        assert index_lifecycle._read_rebuild_status()[0] != 'complete' and index_lifecycle._vector_index_revision is None
+        assert index_lifecycle._read_rebuild_status()[0] == ('building' if operation == 'update' else 'dirty')
     else:
         assert index_lifecycle._ensure_vector_index()
-        assert index_lifecycle._read_rebuild_status()[0]=='complete'
-        reopened=vectors.VectorDatabase(str(tmp_path/'vectors'))
-        assert reopened.metadata==vector.metadata and reopened.snapshot_validated
-        assert reopened.index.ntotal==len(reopened.metadata)==(1 if operation=='update' else 0)
-        if operation=='update':
+        assert index_lifecycle._read_rebuild_status()[0] == 'complete'
+        reopened = vectors.VectorDatabase(str(tmp_path / 'vectors'))
+        assert reopened.metadata == vector.metadata and reopened.snapshot_validated
+        assert reopened.index.ntotal == len(reopened.metadata) == (1 if operation == 'update' else 0)
+        if operation == 'update':
             assert updated in reopened.metadata[0]['content'] and source not in reopened.metadata[0]['content']
-            assert encode.call_count==calls+1
+            assert encode.call_count == calls + 1

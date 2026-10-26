@@ -2,7 +2,7 @@
 
 from knowledge import chat_retrieval
 
-from knowledge import index_lifecycle
+from knowledge.index_lifecycle import default_knowledge_index as index_lifecycle
 
 import io
 import zipfile
@@ -23,66 +23,46 @@ TEXT = "2026年10月23日15:30在青岚楼二层办理登记。申请人须本�
 
 @pytest.fixture
 def publication(tmp_path, monkeypatch):
-    db = SQLiteDB(tmp_path / "source.sqlite")
-    monkeypatch.setattr(knowledge, "db", db)
-    monkeypatch.setattr(index_lifecycle, "db", db)
-    monkeypatch.setattr(index_lifecycle, "_vector_index_revision", None)
-    monkeypatch.setattr(vectors.VectorDatabase, "_check_gpu_availability", lambda self: False)
-    vector = vectors.VectorDatabase(str(tmp_path / "vectors"))
+    db = SQLiteDB(tmp_path / 'source.sqlite')
+    monkeypatch.setattr(index_lifecycle, 'db', db)
+    monkeypatch.setattr(index_lifecycle.db, '_knowledge_index', index_lifecycle, raising=False)
+    monkeypatch.setattr(index_lifecycle, '_vector_index_revision', None)
+    monkeypatch.setattr(vectors.VectorDatabase, '_check_gpu_availability', lambda self: False)
+    vector = vectors.VectorDatabase(str(tmp_path / 'vectors'))
     encode = Mock(side_effect=lambda texts: np.tile(np.eye(1, 384, dtype=np.float32), (len(texts), 1)))
-    monkeypatch.setattr(vector, "_get_embeddings_batch", encode)
-    monkeypatch.setattr(vector, "_get_embedding", lambda text: np.eye(1, 384, dtype=np.float32)[0])
+    monkeypatch.setattr(vector, '_get_embeddings_batch', encode)
+    monkeypatch.setattr(vector, '_get_embedding', lambda text: np.eye(1, 384, dtype=np.float32)[0])
     add = Mock(wraps=vector.add_documents)
-    monkeypatch.setattr(vector, "add_documents", add)
+    monkeypatch.setattr(vector, 'add_documents', add)
     getter = Mock(return_value=vector)
-    monkeypatch.setattr(vectors, "get_vector_db", getter)
-    kb = db.create_knowledge_base("完整合成登记库")
-    folder = db.create_knowledge_folder(kb["id"], "适用条件")
+    monkeypatch.setattr(vectors, 'get_vector_db', getter)
+    kb = db.create_knowledge_base('完整合成登记库')
+    folder = db.create_knowledge_folder(kb['id'], '适用条件')
     assert index_lifecycle._ensure_vector_index()
     getter.reset_mock()
     revision = index_lifecycle._get_rebuild_revision()
     lookup = Mock(wraps=db.get_knowledge_base)
-    monkeypatch.setattr(db, "get_knowledge_base", lookup)
-    root = tmp_path / "knowledge_bases"
-    monkeypatch.setattr(knowledge, "KNOWLEDGE_BASES_DIR", root)
-    return SimpleNamespace(
-        db=db,
-        vector=vector,
-        encode=encode,
-        add=add,
-        getter=getter,
-        kb=kb,
-        folder=folder,
-        revision=revision,
-        lookup=lookup,
-        root=root,
-    )
+    monkeypatch.setattr(db, 'get_knowledge_base', lookup)
+    root = tmp_path / 'knowledge_bases'
+    monkeypatch.setattr(knowledge, 'KNOWLEDGE_BASES_DIR', root)
+    return SimpleNamespace(db=db, vector=vector, encode=encode, add=add, getter=getter, kb=kb, folder=folder, revision=revision, lookup=lookup, root=root)
 
 
 async def publish(rig, route):
-    admin = {"role": "admin"}
-    if route == "create":
-        return await knowledge.create_knowledge_document(
-            KnowledgeDocumentCreate(
-                title="登记规则",
-                content=TEXT,
-                category="旧分类",
-                knowledge_base_id=rig.kb["id"],
-                folder_id=rig.folder["id"],
-            ),
-            admin,
-        )
-    if route == "zip":
+    admin = {'role': 'admin'}
+    if route == 'create':
+        return await knowledge.create_knowledge_document(KnowledgeDocumentCreate(title='登记规则', content=TEXT, category='旧分类', knowledge_base_id=rig.kb['id'], folder_id=rig.folder['id']), admin, database=index_lifecycle.db)
+    if route == 'zip':
         buffer = io.BytesIO()
-        with zipfile.ZipFile(buffer, "w") as archive:
-            archive.writestr("适用条件/登记规则.txt", TEXT)
+        with zipfile.ZipFile(buffer, 'w') as archive:
+            archive.writestr('适用条件/登记规则.txt', TEXT)
         buffer.seek(0)
-        return await knowledge.upload_zip(rig.kb["id"], UploadFile(buffer, filename="完整登记规则.zip"), admin)
-    target = rig.root / "合成来源"
-    folder = target / "适用条件" if route == "scan_folder" else target
+        return await knowledge.upload_zip(rig.kb['id'], UploadFile(buffer, filename='完整登记规则.zip'), admin, database=index_lifecycle.db)
+    target = rig.root / '合成来源'
+    folder = target / '适用条件' if route == 'scan_folder' else target
     folder.mkdir(parents=True)
-    (folder / "登记规则.txt").write_text(TEXT, encoding="utf-8")
-    return await knowledge.import_scanned_directory("合成来源", rig.kb["id"], admin)
+    (folder / '登记规则.txt').write_text(TEXT, encoding='utf-8')
+    return await knowledge.import_scanned_directory('合成来源', rig.kb['id'], admin, database=index_lifecycle.db)
 
 
 @pytest.mark.parametrize("route", ["create", "zip", "scan_root", "scan_folder"])
@@ -120,25 +100,25 @@ async def test_create_and_import_use_one_authoritative_index_publication(publica
     assert reloaded.index.ntotal == len(reloaded.bm25.corpus) == len(reloaded.metadata) == 1
 
 
-@pytest.mark.parametrize("route", ["create", "zip", "scan_root", "scan_folder"])
+@pytest.mark.parametrize('route', ['create', 'zip', 'scan_root', 'scan_folder'])
 async def test_index_failure_keeps_complete_source_and_returns_search_failure(publication, monkeypatch, caplog, route):
     rig = publication
     result = await publish(rig, route)
-    assert result["success"]
+    assert result['success']
     rig.add.assert_not_called()
-    failure = OSError("synthetic-private-index-flush-detail")
-    monkeypatch.setattr(rig.vector, "flush", Mock(side_effect=failure))
-    request = KnowledgeSearchRequest(query="登记办理的完整条件及未确认付款限制", knowledgeBaseName=rig.kb["name"])
+    failure = OSError('synthetic-private-index-flush-detail')
+    monkeypatch.setattr(rig.vector, 'flush', Mock(side_effect=failure))
+    request = KnowledgeSearchRequest(query='登记办理的完整条件及未确认付款限制', knowledgeBaseName=rig.kb['name'])
     with pytest.raises(HTTPException) as raised:
-        await knowledge.search_knowledge(request, {"role": "admin"})
+        await knowledge.search_knowledge(request, {'role': 'admin'}, database=index_lifecycle.db)
     assert raised.value.status_code == 503
     assert raised.value.__cause__ is failure
-    assert "synthetic-private" not in str(raised.value.detail) + caplog.text
-    assert index_lifecycle._read_rebuild_status()[0] != "complete" and index_lifecycle._vector_index_revision is None
+    assert 'synthetic-private' not in str(raised.value.detail) + caplog.text
+    assert index_lifecycle._read_rebuild_status()[0] != 'complete' and index_lifecycle._vector_index_revision is None
     assert index_lifecycle._get_rebuild_revision() == rig.revision + 1
     docs = rig.db.get_knowledge_documents()
-    assert len(docs) == 1 and docs[0]["content"] == TEXT
-    assert "".join(row["content"] for row in rig.db.get_knowledge_chunks(docs[0]["id"])) == TEXT
+    assert len(docs) == 1 and docs[0]['content'] == TEXT
+    assert ''.join((row['content'] for row in rig.db.get_knowledge_chunks(docs[0]['id']))) == TEXT
     rig.add.assert_called_once()
     rig.encode.assert_called_once()
     rig.getter.assert_called_once_with()
@@ -162,14 +142,14 @@ def test_duplicate_parent_creation_ends_transaction_before_document_commit(publi
 
 async def test_scan_reuses_existing_named_base_before_atomic_document_publication(publication):
     rig = publication
-    target = rig.root / rig.kb["name"]
+    target = rig.root / rig.kb['name']
     target.mkdir(parents=True)
-    (target / "登记规则.txt").write_text(TEXT, encoding="utf-8")
-    result = await knowledge.import_scanned_directory(rig.kb["name"], None, {"role": "admin"})
-    assert result["success"] and result["createdDocs"] == 1 and result["errors"] == []
+    (target / '登记规则.txt').write_text(TEXT, encoding='utf-8')
+    result = await knowledge.import_scanned_directory(rig.kb['name'], None, {'role': 'admin'}, database=index_lifecycle.db)
+    assert result['success'] and result['createdDocs'] == 1 and (result['errors'] == [])
     documents = rig.db.get_knowledge_documents()
-    assert len(documents) == 1 and documents[0]["content"] == TEXT
-    assert documents[0]["knowledge_base_id"] == rig.kb["id"]
+    assert len(documents) == 1 and documents[0]['content'] == TEXT
+    assert documents[0]['knowledge_base_id'] == rig.kb['id']
     assert index_lifecycle._get_rebuild_revision() == rig.revision + 1
     assert len(rig.db.get_knowledge_bases()) == 1
     rig.add.assert_not_called()
@@ -179,57 +159,51 @@ async def test_scan_reuses_existing_named_base_before_atomic_document_publicatio
 
 
 
-@pytest.mark.parametrize("stage", ["authority", "flush"])
+@pytest.mark.parametrize('stage', ['authority', 'flush'])
 async def test_generation_retrieval_preserves_index_failure_before_evidence_use(publication, monkeypatch, caplog, stage):
     from knowledge import rag_helper
-
     rig = publication
-    row = rig.db.save_knowledge_document(
-        dict(title="登记规则", content=TEXT, knowledge_base_id=rig.kb["id"]), chunks=[TEXT]
-    )
-    assert row["content"] == TEXT
-    failure = OSError("synthetic-private-index-" + stage)
-    if stage == "authority":
+    row = rig.db.save_knowledge_document(dict(title='登记规则', content=TEXT, knowledge_base_id=rig.kb['id']), chunks=[TEXT])
+    assert row['content'] == TEXT
+    failure = OSError('synthetic-private-index-' + stage)
+    if stage == 'authority':
         assert index_lifecycle._ensure_vector_index()
-        monkeypatch.setattr(rig.db, "get_config_value", Mock(side_effect=failure))
+        monkeypatch.setattr(rig.db, 'get_config_value', Mock(side_effect=failure))
     else:
-        monkeypatch.setattr(rig.vector, "flush", Mock(side_effect=failure))
-    retrieval = Mock(side_effect=AssertionError("Failed index must not authorize evidence"))
-    monkeypatch.setattr(rag_helper, "get_rag_helper", retrieval)
+        monkeypatch.setattr(rig.vector, 'flush', Mock(side_effect=failure))
+    retrieval = Mock(side_effect=AssertionError('Failed index must not authorize evidence'))
+    monkeypatch.setattr(rag_helper, 'get_rag_helper', retrieval)
     builds = rig.add.call_count
     with pytest.raises(OSError) as raised:
-        await chat_retrieval.retrieve_chat_knowledge(
-            "登记办理的完整条件及未确认付款限制", 5, {"knowledge_base_id": rig.kb["id"]}
-        )
+        await chat_retrieval.retrieve_chat_knowledge('登记办理的完整条件及未确认付款限制', 5, {'knowledge_base_id': rig.kb['id']}, database=index_lifecycle.db)
     assert raised.value is failure
     retrieval.assert_not_called()
-    assert "synthetic-private" not in caplog.text
-    if stage == "authority":
+    assert 'synthetic-private' not in caplog.text
+    if stage == 'authority':
         assert rig.add.call_count == builds
     else:
-        assert index_lifecycle._vector_index_revision is None and index_lifecycle._read_rebuild_status()[0] != "complete"
-    assert rig.db.get_knowledge_document(row["id"])["content"] == TEXT
+        assert index_lifecycle._vector_index_revision is None and index_lifecycle._read_rebuild_status()[0] != 'complete'
+    assert rig.db.get_knowledge_document(row['id'])['content'] == TEXT
 
 
 
-@pytest.mark.parametrize("metadata", [False, True])
+@pytest.mark.parametrize('metadata', [False, True])
 async def test_document_creation_preserves_schema_defaults_metadata_and_folder_category(publication, metadata):
     rig = publication
-    options = dict(title="完整登记规则", content=TEXT)
+    options = dict(title='完整登记规则', content=TEXT)
     if metadata:
-        options.update(category="请求分类", knowledge_base_id=rig.kb["id"], folder_id=rig.folder["id"],
-                       sourceType="file", sourceUrl="https://example.invalid/source", fileType="TXT", fileSize=0)
+        options.update(category='请求分类', knowledge_base_id=rig.kb['id'], folder_id=rig.folder['id'], sourceType='file', sourceUrl='https://example.invalid/source', fileType='TXT', fileSize=0)
     request = KnowledgeDocumentCreate(**options)
     original = request.model_dump()
-    result = await knowledge.create_knowledge_document(request, {"role": "admin"})
-    assert result["success"] and result["chunkCount"] == 1
-    doc = rig.db.get_knowledge_document(result["document"]["id"])
+    result = await knowledge.create_knowledge_document(request, {'role': 'admin'}, database=index_lifecycle.db)
+    assert result['success'] and result['chunkCount'] == 1
+    doc = rig.db.get_knowledge_document(result['document']['id'])
     for key, value in original.items():
-        expected = rig.folder["name"] if metadata and key == "category" else value
-        assert doc[key] == expected and result["document"][key] == expected
+        expected = rig.folder['name'] if metadata and key == 'category' else value
+        assert doc[key] == expected and result['document'][key] == expected
     assert request.model_dump() == original
-    assert doc["chunkCount"] == 1 and "".join(row["content"] for row in rig.db.get_knowledge_chunks(doc["id"])) == TEXT
-    assert index_lifecycle._get_rebuild_revision() == rig.revision + 1 and index_lifecycle._read_rebuild_status()[0] == "dirty"
+    assert doc['chunkCount'] == 1 and ''.join((row['content'] for row in rig.db.get_knowledge_chunks(doc['id']))) == TEXT
+    assert index_lifecycle._get_rebuild_revision() == rig.revision + 1 and index_lifecycle._read_rebuild_status()[0] == 'dirty'
     assert index_lifecycle._vector_index_revision is None
     rig.add.assert_not_called()
     rig.getter.assert_not_called()

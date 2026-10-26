@@ -1,5 +1,7 @@
 """Request validation is a required API dependency rather than a capability flag."""
 
+from knowledge.index_lifecycle import default_knowledge_index as index_lifecycle
+
 import base64
 import json
 import os
@@ -75,12 +77,9 @@ async def test_config_limits_are_checked_before_any_write(monkeypatch):
 async def test_document_limits_are_checked_before_storage_or_indexing(monkeypatch):
     from api import knowledge
     from db.schemas import KnowledgeDocumentCreate
-
-    run_db = AsyncMock(side_effect=AssertionError("Invalid document must not reach storage or indexing"))
-    monkeypatch.setattr(knowledge, "run_db", run_db)
+    run_db = AsyncMock(side_effect=AssertionError('Invalid document must not reach storage or indexing'))
+    monkeypatch.setattr(knowledge, 'run_db', run_db)
     with pytest.raises(HTTPException) as raised:
-        await knowledge.create_knowledge_document(
-            KnowledgeDocumentCreate(title="", content="完整的合成正文。"), {"role": "admin"}
-        )
+        await knowledge.create_knowledge_document(KnowledgeDocumentCreate(title='', content='完整的合成正文。'), {'role': 'admin'}, database=index_lifecycle.db)
     assert raised.value.status_code == 422
     run_db.assert_not_awaited()

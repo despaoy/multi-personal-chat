@@ -161,7 +161,7 @@ async def test_generation_stops_when_a_required_index_is_missing(retrieval, sema
         monkeypatch.setattr(retriever.index.bm25, "search", lambda *a: [(2, 1.0)])
     semantic_plan(QUERY, dict(unresolved_source=list(range(len(query_segments(QUERY))))))
 
-    async def retrieve(query, top_k, filters):
+    async def retrieve(query, top_k, filters, *, database):
         rows = retriever.search(analysis, top_k=top_k)
         return dict(results=[row.to_dict() for row in rows], citations=[], confidence=.9,
                     abstained=False, context_text="\n".join(row.document.content for row in rows))

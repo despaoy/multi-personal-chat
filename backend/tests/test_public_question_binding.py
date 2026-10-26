@@ -2,7 +2,7 @@
 
 from knowledge import chat_retrieval
 
-from knowledge import index_lifecycle
+from knowledge.index_lifecycle import default_knowledge_index as index_lifecycle
 
 import copy
 import json
@@ -105,88 +105,45 @@ async def test_cancellation_propagates_without_invented_binding():
 
 async def test_generic_route_reaches_fresh_authority_and_full_body(monkeypatch):
     from threading import RLock
-
     from knowledge import rag_helper, vector_db
     from knowledge.multiscale_rag import runtime
-
-    body = "青妃集市展期须付18元并带签署表原件；假日不办理，预约不能免交原件。"
-    row = dict(
-        id="doc_1_chunk_0",
-        document_id=1,
-        chunk_index=0,
-        title="完整合成规程",
-        category="演练",
-        knowledge_base_id=7,
-        content=body,
-    )
+    body = '青妃集市展期须付18元并带签署表原件；假日不办理，预约不能免交原件。'
+    row = dict(id='doc_1_chunk_0', document_id=1, chunk_index=0, title='完整合成规程', category='演练', knowledge_base_id=7, content=body)
     calls = []
 
     def no_character(*args, **kwargs):
-        pytest.fail("An embedded character alias cannot replace a complete business object")
-
-    monkeypatch.setattr(
-        runtime,
-        "get_multiscale_rag_service",
-        lambda: SimpleNamespace(config=config(), retrieve_with_citations=no_character),
-    )
-    monkeypatch.setattr(index_lifecycle, "_ensure_vector_index", lambda: calls.append("fresh") or True)
-    monkeypatch.setattr(index_lifecycle, "_vector_index_revision", 77)
-    monkeypatch.setattr(index_lifecycle, "_get_rebuild_revision", lambda: 77)
-    monkeypatch.setattr(
-        vector_db,
-        "get_vector_db",
-        lambda: SimpleNamespace(_lock=RLock(), cache_generation=11, snapshot_validated=True, metadata=[row]),
-    )
-    monkeypatch.setattr(
-        chat_retrieval,
-        "db",
-        SimpleNamespace(
-            get_knowledge_document=lambda i: dict(
-                id=i, title=row["title"], category=row["category"], knowledge_base_id=7, content=body
-            )
-        ),
-    )
-    monkeypatch.setenv("CORRECTIVE_RAG_ENABLED", "false")
+        pytest.fail('An embedded character alias cannot replace a complete business object')
+    monkeypatch.setattr(runtime, 'get_multiscale_rag_service', lambda: SimpleNamespace(config=config(), retrieve_with_citations=no_character))
+    monkeypatch.setattr(index_lifecycle, '_ensure_vector_index', lambda: calls.append('fresh') or True)
+    monkeypatch.setattr(index_lifecycle, '_vector_index_revision', 77)
+    monkeypatch.setattr(index_lifecycle, '_get_rebuild_revision', lambda: 77)
+    monkeypatch.setattr(vector_db, 'get_vector_db', lambda: SimpleNamespace(_lock=RLock(), cache_generation=11, snapshot_validated=True, metadata=[row]))
+    monkeypatch.setattr(index_lifecycle, 'db', SimpleNamespace(get_knowledge_document=lambda i: dict(id=i, title=row['title'], category=row['category'], knowledge_base_id=7, content=body)))
+    monkeypatch.setattr(index_lifecycle.db, '_knowledge_index', index_lifecycle, raising=False)
+    monkeypatch.setenv('CORRECTIVE_RAG_ENABLED', 'false')
 
     def retrieve(query, **kwargs):
-        assert query == QUERY and kwargs["filters"] is None
+        assert query == QUERY and kwargs['filters'] is None
         from knowledge.public_question_binding import bound_task_search_views
-        assert kwargs["question_binding"] is receipt
-        assert bound_task_search_views(receipt, query) == ("青妃集市展期\n" + dependencies().segments[1],)
-        calls.append("generic")
+        assert kwargs['question_binding'] is receipt
+        assert bound_task_search_views(receipt, query) == ('青妃集市展期\n' + dependencies().segments[1],)
+        calls.append('generic')
         return dict(results=[row], confidence=0.8, abstained=False)
-
-    monkeypatch.setattr(
-        rag_helper,
-        "get_rag_helper",
-        lambda: SimpleNamespace(retrieve_with_citations=retrieve, build_citations=lambda records: []),
-    )
+    monkeypatch.setattr(rag_helper, 'get_rag_helper', lambda: SimpleNamespace(retrieve_with_citations=retrieve, build_citations=lambda records: []))
     receipt = await binding()
-    bundle = await chat_retrieval.retrieve_chat_knowledge(QUERY, 3, None, question_binding=receipt)
-    assert calls == ["fresh", "generic"]
-    assert bundle["original_source_packets"][0]["original_body"] == body
-    assert bundle["source_coverage"][0]["original_source_receipt"]["authority_revision"] == 77
+    bundle = await chat_retrieval.retrieve_chat_knowledge(QUERY, 3, None, question_binding=receipt, database=index_lifecycle.db)
+    assert calls == ['fresh', 'generic']
+    assert bundle['original_source_packets'][0]['original_body'] == body
+    assert bundle['source_coverage'][0]['original_source_receipt']['authority_revision'] == 77
 
 
 async def test_explicit_character_unavailable_is_still_strict(monkeypatch):
     from knowledge.multiscale_rag import runtime
-
     calls = []
-    monkeypatch.setattr(
-        runtime,
-        "get_multiscale_rag_service",
-        lambda: SimpleNamespace(
-            config=config(), retrieve_with_citations=lambda *a, **kw: calls.append("curated") or None
-        ),
-    )
-    with pytest.raises(RuntimeError, match="Requested character knowledge domain is unavailable"):
-        await chat_retrieval.retrieve_chat_knowledge(
-            "只读已保存的完整本人偏好。请核对妃的家庭关系和末尾否定限制。",
-            3,
-            None,
-            question_binding=await binding("妃", "只读已保存的完整本人偏好。请核对妃的家庭关系和末尾否定限制。"),
-        )
-    assert calls == ["curated"]
+    monkeypatch.setattr(runtime, 'get_multiscale_rag_service', lambda: SimpleNamespace(config=config(), retrieve_with_citations=lambda *a, **kw: calls.append('curated') or None))
+    with pytest.raises(RuntimeError, match='Requested character knowledge domain is unavailable'):
+        await chat_retrieval.retrieve_chat_knowledge('只读已保存的完整本人偏好。请核对妃的家庭关系和末尾否定限制。', 3, None, question_binding=await binding('妃', '只读已保存的完整本人偏好。请核对妃的家庭关系和末尾否定限制。'), database=index_lifecycle.db)
+    assert calls == ['curated']
 
 
 async def test_evidence_review_reuses_exact_pre_retrieval_binding_without_second_scope_call():

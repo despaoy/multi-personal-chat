@@ -1,6 +1,6 @@
 """Accepted filename suffix case must not change named-source identity."""
 
-from knowledge import index_lifecycle
+from knowledge.index_lifecycle import default_knowledge_index as index_lifecycle
 
 import io
 import json
@@ -18,12 +18,12 @@ publication = native_publication
 
 async def upload(rig, name, entry, body):
     data = io.BytesIO()
-    with zipfile.ZipFile(data, "w") as archive:
+    with zipfile.ZipFile(data, 'w') as archive:
         archive.writestr(entry, body)
     data.seek(0)
     file = UploadFile(data, filename=name)
     try:
-        return await knowledge.upload_zip(rig.kb["id"], file, {"role": "admin"})
+        return await knowledge.upload_zip(rig.kb['id'], file, {'role': 'admin'}, database=index_lifecycle.db)
     finally:
         await file.close()
 
@@ -74,16 +74,16 @@ async def test_case_variants_publish_the_same_exact_named_source(publication, ar
     assert excluded["unresolved_requested_titles"] == ["登记规则"]
 
 
-@pytest.mark.parametrize("failure", ["bad_archive", "traversal"])
+@pytest.mark.parametrize('failure', ['bad_archive', 'traversal'])
 async def test_uppercase_archive_keeps_content_and_path_failures_explicit(publication, failure):
     rig = publication
     with pytest.raises(HTTPException) as caught:
-        if failure == "traversal":
-            await upload(rig, "完整资料.ZIP", "../越界.TXT", TEXT)
+        if failure == 'traversal':
+            await upload(rig, '完整资料.ZIP', '../越界.TXT', TEXT)
         else:
-            file = UploadFile(io.BytesIO(b"not a ZIP archive"), filename="无效资料.ZIP")
+            file = UploadFile(io.BytesIO(b'not a ZIP archive'), filename='无效资料.ZIP')
             try:
-                await knowledge.upload_zip(rig.kb["id"], file, {"role": "admin"})
+                await knowledge.upload_zip(rig.kb['id'], file, {'role': 'admin'}, database=index_lifecycle.db)
             finally:
                 await file.close()
     assert caught.value.status_code == 400

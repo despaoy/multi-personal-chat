@@ -1,6 +1,6 @@
 """Real keyword fallback crossing its unchanged 500-row page boundary."""
 
-from knowledge import index_lifecycle
+from knowledge.index_lifecycle import default_knowledge_index as index_lifecycle
 
 import asyncio
 import hashlib

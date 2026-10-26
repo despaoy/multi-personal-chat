@@ -2,7 +2,7 @@
 
 from knowledge import chat_retrieval
 
-from knowledge import index_lifecycle
+from knowledge.index_lifecycle import default_knowledge_index as index_lifecycle
 
 import copy
 import json
@@ -217,7 +217,6 @@ def test_abstention_never_reads_or_grants_raw_originals():
 
 async def test_revision_change_during_original_read_rejects_whole_retrieval(monkeypatch):
     from knowledge import rag_helper, vector_db
-
     anchor = record()
     v = vector_db.VectorDatabase.__new__(vector_db.VectorDatabase)
     v._lock = RLock()
@@ -225,25 +224,24 @@ async def test_revision_change_during_original_read_rejects_whole_retrieval(monk
     v.snapshot_validated = True
     v.metadata = [anchor]
     revision = [77]
-    monkeypatch.setattr(index_lifecycle, "_ensure_vector_index", lambda: True)
-    monkeypatch.setattr(index_lifecycle, "_vector_index_revision", 77)
-    monkeypatch.setattr(index_lifecycle, "_get_rebuild_revision", lambda: revision[0])
-    monkeypatch.setattr(vector_db, "get_vector_db", lambda: v)
+    monkeypatch.setattr(index_lifecycle, '_ensure_vector_index', lambda: True)
+    monkeypatch.setattr(index_lifecycle, '_vector_index_revision', 77)
+    monkeypatch.setattr(index_lifecycle, '_get_rebuild_revision', lambda: revision[0])
+    monkeypatch.setattr(vector_db, 'get_vector_db', lambda: v)
 
     class Helper:
+
         def retrieve_with_citations(self, *args, **kwargs):
             return bundle()
-
-    monkeypatch.setattr(rag_helper, "get_rag_helper", Helper)
+    monkeypatch.setattr(rag_helper, 'get_rag_helper', Helper)
 
     def read(identity):
         revision[0] += 1
         return original(identity)
-
-    monkeypatch.setattr(chat_retrieval.db, "get_knowledge_document", read)
-    monkeypatch.setenv("CORRECTIVE_RAG_ENABLED", "false")
-    with pytest.raises(RuntimeError, match="authority changed"):
-        await chat_retrieval.retrieve_chat_knowledge("完整规程", 3, {"knowledge_base_id": 7})
+    monkeypatch.setattr(index_lifecycle.db, 'get_knowledge_document', read)
+    monkeypatch.setenv('CORRECTIVE_RAG_ENABLED', 'false')
+    with pytest.raises(RuntimeError, match='authority changed'):
+        await chat_retrieval.retrieve_chat_knowledge('完整规程', 3, {'knowledge_base_id': 7}, database=index_lifecycle.db)
 
 
 @pytest.mark.parametrize("body", [None, "", "   "])

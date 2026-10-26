@@ -3,13 +3,16 @@
 import asyncio
 from typing import Any
 
-from db.adapter import db
 from inference.provider_context import get_provider_context_budget
-from knowledge import index_lifecycle
+from knowledge.index_lifecycle import get_knowledge_index
 
 
 async def retrieve_chat_knowledge(
-    query: str, top_k: int, filters: dict[str, Any] | None, *,
+    query: str,
+    top_k: int,
+    filters: dict[str, Any] | None,
+    *,
+    database,
     question_binding: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Retrieve authorized knowledge with fresh source authority."""
@@ -36,7 +39,9 @@ async def retrieve_chat_knowledge(
 
             plan = domain_plan(question_binding, character_rag.config)
             if requires_independent_domains(plan):
-                return retrieve_domains(plan, query, top_k, curated=character_rag.retrieve_with_citations, generic=retrieve_generic)
+                return retrieve_domains(
+                    plan, query, top_k, curated=character_rag.retrieve_with_citations, generic=retrieve_generic
+                )
             if use_curated:
                 if any(obj["authority"] == "curated_character" for obj in plan["objects"]):
                     return retrieve_curated_scope(plan, query, top_k, curated=character_rag.retrieve_with_citations)
@@ -52,9 +57,9 @@ async def retrieve_chat_knowledge(
         return retrieve_generic()
 
     def retrieve_generic() -> dict[str, Any]:
-        from knowledge.rag_helper import get_rag_helper
         from knowledge.source_expansion import expand_source_context
-        from knowledge.vector_db import get_vector_db
+
+        index_lifecycle = get_knowledge_index(database)
 
         # A normal generation does not necessarily follow the search API.
         # Resolve dirty metadata/content before consulting cached RAG
@@ -62,29 +67,36 @@ async def retrieve_chat_knowledge(
         if not index_lifecycle._ensure_vector_index():
             raise RuntimeError("Generic knowledge index is not ready")
 
-        vector_db = get_vector_db()
+        vector_db = index_lifecycle.vector_db
         generation = vector_db.cache_generation
         revision = index_lifecycle._vector_index_revision
         binding_options = {"question_binding": question_binding} if question_binding is not None else {}
-        bundle = get_rag_helper().retrieve_with_citations(query, top_k=top_k, filters=filters, **binding_options)
+        bundle = index_lifecycle.rag_helper.retrieve_with_citations(
+            query, top_k=top_k, filters=filters, **binding_options
+        )
         budget = get_provider_context_budget()
         expanded = expand_source_context(
-            bundle, vector_db, expected_generation=generation,
-            source_budget_tokens=budget.window_tokens, filters=filters, query=query,
+            bundle,
+            vector_db,
+            expected_generation=generation,
+            source_budget_tokens=budget.window_tokens,
+            filters=filters,
+            query=query,
         )
         if index_lifecycle._get_rebuild_revision() != revision:
             raise RuntimeError("Knowledge authority changed during retrieval")
         from knowledge.original_sources import attach_original_sources
 
         expanded = attach_original_sources(
-            expanded, db.get_knowledge_document,
+            expanded,
+            database.get_knowledge_document,
             source_budget_tokens=budget.window_tokens,
             authority_revision=revision,
         )
         if index_lifecycle._get_rebuild_revision() != revision:
             raise RuntimeError("Knowledge authority changed during retrieval")
         if expanded is not bundle:
-            expanded["citations"] = get_rag_helper().build_citations(expanded["results"])
+            expanded["citations"] = index_lifecycle.rag_helper.build_citations(expanded["results"])
         return expanded
 
     return await asyncio.to_thread(retrieve)

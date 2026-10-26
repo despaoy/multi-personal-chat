@@ -16,7 +16,7 @@ from character.source_memory import SourceMemoryService, attach_sources
 from db.database import SQLiteDB
 from inference.generation_request import GenerationRequest, RetrievalResult, generate_character_response
 from inference.public_context_authority import make_public_context_revalidator
-from knowledge import index_lifecycle
+from knowledge.index_lifecycle import default_knowledge_index as index_lifecycle
 from knowledge.evidence_packets import document_evidence_packets
 from knowledge.original_sources import attach_original_sources
 

@@ -320,22 +320,19 @@ def test_annotation_cancellation_propagates_without_a_result():
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("failure", ["provider", "timeout", "invalid"])
+@pytest.mark.parametrize('failure', ['provider', 'timeout', 'invalid'])
 async def test_chat_annotation_failure_propagates_without_returning_an_answer(monkeypatch, semantic_plan, failure):
     from types import SimpleNamespace
-
     from tests.test_public_fact_coverage import FULL, QUERY, run
-
     from db.schemas import MessageRequest
     from inference.context_budget import ReviewContextBudget
     from knowledge import public_question_binding, public_task_evidence
-
     complete, _ = await run()
-    complete["citations"] = [dict(source_id=row["id"]) for row in complete["results"]]
-    authoritative = {row["document_id"]: dict(row, id=row["document_id"]) for row in complete["results"]}
+    complete['citations'] = [dict(source_id=row['id']) for row in complete['results']]
+    authoritative = {row['document_id']: dict(row, id=row['document_id']) for row in complete['results']}
     planning = semantic_plan(QUERY, dict(public_knowledge=[0], private_memory=[1]))
     calls = []
-    error = TimeoutError("Declared annotation timeout") if failure == "timeout" else RuntimeError("Declared annotation provider failure")
+    error = TimeoutError('Declared annotation timeout') if failure == 'timeout' else RuntimeError('Declared annotation provider failure')
 
     async def binding(*args, **kwargs):
         return None
@@ -350,28 +347,22 @@ async def test_chat_annotation_failure_propagates_without_returning_an_answer(mo
     async def model(**kwargs):
         calls.append(kwargs)
         if len(calls) == 1:
-            assert FULL in kwargs["messages"][-1]["content"]
+            assert FULL in kwargs['messages'][-1]['content']
             return FULL
-        payload = json.loads(kwargs["messages"][-1]["content"])
-        assert payload["answer"] == FULL and payload["sources"][0]["body"] == FULL
-        assert kwargs["max_tokens"] == 512 and payload["allowed_exact_quotes"]
-        if failure in ("provider", "timeout"):
+        payload = json.loads(kwargs['messages'][-1]['content'])
+        assert payload['answer'] == FULL and payload['sources'][0]['body'] == FULL
+        assert kwargs['max_tokens'] == 512 and payload['allowed_exact_quotes']
+        if failure in ('provider', 'timeout'):
             raise error
-        return "{"
-
-    monkeypatch.setattr(chat_answer, 'public_knowledge_db', SimpleNamespace(get_knowledge_document=authoritative.get))
+        return '{'
+    source_database = SimpleNamespace(get_knowledge_document=authoritative.get)
     monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieve)
-    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "保留原文的全部费用、日期、原件及雨天例外。")
-    monkeypatch.setattr(public_question_binding, "resolve_question_binding", binding)
-    monkeypatch.setattr(public_task_evidence, "review_public_candidates", reviewed)
-    monkeypatch.setattr(chat_answer, 'get_provider_context_budget', lambda: SimpleNamespace(
-        review=ReviewContextBudget(65536), window_tokens=65536, evidence_max_chars=0,
-    ))
-    with pytest.raises(ValueError if failure == "invalid" else type(error)) as caught:
-        await chat_answer.generate_chat_answer(
-            MessageRequest(message=QUERY), None,
-            runtime_config=dict(maxTokens=2048, useKnowledgeBase=True), model_generate=model,
-        )
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: '保留原文的全部费用、日期、原件及雨天例外。')
+    monkeypatch.setattr(public_question_binding, 'resolve_question_binding', binding)
+    monkeypatch.setattr(public_task_evidence, 'review_public_candidates', reviewed)
+    monkeypatch.setattr(chat_answer, 'get_provider_context_budget', lambda: SimpleNamespace(review=ReviewContextBudget(65536), window_tokens=65536, evidence_max_chars=0))
+    with pytest.raises(ValueError if failure == 'invalid' else type(error)) as caught:
+        await chat_answer.generate_chat_answer(MessageRequest(message=QUERY), None, runtime_config=dict(maxTokens=2048, useKnowledgeBase=True), model_generate=model, message_db=source_database)
     assert len(planning) == 1 and len(calls) == 2
-    if failure != "invalid":
+    if failure != 'invalid':
         assert caught.value is error

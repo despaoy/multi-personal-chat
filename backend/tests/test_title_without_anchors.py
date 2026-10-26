@@ -2,7 +2,7 @@
 
 from knowledge import chat_retrieval
 
-from knowledge import index_lifecycle
+from knowledge.index_lifecycle import default_knowledge_index as index_lifecycle
 
 from threading import RLock
 
@@ -119,21 +119,20 @@ def test_budget_exhausted_is_located_but_not_visible_or_usable_evidence():
 
 async def test_named_read_rejects_original_authority_revision_race(monkeypatch):
     from knowledge import rag_helper, vector_db
-
-    v = vector([row(1, "A")])
+    v = vector([row(1, 'A')])
     revision = [77]
-    monkeypatch.setattr(index_lifecycle, "_ensure_vector_index", lambda: True)
-    monkeypatch.setattr(index_lifecycle, "_vector_index_revision", 77)
-    monkeypatch.setattr(index_lifecycle, "_get_rebuild_revision", lambda: revision[0])
-    monkeypatch.setattr(vector_db, "get_vector_db", lambda: v)
+    monkeypatch.setattr(index_lifecycle, '_ensure_vector_index', lambda: True)
+    monkeypatch.setattr(index_lifecycle, '_vector_index_revision', 77)
+    monkeypatch.setattr(index_lifecycle, '_get_rebuild_revision', lambda: revision[0])
+    monkeypatch.setattr(vector_db, 'get_vector_db', lambda: v)
 
     class Helper:
+
         @staticmethod
         def retrieve_with_citations(*args, **kwargs):
             revision[0] += 1
             return dict(results=[], confidence=0.0, abstained=True)
-
-    monkeypatch.setattr(rag_helper, "get_rag_helper", Helper)
-    monkeypatch.setenv("CORRECTIVE_RAG_ENABLED", "false")
-    with pytest.raises(RuntimeError, match="authority changed"):
-        await chat_retrieval.retrieve_chat_knowledge("读取《A》", 3, {"knowledge_base_id": 7})
+    monkeypatch.setattr(rag_helper, 'get_rag_helper', Helper)
+    monkeypatch.setenv('CORRECTIVE_RAG_ENABLED', 'false')
+    with pytest.raises(RuntimeError, match='authority changed'):
+        await chat_retrieval.retrieve_chat_knowledge('读取《A》', 3, {'knowledge_base_id': 7}, database=index_lifecycle.db)

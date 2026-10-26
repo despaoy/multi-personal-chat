@@ -1,6 +1,6 @@
 """Atomic public document publication, rollback and supported import paths."""
 
-from knowledge import index_lifecycle
+from knowledge.index_lifecycle import default_knowledge_index as index_lifecycle
 
 import io
 import sqlite3
@@ -128,63 +128,49 @@ def test_content_without_complete_replacement_is_rejected_without_partial_commit
     assert db.get_knowledge_document(d["id"]) == d
 
 
-@pytest.mark.parametrize("route", ["create", "zip", "scan_root", "scan_folder", "update", "delete"])
+@pytest.mark.parametrize('route', ['create', 'zip', 'scan_root', 'scan_folder', 'update', 'delete'])
 @pytest.mark.asyncio
 async def test_public_document_paths_use_atomic_publication_before_local_notification(tmp_path, monkeypatch, route):
-    db = SQLiteDB(tmp_path / "api.db")
-    monkeypatch.setattr(knowledge, "db", db)
-    monkeypatch.setattr(index_lifecycle, "db", db)
+    db = SQLiteDB(tmp_path / 'api.db')
+    monkeypatch.setattr(index_lifecycle, 'db', db)
+    monkeypatch.setattr(index_lifecycle.db, '_knowledge_index', index_lifecycle, raising=False)
 
     def forbidden():
-        raise AssertionError("Legacy post-commit database notification must not run")
-
-    monkeypatch.setattr(db, "mark_knowledge_index_dirty", forbidden)
-    kb = db.create_knowledge_base("完整合成库")
-    admin = {"role": "admin"}
+        raise AssertionError('Legacy post-commit database notification must not run')
+    monkeypatch.setattr(db, 'mark_knowledge_index_dirty', forbidden)
+    kb = db.create_knowledge_base('完整合成库')
+    admin = {'role': 'admin'}
     before = 0
-    if route in {"update", "delete"}:
+    if route in {'update', 'delete'}:
         d, before = source(db)
-        if route == "update":
-            result = await knowledge.update_knowledge_document(
-                d["id"], KnowledgeDocumentUpdate(title="新规则", content=NEW), admin
-            )
+        if route == 'update':
+            result = await knowledge.update_knowledge_document(d['id'], KnowledgeDocumentUpdate(title='新规则', content=NEW), admin, database=index_lifecycle.db)
         else:
-            result = await knowledge.delete_knowledge_document(d["id"], admin)
-    elif route == "create":
-        result = await knowledge.create_knowledge_document(
-            KnowledgeDocumentCreate(title="新规则", content=NEW, knowledge_base_id=kb["id"]), admin
-        )
-    elif route == "zip":
+            result = await knowledge.delete_knowledge_document(d['id'], admin, database=index_lifecycle.db)
+    elif route == 'create':
+        result = await knowledge.create_knowledge_document(KnowledgeDocumentCreate(title='新规则', content=NEW, knowledge_base_id=kb['id']), admin, database=index_lifecycle.db)
+    elif route == 'zip':
         import zipfile
-
         buffer = io.BytesIO()
-        with zipfile.ZipFile(buffer, "w") as archive:
-            archive.writestr("当前规则/新规则.txt", NEW)
+        with zipfile.ZipFile(buffer, 'w') as archive:
+            archive.writestr('当前规则/新规则.txt', NEW)
         buffer.seek(0)
-        result = await knowledge.upload_zip(kb["id"], UploadFile(buffer, filename="完整规则.zip"), admin)
+        result = await knowledge.upload_zip(kb['id'], UploadFile(buffer, filename='完整规则.zip'), admin, database=index_lifecycle.db)
     else:
-        root = tmp_path / "knowledge_bases"
-        target = root / "合成来源"
+        root = tmp_path / 'knowledge_bases'
+        target = root / '合成来源'
         target.mkdir(parents=True)
         folder = target
-        if route == "scan_folder":
-            folder = target / "当前规则"
+        if route == 'scan_folder':
+            folder = target / '当前规则'
             folder.mkdir()
-        (folder / "新规则.txt").write_text(NEW, encoding="utf-8")
-        monkeypatch.setattr(knowledge, "KNOWLEDGE_BASES_DIR", root)
-        result = await knowledge.import_scanned_directory("合成来源", kb["id"], admin)
-    assert (
-        result["success"]
-        and db.get_config_value(state.REVISION_KEY) == before + 1
-        and db.get_config_value(state.STATUS_KEY) == "dirty"
-    )
+        (folder / '新规则.txt').write_text(NEW, encoding='utf-8')
+        monkeypatch.setattr(knowledge, 'KNOWLEDGE_BASES_DIR', root)
+        result = await knowledge.import_scanned_directory('合成来源', kb['id'], admin, database=index_lifecycle.db)
+    assert result['success'] and db.get_config_value(state.REVISION_KEY) == before + 1 and (db.get_config_value(state.STATUS_KEY) == 'dirty')
     docs = db.get_knowledge_documents()
-    if route == "delete":
+    if route == 'delete':
         assert docs == []
     else:
-        assert (
-            len(docs) == 1
-            and docs[0]["content"] == NEW
-            and docs[0]["chunkCount"] == len(db.get_knowledge_chunks(docs[0]["id"]))
-        )
-        assert "".join(c["content"] for c in db.get_knowledge_chunks(docs[0]["id"])) == NEW
+        assert len(docs) == 1 and docs[0]['content'] == NEW and (docs[0]['chunkCount'] == len(db.get_knowledge_chunks(docs[0]['id'])))
+        assert ''.join((c['content'] for c in db.get_knowledge_chunks(docs[0]['id']))) == NEW

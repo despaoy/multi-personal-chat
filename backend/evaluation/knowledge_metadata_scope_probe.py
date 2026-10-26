@@ -1,6 +1,6 @@
 """One new metadata-only document migration, real retrieval and pro answer."""
 
-from knowledge import index_lifecycle
+from knowledge.index_lifecycle import default_knowledge_index as index_lifecycle
 
 import json
 from copy import deepcopy

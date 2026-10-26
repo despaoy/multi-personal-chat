@@ -23,6 +23,8 @@ from typing import Dict, Any, Optional, List
 logger = logging.getLogger(__name__)
 
 BACKEND_DIR = Path(__file__).parent.parent
+
+
 def _runtime_dir_from_env(name: str, default: Path) -> Path:
     configured = os.getenv(name, "").strip()
     path = Path(configured).expanduser() if configured else default
@@ -100,6 +102,7 @@ def _check_cancelled():
 # 知识库配置
 # ═══════════════════════════════════════════════════════════
 
+
 def get_active_knowledge_bases() -> List[Dict[str, Any]]:
     config_path = MODEL_DIR / "active_kbs.json"
     if config_path.exists():
@@ -108,8 +111,8 @@ def get_active_knowledge_bases() -> List[Dict[str, Any]]:
     return []
 
 
-def set_active_knowledge_bases(kb_ids: List[int]) -> Dict[str, Any]:
-    from db.adapter import db
+def set_active_knowledge_bases(kb_ids: List[int], *, database) -> Dict[str, Any]:
+    db = database
     all_bases = db.get_knowledge_bases()
     selected = [b for b in all_bases if b["id"] in kb_ids]
     if len(selected) > MAX_KB_COUNT:
@@ -123,6 +126,7 @@ def set_active_knowledge_bases(kb_ids: List[int]) -> Dict[str, Any]:
 # ═══════════════════════════════════════════════════════════
 # 样本管理（生成 / 查看 / 编辑 / 删除）
 # ═══════════════════════════════════════════════════════════
+
 
 def _get_samples_path() -> Path:
     SAMPLES_DIR.mkdir(exist_ok=True)
@@ -190,6 +194,7 @@ def add_sample(label: str, text: str) -> Dict[str, Any]:
 # 样本生成（LLM + 知识库文档）
 # ═══════════════════════════════════════════════════════════
 
+
 class SampleGenerationError(RuntimeError):
     """A safe, actionable failure of the sample-generation contract."""
 
@@ -199,6 +204,8 @@ async def generate_samples(
     samples_per_kb: int = 100,
     negative_count: int = 200,
     lora_name: Optional[str] = None,
+    *,
+    database,
 ) -> Dict[str, Any]:
     """
     异步生成训练样本（不训练，仅生成供审查）
@@ -210,55 +217,34 @@ async def generate_samples(
     - 硬负例：每个KB生成"看起来像但实际属于其他KB"的跨域混淆问题
     """
     global _generation_status
-
     if _generation_status["running"]:
         return {"error": "样本生成正在进行中"}
-
     _cancel_flag.clear()
-    _generation_status = {
-        "running": True,
-        "progress": 0,
-        "stage": "init",
-        "message": "初始化...",
-    }
-
+    _generation_status = {"running": True, "progress": 0, "stage": "init", "message": "初始化..."}
     try:
-        # ── 1. 获取知识库信息 ──
         _generation_status.update(stage="init", message="加载知识库信息...", progress=3)
         _check_cancelled()
-
-        from db.adapter import db
+        db = database
         all_bases = db.get_knowledge_bases()
         selected_kbs = [b for b in all_bases if b["id"] in kb_ids] if kb_ids else all_bases[:MAX_KB_COUNT]
-
         if not selected_kbs:
             raise SampleGenerationError("没有可用的知识库")
-
         if kb_ids and len(selected_kbs) != len(set(kb_ids)):
             raise SampleGenerationError("部分选中的知识库不存在，请刷新后重新选择")
-
         if len(selected_kbs) > MAX_KB_COUNT:
             raise SampleGenerationError(f"最多选择 {MAX_KB_COUNT} 个知识库")
-
-        # ── 2. 读取知识库文档内容 ──
         _generation_status.update(stage="load_docs", message="读取知识库文档...", progress=8)
         _add_log("读取知识库文档内容...")
-        kb_docs = _load_kb_documents(selected_kbs)
+        kb_docs = _load_kb_documents(selected_kbs, database=database)
         for kb_name, doc_text in kb_docs.items():
             _add_log(f"知识库「{kb_name}」: 文档摘要 {len(doc_text)} 字符")
-
-        # ── 3. 获取vLLM客户端 ──
         _check_cancelled()
         _generation_status.update(stage="connect", message="连接vLLM服务...", progress=10)
         vllm_client = await _get_vllm_client()
         _add_log("vLLM服务连接成功")
-
-        # 使用全局共享单例，生命周期由 app.main lifespan 统一管理，此处不 close
         return await _generate_samples_inner(
-            vllm_client, selected_kbs, kb_docs,
-            samples_per_kb, negative_count, lora_name,
+            vllm_client, selected_kbs, kb_docs, samples_per_kb, negative_count, lora_name
         )
-
     except asyncio.CancelledError:
         _generation_status.update(running=False, stage="cancelled", message="已取消", progress=0)
         raise
@@ -275,8 +261,12 @@ async def generate_samples(
 
 
 async def _generate_samples_inner(
-    vllm_client, selected_kbs, kb_docs,
-    samples_per_kb: int, negative_count: int, lora_name: Optional[str],
+    vllm_client,
+    selected_kbs,
+    kb_docs,
+    samples_per_kb: int,
+    negative_count: int,
+    lora_name: Optional[str],
 ) -> Dict[str, Any]:
     """完成全部生成与数量检查后才保存；共享客户端由应用生命周期关闭。"""
     # ── 4. 为每个知识库生成正例（基于文档内容） ──
@@ -287,15 +277,13 @@ async def _generate_samples_inner(
         progress = 12 + int(40 * i / total_kbs)
         _generation_status.update(
             stage="generate_kb",
-            message=f"为「{kb['name']}」生成正例样本 ({i+1}/{total_kbs})...",
+            message=f"为「{kb['name']}」生成正例样本 ({i + 1}/{total_kbs})...",
             progress=progress,
         )
         _add_log(f"生成知识库「{kb['name']}」的正例样本...")
 
         doc_context = kb_docs[kb["name"]]
-        samples = await _generate_kb_samples_with_docs(
-            vllm_client, kb["name"], doc_context, samples_per_kb, lora_name
-        )
+        samples = await _generate_kb_samples_with_docs(vllm_client, kb["name"], doc_context, samples_per_kb, lora_name)
         kb_samples[kb["name"]] = samples
         _add_log(f"知识库「{kb['name']}」: 生成 {len(samples)} 条正例")
 
@@ -323,15 +311,17 @@ async def _generate_samples_inner(
     _add_log(f"样本生成完成，共 {total} 条（含硬负例）")
 
     _generation_status.update(
-        running=False, stage="done", message="样本生成完成", progress=100,
+        running=False,
+        stage="done",
+        message="样本生成完成",
+        progress=100,
     )
     return {"success": True, "total": total, "stats": {k: len(v) for k, v in kb_samples.items()}}
 
 
-def _load_kb_documents(kbs: list) -> Dict[str, str]:
+def _load_kb_documents(kbs: list, *, database) -> Dict[str, str]:
     """Load bounded source text; missing evidence cannot become a guessed topic."""
-    from db.adapter import db
-
+    db = database
     result = {}
     for kb in kbs:
         docs = db.get_knowledge_documents(knowledge_base_id=kb["id"], limit=30)
@@ -363,11 +353,17 @@ async def _get_vllm_client():
 async def _generate_with_vllm(client, prompt: str, lora_name: Optional[str] = None) -> str:
     _check_cancelled()
     messages = [
-        {"role": "system", "content": "你是一个数据生成助手。严格按照用户要求生成数据，每条一行，不要添加额外说明或编号。"},
+        {
+            "role": "system",
+            "content": "你是一个数据生成助手。严格按照用户要求生成数据，每条一行，不要添加额外说明或编号。",
+        },
         {"role": "user", "content": prompt},
     ]
     reply = await client.generate(
-        messages=messages, lora_name=lora_name, temperature=0.9, max_tokens=1024,
+        messages=messages,
+        lora_name=lora_name,
+        temperature=0.9,
+        max_tokens=1024,
     )
     return reply
 
@@ -381,9 +377,9 @@ def _parse_samples(text: str) -> list:
         if not line or len(line) < 2:
             continue
         cleaned = line
-        if len(line) > 2 and line[0].isdigit() and line[1] in '.、:：':
+        if len(line) > 2 and line[0].isdigit() and line[1] in ".、:：":
             cleaned = line[2:].strip()
-        elif len(line) > 3 and line[:2].isdigit() and line[2] in '.、:：':
+        elif len(line) > 3 and line[:2].isdigit() and line[2] in ".、:：":
             cleaned = line[3:].strip()
         if 2 <= len(cleaned) <= 100:
             samples.append(cleaned)
@@ -442,9 +438,7 @@ async def _generate_kb_samples_with_docs(
     return await _generate_sample_batches(client, prompts, count, lora_name)
 
 
-async def _generate_negative_samples(
-    client, count: int, lora_name: Optional[str] = None
-) -> list:
+async def _generate_negative_samples(client, count: int, lora_name: Optional[str] = None) -> list:
     if count == 0:
         return []
     batch_size = (count + 3) // 4
@@ -521,41 +515,40 @@ async def _generate_hard_negatives_per_kb(
 # 训练（使用已审查的样本）
 # ═══════════════════════════════════════════════════════════
 
+
 async def train_intent_classifier(
     kb_ids: List[int] = None,
     samples_per_kb: int = 100,
     negative_count: int = 200,
     lora_name: Optional[str] = None,
+    *,
+    database,
 ) -> Dict[str, Any]:
     """使用已保存的样本训练多分类模型"""
     global _training_status, _training_logs
-
     if _training_status["running"]:
         return {"error": "训练正在进行中"}
-
     _cancel_flag.clear()
     _training_logs = []
     _training_status = {
-        "running": True, "progress": 0, "stage": "init",
-        "message": "加载样本数据...", "result": None, "started_at": time.time(),
+        "running": True,
+        "progress": 0,
+        "stage": "init",
+        "message": "加载样本数据...",
+        "result": None,
+        "started_at": time.time(),
     }
-
     result = None
     try:
-        # ── 1. 加载已保存的样本 ──
         _training_status.update(stage="load_samples", message="加载样本数据...", progress=5)
         _add_log("加载已保存的样本数据")
         _check_cancelled()
-
         samples_data = get_samples()
         all_samples = samples_data["samples"]
-
         if not all_samples:
             raise RuntimeError("没有可用的样本数据，请先生成样本")
-
-        # 如果指定了kb_ids，只使用对应知识库的样本
         if kb_ids:
-            from db.adapter import db
+            db = database
             all_bases = db.get_knowledge_bases()
             kb_names = [b["name"] for b in all_bases if b["id"] in kb_ids]
             filtered = {}
@@ -563,41 +556,27 @@ async def train_intent_classifier(
                 if name in kb_names or name == "none":
                     filtered[name] = items
             all_samples = filtered
-
-        # 保存活跃知识库配置
         if kb_ids:
-            set_active_knowledge_bases(kb_ids)
-
+            set_active_knowledge_bases(kb_ids, database=database)
         kb_names = [k for k in all_samples.keys() if k != "none"]
         negative_samples = all_samples.get("none", [])
         kb_samples = {k: v for k, v in all_samples.items() if k != "none"}
-
-        total = sum(len(v) for v in all_samples.values())
+        total = sum((len(v) for v in all_samples.values()))
         _add_log(f"样本统计: 总计 {total} 条, 知识库 {kb_names}, 负例 {len(negative_samples)} 条")
-
         if not kb_samples:
             raise RuntimeError("没有知识库样本，请先生成样本")
-
-        # ── 2. 编码 + 训练 ──
         _training_status.update(stage="train", message="编码文本 + 训练多分类模型...", progress=15)
         _add_log("开始编码和训练...")
         result = await asyncio.to_thread(_train_multiclass_model, kb_samples, negative_samples)
-
         if not result.get("success"):
             raise RuntimeError(result.get("error", "训练失败"))
-
-        # ── 3. 重载意图检测器 ──
         _check_cancelled()
         _training_status.update(stage="reload", message="重载意图检测器...", progress=95)
         await _reload_intent_detector()
         result = {**result, "artifacts_saved": True, "reloaded": True}
-
-        _training_status.update(
-            running=False, stage="done", message="训练完成！", progress=100, result=result,
-        )
+        _training_status.update(running=False, stage="done", message="训练完成！", progress=100, result=result)
         _add_log(f"训练完成！准确率={result.get('accuracy', 'N/A')}")
         return result
-
     except asyncio.CancelledError:
         cancelled = {"cancelled": True}
         if result is not None and result.get("success"):
@@ -613,8 +592,13 @@ async def train_intent_classifier(
         cancelled = isinstance(exc, RuntimeError) and "取消" in str(exc)
         if cancelled:
             failure["cancelled"] = True
-        _training_status.update(running=False, stage="cancelled" if cancelled else "error",
-            message="训练已取消" if cancelled else message, progress=0, result=failure)
+        _training_status.update(
+            running=False,
+            stage="cancelled" if cancelled else "error",
+            message="训练已取消" if cancelled else message,
+            progress=0,
+            result=failure,
+        )
         _add_log(message)
         return failure
 
@@ -622,6 +606,7 @@ async def train_intent_classifier(
 # ═══════════════════════════════════════════════════════════
 # 多分类模型训练
 # ═══════════════════════════════════════════════════════════
+
 
 def _train_multiclass_model(
     kb_samples: Dict[str, List[str]],
@@ -675,7 +660,9 @@ def _train_multiclass_model(
 
     _add_log("交叉验证中...")
     clf = LogisticRegression(
-        C=1.0, max_iter=1000, class_weight="balanced",
+        C=1.0,
+        max_iter=1000,
+        class_weight="balanced",
         solver="lbfgs",
     )
     scores = cross_val_score(clf, X_scaled, y, cv=min(5, len(set(labels))), scoring="accuracy", error_score="raise")

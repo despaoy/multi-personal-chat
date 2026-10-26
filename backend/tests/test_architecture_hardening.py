@@ -49,12 +49,8 @@ async def test_open_circuit_never_fabricates_a_model_success():
 
 def test_rag_confidence_uses_absolute_score_not_rank_normalization():
     from knowledge.rag_helper import RAGHelper
-
-    results = [
-        {"score": 0.12, "normalized_score": 1.0},
-        {"score": 0.08, "normalized_score": 0.5},
-    ]
-    confidence = RAGHelper.compute_confidence(object.__new__(RAGHelper), results)
+    results = [{'score': 0.12, 'normalized_score': 1.0}, {'score': 0.08, 'normalized_score': 0.5}]
+    confidence = RAGHelper.compute_confidence(results)
     assert 0.0 < confidence < 0.3
 
 

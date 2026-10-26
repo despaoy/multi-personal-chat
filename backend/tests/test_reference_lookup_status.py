@@ -1,5 +1,7 @@
 """Ambiguous references preserve independent roots without choosing versions."""
 
+from types import SimpleNamespace
+
 from services import chat_answer
 
 import copy
@@ -164,42 +166,25 @@ def test_reference_title_injection_is_escaped_user_data():
     assert title not in plan.messages[-1]["content"]
 
 
-@pytest.mark.parametrize("abstained", [False, True])
+@pytest.mark.parametrize('abstained', [False, True])
 async def test_production_api_carries_reference_receipt_and_warning_once(monkeypatch, abstained, semantic_plan, controlled_public_bundle):
     from db.schemas import MessageRequest
-
-    data = dict(
-        results=[row(1, "A", "费用3元；引用《B》。")],
-        confidence=0.8,
-        abstained=abstained,
-        citations=[],
-        source_references=(reference(),),
-    )
-
-    original = dict(data["results"][0], id=1)
-    data["source_coverage"] = [dict(source_id="doc_1", source_title="A",
-        indexed_document_ids=["doc_1_chunk_0"], retrieved_document_ids=["doc_1_chunk_0"],
-        source_authority_snapshot=document_authority_snapshot(original))]
-    monkeypatch.setattr(chat_answer.public_knowledge_db, "get_knowledge_document", lambda identity: original if identity == 1 else None)
+    data = dict(results=[row(1, 'A', '费用3元；引用《B》。')], confidence=0.8, abstained=abstained, citations=[], source_references=(reference(),))
+    original = dict(data['results'][0], id=1)
+    data['source_coverage'] = [dict(source_id='doc_1', source_title='A', indexed_document_ids=['doc_1_chunk_0'], retrieved_document_ids=['doc_1_chunk_0'], source_authority_snapshot=document_authority_snapshot(original))]
+    source_database = SimpleNamespace(get_knowledge_document=lambda identity: original if identity == 1 else None)
 
     async def retrieve(*args, **kwargs):
         return copy.deepcopy(data)
-
     observed = []
 
     async def model(**kwargs):
-        observed.append(kwargs["messages"])
-        return "主体条款应按本轮可见资料核对；引用版本尚不能确定。"
-
+        observed.append(kwargs['messages'])
+        return '主体条款应按本轮可见资料核对；引用版本尚不能确定。'
     monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieve)
-    planning = semantic_plan("说明主体条款及引用范围", dict(public_knowledge=[0]))
-    monkeypatch.setenv("RAG_CITATIONS_ENABLED", "false")
-    _chat_result_metadata = await chat_answer.generate_chat_answer(
-        MessageRequest(message="说明主体条款及引用范围"),
-        "default",
-        runtime_config={"useKnowledgeBase": True, "maxTokens": 512},
-        model_generate=model,
-    )
-    _, used, metadata = _chat_result_metadata.reply, _chat_result_metadata.used_rag, _chat_result_metadata.metadata
-    assert len(planning) == len(observed) == 1 and used and "partial_source_context" in metadata["warnings"]
-    assert actual_coverage(observed[0])["source_references"] == [reference()]
+    planning = semantic_plan('说明主体条款及引用范围', dict(public_knowledge=[0]))
+    monkeypatch.setenv('RAG_CITATIONS_ENABLED', 'false')
+    _chat_result_metadata = await chat_answer.generate_chat_answer(MessageRequest(message='说明主体条款及引用范围'), 'default', runtime_config={'useKnowledgeBase': True, 'maxTokens': 512}, model_generate=model, message_db=source_database)
+    _, used, metadata = (_chat_result_metadata.reply, _chat_result_metadata.used_rag, _chat_result_metadata.metadata)
+    assert len(planning) == len(observed) == 1 and used and ('partial_source_context' in metadata['warnings'])
+    assert actual_coverage(observed[0])['source_references'] == [reference()]

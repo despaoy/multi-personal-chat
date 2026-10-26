@@ -172,45 +172,25 @@ async def test_shared_api_exports_partial_source_warning_without_extra_model_cal
     from db.schemas import MessageRequest
     from types import SimpleNamespace
     from inference.context_budget import ReviewContextBudget
-
-    planning = semantic_plan("核对整份规程", dict(public_knowledge=[0]))
+    planning = semantic_plan('核对整份规程', dict(public_knowledge=[0]))
     from knowledge.original_sources import document_authority_snapshot
-
-    documents = [
-        dict(id="doc_1_chunk_0", document_id=1, title="设备", content="设备 RTX 3060 12GB"),
-        dict(id="doc_1_chunk_1", document_id=1, title="大章", content="大章" * 40000),
-    ]
-    original = dict(id=1, title="完整合成规程", category="规程", knowledge_base_id=1,
-                    content="\n".join(row["content"] for row in documents))
-    receipts = coverage(tuple(row["id"] for row in documents))
-    receipts[0]["source_authority_snapshot"] = document_authority_snapshot(original)
-    monkeypatch.setattr(chat_answer.public_knowledge_db, "get_knowledge_document", lambda identity: original if identity == 1 else None)
+    documents = [dict(id='doc_1_chunk_0', document_id=1, title='设备', content='设备 RTX 3060 12GB'), dict(id='doc_1_chunk_1', document_id=1, title='大章', content='大章' * 40000)]
+    original = dict(id=1, title='完整合成规程', category='规程', knowledge_base_id=1, content='\n'.join((row['content'] for row in documents)))
+    receipts = coverage(tuple((row['id'] for row in documents)))
+    receipts[0]['source_authority_snapshot'] = document_authority_snapshot(original)
+    source_database = SimpleNamespace(get_knowledge_document=lambda identity: original if identity == 1 else None)
 
     async def retrieve(*args, **kwargs):
-        return {
-            "results": documents,
-            "confidence": 0.9,
-            "abstained": False,
-            "citations": [],
-            "source_coverage": receipts,
-        }
-
+        return {'results': documents, 'confidence': 0.9, 'abstained': False, 'citations': [], 'source_coverage': receipts}
     observed = []
 
     async def model(**kwargs):
         observed.append(kwargs)
-        return "当前能核对部分资料，设备为 RTX 3060 12GB，其余条件无法确认。"
-
+        return '当前能核对部分资料，设备为 RTX 3060 12GB，其余条件无法确认。'
     monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieve)
-    monkeypatch.setattr(chat_answer, 'get_provider_context_budget', lambda: SimpleNamespace(
-        review=ReviewContextBudget(8192), window_tokens=8192, evidence_max_chars=0))
-    monkeypatch.setenv("RAG_CITATIONS_ENABLED", "false")
-    _chat_result_metadata = await chat_answer.generate_chat_answer(
-        MessageRequest(message="核对整份规程"),
-        "default",
-        runtime_config={"useKnowledgeBase": True, "maxTokens": 512},
-        model_generate=model,
-    )
-    reply, used, metadata = _chat_result_metadata.reply, _chat_result_metadata.used_rag, _chat_result_metadata.metadata
-    assert len(planning) == len(observed) == 1 and used and "partial_source_context" in metadata["warnings"]
-    assert "部分资料" in reply and metadata["citations"] == []
+    monkeypatch.setattr(chat_answer, 'get_provider_context_budget', lambda: SimpleNamespace(review=ReviewContextBudget(8192), window_tokens=8192, evidence_max_chars=0))
+    monkeypatch.setenv('RAG_CITATIONS_ENABLED', 'false')
+    _chat_result_metadata = await chat_answer.generate_chat_answer(MessageRequest(message='核对整份规程'), 'default', runtime_config={'useKnowledgeBase': True, 'maxTokens': 512}, model_generate=model, message_db=source_database)
+    reply, used, metadata = (_chat_result_metadata.reply, _chat_result_metadata.used_rag, _chat_result_metadata.metadata)
+    assert len(planning) == len(observed) == 1 and used and ('partial_source_context' in metadata['warnings'])
+    assert '部分资料' in reply and metadata['citations'] == []

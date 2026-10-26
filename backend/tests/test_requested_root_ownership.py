@@ -2,7 +2,7 @@
 
 from knowledge import chat_retrieval
 
-from knowledge import index_lifecycle
+from knowledge.index_lifecycle import default_knowledge_index as index_lifecycle
 
 import copy
 from types import SimpleNamespace
@@ -212,39 +212,23 @@ def test_referenced_context_cannot_survive_omitted_root_in_generation_budget():
 
 async def test_real_retrieval_assembly_attaches_only_scoped_complete_original_bodies(monkeypatch):
     from knowledge import rag_helper, vector_db
-
-    docs = [
-        dict(id=i, title=t, content=body, knowledge_base_id=7, category="配送")
-        for i, t, body in [
-            (1, "紫茶规程", "完整公定条件及末尾预约例外。"),
-            (2, "本人版本说明", "完整个人条件，不证明实际操作。"),
-            (9, "代办", "完整委托规则，但不是这次来源。"),
-        ]
-    ]
-    records = [d | dict(id=f"doc_{d['id']}_chunk_0", document_id=d["id"], chunk_index=0) for d in docs]
+    docs = [dict(id=i, title=t, content=body, knowledge_base_id=7, category='配送') for i, t, body in [(1, '紫茶规程', '完整公定条件及末尾预约例外。'), (2, '本人版本说明', '完整个人条件，不证明实际操作。'), (9, '代办', '完整委托规则，但不是这次来源。')]]
+    records = [d | dict(id=f"doc_{d['id']}_chunk_0", document_id=d['id'], chunk_index=0) for d in docs]
     indexed = vector(records)
-    monkeypatch.setattr(index_lifecycle, "_ensure_vector_index", lambda: True)
-    monkeypatch.setattr(index_lifecycle, "_vector_index_revision", 77)
-    monkeypatch.setattr(index_lifecycle, "_get_rebuild_revision", lambda: 77)
-    monkeypatch.setattr(vector_db, "get_vector_db", lambda: indexed)
-    monkeypatch.setattr(
-        chat_retrieval, "db", SimpleNamespace(get_knowledge_document=lambda i: next(d for d in docs if d["id"] == i))
-    )
-    monkeypatch.setenv("CORRECTIVE_RAG_ENABLED", "false")
-    query = "读取《紫茶规程》《本人版本说明》。分别核对完整条件与主体。"
+    monkeypatch.setattr(index_lifecycle, '_ensure_vector_index', lambda: True)
+    monkeypatch.setattr(index_lifecycle, '_vector_index_revision', 77)
+    monkeypatch.setattr(index_lifecycle, '_get_rebuild_revision', lambda: 77)
+    monkeypatch.setattr(vector_db, 'get_vector_db', lambda: indexed)
+    monkeypatch.setattr(index_lifecycle, 'db', SimpleNamespace(get_knowledge_document=lambda i: next((d for d in docs if d['id'] == i))))
+    monkeypatch.setattr(index_lifecycle.db, '_knowledge_index', index_lifecycle, raising=False)
+    monkeypatch.setenv('CORRECTIVE_RAG_ENABLED', 'false')
+    query = '读取《紫茶规程》《本人版本说明》。分别核对完整条件与主体。'
 
     def retrieve(actual, **kwargs):
-        assert actual == query and kwargs["filters"] is None
-        return dict(
-            results=[dict(records[2], score=0.99), dict(records[0], score=0.3)], confidence=0.9, abstained=False
-        )
-
-    helper = SimpleNamespace(
-        retrieve_with_citations=retrieve,
-        compute_confidence=lambda results: RAGHelper.compute_confidence(object.__new__(RAGHelper), results),
-        build_citations=lambda results: [dict(source_id=r["id"]) for r in results],
-    )
-    monkeypatch.setattr(rag_helper, "get_rag_helper", lambda: helper)
-    result = await chat_retrieval.retrieve_chat_knowledge(query, 3, None)
-    assert {p["original_body"] for p in result["original_source_packets"]} == {d["content"] for d in docs[:2]}
-    assert all("doc_9" not in c["source_id"] for c in result["citations"])
+        assert actual == query and kwargs['filters'] is None
+        return dict(results=[dict(records[2], score=0.99), dict(records[0], score=0.3)], confidence=0.9, abstained=False)
+    helper = SimpleNamespace(retrieve_with_citations=retrieve, compute_confidence=lambda results: RAGHelper.compute_confidence(results), build_citations=lambda results: [dict(source_id=r['id']) for r in results])
+    monkeypatch.setattr(rag_helper, 'get_rag_helper', lambda: helper)
+    result = await chat_retrieval.retrieve_chat_knowledge(query, 3, None, database=index_lifecycle.db)
+    assert {p['original_body'] for p in result['original_source_packets']} == {d['content'] for d in docs[:2]}
+    assert all(('doc_9' not in c['source_id'] for c in result['citations']))

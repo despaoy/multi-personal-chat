@@ -105,38 +105,24 @@ def test_inconsistent_producer_lookup_never_becomes_generation_authority(change)
 async def test_shared_api_preserves_missing_title_status_without_extra_model_call(monkeypatch, semantic_plan, controlled_public_bundle):
     from db.schemas import MessageRequest
     from knowledge.original_sources import document_authority_snapshot
-
     data = producer()
-    data.update(
-        results=[dict(id="doc_5_chunk_0", document_id=5, title="A", content="原文限制：身份核验不能豁免。")],
-        confidence=0.9,
-        abstained=False,
-        citations=[],
-    )
-
-    original = dict(id=5, title="A", content=data["results"][0]["content"])
-    data["source_coverage"][0]["source_authority_snapshot"] = document_authority_snapshot(original)
-    monkeypatch.setattr(chat_answer.public_knowledge_db, "get_knowledge_document", lambda identity: original if identity == 5 else None)
+    data.update(results=[dict(id='doc_5_chunk_0', document_id=5, title='A', content='原文限制：身份核验不能豁免。')], confidence=0.9, abstained=False, citations=[])
+    original = dict(id=5, title='A', content=data['results'][0]['content'])
+    data['source_coverage'][0]['source_authority_snapshot'] = document_authority_snapshot(original)
+    source_database = SimpleNamespace(get_knowledge_document=lambda identity: original if identity == 5 else None)
 
     async def retrieve(*args, **kwargs):
         return data
-
     observed = []
 
     async def model(**kwargs):
-        observed.append(kwargs["messages"])
-        return "A明确不豁免身份核验；本次未找到B，不能核对其条件。"
-
+        observed.append(kwargs['messages'])
+        return 'A明确不豁免身份核验；本次未找到B，不能核对其条件。'
     monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieve)
-    planning = semantic_plan("读取《A》《B》", dict(public_knowledge=[0]))
-    monkeypatch.setenv("RAG_CITATIONS_ENABLED", "false")
-    _chat_result_metadata = await chat_answer.generate_chat_answer(
-        MessageRequest(message="读取《A》《B》"),
-        "default",
-        runtime_config={"useKnowledgeBase": True, "maxTokens": 512},
-        model_generate=model,
-    )
-    reply, used, metadata = _chat_result_metadata.reply, _chat_result_metadata.used_rag, _chat_result_metadata.metadata
-    assert len(planning) == len(observed) == 1 and used and "partial_source_context" in metadata["warnings"]
-    actual = coverage(SimpleNamespace(messages=observed[0]))["requested_sources"]
-    assert actual[1]["lookup_status"] == "not_found_in_index_scope"
+    planning = semantic_plan('读取《A》《B》', dict(public_knowledge=[0]))
+    monkeypatch.setenv('RAG_CITATIONS_ENABLED', 'false')
+    _chat_result_metadata = await chat_answer.generate_chat_answer(MessageRequest(message='读取《A》《B》'), 'default', runtime_config={'useKnowledgeBase': True, 'maxTokens': 512}, model_generate=model, message_db=source_database)
+    reply, used, metadata = (_chat_result_metadata.reply, _chat_result_metadata.used_rag, _chat_result_metadata.metadata)
+    assert len(planning) == len(observed) == 1 and used and ('partial_source_context' in metadata['warnings'])
+    actual = coverage(SimpleNamespace(messages=observed[0]))['requested_sources']
+    assert actual[1]['lookup_status'] == 'not_found_in_index_scope'

@@ -42,41 +42,17 @@ def rig(monkeypatch):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "field,value",
-    [
-        ("temperature", "synthetic-private-invalid"),
-        ("temperature", -0.1),
-        ("temperature", float("nan")),
-        ("temperature", float("inf")),
-        ("temperature", None),
-        ("temperature", True),
-        ("maxTokens", "synthetic-private-invalid"),
-        ("maxTokens", 64.5),
-        ("maxTokens", 0),
-        ("maxTokens", -1),
-        ("maxTokens", None),
-        ("maxTokens", True),
-        ("topP", 0),
-        ("topP", 1.1),
-        ("topP", float("nan")),
-        ("topP", False),
-    ],
-)
+@pytest.mark.parametrize('field,value', [('temperature', 'synthetic-private-invalid'), ('temperature', -0.1), ('temperature', float('nan')), ('temperature', float('inf')), ('temperature', None), ('temperature', True), ('maxTokens', 'synthetic-private-invalid'), ('maxTokens', 64.5), ('maxTokens', 0), ('maxTokens', -1), ('maxTokens', None), ('maxTokens', True), ('topP', 0), ('topP', 1.1), ('topP', float('nan')), ('topP', False)])
 async def test_invalid_owned_number_stops_before_semantic_work_or_slot(rig, monkeypatch, caplog, field, value):
     from services import turn_completion
-
-    owned = SimpleNamespace(config={"topP": 1.0, "useKnowledgeBase": True, field: value})
-    monkeypatch.setattr(chat_answer, 'public_knowledge_db', SimpleNamespace(config={"temperature": 0.7, "maxTokens": 2048, "topP": 1.0}))
-    reserve = Mock(side_effect=AssertionError("Invalid settings reserved a completion slot"))
-    monkeypatch.setattr(turn_completion, "get_turn_completion_runtime", reserve)
+    owned = SimpleNamespace(config={'topP': 1.0, 'useKnowledgeBase': True, field: value})
+    reserve = Mock(side_effect=AssertionError('Invalid settings reserved a completion slot'))
+    monkeypatch.setattr(turn_completion, 'get_turn_completion_runtime', reserve)
     with pytest.raises(HTTPException) as caught:
-        await rig.api._generate_reply_impl(
-            request(), message_db=owned, character_service=SimpleNamespace(), record_invocation=False
-        )
+        await rig.api._generate_reply_impl(request(), message_db=owned, character_service=SimpleNamespace(), record_invocation=False)
     assert caught.value.status_code == 503 and isinstance(caught.value.__cause__, ValidationError)
     assert field in caught.value.detail
-    assert "synthetic-private" not in caught.value.detail + caplog.text + str(caught.value.__cause__)
+    assert 'synthetic-private' not in caught.value.detail + caplog.text + str(caught.value.__cause__)
     rig.prepare.assert_not_awaited()
     rig.generation.assert_not_awaited()
     rig.manager.get_current_provider().async_complete.assert_not_awaited()

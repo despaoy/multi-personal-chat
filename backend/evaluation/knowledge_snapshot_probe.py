@@ -1,6 +1,6 @@
 """A new ordinary generation on real, concurrently published complete sources."""
 
-from knowledge import index_lifecycle
+from knowledge.index_lifecycle import default_knowledge_index as index_lifecycle
 
 import hashlib
 import json

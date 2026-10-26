@@ -239,93 +239,45 @@ def test_identity_protocol_rejects_unverifiable_relations(mutation):
 @pytest.mark.asyncio
 async def test_actual_api_production_identity_stage_keeps_registry_rules_and_private(monkeypatch):
     from types import SimpleNamespace
-
     from api import generate
     from character.models import CompiledCharacterContext
     from db.schemas import MessageRequest
     from knowledge import public_task_evidence, retrieval_query_plan
     from knowledge.retrieval_query_plan import RetrievalQueryPlan
-
     await positive()
 
     async def planner(_query, **_context):
-        return RetrievalQueryPlan(status="applied", dependencies=deps(), public_obligations=parts())
+        return RetrievalQueryPlan(status='applied', dependencies=deps(), public_obligations=parts())
 
     async def retrieve(*_args, **_kwargs):
         return bundle()
 
     async def review(messages):
-        data = json.loads(messages[-1]["content"])
-        if set(data) - {"scope_policy", "reference_context"} == {"query", "public_tasks"}:
-            return open_scope_response(messages, [dict(task_id=TASK, objects=["榆湾续办"])])
-        if set(data) == {"query", "public_tasks", "object_scopes"}:
-            return json.dumps(
-                dict(
-                    tasks=[
-                        dict(
-                            task_id=TASK,
-                            aspects=[
-                                dict(object_id="query-object:0", query_quote=field)
-                                for field in ["费用", "受理日", "原件", "例外"]
-                            ],
-                        )
-                    ]
-                )
-            )
-        if "identity_review" not in data:
+        data = json.loads(messages[-1]['content'])
+        if set(data) - {'scope_policy', 'reference_context'} == {'query', 'public_tasks'}:
+            return open_scope_response(messages, [dict(task_id=TASK, objects=['榆湾续办'])])
+        if set(data) == {'query', 'public_tasks', 'object_scopes'}:
+            return json.dumps(dict(tasks=[dict(task_id=TASK, aspects=[dict(object_id='query-object:0', query_quote=field) for field in ['费用', '受理日', '原件', '例外']])]))
+        if 'identity_review' not in data:
             return json.dumps(identity())
-        return literal_span_response(
-            data,
-            dict(
-                decisions=[
-                    dict(source_id="doc_1", task_ids=[], object_evidence=[]),
-                    dict(
-                        source_id="doc_2",
-                        task_ids=[TASK],
-                        object_evidence=[
-                            dict(object_id="query-object:0", source_quote=RULE, identity_binding_id="identity:0")
-                        ],
-                    ),
-                ]
-            ),
-        )
+        return literal_span_response(data, dict(decisions=[dict(source_id='doc_1', task_ids=[], object_evidence=[]), dict(source_id='doc_2', task_ids=[TASK], object_evidence=[dict(object_id='query-object:0', source_quote=RULE, identity_binding_id='identity:0')])]))
 
     async def facts(_messages):
-        return json.dumps(
-            dict(
-                assessments=[
-                    dict(
-                        aspect_id=f"fact-aspect:{i}",
-                        evidence=[dict(source_id="doc_2", source_quote=RULE, assertion="affirmative")],
-                    )
-                    for i in range(4)
-                ]
-            )
-        )
+        return json.dumps(dict(assessments=[dict(aspect_id=f'fact-aspect:{i}', evidence=[dict(source_id='doc_2', source_quote=RULE, assertion='affirmative')]) for i in range(4)]))
 
     async def model(**kwargs):
-        wire = unescape(kwargs["messages"][-1]["content"])
-        assert all(text in wire for text in (BRIDGE, RULE, PRIVATE))
-        assert "verified_object_evidence_admitted" in wire and kwargs["max_tokens"] == 2048
-        return "续办费用与原件及例外依完整规则回答，周末偏好保留。"
-
-    monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
+        wire = unescape(kwargs['messages'][-1]['content'])
+        assert all((text in wire for text in (BRIDGE, RULE, PRIVATE)))
+        assert 'verified_object_evidence_admitted' in wire and kwargs['max_tokens'] == 2048
+        return '续办费用与原件及例外依完整规则回答，周末偏好保留。'
+    monkeypatch.setattr(retrieval_query_plan, 'plan_retrieval', planner)
     monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieve)
     install_public_source_reader(monkeypatch, generate, bundle())
     from knowledge import public_fact_coverage
-
-    monkeypatch.setattr(public_fact_coverage, "_review_facts", facts)
-    monkeypatch.setattr(public_task_evidence, "_review", review)
-    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "人物规则")
-    prepared = SimpleNamespace(
-        compiled=CompiledCharacterContext("", "", PRIVATE, used_memory_ids=("fiction-private",)), history=()
-    )
-    _chat_result_meta = await chat_answer.generate_chat_answer(
-        MessageRequest(message=QUERY),
-        None,
-        prepared_character_turn=prepared,
-        runtime_config=dict(maxTokens=2048, useKnowledgeBase=True),
-        model_generate=model,
-    )
-    _, used, meta = _chat_result_meta.reply, _chat_result_meta.used_rag, _chat_result_meta.metadata
-    assert used and not meta["abstained"] and "partial_public_evidence" not in (meta["warnings"] or [])
+    monkeypatch.setattr(public_fact_coverage, '_review_facts', facts)
+    monkeypatch.setattr(public_task_evidence, '_review', review)
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: '人物规则')
+    prepared = SimpleNamespace(compiled=CompiledCharacterContext('', '', PRIVATE, used_memory_ids=('fiction-private',)), history=())
+    _chat_result_meta = await chat_answer.generate_chat_answer(MessageRequest(message=QUERY), None, prepared_character_turn=prepared, runtime_config=dict(maxTokens=2048, useKnowledgeBase=True), model_generate=model, message_db=generate.db)
+    _, used, meta = (_chat_result_meta.reply, _chat_result_meta.used_rag, _chat_result_meta.metadata)
+    assert used and (not meta['abstained']) and ('partial_public_evidence' not in (meta['warnings'] or []))

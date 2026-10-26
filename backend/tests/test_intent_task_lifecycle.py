@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from app.runtime import RuntimeContainer
+from types import SimpleNamespace
+
 import asyncio
 
 import pytest
@@ -14,6 +17,7 @@ from knowledge import intent_trainer
 
 
 def test_intent_generation_and_training_share_one_task_slot(monkeypatch):
+
     async def scenario():
         started = asyncio.Event()
 
@@ -23,41 +27,22 @@ def test_intent_generation_and_training_share_one_task_slot(monkeypatch):
 
         async def train(*args, **kwargs):
             await asyncio.Event().wait()
-
-        monkeypatch.setattr(intent_trainer, "generate_samples", generate)
-        monkeypatch.setattr(intent_trainer, "train_intent_classifier", train)
-        monkeypatch.setattr(
-            intent_trainer,
-            "get_generation_status",
-            lambda: {"running": False},
-        )
-        monkeypatch.setattr(
-            intent_trainer,
-            "get_training_status",
-            lambda: {"running": False},
-        )
-        monkeypatch.setattr(intent_trainer, "cancel_training", lambda: True)
-        monkeypatch.setattr(knowledge, "_intent_task", None)
-        monkeypatch.setattr(knowledge, "_intent_task_lock", None)
-        monkeypatch.setattr(knowledge, "_intent_task_lock_loop", None)
-
-        result = await knowledge.generate_intent_samples(
-            IntentSampleGenerateRequest(),
-            current_user={"role": "admin"},
-        )
+        monkeypatch.setattr(intent_trainer, 'generate_samples', generate)
+        monkeypatch.setattr(intent_trainer, 'train_intent_classifier', train)
+        monkeypatch.setattr(intent_trainer, 'get_generation_status', lambda: {'running': False})
+        monkeypatch.setattr(intent_trainer, 'get_training_status', lambda: {'running': False})
+        monkeypatch.setattr(intent_trainer, 'cancel_training', lambda: True)
+        monkeypatch.setattr(knowledge, '_intent_task', None)
+        monkeypatch.setattr(knowledge, '_intent_task_lock', None)
+        monkeypatch.setattr(knowledge, '_intent_task_lock_loop', None)
+        result = await knowledge.generate_intent_samples(IntentSampleGenerateRequest(), current_user={'role': 'admin'}, database=SimpleNamespace())
         await asyncio.wait_for(started.wait(), timeout=1)
-
-        assert result["success"] is True
+        assert result['success'] is True
         with pytest.raises(HTTPException) as exc_info:
-            await knowledge.train_intent_classifier(
-                IntentTrainRequest(),
-                current_user={"role": "admin"},
-            )
+            await knowledge.train_intent_classifier(IntentTrainRequest(), current_user={'role': 'admin'}, database=SimpleNamespace())
         assert exc_info.value.status_code == 409
-
         await knowledge.shutdown_intent_tasks(timeout=0)
         assert knowledge._intent_task is None
-
     asyncio.run(scenario())
 
 

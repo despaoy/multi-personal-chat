@@ -1,6 +1,6 @@
 """Container paths, folder detachment and cascades share durable authority."""
 
-from knowledge import index_lifecycle
+from knowledge.index_lifecycle import default_knowledge_index as index_lifecycle
 
 import sqlite3
 
@@ -166,28 +166,23 @@ def test_invalid_revision_rolls_back_rename_without_resetting_authority(tmp_path
     assert snapshot(db) == before
 
 
-@pytest.mark.parametrize("operation", ["rename", "base_delete", "folder_delete"])
+@pytest.mark.parametrize('operation', ['rename', 'base_delete', 'folder_delete'])
 @pytest.mark.asyncio
 async def test_public_container_route_requires_no_postcommit_database_signal(tmp_path, monkeypatch, operation):
-    db = SQLiteDB(tmp_path / "paths.db")
+    db = SQLiteDB(tmp_path / 'paths.db')
     kb, folder, doc, _, revision = setup(db)
-    monkeypatch.setattr(knowledge, "db", db)
-    monkeypatch.setattr(index_lifecycle, "db", db)
+    monkeypatch.setattr(index_lifecycle, 'db', db)
+    monkeypatch.setattr(index_lifecycle.db, '_knowledge_index', index_lifecycle, raising=False)
 
     def forbidden():
-        raise AssertionError("Public container mutation must already have durable dirty authority")
-
-    monkeypatch.setattr(db, "mark_knowledge_index_dirty", forbidden)
-    admin = {"role": "admin"}
-    if operation == "rename":
-        result = await knowledge.update_knowledge_base(kb["id"], KnowledgeBaseUpdate(name="新资料组"), admin)
-    elif operation == "base_delete":
-        result = await knowledge.delete_knowledge_base(kb["id"], admin)
+        raise AssertionError('Public container mutation must already have durable dirty authority')
+    monkeypatch.setattr(db, 'mark_knowledge_index_dirty', forbidden)
+    admin = {'role': 'admin'}
+    if operation == 'rename':
+        result = await knowledge.update_knowledge_base(kb['id'], KnowledgeBaseUpdate(name='新资料组'), admin, database=index_lifecycle.db)
+    elif operation == 'base_delete':
+        result = await knowledge.delete_knowledge_base(kb['id'], admin, database=index_lifecycle.db)
     else:
-        result = await knowledge.delete_knowledge_folder(folder["id"], admin)
-        assert db.get_knowledge_document(doc["id"])["category"] == "未分类"
-    assert (
-        result["success"]
-        and db.get_config_value(state.REVISION_KEY) == revision + 1
-        and db.get_config_value(state.STATUS_KEY) == "dirty"
-    )
+        result = await knowledge.delete_knowledge_folder(folder['id'], admin, database=index_lifecycle.db)
+        assert db.get_knowledge_document(doc['id'])['category'] == '未分类'
+    assert result['success'] and db.get_config_value(state.REVISION_KEY) == revision + 1 and (db.get_config_value(state.STATUS_KEY) == 'dirty')

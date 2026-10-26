@@ -82,157 +82,102 @@ async def test_failed_binding_exposes_internal_diagnostic_without_binding(defect
 async def run_api(tmp_path, monkeypatch, defect=None, *, provider_budget, private=True, fee_only=False, private_large=False):
     from html import unescape
     from types import SimpleNamespace
-
-    from test_failed_fact_review_receipts import (
-        FIRST,
-        PRIVATE,
-        SECOND,
-        complete_sources,
-        fact_value,
-        private_context,
-        scope_value,
-    )
-
+    from test_failed_fact_review_receipts import FIRST, PRIVATE, SECOND, complete_sources, fact_value, private_context, scope_value
     from character.models import CompiledCharacterContext
     from db.schemas import MessageRequest
     from knowledge import public_fact_coverage, public_task_evidence, retrieval_query_plan
     from knowledge.retrieval_query_plan import RetrievalQueryPlan
-
     observed = dict(binding=[], retrieval_calls=0, model_calls=0)
-    context = (
-        await budget_pressure_private(tmp_path)
-        if private_large
-        else await private_context(tmp_path)
-        if private
-        else CompiledCharacterContext("独立测试画像", "", "", memory_status="no_match")
-    )
-    assert not context.memory_packets and not context.used_memory_ids
-    first_body = "霁浦登记不收费；当前完整公开页未载日期、材料、例外，缺项保持未知。" if fee_only else FIRST
+    context = await budget_pressure_private(tmp_path) if private_large else await private_context(tmp_path) if private else CompiledCharacterContext('独立测试画像', '', '', memory_status='no_match')
+    assert not context.memory_packets and (not context.used_memory_ids)
+    first_body = '霁浦登记不收费；当前完整公开页未载日期、材料、例外，缺项保持未知。' if fee_only else FIRST
 
     async def planner(query, *, history, context_budget):
         assert query == QUERY and history == ()
         assert context_budget is provider_budget.review
-        return RetrievalQueryPlan(status="applied", dependencies=deps())
+        return RetrievalQueryPlan(status='applied', dependencies=deps())
 
     async def retrieve(*args, **kwargs):
-        observed["retrieval_calls"] += 1
-        assert args[0] == QUERY and kwargs["question_binding"]["input"]["query"] == QUERY
+        observed['retrieval_calls'] += 1
+        assert args[0] == QUERY and kwargs['question_binding']['input']['query'] == QUERY
         if fee_only:
             from test_failed_object_identity_source_reviews import complete_sources as whole_sources
-
             return whole_sources((first_body, SECOND), (1, 2))
         return complete_sources()
-
-    # The send-time authority check must see the same complete documents as retrieval.
     if fee_only:
         from test_failed_object_identity_source_reviews import complete_sources as whole_sources
         source_bundle = whole_sources((first_body, SECOND), (1, 2))
     else:
         source_bundle = complete_sources()
-    documents = {row["document_id"]: dict(row, id=row["document_id"]) for row in source_bundle["results"]}
-    monkeypatch.setattr(chat_answer.public_knowledge_db, "get_knowledge_document", documents.get)
+    documents = {row['document_id']: dict(row, id=row['document_id']) for row in source_bundle['results']}
+    source_database = SimpleNamespace(get_knowledge_document=documents.get)
 
     async def review(messages):
-        data = json.loads(messages[-1]["content"])
-        assert data["query"] == QUERY
-        if set(data) == {"query", "public_tasks", "scope_policy"}:
-            assert data["scope_policy"] == {"allow_independent_identity": False, "include_unresolved": False}
-            observed["binding"].append(deepcopy(messages))
-            if defect == "transport":
-                raise RuntimeError("controlled missing response")
-            if defect == "timeout":
+        data = json.loads(messages[-1]['content'])
+        assert data['query'] == QUERY
+        if set(data) == {'query', 'public_tasks', 'scope_policy'}:
+            assert data['scope_policy'] == {'allow_independent_identity': False, 'include_unresolved': False}
+            observed['binding'].append(deepcopy(messages))
+            if defect == 'transport':
+                raise RuntimeError('controlled missing response')
+            if defect == 'timeout':
                 raise asyncio.TimeoutError
-            value = dict(scopes=[dict(task_id=0, objects=["霁浦登记"]), dict(task_id=1, objects=["竹原续签"])])
-            if defect == "typed_id":
-                value["scopes"][0]["task_id"] = "0"
-            raw = open_scope_response(messages, value["scopes"], ensure_ascii=False)
-            if defect == "json":
-                raw = "{" + MARKER
-            elif defect == "fence":
-                raw = "```json\n" + raw + "\n```\n" + MARKER
-            elif defect == "non_text":
-                raw = {"marker": MARKER}
-            observed["raw"] = raw
+            value = dict(scopes=[dict(task_id=0, objects=['霁浦登记']), dict(task_id=1, objects=['竹原续签'])])
+            if defect == 'typed_id':
+                value['scopes'][0]['task_id'] = '0'
+            raw = open_scope_response(messages, value['scopes'], ensure_ascii=False)
+            if defect == 'json':
+                raw = '{' + MARKER
+            elif defect == 'fence':
+                raw = '```json\n' + raw + '\n```\n' + MARKER
+            elif defect == 'non_text':
+                raw = {'marker': MARKER}
+            observed['raw'] = raw
             return raw
-        if set(data) == {"query", "public_tasks", "object_scopes"}:
+        if set(data) == {'query', 'public_tasks', 'object_scopes'}:
             return json.dumps(scope_value())
-        assert [source["original_body"] for source in data["sources"]] == [first_body, SECOND]
-        return json.dumps(
-            dict(
-                decisions=[
-                    dict(
-                        source_id=f"doc_{i}",
-                        task_ids=[i - 1],
-                        object_evidence=[
-                            dict(
-                                object_id=f"query-object:{i - 1}",
-                                source_span_id=next(
-                                    span["span_id"]
-                                    for span in data["source_span_catalog"]
-                                    if span["source_id"] == f"doc_{i}"
-                                ),
-                            )
-                        ],
-                    )
-                    for i in (1, 2)
-                ]
-            )
-        )
+        assert [source['original_body'] for source in data['sources']] == [first_body, SECOND]
+        return json.dumps(dict(decisions=[dict(source_id=f'doc_{i}', task_ids=[i - 1], object_evidence=[dict(object_id=f'query-object:{i - 1}', source_span_id=next((span['span_id'] for span in data['source_span_catalog'] if span['source_id'] == f'doc_{i}')))]) for i in (1, 2)]))
 
     async def facts(messages):
-        data = json.loads(messages[-1]["content"])
-        assert data["query"] == QUERY and [source["original_body"] for source in data["sources"]] == [
-            first_body,
-            SECOND,
-        ]
+        data = json.loads(messages[-1]['content'])
+        assert data['query'] == QUERY and [source['original_body'] for source in data['sources']] == [first_body, SECOND]
         value = fact_value()
         if fee_only:
-            for aspect in value["assessments"][1:4]:
-                aspect["evidence"] = []
+            for aspect in value['assessments'][1:4]:
+                aspect['evidence'] = []
         return json.dumps(value)
-
     actual_generate = chat_answer.generate_character_response
 
     async def capture(request, model):
-        observed["initial_retrieval"] = request.retrieval
+        observed['initial_retrieval'] = request.retrieval
         result = await actual_generate(request, model)
-        observed["plan"] = result.plan
+        observed['plan'] = result.plan
         return result
 
     async def model(**kwargs):
-        observed["model_calls"] += 1
-        wire = unescape("\n".join(message["content"] for message in kwargs["messages"]))
-        assert QUERY in wire and MARKER not in wire and kwargs["max_tokens"] == 2048
-        assert (PRIVATE in wire) is (private and not private_large)
+        observed['model_calls'] += 1
+        wire = unescape('\n'.join((message['content'] for message in kwargs['messages'])))
+        assert QUERY in wire and MARKER not in wire and (kwargs['max_tokens'] == 2048)
+        assert (PRIVATE in wire) is (private and (not private_large))
         if defect is None:
-            assert first_body in wire and SECOND in wire and "fact_evidence_admitted" in wire
+            assert first_body in wire and SECOND in wire and ('fact_evidence_admitted' in wire)
             if fee_only:
-                assert "partial_fact_evidence" in wire
+                assert 'partial_fact_evidence' in wire
         else:
             assert first_body not in wire and SECOND not in wire
-        return (
-            "已有私人提醒保留，公共规则按可见依据核对，缺失保持未知。"
-            if private
-            else "没有可接纳的公共依据，规则保持未知。"
-        )
-
-    monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", planner)
+        return '已有私人提醒保留，公共规则按可见依据核对，缺失保持未知。' if private else '没有可接纳的公共依据，规则保持未知。'
+    monkeypatch.setattr(retrieval_query_plan, 'plan_retrieval', planner)
     monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieve)
-    monkeypatch.setattr(public_task_evidence, "_review", review)
-    monkeypatch.setattr(public_fact_coverage, "_review_facts", facts)
-    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "独立测试人物规则")
+    monkeypatch.setattr(public_task_evidence, '_review', review)
+    monkeypatch.setattr(public_fact_coverage, '_review_facts', facts)
+    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: '独立测试人物规则')
     monkeypatch.setattr(chat_answer, 'generate_character_response', capture)
-    _chat_result_meta = await chat_answer.generate_chat_answer(
-        MessageRequest(message=QUERY),
-        None,
-        prepared_character_turn=SimpleNamespace(compiled=context, history=()),
-        runtime_config=dict(maxTokens=2048, useKnowledgeBase=True),
-        model_generate=model,
-    )
-    _, used, meta = _chat_result_meta.reply, _chat_result_meta.used_rag, _chat_result_meta.metadata
-    assert used and observed["model_calls"] == 1 and len(observed["binding"]) == 1
+    _chat_result_meta = await chat_answer.generate_chat_answer(MessageRequest(message=QUERY), None, prepared_character_turn=SimpleNamespace(compiled=context, history=()), runtime_config=dict(maxTokens=2048, useKnowledgeBase=True), model_generate=model, message_db=source_database)
+    _, used, meta = (_chat_result_meta.reply, _chat_result_meta.used_rag, _chat_result_meta.metadata)
+    assert used and observed['model_calls'] == 1 and (len(observed['binding']) == 1)
     assert MARKER not in json.dumps(meta)
-    return observed, meta
+    return (observed, meta)
 
 
 async def test_actual_generation_positive_keeps_five_facts_and_normal_private(tmp_path, monkeypatch, provider_budget):

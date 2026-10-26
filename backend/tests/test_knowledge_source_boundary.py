@@ -1,6 +1,6 @@
 """Only configured knowledge sources may be scanned or imported."""
 
-from knowledge import index_lifecycle
+from knowledge.index_lifecycle import default_knowledge_index as index_lifecycle
 
 from types import SimpleNamespace
 
@@ -20,23 +20,23 @@ OUTSIDE = "完整外部合成资料：12月8日15点到三楼，须携证件并�
 
 @pytest.fixture
 def sources(tmp_path, monkeypatch):
-    root = tmp_path / "knowledge"
-    target = root / "source"
+    root = tmp_path / 'knowledge'
+    target = root / 'source'
     target.mkdir(parents=True)
-    outside = tmp_path / "outside"
+    outside = tmp_path / 'outside'
     outside.mkdir()
-    (outside / "external.txt").write_text(OUTSIDE, encoding="utf-8")
-    db = SQLiteDB(tmp_path / "source.sqlite")
-    kb = db.create_knowledge_base("合成目标库")
-    monkeypatch.setattr(knowledge, "db", db)
-    monkeypatch.setattr(index_lifecycle, "db", db)
-    monkeypatch.setattr(knowledge, "KNOWLEDGE_BASES_DIR", root)
-    monkeypatch.setattr(index_lifecycle, "_vector_index_revision", None)
+    (outside / 'external.txt').write_text(OUTSIDE, encoding='utf-8')
+    db = SQLiteDB(tmp_path / 'source.sqlite')
+    kb = db.create_knowledge_base('合成目标库')
+    monkeypatch.setattr(index_lifecycle, 'db', db)
+    monkeypatch.setattr(index_lifecycle.db, '_knowledge_index', index_lifecycle, raising=False)
+    monkeypatch.setattr(knowledge, 'KNOWLEDGE_BASES_DIR', root)
+    monkeypatch.setattr(index_lifecycle, '_vector_index_revision', None)
     app = FastAPI()
-    executor = BoundedThreadExecutor(name="source-boundary-scan", max_workers=1, max_pending=2, default_timeout=3)
+    executor = BoundedThreadExecutor(name='source-boundary-scan', max_workers=1, max_pending=2, default_timeout=3)
     app.state.runtime_container = RuntimeContainer(db=db, is_pg_mode=lambda: False, knowledge_scan_executor=executor)
     app.include_router(knowledge.router)
-    app.dependency_overrides[get_current_admin] = lambda: {"role": "admin"}
+    app.dependency_overrides[get_current_admin] = lambda: {'role': 'admin'}
     try:
         yield SimpleNamespace(root=root, target=target, outside=outside, db=db, kb=kb, app=app)
     finally:

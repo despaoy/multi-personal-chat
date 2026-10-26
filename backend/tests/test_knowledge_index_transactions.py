@@ -1,6 +1,6 @@
 """Persisted index authority transactions and the affected rebuild commits."""
 
-from knowledge import index_lifecycle
+from knowledge.index_lifecycle import default_knowledge_index as index_lifecycle
 
 import json
 import sqlite3
@@ -143,21 +143,20 @@ class RecordingVector:
         pass
 
 
-@pytest.mark.parametrize("branch", ["empty", "rebuild", "reuse"])
+@pytest.mark.parametrize('branch', ['empty', 'rebuild', 'reuse'])
 def test_all_ready_branches_reject_real_revision_change_at_completion(tmp_path, monkeypatch, branch):
     from knowledge import vector_db as vector_module
-
-    database = SQLiteDB(tmp_path / "state.db")
+    database = SQLiteDB(tmp_path / 'state.db')
     other = SQLiteDB(database.db_path)
     vector = RecordingVector()
-    if branch != "empty":
-        body = "完整安排。末尾须书面确认。"
-        database.save_knowledge_document(dict(title="完整规则", content=body, category="现行"), chunks=[body])
-    monkeypatch.setattr(knowledge, "db", database)
-    monkeypatch.setattr(index_lifecycle, "db", database)
-    monkeypatch.setattr(vector_module, "get_vector_db", lambda: vector)
-    monkeypatch.setattr(index_lifecycle, "_vector_index_revision", None)
-    if branch == "reuse":
+    if branch != 'empty':
+        body = '完整安排。末尾须书面确认。'
+        database.save_knowledge_document(dict(title='完整规则', content=body, category='现行'), chunks=[body])
+    monkeypatch.setattr(index_lifecycle, 'db', database)
+    monkeypatch.setattr(index_lifecycle.db, '_knowledge_index', index_lifecycle, raising=False)
+    monkeypatch.setattr(vector_module, 'get_vector_db', lambda: vector)
+    monkeypatch.setattr(index_lifecycle, '_vector_index_revision', None)
+    if branch == 'reuse':
         assert index_lifecycle._ensure_vector_index()
         index_lifecycle._vector_index_revision = None
     original = database.commit_knowledge_index_revision
@@ -165,27 +164,21 @@ def test_all_ready_branches_reject_real_revision_change_at_completion(tmp_path, 
     def concurrent(expected, count, fingerprint):
         other.mark_knowledge_index_dirty()
         return original(expected, count, fingerprint)
-
-    monkeypatch.setattr(database, "commit_knowledge_index_revision", concurrent)
-    assert (
-        index_lifecycle._ensure_vector_index() is False
-        and index_lifecycle._vector_index_revision is None
-        and index_lifecycle._vector_index_revision is None
-    )
-    assert database.get_config_value(state.STATUS_KEY) == "dirty"
+    monkeypatch.setattr(database, 'commit_knowledge_index_revision', concurrent)
+    assert index_lifecycle._ensure_vector_index() is False and index_lifecycle._vector_index_revision is None and (index_lifecycle._vector_index_revision is None)
+    assert database.get_config_value(state.STATUS_KEY) == 'dirty'
 
 
 def test_document_transaction_precedes_local_cache_invalidation(tmp_path, monkeypatch):
-    database = SQLiteDB(tmp_path / "state.db")
-    monkeypatch.setattr(knowledge, "db", database)
-    monkeypatch.setattr(index_lifecycle, "db", database)
-    monkeypatch.setattr(index_lifecycle, "_vector_index_revision", 0)
+    database = SQLiteDB(tmp_path / 'state.db')
+    monkeypatch.setattr(index_lifecycle, 'db', database)
+    monkeypatch.setattr(index_lifecycle.db, '_knowledge_index', index_lifecycle, raising=False)
+    monkeypatch.setattr(index_lifecycle, '_vector_index_revision', 0)
 
     def forbidden(*args, **kwargs):
-        raise AssertionError("Separate config writes cannot be used for invalidation")
-
-    monkeypatch.setattr(database, "set_config_value", forbidden)
-    database.save_knowledge_document(dict(title="完整规则", content="须书面确认。"), chunks=["须书面确认。"])
+        raise AssertionError('Separate config writes cannot be used for invalidation')
+    monkeypatch.setattr(database, 'set_config_value', forbidden)
+    database.save_knowledge_document(dict(title='完整规则', content='须书面确认。'), chunks=['须书面确认。'])
     index_lifecycle._invalidate_local_knowledge_index()
-    assert database.get_config_value(state.REVISION_KEY) == 1 and database.get_config_value(state.STATUS_KEY) == "dirty"
+    assert database.get_config_value(state.REVISION_KEY) == 1 and database.get_config_value(state.STATUS_KEY) == 'dirty'
     assert index_lifecycle._vector_index_revision is None

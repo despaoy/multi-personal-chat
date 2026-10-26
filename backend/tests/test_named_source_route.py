@@ -2,7 +2,7 @@
 
 from knowledge import chat_retrieval
 
-from knowledge import index_lifecycle
+from knowledge.index_lifecycle import default_knowledge_index as index_lifecycle
 from threading import RLock
 from types import SimpleNamespace
 
@@ -36,35 +36,28 @@ def test_background_negative_or_incomplete_named_read_does_not_grant_a_route(que
 async def test_named_role_document_uses_fresh_generic_authority_and_complete_body(monkeypatch):
     from knowledge import rag_helper, vector_db
     from knowledge.multiscale_rag import runtime
-
     body = '合成角色当前偏好甲；上一版本乙仅为历史；不证明已经操作。'
-    record = dict(id='doc_1_chunk_0', document_id=1, chunk_index=0, title='合成偏好',
-                  category='演练', knowledge_base_id=7, content=body)
-    indexed = SimpleNamespace(_lock=RLock(), cache_generation=11, snapshot_validated=True,
-                              metadata=[record])
+    record = dict(id='doc_1_chunk_0', document_id=1, chunk_index=0, title='合成偏好', category='演练', knowledge_base_id=7, content=body)
+    indexed = SimpleNamespace(_lock=RLock(), cache_generation=11, snapshot_validated=True, metadata=[record])
     calls = []
 
     def character_forbidden():
         pytest.fail('Named document task must not first load an unrelated curated index')
-
     monkeypatch.setattr(runtime, 'get_multiscale_rag_service', character_forbidden)
     monkeypatch.setattr(index_lifecycle, '_ensure_vector_index', lambda: calls.append('fresh') or True)
     monkeypatch.setattr(index_lifecycle, '_vector_index_revision', 77)
     monkeypatch.setattr(index_lifecycle, '_get_rebuild_revision', lambda: 77)
     monkeypatch.setattr(vector_db, 'get_vector_db', lambda: indexed)
-    monkeypatch.setattr(chat_retrieval, 'db', SimpleNamespace(get_knowledge_document=lambda identity:
-        dict(id=identity, title='合成偏好', category='演练', knowledge_base_id=7, content=body)))
+    monkeypatch.setattr(index_lifecycle, 'db', SimpleNamespace(get_knowledge_document=lambda identity: dict(id=identity, title='合成偏好', category='演练', knowledge_base_id=7, content=body)))
+    monkeypatch.setattr(index_lifecycle.db, '_knowledge_index', index_lifecycle, raising=False)
     monkeypatch.setenv('CORRECTIVE_RAG_ENABLED', 'false')
 
     def retrieve(query, **kwargs):
         calls.append('generic')
         assert '月社妃' in query and kwargs['filters'] is None
         return dict(results=[record], confidence=0.8, abstained=False)
-
-    monkeypatch.setattr(rag_helper, 'get_rag_helper', lambda: SimpleNamespace(
-        retrieve_with_citations=retrieve, build_citations=lambda records: []))
-    result = await chat_retrieval.retrieve_chat_knowledge(
-        '请核对演练场景中《合成偏好》的当前修订：月社妃当前最喜欢哪个方案？', 3, None)
+    monkeypatch.setattr(rag_helper, 'get_rag_helper', lambda: SimpleNamespace(retrieve_with_citations=retrieve, build_citations=lambda records: []))
+    result = await chat_retrieval.retrieve_chat_knowledge('请核对演练场景中《合成偏好》的当前修订：月社妃当前最喜欢哪个方案？', 3, None, database=index_lifecycle.db)
     assert calls == ['fresh', 'generic']
     assert result['requested_source_titles'] == ['合成偏好']
     assert result['original_source_packets'][0]['original_body'] == body
@@ -73,9 +66,7 @@ async def test_named_role_document_uses_fresh_generic_authority_and_complete_bod
 
 async def test_named_read_with_unready_generic_index_fails_without_curated_substitution(monkeypatch):
     from knowledge.multiscale_rag import runtime
-
     monkeypatch.setattr(index_lifecycle, '_ensure_vector_index', lambda: False)
-    monkeypatch.setattr(runtime, 'get_multiscale_rag_service', lambda:
-        pytest.fail('A missing named document index must not substitute curated character material'))
+    monkeypatch.setattr(runtime, 'get_multiscale_rag_service', lambda: pytest.fail('A missing named document index must not substitute curated character material'))
     with pytest.raises(RuntimeError, match='Generic knowledge index is not ready'):
-        await chat_retrieval.retrieve_chat_knowledge('核对《合成偏好》中月社妃的记录。', 3, None)
+        await chat_retrieval.retrieve_chat_knowledge('核对《合成偏好》中月社妃的记录。', 3, None, database=index_lifecycle.db)

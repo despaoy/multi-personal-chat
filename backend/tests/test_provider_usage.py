@@ -85,43 +85,41 @@ async def test_parallel_requests_and_nested_collection_are_isolated():
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("finish,expected_calls", [("stop", 2), ("length", 1)])
+@pytest.mark.parametrize('finish,expected_calls', [('stop', 2), ('length', 1)])
 async def test_api_records_actual_usage_even_if_answer_rejected(installed, monkeypatch, tmp_path, finish, expected_calls):
     from api import generate
     from db.database import SQLiteDB
     from db.schemas import MessageRequest
     from fastapi import HTTPException
     from types import SimpleNamespace
-    database = SQLiteDB(tmp_path / "measured.sqlite")
-    monkeypatch.setattr(generate, "db", SimpleNamespace(config=installed.config, loras=[], add_model_invocation=database.add_model_invocation))
-    monkeypatch.setattr(chat_answer, "public_knowledge_db", generate.db)
+    database = SQLiteDB(tmp_path / 'measured.sqlite')
+    monkeypatch.setattr(generate, 'db', SimpleNamespace(config=installed.config, loras=[], add_model_invocation=database.add_model_invocation))
     installed.state.finish = finish
     compiled = chat_answer.generate_chat_answer
+
     async def twice(*args, **kwargs):
         await compiled(*args, **kwargs)
         return await compiled(*args, **kwargs)
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', twice)
-    request = MessageRequest(message="Synthetic facts: project A is approved; B is rejected. Which is approved?", loraName="default", traceId="usage-fixture")
-    if finish == "stop":
+    request = MessageRequest(message='Synthetic facts: project A is approved; B is rejected. Which is approved?', loraName='default', traceId='usage-fixture')
+    if finish == 'stop':
         await generate._generate_reply_impl(request, persist_message=False, message_db=generate.db)
     else:
         with pytest.raises(HTTPException):
             await generate._generate_reply_impl(request, persist_message=False, message_db=generate.db)
-    rows = database.execute_sql("SELECT * FROM model_invocations")
+    rows = database.execute_sql('SELECT * FROM model_invocations')
     assert len(rows) == 1 and len(installed.calls) == expected_calls
-    assert rows[0]["promptTokens"] == 100 * expected_calls
-    assert rows[0]["completionTokens"] == 20 * expected_calls
-    assert rows[0]["totalTokens"] == 120 * expected_calls
-    assert rows[0]["usageSource"] == "provider"
-    assert bool(rows[0]["errorType"]) == (finish == "length")
+    assert rows[0]['promptTokens'] == 100 * expected_calls
+    assert rows[0]['completionTokens'] == 20 * expected_calls
+    assert rows[0]['totalTokens'] == 120 * expected_calls
+    assert rows[0]['usageSource'] == 'provider'
+    assert bool(rows[0]['errorType']) == (finish == 'length')
     from services.stats import StatsService
-
-    monkeypatch.setattr("services.stats.check_service", lambda _port: False)
-    recorded = StatsService(database=database, inference_runtime=generate.inference_runtime,
-        env={"ASTRBOT_ENABLED": "false"}).collect()["metrics"]
-    assert recorded["chatGenerations"] == 1
-    assert recorded["chatGenerationFailures"] == int(finish == "length")
-    assert recorded["chatGenerationFailureRate"] == float(finish == "length")
+    monkeypatch.setattr('services.stats.check_service', lambda _port: False)
+    recorded = StatsService(database=database, inference_runtime=generate.inference_runtime, env={'ASTRBOT_ENABLED': 'false'}).collect()['metrics']
+    assert recorded['chatGenerations'] == 1
+    assert recorded['chatGenerationFailures'] == int(finish == 'length')
+    assert recorded['chatGenerationFailureRate'] == float(finish == 'length')
 
 
 

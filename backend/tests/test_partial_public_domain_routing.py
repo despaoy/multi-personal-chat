@@ -6,7 +6,7 @@ not native authorization, vector quality, or actual model evaluations.
 
 from knowledge import chat_retrieval
 
-from knowledge import index_lifecycle
+from knowledge.index_lifecycle import default_knowledge_index as index_lifecycle
 
 import json
 from threading import RLock
@@ -59,77 +59,49 @@ async def binding(*, empty=False):
     )
 
 
-@pytest.mark.parametrize("curated_error", [False, True])
+@pytest.mark.parametrize('curated_error', [False, True])
 async def test_api_preserves_normal_business_or_propagates_curated_fault(monkeypatch, curated_error):
     from knowledge import rag_helper, vector_db
     from knowledge.multiscale_rag import runtime
-
     calls = []
     receipt = await binding()
-    row = dict(
-        id="doc_1_chunk_0",
-        document_id=1,
-        chunk_index=0,
-        title="独立虚构业务完整规则",
-        category="演练",
-        knowledge_base_id=7,
-        content=BODY,
-    )
+    row = dict(id='doc_1_chunk_0', document_id=1, chunk_index=0, title='独立虚构业务完整规则', category='演练', knowledge_base_id=7, content=BODY)
 
     def curated(query, **kwargs):
         assert query == QUERY
-        calls.append("curated")
+        calls.append('curated')
         if curated_error:
-            raise RuntimeError("Controlled unresolved character branch unavailable")
+            raise RuntimeError('Controlled unresolved character branch unavailable')
         return dict(abstained=True, results=[], evidence_packets=[])
-
-    monkeypatch.setattr(
-        runtime, "get_multiscale_rag_service", lambda: SimpleNamespace(config=config(), retrieve_with_citations=curated)
-    )
-    monkeypatch.setattr(index_lifecycle, "_ensure_vector_index", lambda: calls.append("fresh") or True)
-    monkeypatch.setattr(index_lifecycle, "_vector_index_revision", 88)
-    monkeypatch.setattr(index_lifecycle, "_get_rebuild_revision", lambda: 88)
-    monkeypatch.setattr(
-        vector_db,
-        "get_vector_db",
-        lambda: SimpleNamespace(_lock=RLock(), cache_generation=12, snapshot_validated=True, metadata=[row]),
-    )
-    monkeypatch.setattr(
-        chat_retrieval,
-        "db",
-        SimpleNamespace(
-            get_knowledge_document=lambda i: dict(
-                id=i, title=row["title"], category=row["category"], knowledge_base_id=7, content=BODY
-            )
-        ),
-    )
-    monkeypatch.setenv("CORRECTIVE_RAG_ENABLED", "false")
+    monkeypatch.setattr(runtime, 'get_multiscale_rag_service', lambda: SimpleNamespace(config=config(), retrieve_with_citations=curated))
+    monkeypatch.setattr(index_lifecycle, '_ensure_vector_index', lambda: calls.append('fresh') or True)
+    monkeypatch.setattr(index_lifecycle, '_vector_index_revision', 88)
+    monkeypatch.setattr(index_lifecycle, '_get_rebuild_revision', lambda: 88)
+    monkeypatch.setattr(vector_db, 'get_vector_db', lambda: SimpleNamespace(_lock=RLock(), cache_generation=12, snapshot_validated=True, metadata=[row]))
+    monkeypatch.setattr(index_lifecycle, 'db', SimpleNamespace(get_knowledge_document=lambda i: dict(id=i, title=row['title'], category=row['category'], knowledge_base_id=7, content=BODY)))
+    monkeypatch.setattr(index_lifecycle.db, '_knowledge_index', index_lifecycle, raising=False)
+    monkeypatch.setenv('CORRECTIVE_RAG_ENABLED', 'false')
 
     def generic(query, **kwargs):
-        assert query == QUERY and kwargs["filters"] is None
-        assert kwargs["question_binding"] == receipt and "additional_queries" not in kwargs
-        calls.append("generic")
+        assert query == QUERY and kwargs['filters'] is None
+        assert kwargs['question_binding'] == receipt and 'additional_queries' not in kwargs
+        calls.append('generic')
         return dict(results=[row], confidence=0.8, abstained=False)
-
-    monkeypatch.setattr(
-        rag_helper,
-        "get_rag_helper",
-        lambda: SimpleNamespace(retrieve_with_citations=generic, build_citations=lambda records: []),
-    )
+    monkeypatch.setattr(rag_helper, 'get_rag_helper', lambda: SimpleNamespace(retrieve_with_citations=generic, build_citations=lambda records: []))
     if curated_error:
-        with pytest.raises(RuntimeError, match="Controlled unresolved character branch unavailable"):
-            await chat_retrieval.retrieve_chat_knowledge(QUERY, 3, None, question_binding=receipt)
-        assert calls == ["curated"]
+        with pytest.raises(RuntimeError, match='Controlled unresolved character branch unavailable'):
+            await chat_retrieval.retrieve_chat_knowledge(QUERY, 3, None, question_binding=receipt, database=index_lifecycle.db)
+        assert calls == ['curated']
         return
-    bundle = await chat_retrieval.retrieve_chat_knowledge(QUERY, 3, None, question_binding=receipt)
-    assert calls == ["curated", "fresh", "generic"]
-    branches = bundle["independent_domains"]["branches"]
-    assert branches["curated_character"]["status"] == "retrieved"
-    business = branches["generic_knowledge"]["bundle"]
-    assert business["original_source_packets"][0]["original_body"] == BODY
-    assert business["source_coverage"][0]["original_source_receipt"]["authority_revision"] == 88
-    assert bundle["independent_domains"]["plan"]["binding"] == receipt
-    assert receipt["scopes"]["task_scopes"][2]["object_ids"] == []
+    bundle = await chat_retrieval.retrieve_chat_knowledge(QUERY, 3, None, question_binding=receipt, database=index_lifecycle.db)
+    assert calls == ['curated', 'fresh', 'generic']
+    branches = bundle['independent_domains']['branches']
+    assert branches['curated_character']['status'] == 'retrieved'
+    business = branches['generic_knowledge']['bundle']
+    assert business['original_source_packets'][0]['original_body'] == BODY
+    assert business['source_coverage'][0]['original_source_receipt']['authority_revision'] == 88
+    assert bundle['independent_domains']['plan']['binding'] == receipt
+    assert receipt['scopes']['task_scopes'][2]['object_ids'] == []
 
 
 async def test_unresolved_branch_cannot_receive_a_business_object_grant():

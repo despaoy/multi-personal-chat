@@ -1,6 +1,8 @@
 """Declared duplicates are distinct from real knowledge storage failures."""
 
-from knowledge import index_lifecycle
+from app.runtime import RuntimeContainer
+
+from knowledge.index_lifecycle import default_knowledge_index as index_lifecycle
 
 import asyncio
 import sqlite3
@@ -17,13 +19,14 @@ from db.database import SQLiteDB
 
 @pytest.fixture
 def creation(tmp_path, monkeypatch):
-    database = SQLiteDB(tmp_path / "creation.sqlite")
-    owner = database.create_knowledge_base("完整合成知识库")
-    monkeypatch.setattr(knowledge, "db", database)
-    monkeypatch.setattr(index_lifecycle, "db", database)
+    database = SQLiteDB(tmp_path / 'creation.sqlite')
+    owner = database.create_knowledge_base('完整合成知识库')
+    monkeypatch.setattr(index_lifecycle, 'db', database)
+    monkeypatch.setattr(index_lifecycle.db, '_knowledge_index', index_lifecycle, raising=False)
     app = FastAPI()
+    app.state.runtime_container = RuntimeContainer(db=index_lifecycle.db, is_pg_mode=lambda: False, startup_env={})
     app.include_router(knowledge.router)
-    app.dependency_overrides[get_current_admin] = lambda: {"role": "admin"}
+    app.dependency_overrides[get_current_admin] = lambda: {'role': 'admin'}
     return SimpleNamespace(db=database, owner=owner, app=app)
 
 

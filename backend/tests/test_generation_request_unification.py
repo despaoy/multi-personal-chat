@@ -3,7 +3,7 @@ from services import chat_answer
 
 from knowledge import chat_retrieval
 
-from knowledge import index_lifecycle
+from knowledge.index_lifecycle import default_knowledge_index as index_lifecycle
 from unittest.mock import AsyncMock
 from types import SimpleNamespace
 
@@ -18,104 +18,87 @@ pytestmark = pytest.mark.usefixtures("no_live_context_review")
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("outcome", ["success", "load_failure", "retrieval_failure"])
+@pytest.mark.parametrize('outcome', ['success', 'load_failure', 'retrieval_failure'])
 async def test_character_runtime_owns_domain_and_failure(monkeypatch, outcome):
     from unittest.mock import Mock
     from knowledge.multiscale_rag import runtime
     from test_multiscale_rag_runtime import ranking_score_runtime
-
-    # Exercise the production runtime and its real domain analyzer; only the
-    # local index payload and injected I/O failures are synthetic.
     service = runtime.MultiScaleRagRuntime()
     service._service = ranking_score_runtime(0.9)._service
-    failure = OSError("synthetic character index failure")
-    if outcome == "load_failure":
+    failure = OSError('synthetic character index failure')
+    if outcome == 'load_failure':
         service._service = None
-        monkeypatch.setattr(service, "_ensure_loaded", Mock(side_effect=failure))
-    elif outcome == "retrieval_failure":
+        monkeypatch.setattr(service, '_ensure_loaded', Mock(side_effect=failure))
+    elif outcome == 'retrieval_failure':
         service._service.retrieve = Mock(side_effect=failure)
-    generic = Mock(side_effect=AssertionError("Character failure must not switch to generic KB"))
-    monkeypatch.setattr(index_lifecycle, "_ensure_vector_index", generic)
-    monkeypatch.setattr(runtime, "get_multiscale_rag_service", lambda: service)
-    if outcome == "success":
-        result = await chat_retrieval.retrieve_chat_knowledge("妃和琉璃是什么关系？", 3, None)
-        assert result["domains"] == [service.config.domain_id]
-        assert result["results"][0]["content"] == "只能离线验收，禁止联网。"
-        assert result["abstained"] is False
+    generic = Mock(side_effect=AssertionError('Character failure must not switch to generic KB'))
+    monkeypatch.setattr(index_lifecycle, '_ensure_vector_index', generic)
+    monkeypatch.setattr(runtime, 'get_multiscale_rag_service', lambda: service)
+    if outcome == 'success':
+        result = await chat_retrieval.retrieve_chat_knowledge('妃和琉璃是什么关系？', 3, None, database=index_lifecycle.db)
+        assert result['domains'] == [service.config.domain_id]
+        assert result['results'][0]['content'] == '只能离线验收，禁止联网。'
+        assert result['abstained'] is False
     else:
         with pytest.raises(OSError) as raised:
-            await chat_retrieval.retrieve_chat_knowledge("妃和琉璃是什么关系？", 3, None)
+            await chat_retrieval.retrieve_chat_knowledge('妃和琉璃是什么关系？', 3, None, database=index_lifecycle.db)
         assert raised.value is failure
     generic.assert_not_called()
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("provider", ["vllm", "openai_compat"])
-@pytest.mark.parametrize("failure_kind", ["provider", "reply_validation", "context_authority"])
+@pytest.mark.parametrize('provider', ['vllm', 'openai_compat'])
+@pytest.mark.parametrize('failure_kind', ['provider', 'reply_validation', 'context_authority'])
 async def test_generation_failure_is_reported_and_recorded(monkeypatch, provider, failure_kind):
     from api import generate
     from inference import model_manager
-
-    records, counters = [], []
+    records, counters = ([], [])
     from unittest.mock import Mock
-
-    switch = Mock(side_effect=AssertionError("A failed request must not switch the configured provider"))
-    manager = SimpleNamespace(_current_provider=SimpleNamespace(value=provider),
-                              set_lora_adapter=lambda _: None, set_provider=switch)
-    connection = cloud_connection("fixture-model")
+    switch = Mock(side_effect=AssertionError('A failed request must not switch the configured provider'))
+    manager = SimpleNamespace(_current_provider=SimpleNamespace(value=provider), set_lora_adapter=lambda _: None, set_provider=switch)
+    connection = cloud_connection('fixture-model')
     connection.name = provider
     manager.get_current_provider = lambda: connection
-    monkeypatch.setattr(model_manager, "get_model_manager", lambda: manager)
-    monkeypatch.setattr(generate, "db", SimpleNamespace(config={}, loras=[]))
-    monkeypatch.setattr(chat_answer, "public_knowledge_db", generate.db)
-    monkeypatch.setattr(generate, "response_cache", None)
-    monkeypatch.setattr(generate, "get_vllm_client", AsyncMock(return_value=SimpleNamespace(generate=AsyncMock())))
-    monkeypatch.setattr(generate, "set_consecutive", lambda *args: counters.append(args))
-
-
+    monkeypatch.setattr(model_manager, 'get_model_manager', lambda: manager)
+    monkeypatch.setattr(generate, 'db', SimpleNamespace(config={}, loras=[]))
+    monkeypatch.setattr(generate, 'response_cache', None)
+    monkeypatch.setattr(generate, 'get_vllm_client', AsyncMock(return_value=SimpleNamespace(generate=AsyncMock())))
+    monkeypatch.setattr(generate, 'set_consecutive', lambda *args: counters.append(args))
     from inference.generation_request import ContextAuthorityChangedError, ReplyValidationError
-    failure = {
-        "provider": RuntimeError("model unavailable"),
-        "reply_validation": ReplyValidationError(("unsupported_user_fact",)),
-        "context_authority": ContextAuthorityChangedError("Context authority changed again after one regeneration"),
-    }[failure_kind]
+    failure = {'provider': RuntimeError('model unavailable'), 'reply_validation': ReplyValidationError(('unsupported_user_fact',)), 'context_authority': ContextAuthorityChangedError('Context authority changed again after one regeneration')}[failure_kind]
     save = AsyncMock()
-    monkeypatch.setattr(generate, "_save_message", save)
-
+    monkeypatch.setattr(generate, '_save_message', save)
     connection.async_complete.side_effect = failure
     client = await generate.get_vllm_client()
     client.generate.side_effect = failure
 
     async def failed_expression(*args, model_generate, **kwargs):
-        if failure_kind == "provider":
-            await model_generate(messages=[{"role": "user", "content": "完整合成资料：旧版已撤销，以当前版本回答。"}],
-                temperature=0, max_tokens=100, top_p=1.0)
+        if failure_kind == 'provider':
+            await model_generate(messages=[{'role': 'user', 'content': '完整合成资料：旧版已撤销，以当前版本回答。'}], temperature=0, max_tokens=100, top_p=1.0)
         raise failure
 
     async def record(*args, **kwargs):
         records.append(kwargs)
-
-    monkeypatch.setattr(generate, "circuit_breaker_registry", None)
+    monkeypatch.setattr(generate, 'circuit_breaker_registry', None)
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', failed_expression)
-    monkeypatch.setattr(generate, "_record_model_invocation", record)
+    monkeypatch.setattr(generate, '_record_model_invocation', record)
     from fastapi import HTTPException
-
     with pytest.raises(HTTPException) as caught:
-        await generate._generate_reply_impl(MessageRequest(message="按当前完整资料回答，不使用已撤销版本。"), message_db=generate.db)
-    assert caught.value.status_code == (503 if provider == "vllm" or failure_kind != "provider" else 500)
-    if failure_kind == "context_authority":
-        assert caught.value.detail["stage"] == "context_authority"
-        assert caught.value.detail["reason"] == "repeated_authority_change"
-    if failure_kind == "reply_validation":
-        assert caught.value.detail["stage"] == "reply_validation"
-        assert caught.value.detail["violations"] == ["unsupported_user_fact"]
+        await generate._generate_reply_impl(MessageRequest(message='按当前完整资料回答，不使用已撤销版本。'), message_db=generate.db)
+    assert caught.value.status_code == (503 if provider == 'vllm' or failure_kind != 'provider' else 500)
+    if failure_kind == 'context_authority':
+        assert caught.value.detail['stage'] == 'context_authority'
+        assert caught.value.detail['reason'] == 'repeated_authority_change'
+    if failure_kind == 'reply_validation':
+        assert caught.value.detail['stage'] == 'reply_validation'
+        assert caught.value.detail['violations'] == ['unsupported_user_fact']
     assert caught.value.__cause__ is failure
-    assert len(records) == 1 and records[0]["error_type"] == type(failure).__name__
+    assert len(records) == 1 and records[0]['error_type'] == type(failure).__name__
     save.assert_not_awaited()
     switch.assert_not_called()
-    assert counters == ([("model_failure", False)] if failure_kind == "provider" else [])
-    if failure_kind == "provider":
-        (client.generate if provider == "vllm" else connection.async_complete).assert_awaited_once()
+    assert counters == ([('model_failure', False)] if failure_kind == 'provider' else [])
+    if failure_kind == 'provider':
+        (client.generate if provider == 'vllm' else connection.async_complete).assert_awaited_once()
     else:
         client.generate.assert_not_awaited()
         connection.async_complete.assert_not_awaited()

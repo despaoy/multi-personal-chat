@@ -369,11 +369,11 @@ def expand_source_context(bundle, vector_db, *, expected_generation, source_budg
             )
         result = {**bundle, "results": results, "source_context_added": len(added), "source_coverage": tuple(coverage)}
         if scope_excluded:
-            from knowledge.rag_helper import get_rag_helper
+            from knowledge.rag_helper import RAGHelper
 
             # Strong unrelated votes cannot certify the remaining semantic
             # roots. Exact title lookup retains its separate source authority.
-            confidence = get_rag_helper().compute_confidence(anchors)
+            confidence = RAGHelper.compute_confidence(anchors)
             result.update(
                 confidence=min(float(bundle.get("confidence", 0.0)), confidence),
                 original_semantic_confidence=bundle.get("confidence", 0.0),

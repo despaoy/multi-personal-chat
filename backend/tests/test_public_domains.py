@@ -4,7 +4,7 @@ from services import chat_answer
 
 from knowledge import chat_retrieval
 
-from knowledge import index_lifecycle
+from knowledge.index_lifecycle import default_knowledge_index as index_lifecycle
 
 import copy
 import json
@@ -242,67 +242,43 @@ async def test_branch_id_collision_rejected_instead_of_renaming_curated_sources(
         assemble_domains(result["independent_domains"], generic())
 
 
-@pytest.mark.parametrize("filters", [None, {"knowledge_base_id": 2}])
+@pytest.mark.parametrize('filters', [None, {'knowledge_base_id': 2}])
 async def test_actual_api_mixed_retrieval_reads_fresh_business_after_curated_success(config, monkeypatch, filters):
-
     installed = install_api_retrieval(config, monkeypatch, filters)
     plan, _ = await make_plan(config)
-    result = await chat_retrieval.retrieve_chat_knowledge(QUERY, 3, filters, question_binding=plan["binding"])
-    assert installed.calls == ["curated", "fresh", "generic"]
-    container = result["independent_domains"]
-    assert (
-        container["branches"]["generic_knowledge"]["bundle"]["original_source_packets"][0]["original_body"]
-        == installed.row["content"]
-    )
+    result = await chat_retrieval.retrieve_chat_knowledge(QUERY, 3, filters, question_binding=plan['binding'], database=index_lifecycle.db)
+    assert installed.calls == ['curated', 'fresh', 'generic']
+    container = result['independent_domains']
+    assert container['branches']['generic_knowledge']['bundle']['original_source_packets'][0]['original_body'] == installed.row['content']
 
 
 def install_api_retrieval(config, monkeypatch, filters=None):
     from threading import RLock
-
     from knowledge import rag_helper, vector_db
     from knowledge.multiscale_rag import runtime
-
-    row = generic()["results"][0]
-    row.update(chunk_index=0, category="独立虚构规程")
+    row = generic()['results'][0]
+    row.update(chunk_index=0, category='独立虚构规程')
     calls = []
 
     def actual_curated(query, **kwargs):
-        calls.append("curated")
+        calls.append('curated')
         return curated(query, **kwargs)
 
     def business(query, **kwargs):
-        assert query == QUERY and kwargs["filters"] == filters
-        calls.append("generic")
+        assert query == QUERY and kwargs['filters'] == filters
+        calls.append('generic')
         return dict(results=[row], abstained=False)
-
     character = SimpleNamespace(config=config, retrieve_with_citations=actual_curated, is_warm=lambda: True)
-    monkeypatch.setattr(runtime, "get_multiscale_rag_service", lambda: character)
-    monkeypatch.setattr(index_lifecycle, "_ensure_vector_index", lambda: calls.append("fresh") or True)
-    monkeypatch.setattr(index_lifecycle, "_vector_index_revision", 79)
-    monkeypatch.setattr(index_lifecycle, "_get_rebuild_revision", lambda: 79)
-    monkeypatch.setattr(
-        vector_db,
-        "get_vector_db",
-        lambda: SimpleNamespace(
-            _lock=RLock(),
-            cache_generation=11,
-            snapshot_validated=True,
-            metadata=[row],
-            _match_filters=lambda record, selected: all(record.get(key) == value for key, value in selected.items()),
-        ),
-    )
-    monkeypatch.setattr(
-        chat_retrieval,
-        "db",
-        SimpleNamespace(
-            get_knowledge_document=lambda identity: dict(
-                id=identity, title=row["title"], category=row["category"], knowledge_base_id=2, content=row["content"]
-            )
-        ),
-    )
+    monkeypatch.setattr(runtime, 'get_multiscale_rag_service', lambda: character)
+    monkeypatch.setattr(index_lifecycle, '_ensure_vector_index', lambda: calls.append('fresh') or True)
+    monkeypatch.setattr(index_lifecycle, '_vector_index_revision', 79)
+    monkeypatch.setattr(index_lifecycle, '_get_rebuild_revision', lambda: 79)
+    monkeypatch.setattr(vector_db, 'get_vector_db', lambda: SimpleNamespace(_lock=RLock(), cache_generation=11, snapshot_validated=True, metadata=[row], _match_filters=lambda record, selected: all((record.get(key) == value for key, value in selected.items()))))
+    monkeypatch.setattr(index_lifecycle, 'db', SimpleNamespace(get_knowledge_document=lambda identity: dict(id=identity, title=row['title'], category=row['category'], knowledge_base_id=2, content=row['content'])))
+    monkeypatch.setattr(index_lifecycle.db, '_knowledge_index', index_lifecycle, raising=False)
     helper = SimpleNamespace(retrieve_with_citations=business, build_citations=lambda rows: [])
-    monkeypatch.setattr(rag_helper, "get_rag_helper", lambda: helper)
-    monkeypatch.setenv("CORRECTIVE_RAG_ENABLED", "false")
+    monkeypatch.setattr(rag_helper, 'get_rag_helper', lambda: helper)
+    monkeypatch.setenv('CORRECTIVE_RAG_ENABLED', 'false')
     return SimpleNamespace(calls=calls, row=row, character=character, generic=helper)
 
 
@@ -384,6 +360,7 @@ async def test_actual_chat_branch_failure_stops_review_and_answer(config, monkey
         await chat_answer.generate_chat_answer(
             MessageRequest(message=QUERY), None,
             runtime_config=dict(maxTokens=2048, useKnowledgeBase=True), model_generate=forbidden_answer,
+            message_db=index_lifecycle.db,
         )
     assert caught.value.http_status == 503
     if defect == "timeout":
