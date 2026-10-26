@@ -44,7 +44,9 @@ if _USE_PG:
         raise RuntimeError("PostgreSQL 已配置，但依赖不可用；请安装后端依赖后重启") from exc
 
 else:
-    from db.database import db
+    from db.database import SQLiteDB
+
+    db = SQLiteDB()
 
 # 接口契约验证：确保 db 实例实现 DatabaseInterface 接口
 assert isinstance(db, DatabaseInterface), f"Database adapter must implement DatabaseInterface, got {type(db)}"

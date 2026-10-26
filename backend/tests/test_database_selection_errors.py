@@ -53,7 +53,7 @@ def load_adapter(monkeypatch, tmp_path):
             imports.append(name)
             if name == "db.pg_database" and failure is not None:
                 raise failure
-            return SimpleNamespace(sync_pg_db=store, db=store)
+            return SimpleNamespace(sync_pg_db=store, SQLiteDB=lambda: store)
         return original_import(name, *args, **kwargs)
 
     monkeypatch.setattr(builtins, "__import__", controlled_import)
@@ -105,3 +105,48 @@ def test_invalid_flag_stops_startup_before_importing_any_backend(load_adapter):
     with pytest.raises(ValueError, match="USE_POSTGRESQL"):
         load(pg="flase", environment="development")
     assert imports == []
+
+
+
+@pytest.mark.parametrize("mode", ["definitions", "postgres_api", "sqlite_adapter"])
+def test_database_creation_belongs_to_selected_adapter_not_definition_import(tmp_path, mode):
+    import json
+    import os
+    import subprocess
+    import sys
+
+    source = """import importlib,json,logging,sqlite3,sys
+from pathlib import Path
+logging.disable(logging.CRITICAL)
+from app import env
+env.load_backend_env=lambda *args,**kwargs:None
+mode=sys.argv[1]
+opens=[]
+original=sqlite3.connect
+def connect(*args,**kwargs):
+ opens.append(str(args[0]))
+ if mode!='sqlite_adapter':raise OSError('Unused SQLite must not be opened')
+ return original(*args,**kwargs)
+sqlite3.connect=connect
+try:
+ definitions=importlib.import_module('db.database')
+ assert not opens
+ assert definitions.get_lora_path_by_id('absent-adapter',loras=[]) is None
+ if mode=='postgres_api':importlib.import_module('api.generate')
+ if mode=='sqlite_adapter':
+  selected=importlib.import_module('db.adapter')
+  assert selected.db is importlib.import_module('db.adapter').db
+  assert len(opens)==1 and Path(selected.db.db_path).is_file()
+  selected.db.close_connection()
+ print(json.dumps(dict(kind='complete',sqlite_connections=len(opens))))
+except Exception as error:
+ print(json.dumps(dict(kind=type(error).__name__,sqlite_connections=len(opens))))
+"""
+    env = dict(os.environ, USE_POSTGRESQL="false" if mode=="sqlite_adapter" else "true",
+        DATABASE_URL="postgresql+asyncpg://unused@127.0.0.1:1/unused",
+        DATABASE_PATH=str(tmp_path/"selected.sqlite"), LORA_PATH=str(tmp_path/"loras"),
+        ENVIRONMENT="test", JWT_SECRET="synthetic-database-owner-secret-at-least-32-characters")
+    result = subprocess.run([sys.executable,"-c",source,mode],env=env,capture_output=True,text=True,timeout=30)
+    assert result.returncode == 0
+    assert json.loads(result.stdout) == {"kind":"complete","sqlite_connections":int(mode=="sqlite_adapter")}
+    assert (tmp_path/"selected.sqlite").exists() == (mode=="sqlite_adapter")

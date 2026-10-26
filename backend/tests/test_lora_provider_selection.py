@@ -54,9 +54,8 @@ def test_adapter_lookup_propagates_the_original_read_failure(monkeypatch, stage)
             raise failure
 
     monkeypatch.setattr(database, "refresh_lora_dir_map", fail if stage == "scan" else lambda: {})
-    monkeypatch.setattr(database, "db", Database())
     with pytest.raises(OSError) as caught:
-        database.get_lora_path_by_id("registered-adapter")
+        database.get_lora_path_by_id("registered-adapter", loras=[] if stage == "scan" else Database().loras)
     assert caught.value is failure
 
 

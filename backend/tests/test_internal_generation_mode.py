@@ -356,24 +356,18 @@ async def test_save_message_and_invocation_use_injected_database(monkeypatch):
 
 
 def test_lora_path_resolution_uses_injected_loras(monkeypatch):
-    """本地 LoRA 回退路径查找必须使用容器数据库读出的 LoRA 列表。
-
-    默认查全局 db.loras 时，自定义容器下 LoRA 列表来自容器库、
-    路径却在全局库查不到，会静默退回基座模型。
-    """
+    """LoRA路径只解析调用方已经读取的列表，不选择其他数据库。"""
     from db import database as db_mod
 
     monkeypatch.setattr(
         db_mod, "refresh_lora_dir_map", lambda: {"kisaki": "/loras/kisaki"}
     )
-    # 全局库没有 id=42 的 LoRA；容器库有
-    monkeypatch.setattr(db_mod, "db", SimpleNamespace(loras=[]))
     container_loras = [{"id": 42, "name": "kisaki"}]
 
     # 注入容器列表：能解析到路径
     assert db_mod.get_lora_path_by_id(42, loras=container_loras) == "/loras/kisaki"
-    # 不注入时回退全局库：查不到，返回 None
-    assert db_mod.get_lora_path_by_id(42) is None
+    # 合法的空登记列表保持无匹配。
+    assert db_mod.get_lora_path_by_id(42, loras=[]) is None
 
 
 @pytest.mark.asyncio

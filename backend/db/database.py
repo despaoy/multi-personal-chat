@@ -68,10 +68,10 @@ def refresh_lora_dir_map(lora_base: Optional[Path] = None) -> dict[str, str]:
         return dict(LORA_DIR_MAP)
 
 
-def get_lora_path_by_id(lora_id: str, *, loras: list | None = None) -> str | None:
+def get_lora_path_by_id(lora_id: str, *, loras: list) -> str | None:
     """Resolve a registered adapter by name or stored ID; propagate read errors."""
     directory_map = refresh_lora_dir_map()
-    for lora in (loras if loras is not None else db.loras):
+    for lora in loras:
         if str(lora.get("id")) == str(lora_id):
             name = lora.get("name", "")
             if name and name in directory_map:
@@ -3632,6 +3632,3 @@ class SQLiteDB:
             (lora_name,)
         )
         return [training_task_record(dict(row)) for row in cursor.fetchall()]
-
-# 全局数据库实例
-db = SQLiteDB()

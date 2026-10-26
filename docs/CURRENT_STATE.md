@@ -1,5 +1,15 @@
 # 当前实现与阅读入口
 
+## 2026-10-26：数据库实例由选定适配器创建
+
+准备公共RAG与私人记忆混合抽查时发现：db.database模块在末尾无条件执行SQLiteDB()，PostgreSQL生成入口也会因导入LoRA工具而初始化额外SQLite文件。真实冷导入复现中，只要禁止这一次不应发生的SQLite连接，模块与PostgreSQL生成入口都会失败；SQLite模式同样提前在定义模块创建了实例，创建所有权与适配器选择分离。
+
+现定义模块只提供SQLite类和现用工具，SQLite实例在db.adapter选定该后端的分支创建，PostgreSQL沿用原有同步适配器。get_lora_path_by_id的loras成为必需参数，直接使用调用方已读取的列表；两个正式调用方原已提供该参数。删除模块级单例与工具函数的隐式全局库读取，未新增工厂层、兼容别名或运行时检查。使用旧内部db.database.db导入或省略loras的外部Python脚本需要迁移；仓库内正式入口已核对。已有SQLite文件与历史数据保留。
+
+六个直接关联文件126项通过、零跳过：三项新增冷导入行为检查覆盖定义导入不连接、PostgreSQL入口不打开SQLite及SQLite适配器只创建一次；其余检查保留数据库选择、生成、LoRA读取失败、路径边界和启动资源所有权。三处旧夹具迁移到明确的构造与输入契约，既有有效断言保留，仅一处空列表查询断言增加显式loras参数。两个产品文件净减少1行，SQLite类的全部实现语法树不变；五个Python文件语法及基础Ruff、适配器完整lint、仓库完整性通过。没有数据库迁移或新增模型请求。
+
+前一项私人记忆真实抽查在45c7c428完成：六次实际DeepSeek请求14,272 tokens与三条调用账目一致，四条结构化记忆、完整原文和准确归档支持姓名、昵称归属、饮品时间/例外和培训费39元等回答。培训费用由原文提供，不能称所有字段已结构化；公共RAG在该私人用例关闭。本次导入副作用的发现意味着旧测试的production_writes=false仅证明业务写入在隔离PostgreSQL，不能扩展为所有导入过程绝无文件初始化。本阶段从根源移除这一SQLite副作用。45c7c428的[整体CI](https://github.com/despaoy/multi-personal-chat/actions/runs/40244682962)后端10,969通过、1跳过、8警告，前端与Docker成功；新的混合来源真实请求尚未发送。
+
 ## 2026-10-26：聊天链路等待预算统一使用有限正数设置
 
 七个真实模块冷导入测试复现：生成、检索、调用记账和网关用float直接读取时限，会接受inf、nan、零或负数，无法在读取配置时明确报告无效预算。现将五个产品文件中的十处读取改为既有read_positive_float；涵盖MODEL_INFERENCE_TIMEOUT、DB_WRITE_TIMEOUT、RAG_TIMEOUT、RAG_COLD_START_TIMEOUT、INTEGRATION_AUTH_TIMEOUT及INTEGRATION_DB_TIMEOUT。NoneBot两处调用也使用同一读取函数，不再保留独立的float解析路径。
