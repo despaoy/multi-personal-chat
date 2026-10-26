@@ -1,6 +1,6 @@
 """Shared embedding providers, explicit model resolution and vector validation.
 
-The default SentenceTransformer provider is reused by long-term memory.
+The default SentenceTransformer provider is shared by generic RAG and long-term memory.
 Character retrieval uses its own pooling provider with the same path and
 vector validation helpers. Missing required models propagate clear errors.
 """
@@ -170,34 +170,28 @@ class SentenceTransformerEmbeddingProvider:
         logger.info("embedding 模型已加载: %s (device=%s)", self.model_path, device)
         return self._model
 
-    def embed_texts(self, texts: list[str]) -> np.ndarray:
+    def embed_texts(self, texts: list[str], *, batch_size: int | None = None) -> np.ndarray:
         if not texts:
             return np.zeros((0, self.dimension), dtype=np.float32)
         with self._model_lock:
-            return self._embed_texts_locked(texts)
-
-    def _embed_texts_locked(self, texts: list[str]) -> np.ndarray:
-        model = self._load_model_locked()
-        return sentence_transformer_embeddings(
-            model,
-            texts,
-            batch_size=self._batch_size,
-            dimension=self.dimension,
-            timeout_seconds=self._timeout_seconds,
-        )
+            model = self._load_model_locked()
+            return sentence_transformer_embeddings(
+                model,
+                texts,
+                batch_size=self._batch_size if batch_size is None else batch_size,
+                dimension=self.dimension,
+                timeout_seconds=self._timeout_seconds,
+            )
 
     def embed_query(self, query: str) -> np.ndarray:
         return self.embed_texts([query])[0]
 
 
-_default_embedding_provider: SentenceTransformerEmbeddingProvider | None = None
+_default_embedding_provider = SentenceTransformerEmbeddingProvider()
 
 
 def get_default_embedding_provider() -> SentenceTransformerEmbeddingProvider:
-    """返回进程内共享的惰性 embedding provider，避免业务模块重复加载模型。"""
-    global _default_embedding_provider
-    if _default_embedding_provider is None:
-        _default_embedding_provider = SentenceTransformerEmbeddingProvider()
+    """返回进程共享的提供方；模型仍按需加载。"""
     return _default_embedding_provider
 
 

@@ -7,6 +7,7 @@ import pytest
 import torch
 
 from knowledge import rag_helper
+from knowledge.retrieval_core import embedding
 from knowledge.vector_db import IndexConfig, VectorDatabase
 
 QUERY = '档案馆周一开门时间和借阅期限'
@@ -50,7 +51,9 @@ def prepared(tmp_path, monkeypatch):
             rows = encode([None] * len(features["input_ids"]))
             return {"sentence_embedding": torch.as_tensor(rows)}
 
-    vector._model = Model()
+    provider = embedding.SentenceTransformerEmbeddingProvider(model_path="synthetic", device="cpu")
+    provider._model = Model()
+    monkeypatch.setattr(embedding, "_default_embedding_provider", provider)
     vector.add_documents([dict(DOCUMENT)])
     monkeypatch.setattr(rag_helper, 'get_vector_db', lambda: vector)
     helper = rag_helper.RAGHelper()
@@ -120,8 +123,9 @@ def test_batch_boundaries_are_validated_before_next_encode(prepared):
 
 def test_healthy_batches_preserve_values_dtype_and_single_loading_boundary(prepared, monkeypatch):
     vector, encode, _ = prepared
-    load = Mock(wraps=vector._load_model)
-    monkeypatch.setattr(vector, '_load_model', load)
+    provider = embedding.get_default_embedding_provider()
+    load = Mock(wraps=provider._load_model_locked)
+    monkeypatch.setattr(provider, '_load_model_locked', load)
     encode.side_effect = lambda texts, **kwargs: 2.0 * healthy(texts).astype(np.float64)
     vector.add_documents([dict(id='next-rule', title='次日规定', content='周二十点开门。')])
     assert load.call_count == 1

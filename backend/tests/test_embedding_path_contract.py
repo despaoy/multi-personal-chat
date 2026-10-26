@@ -8,7 +8,7 @@ import pytest
 
 from knowledge.multiscale_rag.vector_runtime import LocalMeanPoolingEmbeddingProvider
 from knowledge.retrieval_core import embedding
-from knowledge.vector_db import VectorDatabase
+from knowledge.vector_db import IndexConfig, VectorDatabase
 
 
 @pytest.fixture
@@ -74,9 +74,11 @@ def test_both_vector_callers_use_same_explicit_path(paths,monkeypatch):
     constructor=Mock(return_value=object())
     monkeypatch.setitem(sys.modules,'sentence_transformers',SimpleNamespace(SentenceTransformer=constructor))
     database=VectorDatabase.__new__(VectorDatabase)
-    database._model=None
-    database._use_gpu=False
-    database._load_model()
+    database.config=IndexConfig()
+    monkeypatch.setattr(embedding,'_cuda_available',lambda:False)
+    monkeypatch.setattr(embedding,'_default_embedding_provider',embedding.SentenceTransformerEmbeddingProvider())
+    monkeypatch.setattr(embedding,'sentence_transformer_embeddings',Mock(return_value=object()))
+    database._get_embeddings_batch(['complete synthetic source'])
     constructor.assert_called_once_with(expected,device='cpu')
     assert LocalMeanPoolingEmbeddingProvider().model_path==expected
 

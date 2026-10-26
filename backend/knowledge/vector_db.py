@@ -22,7 +22,7 @@ from typing import Any, Dict, List, Optional
 import faiss
 import numpy as np
 
-from knowledge.retrieval_core.embedding import resolve_local_model_path, sentence_transformer_embeddings
+from knowledge.retrieval_core.embedding import get_default_embedding_provider
 from knowledge.retrieval_core.tokenization import tokenize
 from knowledge.snapshot_store import SNAPSHOT_NAME, document_ids, load_snapshot, save_snapshot
 
@@ -176,8 +176,6 @@ class VectorDatabase:
         self.metadata: List[Dict[str, Any]] = []
         self._lock = RLock()
         self._id_to_index: Dict[int, int] = {}
-        self._model = None
-        self._device = None
         self._use_gpu = self._check_gpu_availability()
         self._add_count = 0
         self._dirty = False
@@ -200,15 +198,6 @@ class VectorDatabase:
         import torch
 
         return bool(torch.cuda.is_available())
-
-    def _load_model(self):
-        if self._model is None:
-            from sentence_transformers import SentenceTransformer
-
-            self._device = "cuda" if self._use_gpu else "cpu"
-            model_path = resolve_local_model_path()
-            self._model = SentenceTransformer(model_path, device=self._device)
-            logger.info("向量嵌入模型加载完成，设备: %s", self._device)
 
     def _determine_index_type(self) -> str:
         if self.config.index_type != "auto":
@@ -315,10 +304,7 @@ class VectorDatabase:
         return value if -limit <= value < limit else value % limit
 
     def _get_embeddings_batch(self, texts: List[str]) -> np.ndarray:
-        self._load_model()
-        return sentence_transformer_embeddings(
-            self._model, texts, batch_size=self.config.batch_encode_size, dimension=self.EMBEDDING_DIM,
-        )
+        return get_default_embedding_provider().embed_texts(texts, batch_size=self.config.batch_encode_size)
 
     def _get_embedding(self, text: str) -> np.ndarray:
         return self._get_embeddings_batch([text])[0]

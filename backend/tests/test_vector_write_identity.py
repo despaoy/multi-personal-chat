@@ -12,7 +12,6 @@ from knowledge.vector_db import IndexConfig, VectorDatabase
 def test_invalid_batch_preserves_published_index(tmp_path,monkeypatch,damage):
     monkeypatch.setattr(VectorDatabase,'_check_gpu_availability',lambda self:False)
     vector=VectorDatabase(str(tmp_path/'vectors'),IndexConfig(index_type='flat'))
-    vector._model=object()
     monkeypatch.setattr(vector,'_get_embeddings_batch',lambda texts:np.tile(np.eye(1,384,dtype=np.float32),(len(texts),1)))
     vector.add_documents([dict(id=7,title='permit',content='permit requires written approval')])
     snapshot=vector.snapshot_path.read_bytes()
@@ -38,7 +37,7 @@ def test_invalid_batch_preserves_published_index(tmp_path,monkeypatch,damage):
         docs[0]['id']='7'
     load=Mock(side_effect=AssertionError('invalid identity must not load the model'))
     encode=Mock(side_effect=AssertionError('invalid identity must not encode'))
-    monkeypatch.setattr(vector,'_load_model',load)
+    monkeypatch.setattr('knowledge.vector_db.get_default_embedding_provider',load)
     monkeypatch.setattr(vector,'_get_embeddings_batch',encode)
     with pytest.raises((KeyError,ValueError)):
         vector.add_documents(docs)

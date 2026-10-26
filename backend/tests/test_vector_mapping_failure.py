@@ -9,7 +9,6 @@ from knowledge.vector_db import IndexConfig, VectorDatabase
 def vector(tmp_path, monkeypatch):
     monkeypatch.setattr(VectorDatabase, "_check_gpu_availability", lambda self: False)
     db = VectorDatabase(str(tmp_path / "vectors"), IndexConfig(index_type="flat"))
-    db._model = object()
     embedding = np.eye(1, 384, dtype=np.float32)
     monkeypatch.setattr(db, "_get_embeddings_batch", lambda texts: embedding)
     monkeypatch.setattr(db, "_get_embedding", lambda query: embedding[0])

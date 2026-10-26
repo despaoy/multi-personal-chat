@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 
 from knowledge.retrieval_core import embedding
-from knowledge.vector_db import VectorDatabase
+from knowledge.vector_db import IndexConfig, VectorDatabase
 
 
 @pytest.mark.parametrize('caller',['shared','vector'])
@@ -16,15 +16,14 @@ def test_model_load_failure_never_switches_device(monkeypatch,caller,message):
     error=RuntimeError(message)
     constructor=Mock(side_effect=error)
     monkeypatch.setitem(sys.modules,'sentence_transformers',SimpleNamespace(SentenceTransformer=constructor))
+    provider=embedding.SentenceTransformerEmbeddingProvider(model_path='fixture',device='cuda')
     if caller=='shared':
-        provider=embedding.SentenceTransformerEmbeddingProvider(model_path='fixture',device='cuda')
         load=provider._load_model
     else:
-        monkeypatch.setattr('knowledge.vector_db.resolve_local_model_path',lambda:'fixture')
-        provider=VectorDatabase.__new__(VectorDatabase)
-        provider._model=None
-        provider._use_gpu=True
-        load=provider._load_model
+        monkeypatch.setattr(embedding,'_default_embedding_provider',provider)
+        database=VectorDatabase.__new__(VectorDatabase)
+        database.config=IndexConfig()
+        load=lambda:database._get_embeddings_batch(['complete synthetic source'])
     with pytest.raises(RuntimeError) as caught:
         load()
     assert caught.value is error
