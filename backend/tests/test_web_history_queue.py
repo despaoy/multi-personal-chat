@@ -19,6 +19,8 @@ from infra.concurrency_control import InferenceRuntime
 FIRST = "合成第一轮：请把完整材料润色成简短通知：尚未付款，仅周五执行，出差顺延。"
 SECOND = "合成第二轮：请继续润色刚才的通知，不要遗漏日期、否定和出差例外。"
 ANSWER = "合成控制通知：尚未付款，仅周五执行，出差时顺延。"
+INDEPENDENT = "合成独立通知：请整理完整资料：周一10:00开门，暴雨暂停。"
+INDEPENDENT_ANSWER = "独立通知：周一10:00开门，暴雨暂停。"
 ROLE = "tsukiyashiro_kisaki"
 
 
@@ -56,7 +58,7 @@ async def test_real_web_queue_preserves_history_order_and_independent_owners(
     )
     monkeypatch.setattr(character_context, "build_character_context_service", lambda owner: service)
     first_started = asyncio.Event()
-    second_started = asyncio.Event()
+    independent_started = asyncio.Event()
     second_submitted = asyncio.Event()
     release = asyncio.Event()
     wire = []
@@ -78,13 +80,16 @@ async def test_real_web_queue_preserves_history_order_and_independent_owners(
         if FIRST in current:
             first_started.set()
             await release.wait()
+        elif SECOND in current:
+            assert same_owner
         else:
-            assert SECOND in current
-            second_started.set()
+            assert INDEPENDENT in current
+            independent_started.set()
+        answer = INDEPENDENT_ANSWER if INDEPENDENT in current else ANSWER
         return httpx.Response(
             200,
             json={
-                "choices": [{"message": {"content": ANSWER}, "finish_reason": "stop"}],
+                "choices": [{"message": {"content": answer}, "finish_reason": "stop"}],
                 "usage": {"prompt_tokens": 100, "completion_tokens": 20, "total_tokens": 120},
             },
         )
@@ -99,7 +104,7 @@ async def test_real_web_queue_preserves_history_order_and_independent_owners(
                 base_url="https://isolated",
                 headers={"Authorization": "Bearer " + tokens[index]},
             )
-            for index in [0, 0 if same_owner else 1]
+            for index in ([0, 0, 1] if same_owner else [0, 1])
         ]
         try:
             first = asyncio.create_task(
@@ -120,7 +125,7 @@ async def test_real_web_queue_preserves_history_order_and_independent_owners(
                 clients[1].post(
                     "/api/generate",
                     json={
-                        "message": SECOND,
+                        "message": SECOND if same_owner else INDEPENDENT,
                         "characterId": ROLE,
                         "sessionType": "private",
                         "conversationType": "private",
@@ -130,25 +135,43 @@ async def test_real_web_queue_preserves_history_order_and_independent_owners(
             )
             tasks.append(second)
             await asyncio.wait_for(second_submitted.wait(), timeout=5)
-            # Force the old race to completion without timing-based sleeps.
-            # Equal keys use the runtime's existing, separately tested lock.
-            if not same_owner or queue_keys[0] != queue_keys[1]:
-                await asyncio.wait_for(second_started.wait(), timeout=5)
+            if same_owner:
+                tasks.append(
+                    asyncio.create_task(
+                        clients[2].post(
+                            "/api/generate",
+                            json={
+                                "message": INDEPENDENT,
+                                "characterId": ROLE,
+                                "sessionType": "private",
+                                "conversationType": "private",
+                                "sessionId": "shared-tab",
+                            },
+                        )
+                    )
+                )
+            await asyncio.wait_for(independent_started.wait(), timeout=5)
+            independent_response = await asyncio.wait_for(tasks[-1], timeout=5)
+            assert independent_response.status_code == 200 and not release.is_set()
             release.set()
             responses = await asyncio.gather(*tasks)
-            assert [response.status_code for response in responses] == [200, 200]
-            assert len(wire) == 2
+            assert [response.status_code for response in responses] == [200] * len(clients)
+            assert len(wire) == len(clients)
             first_wire = next(body for body in wire if FIRST in body["messages"][-1]["content"])
-            second_wire = next(body for body in wire if SECOND in body["messages"][-1]["content"])
+            independent_wire = next(body for body in wire if INDEPENDENT in body["messages"][-1]["content"])
+            assert all(
+                FIRST not in row["content"] and ANSWER not in row["content"] for row in independent_wire["messages"]
+            )
+            assert any(INDEPENDENT in row["content"] for row in independent_wire["messages"])
             assert any(FIRST in row["content"] for row in first_wire["messages"])
             if same_owner:
+                second_wire = next(body for body in wire if SECOND in body["messages"][-1]["content"])
                 assert any(FIRST in row["content"] for row in second_wire["messages"])
                 assert any(ANSWER in row["content"] for row in second_wire["messages"])
-            else:
-                assert all(FIRST not in row["content"] for row in second_wire["messages"])
             rows = database.get_messages()
-            assert len(rows) == 2 and {row["message"] for row in rows} == {FIRST, SECOND}
-            assert len({row["senderId"] for row in rows}) == (1 if same_owner else 2)
+            expected = {FIRST, SECOND, INDEPENDENT} if same_owner else {FIRST, INDEPENDENT}
+            assert len(rows) == len(clients) and {row["message"] for row in rows} == expected
+            assert len({row["senderId"] for row in rows}) == 2
             assert {row["sessionId"] for row in rows} == ({"shared-tab", "other-tab"} if same_owner else {"shared-tab"})
             assert all(row["sourceMessageId"].startswith("web:") for row in rows)
         finally:

@@ -57,13 +57,13 @@ def test_explicit_configuration_precedence_and_legacy_warning(monkeypatch, caplo
         ("MODEL_MAX_CONCURRENCY", ""),
     ],
 )
-def test_invalid_queue_configuration_never_allocates_a_queue(monkeypatch, name, value):
+def test_invalid_queue_configuration_never_starts_owners(monkeypatch, name, value):
     monkeypatch.setenv(name, value)
-    queue = Mock(side_effect=AssertionError("invalid configuration must fail before queue allocation"))
-    monkeypatch.setattr(controls.asyncio, "PriorityQueue", queue)
+    start = Mock(side_effect=AssertionError("invalid configuration must fail before owner startup"))
+    monkeypatch.setattr(controls.asyncio, "create_task", start)
     with pytest.raises(RuntimeError, match=name):
         controls.InferenceRuntime()
-    queue.assert_not_called()
+    start.assert_not_called()
 
 
 @pytest.mark.parametrize(
@@ -88,7 +88,7 @@ async def test_invalid_request_deadline_does_not_start_workers_or_submit_work(mo
         await runtime.submit(factory, session_id="synthetic-session", priority=1, timeout=value)
     ensure.assert_not_awaited()
     factory.assert_not_called()
-    assert runtime._queue.empty() and runtime._stats == before and not runtime._workers_started
+    assert runtime.stats()["queue_size"] == 0 and runtime._stats == before and not runtime._workers_started
 
 
 @pytest.mark.parametrize("deadline", [None, 0.5])
@@ -133,7 +133,7 @@ async def test_positive_queue_capacity_rejects_overflow_and_preserves_admitted_j
         admitted.append(second)
 
         async def wait_queued():
-            while runtime._queue.empty():
+            while runtime.stats()["queue_size"] == 0:
                 await asyncio.sleep(0)
 
         await asyncio.wait_for(wait_queued(), 1)

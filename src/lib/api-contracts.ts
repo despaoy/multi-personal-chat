@@ -285,7 +285,6 @@ export interface InferenceQueueMetrics {
   max_queue_size: number;
   workers: number;
   active: number;
-  session_locks: number;
   rate_limits: {
     global: TokenBucketMetrics;
     conversation: TokenBucketMetrics;

@@ -106,18 +106,10 @@ class TokenBucketLimiter:
 class _QueuedInference:
     priority: int
     sequence: int
-    enqueued_at: float = field(compare=False)
     session_id: str = field(compare=False)
     factory: Callable[[], Awaitable[Any]] = field(compare=False)
     future: asyncio.Future = field(compare=False)
     running_task: asyncio.Task | None = field(default=None, compare=False)
-
-
-@dataclass
-class _SessionLockEntry:
-    lock: asyncio.Lock = field(default_factory=asyncio.Lock)
-    users: int = 0
-    last_used: float = field(default_factory=time.monotonic)
 
 
 class InferenceRuntime:
@@ -133,16 +125,14 @@ class InferenceRuntime:
             logger.warning("MODEL_MAX_CONCURRENCY 已弃用，请改用 INFERENCE_WORKERS")
         self.worker_count = read_positive_int(os.environ, worker_key, 2)
         self.queue_timeout = read_positive_float(os.environ, "INFERENCE_QUEUE_TIMEOUT", 180.0)
-        self._queue: asyncio.PriorityQueue[_QueuedInference] = asyncio.PriorityQueue(maxsize=self.max_queue_size)
+        self._pending: list[_QueuedInference] = []
+        self._ready = asyncio.Condition()
+        self._active_sessions: set[str] = set()
         self._sequence = itertools.count()
         self._workers_started = False
         self._workers: list[asyncio.Task] = []
         self._maintenance_task: asyncio.Task | None = None
         self._start_lock = asyncio.Lock()
-        self._session_locks: dict[str, _SessionLockEntry] = {}
-        self._session_locks_guard = asyncio.Lock()
-        self._active_count = 0
-        self._active_guard = asyncio.Lock()
         self._rate_limit_guard = asyncio.Lock()
         self._stats = {
             "submitted": 0,
@@ -201,18 +191,17 @@ class InferenceRuntime:
         item = _QueuedInference(
             priority=priority,
             sequence=next(self._sequence),
-            enqueued_at=time.monotonic(),
             session_id=session_id or "default",
             factory=factory,
             future=future,
         )
-        try:
-            self._queue.put_nowait(item)
-        except asyncio.QueueFull as exc:
-            self._stats["rejected"] += 1
-            raise InferenceQueueFull("inference queue is full") from exc
-
-        self._stats["submitted"] += 1
+        async with self._ready:
+            if len(self._pending) >= self.max_queue_size:
+                self._stats["rejected"] += 1
+                raise InferenceQueueFull("inference queue is full")
+            self._pending.append(item)
+            self._stats["submitted"] += 1
+            self._ready.notify_all()
         try:
             return await asyncio.wait_for(future, timeout=wait_timeout)
         except (asyncio.TimeoutError, asyncio.CancelledError) as exc:
@@ -222,6 +211,10 @@ class InferenceRuntime:
             self._stats["cancelled"] += 1
             if not future.done():
                 future.cancel()
+            async with self._ready:
+                if item in self._pending:
+                    self._pending.remove(item)
+                    self._ready.notify_all()
             if item.running_task is not None and not item.running_task.done():
                 running_task = item.running_task
                 running_task.cancel()
@@ -247,53 +240,39 @@ class InferenceRuntime:
             )
             self._workers_started = True
 
-    async def _reserve_session_lock(self, session_id: str) -> _SessionLockEntry:
-        async with self._session_locks_guard:
-            entry = self._session_locks.get(session_id)
-            if entry is None:
-                entry = _SessionLockEntry()
-                self._session_locks[session_id] = entry
-            entry.users += 1
-            entry.last_used = time.monotonic()
-            return entry
-
-    async def _release_session_lock(self, entry: _SessionLockEntry) -> None:
-        async with self._session_locks_guard:
-            entry.users = max(0, entry.users - 1)
-            entry.last_used = time.monotonic()
+    async def _take_ready(self) -> _QueuedInference:
+        async with self._ready:
+            while True:
+                item = min(
+                    (
+                        item
+                        for item in self._pending
+                        if item.session_id not in self._active_sessions and not item.future.cancelled()
+                    ),
+                    default=None,
+                )
+                if item is not None:
+                    self._pending.remove(item)
+                    self._active_sessions.add(item.session_id)
+                    return item
+                await self._ready.wait()
 
     async def _worker(self, worker_id: int) -> None:
         while True:
-            item = await self._queue.get()
-            entry: _SessionLockEntry | None = None
+            item = await self._take_ready()
             try:
-                if item.future.cancelled():
+                # Selection and publishing the task have no suspension point;
+                # submit() can always cancel work that has actually started.
+                item.running_task = asyncio.create_task(item.factory())
+                try:
+                    result = await item.running_task
+                except asyncio.CancelledError:
+                    # A caller cancels its job; shutdown cancels the worker too.
+                    if asyncio.current_task().cancelling():
+                        raise
+                    if not item.future.done():
+                        item.future.cancel()
                     continue
-                entry = await self._reserve_session_lock(item.session_id)
-                async with entry.lock:
-                    if item.future.cancelled():
-                        continue
-                    async with self._active_guard:
-                        if item.future.cancelled():
-                            continue
-                        # No await between the final cancellation check and
-                        # publishing running_task: submit() can always cancel
-                        # work that has actually started.
-                        item.running_task = asyncio.create_task(item.factory())
-                        self._active_count += 1
-                    try:
-                        result = await item.running_task
-                    except asyncio.CancelledError:
-                        # A timed-out caller cancels only its model task; the worker survives.
-                        if asyncio.current_task().cancelling():
-                            raise
-                        if not item.future.done():
-                            item.future.cancel()
-                        continue
-                    finally:
-                        item.running_task = None
-                        async with self._active_guard:
-                            self._active_count = max(0, self._active_count - 1)
                 if not item.future.done():
                     item.future.set_result(result)
                     self._stats["completed"] += 1
@@ -306,9 +285,10 @@ class InferenceRuntime:
                 if not item.future.done():
                     item.future.set_exception(exc)
             finally:
-                if entry is not None:
-                    await self._release_session_lock(entry)
-                self._queue.task_done()
+                item.running_task = None
+                async with self._ready:
+                    self._active_sessions.remove(item.session_id)
+                    self._ready.notify_all()
 
     async def _maintenance_loop(self) -> None:
         try:
@@ -319,23 +299,11 @@ class InferenceRuntime:
             raise
 
     async def cleanup(self, max_age: float = 3600.0) -> dict[str, int]:
-        removed = {
+        return {
             "global_buckets": await self.global_limiter.cleanup(max_age),
             "conversation_buckets": await self.conversation_limiter.cleanup(max_age),
             "sender_buckets": await self.sender_limiter.cleanup(max_age),
-            "session_locks": 0,
         }
-        cutoff = time.monotonic() - max_age
-        async with self._session_locks_guard:
-            stale = [
-                key
-                for key, entry in self._session_locks.items()
-                if entry.users == 0 and not entry.lock.locked() and entry.last_used < cutoff
-            ]
-            for key in stale:
-                self._session_locks.pop(key, None)
-            removed["session_locks"] = len(stale)
-        return removed
 
     async def shutdown(self) -> None:
         """Cancel workers, release queued callers, and make the scheduler restartable."""
@@ -348,30 +316,20 @@ class InferenceRuntime:
             if tasks:
                 await asyncio.gather(*tasks, return_exceptions=True)
 
-            while True:
-                try:
-                    item = self._queue.get_nowait()
-                except asyncio.QueueEmpty:
-                    break
-                if not item.future.done():
-                    item.future.cancel()
-                self._queue.task_done()
+            async with self._ready:
+                for item in self._pending:
+                    if not item.future.done():
+                        item.future.cancel()
+                self._pending.clear()
 
             self._workers.clear()
             self._maintenance_task = None
             self._workers_started = False
-            async with self._session_locks_guard:
-                self._session_locks.clear()
 
-            # asyncio queues and locks retain their owning event loop after
-            # contention. Rebuild all loop-bound state so application/test
-            # lifecycles can safely reuse this runtime on a fresh loop.
-            self._queue = asyncio.PriorityQueue(maxsize=self.max_queue_size)
-            self._session_locks = {}
-            self._session_locks_guard = asyncio.Lock()
-            self._active_guard = asyncio.Lock()
+            # Rebuild loop-bound state so a fresh lifecycle can use a new loop.
+            self._ready = asyncio.Condition()
+            self._active_sessions.clear()
             self._rate_limit_guard = asyncio.Lock()
-            self._active_count = 0
             for limiter in (self.global_limiter, self.conversation_limiter, self.sender_limiter):
                 limiter.reset()
 
@@ -398,11 +356,10 @@ class InferenceRuntime:
     def stats(self) -> dict[str, Any]:
         return {
             **self._stats,
-            "queue_size": self._queue.qsize(),
+            "queue_size": len(self._pending),
             "max_queue_size": self.max_queue_size,
             "workers": self.worker_count,
-            "active": self._active_count,
-            "session_locks": len(self._session_locks),
+            "active": len(self._active_sessions),
             "rate_limits": self.rate_limit_stats(),
         }
 
