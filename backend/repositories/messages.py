@@ -61,6 +61,7 @@ class MessageRepository(Protocol):
         limit: int = 8,
         max_chars: int = 6000,
         character_id: str | None = None,
+        after_id: int | None = None,
     ) -> list[dict[str, str]]: ...
 
     async def delete_filtered(self, query: MessageQuery) -> int: ...
@@ -112,6 +113,7 @@ class DatabaseMessageRepository:
         limit: int = 8,
         max_chars: int = 6000,
         character_id: str | None = None,
+        after_id: int | None = None,
     ) -> list[dict[str, str]]:
         """按用户范围读取最近对话历史（时间正序，按完整问答轮预算）。
 
@@ -129,6 +131,7 @@ class DatabaseMessageRepository:
                 limit,
                 max_chars,
                 character_id=character_id,
+                after_id=after_id,
             )
         )
 

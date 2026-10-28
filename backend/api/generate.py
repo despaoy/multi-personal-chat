@@ -347,6 +347,22 @@ async def _generate_reply_body(
         mapped_character_id = request.characterId
     if prepared_override is not None and request.loraName and mapped_character_id != prepared_override.character_id:
         raise HTTPException(422, "LoRA 与分支角色不匹配")
+    if request._history_after_id is not None:
+        from character.models import build_user_scope
+        from inference.provider_context import get_provider_context_budget
+        from repositories.messages import DatabaseMessageRepository
+
+        turn = _character_turn_input(request)
+        scope = build_user_scope(
+            turn.platform, turn.adapter, turn.sender_id, turn.conversation_id, turn.conversation_type
+        )
+        budget = get_provider_context_budget()
+        request.history = await DatabaseMessageRepository(message_db).list_recent_conversation_history(
+            scope, limit=budget.history_limit, max_chars=budget.history_max_chars,
+            character_id=mapped_character_id, after_id=request._history_after_id,
+        )
+        request._history_loaded = True
+
     completion_slot = None
     if (
         (mapped_character_id or prepared_override is not None)

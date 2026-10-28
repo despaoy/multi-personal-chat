@@ -341,6 +341,12 @@ class PgDatabase:
                 "createdAt": created_at,
             }
 
+    async def get_message_high_watermark(self) -> int:
+        """Committed archive position; context reset does not delete messages."""
+        async with self.async_session() as session:
+            result = await session.execute(text("SELECT COALESCE(MAX(id), 0) FROM messages"))
+            return int(result.scalar_one())
+
     async def get_messages(self, limit: int = 100, offset: int = 0, session_id: Optional[str] = None) -> List[Dict]:
         """获取消息记录，支持按会话 ID 筛选。
 
@@ -1850,6 +1856,7 @@ class PgDatabase:
         limit: int = 8,
         max_chars: int = 6000,
         character_id: str | None = None,
+        after_id: int | None = None,
     ) -> List[dict]:
         """按用户范围读取最近对话历史，组装成角色生成用的消息列表。
 
@@ -1860,6 +1867,7 @@ class PgDatabase:
         """
         from db.history_budget import history_turn_limit
 
+        boundary = "AND id > :after_id " if after_id is not None else ""
         async with self.async_session() as session:
             if conversation_type in ("group", "channel") or adapter == "narrative":
                 stmt = text(
@@ -1870,6 +1878,7 @@ class PgDatabase:
                     "AND NOT EXISTS (SELECT 1 FROM integration_receipts r "
                     "WHERE r.owner = messages.\"traceId\" AND r.status <> 'delivered') "
                     + ('AND "characterId" = :character_id ' if character_id is not None else '')
+                    + boundary
                     + 'ORDER BY "createdAt" DESC, id DESC LIMIT :limit'
                 )
                 params: dict = {
@@ -1889,6 +1898,7 @@ class PgDatabase:
                     "AND NOT EXISTS (SELECT 1 FROM integration_receipts r "
                     "WHERE r.owner = messages.\"traceId\" AND r.status <> 'delivered') "
                     + ('AND "characterId" = :character_id ' if character_id is not None else '')
+                    + boundary
                     + 'ORDER BY "createdAt" DESC, id DESC LIMIT :limit'
                 )
                 params = {
@@ -1901,6 +1911,8 @@ class PgDatabase:
                 }
             if character_id is not None:
                 params['character_id'] = character_id
+            if after_id is not None:
+                params["after_id"] = after_id
             result = await session.execute(stmt, params)
             rows = result.fetchall()
             from db.history_source_grants import filter_plan
@@ -3269,13 +3281,16 @@ class SyncPgAdapter:
         return self._run(self._pg.list_scoped_conversation_turns(
             user_scope, character_id, limit=limit, before=before))
 
+    def get_message_high_watermark(self) -> int:
+        return self._run(self._pg.get_message_high_watermark())
+
     def list_conversation_history(
         self, platform, adapter, sender_id, conversation_type, conversation_id, limit=8, max_chars=6000,
-        character_id=None,
+        character_id=None, after_id=None,
     ):
         return self._run(
             self._pg.list_conversation_history(
-                platform, adapter, sender_id, conversation_type, conversation_id, limit, max_chars, character_id
+                platform, adapter, sender_id, conversation_type, conversation_id, limit, max_chars, character_id, after_id
             )
         )
 

@@ -30,6 +30,7 @@ MessageText = Annotated[str, AfterValidator(_require_message_text)]
 class MessageRequest(BaseModel):
     _source_received_at: datetime | None = PrivateAttr(default=None)
     _history_loaded: bool = PrivateAttr(default=False)
+    _history_after_id: int | None = PrivateAttr(default=None)
     characterId: str | None = Field(default=None, min_length=1, max_length=100, pattern=r"^[A-Za-z0-9_-]+$")
     branchId: str | None = Field(default=None, min_length=1, max_length=64)
     message: MessageText = Field(..., min_length=1, max_length=8000)

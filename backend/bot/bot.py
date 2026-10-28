@@ -13,9 +13,8 @@ import sys
 import json
 import time
 import asyncio
-import threading
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any
 
 from dotenv import load_dotenv
 from nonebot import on_command, on_message
@@ -114,94 +113,10 @@ class Config:
     def REPLY_DELAY(self):
         return float(_get_db_config().get('replyDelay', os.getenv("REPLY_DELAY", "0.8")))
 
-    @property
-    def CONTEXT_WINDOW(self):
-        return _get_db_config().get('contextWindow', '24k')
-
 config = Config()
 
-# ============================================
-# 会话历史管理 - 通过db.adapter读取
-# ============================================
-class SessionHistory:
-    """Bounded history for one canonical user scope, serialized by its queue."""
-
-    def __init__(self, max_tokens: int = 2000):
-        self.max_tokens = max_tokens
-        self.sessions: Dict[tuple[str, ...], List[Dict[str, str]]] = {}
-        self._lock = threading.Lock()
-
-    def _load_from_db(self, scope: UserScope):
-        history = db.list_conversation_history(
-            scope.platform, scope.adapter, scope.sender_id,
-            scope.conversation_type, scope.conversation_id,
-            limit=10, max_chars=self.max_tokens * 2,
-        )
-        if history:
-            self.sessions[scope.memory_scope_key] = history
-
-    def get_history(self, scope: UserScope, tokenizer=None) -> List[Dict[str, str]]:
-        """获取会话历史，按token数截断"""
-        session_id = scope.memory_scope_key
-        with self._lock:
-            if session_id not in self.sessions:
-                self._load_from_db(scope)
-                if session_id not in self.sessions:
-                    return []
-
-            history = self.sessions[session_id]
-            trimmed = []
-            total = 0
-            for msg in reversed(history):
-                tokens = self._count_tokens(msg["content"], tokenizer)
-                if total + tokens > self.max_tokens:
-                    break
-                trimmed.insert(0, msg)
-                total += tokens
-            return trimmed
-
-    def add_message(self, scope: UserScope, role: str, content: str):
-        """添加消息到内存历史"""
-        session_id = scope.memory_scope_key
-        with self._lock:
-            if session_id not in self.sessions:
-                self.sessions[session_id] = []
-            self.sessions[session_id].append({"role": role, "content": content})
-            self._prune_by_tokens(session_id)
-
-    def _prune_by_tokens(self, session_id: tuple[str, ...]):
-        """按token数裁剪历史"""
-        history = self.sessions.get(session_id, [])
-        total = 0
-        for msg in reversed(history):
-            total += self._count_tokens(msg["content"], None)
-        while total > self.max_tokens * 2 and len(history) > 2:
-            removed = history.pop(0)
-            total -= self._count_tokens(removed["content"], None)
-
-    def clear_history(self, scope: UserScope):
-        """Reset this process's context without restoring the archived turns."""
-        with self._lock:
-            self.sessions[scope.memory_scope_key] = []
-
-    @staticmethod
-    def _count_tokens(text: str, tokenizer=None) -> int:
-        if tokenizer is not None:
-            return len(tokenizer.encode(text))
-        return max(1, len(text) // 2)
-
-# 全局会话历史管理器
-_context_window_map = {
-    '4k': 4096,
-    '8k': 8192,
-    '16k': 16384,
-    '24k': 24576,
-    '32k': 32768,
-}
-_context_tokens = _context_window_map.get(str(config.CONTEXT_WINDOW), 24576)
-# 历史最多使用上下文的约三分之一；其余预算留给人物规则、当前消息、
-# 按需 RAG 证据和输出，避免长会话把生成空间全部挤占。
-session_history = SessionHistory(max_tokens=_context_tokens // 3)
+# Per-process resets retain only the archive position, never copied speech.
+_history_resets: dict[tuple[str, ...], int] = {}
 claw_sessions: Dict[str, bool] = {}
 
 # Empty selection follows backend configuration; "default" explicitly selects its base model.
@@ -409,16 +324,13 @@ async def process_message(event: MessageEvent) -> str:
     )
 
     async def _queued_generation():
-        # Read and update history under the runtime's session lock.
-        msg.history = session_history.get_history(scope)
-        msg._history_loaded = True
+        # Resolve the reset after earlier queued turns and clear commands finish.
+        msg._history_after_id = _history_resets.get(scope.memory_scope_key, 0)
         result = await generate_reply_core(
             msg,
             current_user={"username": "nonebot", "user_id": 0},
             message_db=db,
         )
-        session_history.add_message(scope, "user", user_message)
-        session_history.add_message(scope, "assistant", result.reply)
         return result
 
     result = await inference_runtime.submit(
@@ -586,7 +498,7 @@ def init_bot():
                                 s = s[:-1].strip()
                         return s
 
-                    def _smart_split_reply(text: str) -> List[str]:
+                    def _smart_split_reply(text: str) -> list[str]:
                         if not text or len(text) <= 40:
                             return [text] if text else []
 
@@ -727,7 +639,7 @@ def init_bot():
         scope = _message_scope(event)
 
         async def clear_context():
-            session_history.clear_history(scope)
+            _history_resets[scope.memory_scope_key] = await asyncio.to_thread(db.get_message_high_watermark)
 
         await inference_runtime.submit(
             clear_context,

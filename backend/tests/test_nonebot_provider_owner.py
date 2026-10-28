@@ -264,10 +264,8 @@ async def test_indented_message_keeps_original_in_wire_archive_and_history(
     runtime = SimpleNamespace(
         check_rate_limits=AsyncMock(), submit=AsyncMock(side_effect=submit), priority_for=lambda *args: 1
     )
-    history = bot_module.SessionHistory(max_tokens=4096)
     monkeypatch.setattr(bot_module, "db", database)
     monkeypatch.setattr(bot_module, "inference_runtime", runtime)
-    monkeypatch.setattr(bot_module, "session_history", history)
     monkeypatch.setattr(bot_module, "config", SimpleNamespace(REPLY_DELAY=-100))
     try:
         assert await bot_module.process_message(event) == ANSWER
@@ -277,7 +275,7 @@ async def test_indented_message_keeps_original_in_wire_archive_and_history(
         assert any(row["role"] == "user" and original in row["content"] for row in messages)
         (archived,) = database.get_messages(session_id="1001")
         assert archived["message"] == original and archived["reply"] == ANSWER
-        assert history.get_history(bot_module._message_scope(event)) == [
+        assert database.list_conversation_history("qq", "nonebot", "1001", "private", "1001") == [
             {"role": "user", "content": original},
             {"role": "assistant", "content": ANSWER},
         ]
@@ -295,4 +293,4 @@ async def test_blank_message_does_not_enter_generation(bot_module, private_event
     runtime.check_rate_limits.assert_not_awaited()
     runtime.submit.assert_not_awaited()
     generate.assert_not_awaited()
-    history.add_message.assert_not_called()
+    assert bot_module._history_resets == history

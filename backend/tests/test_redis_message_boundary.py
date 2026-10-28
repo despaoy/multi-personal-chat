@@ -8,13 +8,19 @@ import importlib.util
 import logging
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, Mock, call
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 import redis.asyncio as aioredis
 from redis.exceptions import ConnectionError, TimeoutError
 
 from cache import redis_client
+from db.database import SQLiteDB
+from db.schemas import MessageRequest
+from services import chat_answer
+from test_compiled_cloud_transport import installed as installed
+
+actual_answer = chat_answer.generate_chat_answer
 
 
 @pytest.fixture
@@ -197,9 +203,11 @@ def message_handler(bot_module, private_event, monkeypatch):
     monkeypatch.setattr(bot_module, "on_message", matcher)
     monkeypatch.setattr(bot_module, "on_command", matcher)
     monkeypatch.setattr(bot_module, "should_reply", AsyncMock(return_value=True))
+    original_process = bot_module.process_message
     monkeypatch.setattr(bot_module, "process_message", AsyncMock(return_value="不应生成"))
     bot_module.init_bot()
     matchers[0].commands = {item.name: item for item in matchers if item.name}
+    matchers[0].process_message = original_process
     return matchers[0], private_event, SimpleNamespace(send=AsyncMock())
 
 
@@ -275,22 +283,19 @@ async def test_session_setting_read_failure_does_not_enable_replies(bot_module, 
 
 
 @pytest.fixture
-def generation_control(bot_module, monkeypatch):
+def generation_control(bot_module, private_event, monkeypatch):
     async def submit(factory, **kwargs):
         return await factory()
 
     runtime = SimpleNamespace(check_rate_limits=AsyncMock(), submit=AsyncMock(side_effect=submit),
                               priority_for=Mock(return_value=10))
-    history = SimpleNamespace(get_history=Mock(return_value=[
-        {"role": "user", "content": "仅在周五付款，出差时顺延。"},
-        {"role": "assistant", "content": "已记录周五执行及出差例外。"},
-    ]), add_message=Mock())
+    resets = {bot_module._message_scope(private_event).memory_scope_key: 17}
     generate = AsyncMock(return_value=SimpleNamespace(reply="尚未付款；周五执行，出差时顺延。"))
     monkeypatch.setattr(bot_module, "inference_runtime", runtime)
-    monkeypatch.setattr(bot_module, "session_history", history)
+    monkeypatch.setattr(bot_module, "_history_resets", resets)
     monkeypatch.setattr(bot_module, "generate_reply_core", generate)
     monkeypatch.setattr(bot_module, "config", SimpleNamespace(REPLY_DELAY=-100))
-    return runtime, history, generate
+    return runtime, dict(resets), generate
 
 
 @pytest.mark.parametrize("stage", ["rate", "queue", "model"])
@@ -308,7 +313,7 @@ async def test_generation_failures_propagate_without_a_reply(bot_module, private
     with pytest.raises(type(failure)) as caught:
         await bot_module.process_message(private_event)
     assert caught.value is failure
-    history.add_message.assert_not_called()
+    assert bot_module._history_resets == history
     if stage != "model":
         generate.assert_not_awaited()
 
@@ -327,14 +332,11 @@ async def test_generation_success_keeps_history_and_request_identity(bot_module,
     runtime.submit.assert_awaited_once()
     request = generate.await_args.args[0]
     assert request.message == str(private_event.message)
-    assert request.history == history.get_history.return_value
-    assert request._history_loaded is True
+    assert request.history == [] and request._history_loaded is False
+    assert request._history_after_id == 17
     assert (request.platform, request.adapter, request.conversationId, request.senderId) == (
         "qq", "nonebot", "1001", "1001")
-    assert history.add_message.call_args_list == [
-        call(bot_module._message_scope(private_event), "user", str(private_event.message)),
-        call(bot_module._message_scope(private_event), "assistant", generate.return_value.reply),
-    ]
+    assert bot_module._history_resets == history
 
 
 async def test_generation_cancellation_is_preserved(bot_module, private_event, generation_control):
@@ -342,7 +344,7 @@ async def test_generation_cancellation_is_preserved(bot_module, private_event, g
     generate.side_effect = asyncio.CancelledError
     with pytest.raises(asyncio.CancelledError):
         await bot_module.process_message(private_event)
-    history.add_message.assert_not_called()
+    assert bot_module._history_resets == history
 
 
 @pytest.mark.parametrize("stage,expected", [
@@ -394,46 +396,55 @@ async def test_message_entry_sends_the_real_success_reply(bot_module, message_ha
     bot.send.assert_not_awaited()
 
 
-async def test_history_read_failure_stops_before_model(
-    bot_module, private_event, generation_control, monkeypatch,
-):
-    _, _, generate = generation_control
+async def test_history_read_failure_stops_before_model(installed, monkeypatch, tmp_path):
+    from api.generate import generate_reply_core
+
+    database = SQLiteDB(tmp_path / "history-failure.sqlite")
+    database.update_config(installed.config)
     failure = RuntimeError("synthetic-private-history-error")
-    reader = Mock(side_effect=failure)
-    monkeypatch.setattr(bot_module, "db", SimpleNamespace(list_conversation_history=reader))
-    history = bot_module.SessionHistory()
-    monkeypatch.setattr(bot_module, "session_history", history)
-    with pytest.raises(RuntimeError) as caught:
-        await bot_module.process_message(private_event)
-    assert caught.value is failure
-    generate.assert_not_awaited()
-    assert history.sessions == {}
+    monkeypatch.setattr(database, "list_conversation_history", Mock(side_effect=failure))
+    request = MessageRequest(message="合成完整问题：请复述此前执行时间和例外。", senderId="1001",
+                             conversationId="1001", loraName="default")
+    request._history_after_id = 0
+    try:
+        with pytest.raises(RuntimeError) as caught:
+            await generate_reply_core(request, message_db=database)
+        assert caught.value is failure
+        assert installed.calls == []
+        assert database.get_messages() == []
+    finally:
+        database.close_connection()
 
 
-def test_history_empty_result_and_recovery_remain_distinct(bot_module, private_event, monkeypatch):
+async def test_history_empty_result_and_recovery_remain_distinct(installed, monkeypatch, tmp_path):
+    from api.generate import generate_reply_core
+
+    database = SQLiteDB(tmp_path / "history-recovery.sqlite")
+    database.update_config(installed.config)
     failure = RuntimeError("Controlled history service unavailable")
-    reader = Mock(side_effect=[failure, [], [{"role": "user", "content": "周五执行，出差例外。"}, {"role": "assistant", "content": "已记录例外。"}]])
-    monkeypatch.setattr(bot_module, "db", SimpleNamespace(list_conversation_history=reader))
-    history = bot_module.SessionHistory()
-    with pytest.raises(RuntimeError) as caught:
-        history.get_history(bot_module._message_scope(private_event))
-    assert caught.value is failure
-    assert history.get_history(bot_module._message_scope(private_event)) == []
-    assert history.get_history(bot_module._message_scope(private_event)) == [
-        {"role": "user", "content": "周五执行，出差例外。"},
-        {"role": "assistant", "content": "已记录例外。"},
-    ]
+    rows = [{"role": "user", "content": "周五执行，出差例外。"},
+            {"role": "assistant", "content": "已记录例外。"}]
+    reader = Mock(side_effect=[failure, [], rows])
+    monkeypatch.setattr(database, "list_conversation_history", reader)
+    monkeypatch.setattr(chat_answer, "generate_chat_answer", actual_answer)
 
+    async def generate():
+        request = MessageRequest(message="合成完整问题：请复述执行时间和例外。", senderId="1001",
+                                 conversationId="1001", loraName="default")
+        request._history_after_id = 0
+        return await generate_reply_core(request, message_db=database)
 
-def test_explicit_history_tokenizer_failure_does_not_use_character_estimate(bot_module):
-    error = ValueError("controlled tokenizer failure")
-    tokenizer = SimpleNamespace(encode=Mock(side_effect=error))
-    with pytest.raises(ValueError) as caught:
-        bot_module.SessionHistory._count_tokens("完整历史", tokenizer)
-    assert caught.value is error
-
-
-def test_history_token_estimate_is_only_for_absent_tokenizer(bot_module):
-    tokenizer = SimpleNamespace(encode=Mock(return_value=[1, 2, 3]))
-    assert bot_module.SessionHistory._count_tokens("完整历史", tokenizer) == 3
-    assert bot_module.SessionHistory._count_tokens("完整历史") == 2
+    try:
+        with pytest.raises(RuntimeError) as caught:
+            await generate()
+        assert caught.value is failure and installed.calls == []
+        assert (await generate()).reply
+        assert len(installed.calls) == 1
+        assert all(rows[0]["content"] not in row["content"] for row in installed.calls[-1]["body"]["messages"])
+        assert (await generate()).reply
+        assert len(installed.calls) == 2
+        wire = installed.calls[-1]["body"]["messages"]
+        assert all(any(row["content"] in item["content"] for item in wire) for row in rows)
+        assert reader.call_count == 3 and len(database.get_messages()) == 2
+    finally:
+        database.close_connection()

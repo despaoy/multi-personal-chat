@@ -1175,6 +1175,10 @@ class SQLiteDB:
         for key, value in default_config.items():
             cursor.execute('INSERT INTO config (key, value) VALUES (?, ?)', (key, value))
 
+    def get_message_high_watermark(self) -> int:
+        """Committed archive position; context reset does not delete messages."""
+        return int(self._get_connection().execute("SELECT COALESCE(MAX(id), 0) FROM messages").fetchone()[0])
+
     def get_messages(self, limit: int = 100, offset: int = 0, session_id: str | None = None):
         """获取消息记录，支持按会话 ID 筛选。
 
@@ -3410,6 +3414,7 @@ class SQLiteDB:
         limit: int = 8,
         max_chars: int = 6000,
         character_id: str | None = None,
+        after_id: int | None = None,
     ) -> list:
         """按用户范围读取最近对话历史，组装成角色生成用的消息列表。
 
@@ -3428,6 +3433,9 @@ class SQLiteDB:
         if character_id is not None:
             conditions.append('characterId = ?')
             params.append(character_id)
+        if after_id is not None:
+            conditions.append('id > ?')
+            params.append(after_id)
         if conversation_type in ("group", "channel") or adapter == "narrative":
             conditions.append('"conversationId" = ?')
             params.append(conversation_id)
