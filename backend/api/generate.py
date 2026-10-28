@@ -358,8 +358,11 @@ async def _generate_reply_body(
         )
         budget = get_provider_context_budget()
         request.history = await DatabaseMessageRepository(message_db).list_recent_conversation_history(
-            scope, limit=budget.history_limit, max_chars=budget.history_max_chars,
-            character_id=mapped_character_id, after_id=request._history_after_id,
+            scope,
+            limit=budget.history_limit,
+            max_chars=budget.history_max_chars,
+            character_id=mapped_character_id,
+            after_id=request._history_after_id,
         )
         request._history_loaded = True
 
