@@ -8,9 +8,18 @@ from pydantic import ValidationError
 from db.schemas import MessageRequest
 
 
-def request(**kwargs):
-    return MessageRequest(message='新完整陈述', characterId='tsukiyashiro_kisaki', platform='web', adapter='web-character',
-                          senderId='1', userId='1', conversationId='1', sourceMessageId='existing', **kwargs)
+def request(message="新完整陈述", **kwargs):
+    return MessageRequest(
+        message=message,
+        characterId="tsukiyashiro_kisaki",
+        platform="web",
+        adapter="web-character",
+        senderId="1",
+        userId="1",
+        conversationId="1",
+        sourceMessageId="existing",
+        **kwargs,
+    )
 
 
 def service(monkeypatch, status="new", *, read_error=None):
@@ -81,12 +90,11 @@ async def test_branch_owned_path_keeps_its_existing_authority(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_source_comparison_uses_same_original_text_as_generation(monkeypatch):
-    chat, handler, reader = service(monkeypatch, 'recorded')
-    incoming = request()
-    incoming.message = '    新完整陈述 \n'
-    assert await chat.generate(incoming, {'id': '1'}) == 'allowed'
-    assert handler.call_args.args[0].message == '    新完整陈述 \n'
-    assert reader.call_args.kwargs['body'] == incoming.message
+    chat, handler, reader = service(monkeypatch, "recorded")
+    incoming = request(message="    新完整陈述 \n")
+    assert await chat.generate(incoming, {"id": "1"}) == "allowed"
+    assert handler.call_args.args[0].message == "    新完整陈述 \n"
+    assert reader.call_args.kwargs["body"] == incoming.message
 
 
 @pytest.mark.asyncio

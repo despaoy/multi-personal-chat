@@ -42,7 +42,6 @@ from inference.usage import collect_usage, has_pending_usage, usage_record_start
 from infra.circuit_breaker import CircuitOpenError
 from infra.concurrency_control import InferenceQueueFull, RateLimitExceeded, inference_runtime
 from infra.environment import read_bool, read_positive_float
-from infra.input_validator import MESSAGE_SCHEMA, InputValidator
 from infra.observability import increment, log_event, set_consecutive
 from services import chat_answer
 from services.chat_generation import ChatGenerationService
@@ -285,11 +284,6 @@ async def _generate_reply_body(
             detail="当前模型提供商为 mock 模式，无法提供真实推理。"
             "请在设置页面配置有效的模型提供商（如 vLLM / DeepSeek API / Ollama）。",
         )
-
-    # 输入验证
-    is_valid, errors = InputValidator.validate({"message": request.message}, MESSAGE_SCHEMA)
-    if not is_valid:
-        raise HTTPException(status_code=422, detail={"message": "输入验证失败", "errors": errors})
 
     select_active_lora = not request.loraName and not request.characterId and prepared_override is None
     try:

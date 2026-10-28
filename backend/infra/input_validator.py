@@ -111,19 +111,6 @@ _CONTROL_CHAR_PATTERN = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f]")
 # 预定义Schema
 # ---------------------------------------------------------------------------
 
-MESSAGE_SCHEMA = Schema(
-    fields={
-        "message": FieldRule(
-            field_type=FieldType.STRING,
-            required=True,
-            min_length=1,
-            max_length=10000,
-            sanitize=True,
-        ),
-    },
-    allow_extra=True,
-)
-
 KNOWLEDGE_DOCUMENT_SCHEMA = Schema(
     fields={
         "title": FieldRule(

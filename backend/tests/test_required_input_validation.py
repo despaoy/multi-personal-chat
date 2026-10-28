@@ -12,16 +12,26 @@ from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import HTTPException
+from pydantic import ValidationError
 
 
-@pytest.mark.parametrize("module", ["api.generate", "api.config", "api.knowledge", "api.training", "app.main"])
-def test_missing_validation_dependency_prevents_component_import(module, tmp_path):
+@pytest.mark.parametrize(
+    "module,dependency",
+    [
+        ("api.generate", "db.schemas"),
+        ("api.config", "infra.input_validator"),
+        ("api.knowledge", "infra.input_validator"),
+        ("api.training", "infra.input_validator"),
+        ("app.main", "infra.input_validator"),
+    ],
+)
+def test_missing_validation_dependency_prevents_component_import(module, dependency, tmp_path):
     source = """import builtins,importlib,json,logging,sys
 logging.disable(logging.CRITICAL)
 original=builtins.__import__
 failure=ImportError('synthetic required input dependency unavailable')
 def blocked(name,*args,**kwargs):
- if name=='infra.input_validator':raise failure
+ if name==sys.argv[2]:raise failure
  return original(name,*args,**kwargs)
 builtins.__import__=blocked
 try:
@@ -41,20 +51,21 @@ else:
         ENCRYPTION_KEY=base64.urlsafe_b64encode(b"v" * 32).decode(),
     )
     process = subprocess.run(
-        [sys.executable, "-c", source, module], capture_output=True, text=True, env=env, timeout=30
+        [sys.executable, "-c", source, module, dependency], capture_output=True, text=True, env=env, timeout=30
     )
     assert process.returncode == 0
     assert json.loads(process.stdout)["original_dependency_error"] is True
 
 
-async def test_generation_rejects_empty_normalized_input_before_context_model_or_archive(monkeypatch):
+async def test_accepted_message_cannot_change_before_context_model_or_archive(monkeypatch):
     from test_turn_completion_admission import generation_environment
 
-    gen, runtime, request, prepare, generation, storage = generation_environment(monkeypatch, "openai_compat")
-    request.message = ""
-    with pytest.raises(HTTPException) as raised:
-        await gen._generate_reply_impl(request, enable_rag=False, record_invocation=False, message_db=gen.db)
-    assert raised.value.status_code == 422
+    _gen, runtime, request, prepare, generation, storage = generation_environment(monkeypatch, "openai_compat")
+    original = request.message
+    with pytest.raises(ValidationError) as raised:
+        request.message = ""
+    assert raised.value.errors()[0]["type"] == "frozen_field"
+    assert request.message == original
     prepare.assert_not_awaited()
     generation.assert_not_awaited()
     storage.assert_not_awaited()

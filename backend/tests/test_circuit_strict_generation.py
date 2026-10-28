@@ -29,11 +29,17 @@ FACTS = "完整虚构题设：林绮周四14:00开会，15:00结束；尚未出�
 REPLY = "林绮周四14:00至15:00开会，尚未出发；下雨改为线上。"
 
 
-def request(label):
+def request(label, message=FACTS):
     return MessageRequest(
-        message=FACTS, loraName="default", platform="web", adapter="fiction-breaker-test",
-        conversationId="fiction-breaker", sessionId="fiction-breaker", senderId="fiction-sender",
-        sourceMessageId=f"fiction-source-{label}", traceId=f"fiction-circuit-{label}",
+        message=message,
+        loraName="default",
+        platform="web",
+        adapter="fiction-breaker-test",
+        conversationId="fiction-breaker",
+        sessionId="fiction-breaker",
+        senderId="fiction-sender",
+        sourceMessageId=f"fiction-source-{label}",
+        traceId=f"fiction-circuit-{label}",
     )
 
 
@@ -361,10 +367,11 @@ async def test_capacity_failures_keep_audit_without_disabling_a_healthy_provider
     rig = circuit_rig
     counters = []
     monkeypatch.setattr(generate, "increment", lambda name, *args, **kwargs: counters.append(name))
-    monkeypatch.setattr(chat_answer, 'get_provider_context_budget', lambda: SimpleNamespace(window_tokens=1024, evidence_max_chars=0))
+    monkeypatch.setattr(
+        chat_answer, "get_provider_context_budget", lambda: SimpleNamespace(window_tokens=1024, evidence_max_chars=0)
+    )
     for index in range(5):
-        value = request(f"capacity-{index}")
-        value.message = FACTS * 30
+        value = request(f"capacity-{index}", message=FACTS * 30)
         with pytest.raises(HTTPException) as caught:
             await generate._generate_reply_impl(value, enable_rag=False, message_db=rig.database)
         assert caught.value.status_code == 503
@@ -374,7 +381,9 @@ async def test_capacity_failures_keep_audit_without_disabling_a_healthy_provider
     assert [row["errorType"] for row in records(rig)] == ["InputBudgetError"] * 5
     assert "model_failures" not in counters
     assert await rig.registry.get(rig.circuit_name) is None
-    monkeypatch.setattr(chat_answer, 'get_provider_context_budget', lambda: SimpleNamespace(window_tokens=65536, evidence_max_chars=0))
+    monkeypatch.setattr(
+        chat_answer, "get_provider_context_budget", lambda: SimpleNamespace(window_tokens=65536, evidence_max_chars=0)
+    )
     result = await turn(rig, "healthy-after-capacity")
     assert result.modelInvoked and result.reply == REPLY and len(rig.calls) == 1
     breaker = await rig.registry.get(rig.circuit_name)
