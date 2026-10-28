@@ -59,7 +59,7 @@ async def test_generate_endpoint_uses_runtime_container_inference_runtime() -> N
     service = get_request_chat_generation_service(http_request)
     response = await generate_reply(MessageRequest(message='hello', sessionType='group'), {'user_id': 17}, service)
     assert response is expected
-    assert calls == [('priority', 'admin', 'group'), ('rate-limit', 'admin', 'manual:17', '17'), ('submit', 'manual:17', 5)]
+    assert calls == [('priority', 'admin', 'group'), ('rate-limit', 'admin', '["manual","17",""]', '17'), ('submit', '["manual","17",""]', 5)]
 def test_shared_environment_loader_preserves_injected_values(tmp_path, monkeypatch) -> None:
     from app.env import load_backend_env
 

@@ -260,7 +260,7 @@ async def test_queued_http_turn_uses_execution_provider_and_one_owning_service(b
             assert identity == OWNER
 
         async def submit(self, job, *, session_id, priority):
-            assert session_id == 'fiction-budget-session' and priority == 5
+            assert json.loads(session_id) == ['character', ROLE, 'web', 'web-character', 'private', OWNER] and priority == 5
             queued.set()
             await release.wait()
             return await job()
