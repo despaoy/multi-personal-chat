@@ -308,6 +308,7 @@ async def process_message(event: MessageEvent) -> str:
     await inference_runtime.check_rate_limits("qq:nonebot", f"{conversation_type}:{conversation_id}", sender_id)
     msg = MessageRequest(
         message=user_message,
+        sourceMessageId=str(event.message_id),
         sessionType=conversation_type,
         conversationType=conversation_type,
         sessionId=session_id,
@@ -326,12 +327,11 @@ async def process_message(event: MessageEvent) -> str:
     async def _queued_generation():
         # Resolve the reset after earlier queued turns and clear commands finish.
         msg._history_after_id = _history_resets.get(scope.memory_scope_key, 0)
-        result = await generate_reply_core(
+        return await generate_reply_core(
             msg,
             current_user={"username": "nonebot", "user_id": 0},
             message_db=db,
         )
-        return result
 
     result = await inference_runtime.submit(
         _queued_generation,

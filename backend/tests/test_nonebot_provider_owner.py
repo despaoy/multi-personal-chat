@@ -275,6 +275,7 @@ async def test_indented_message_keeps_original_in_wire_archive_and_history(
         assert any(row["role"] == "user" and original in row["content"] for row in messages)
         (archived,) = database.get_messages(session_id="1001")
         assert archived["message"] == original and archived["reply"] == ANSWER
+        assert archived["sourceMessageId"] == str(event.message_id)
         assert database.list_conversation_history("qq", "nonebot", "1001", "private", "1001") == [
             {"role": "user", "content": original},
             {"role": "assistant", "content": ANSWER},
@@ -294,3 +295,64 @@ async def test_blank_message_does_not_enter_generation(bot_module, private_event
     runtime.submit.assert_not_awaited()
     generate.assert_not_awaited()
     assert bot_module._history_resets == history
+
+
+async def test_platform_message_identity_reaches_actual_character_source_capture(
+    bot_module,
+    private_event,
+    generation_control,
+    monkeypatch,
+    tmp_path,
+):
+    from character.memory_llm import MemoryEnrichmentScheduler, MemoryLlmConfig
+    from character.profile_registry import get_default_profile_registry
+    from repositories.character_memory import DatabaseCharacterMemoryRepository
+    from repositories.messages import DatabaseMessageRepository
+    from services.character_context import CharacterContextService
+
+    for name in [
+        "DYNAMIC_CONTEXT_SEMANTIC_REVIEW_ENABLED",
+        "CONTEXTUAL_MEMORY_SELECTION_ENABLED",
+        "CONTEXTUAL_DECISION_POLICY_ENABLED",
+    ]:
+        monkeypatch.setenv(name, "false")
+    database = SQLiteDB(tmp_path / "platform-source.sqlite")
+    repository = DatabaseCharacterMemoryRepository(database)
+    role = "tsukiyashiro_kisaki"
+    service = CharacterContextService(
+        get_default_profile_registry(),
+        repository,
+        DatabaseMessageRepository(database),
+        memory_service=SimpleNamespace(recall_with_diagnostics=AsyncMock(return_value=((), 0, {"status": "no_match"}))),
+        source_recall_enabled=False,
+    )
+    completion = SimpleNamespace(complete=AsyncMock(return_value='{"memories":[]}'), close=AsyncMock())
+    scheduler = MemoryEnrichmentScheduler(
+        config=MemoryLlmConfig(enabled=True, base_url="https://isolated.invalid", model="controlled-source-test"),
+        completion=completion,
+    )
+    monkeypatch.setattr("character.memory_llm.get_memory_enrichment_scheduler", lambda owner: scheduler)
+    monkeypatch.setattr(bot_module, "db", database)
+    outcomes = []
+
+    async def complete(request, **kwargs):
+        assert request.message == str(private_event.message)
+        turn = generate._character_turn_input(request)
+        prepared = await service.prepare_turn(turn, role)
+        outcomes.append(await service.complete_turn(prepared, turn, source_message_id=request.sourceMessageId))
+        return SimpleNamespace(reply=ANSWER)
+
+    generation_control[2].side_effect = complete
+    try:
+        assert await bot_module.process_message(private_event) == ANSWER
+        assert outcomes[0].source_capture == "recorded"
+        assert outcomes[0].memory_enrichment_scheduled
+        await scheduler.shutdown(timeout=3)
+        (source,) = await repository.list_sources(role, bot_module._message_scope(private_event))
+        assert source["source_message_id"] == str(private_event.message_id)
+        assert source["body"] == str(private_event.message)
+        assert await repository.list_memory_records(role, bot_module._message_scope(private_event)) == []
+        assert completion.complete.await_count == 1
+    finally:
+        await scheduler.shutdown(timeout=3)
+        database.close_connection()
