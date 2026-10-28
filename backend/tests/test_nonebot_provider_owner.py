@@ -242,3 +242,57 @@ async def test_tool_record_failure_cannot_report_success(bot_module, tool_rig, m
     assert 'synthetic-private' not in str(caught.value.detail)
     assert len(tool_rig.provider.calls) == 1
     assert tool_rig.database.execute_sql('SELECT * FROM model_invocations') == []
+
+
+async def test_indented_message_keeps_original_in_wire_archive_and_history(
+    bot_module,
+    private_event,
+    installed,
+    monkeypatch,
+    tmp_path,
+):
+    from nonebot.adapters.onebot.v11 import Message
+
+    original = "    def schedule():\n        # 尚未付款；仅周五执行，出差顺延。\n        return 'Friday only'\n\n"
+    event = private_event.model_copy(update={"message": Message(original), "raw_message": original})
+    database = SQLiteDB(tmp_path / "original-message.sqlite")
+    database.update_config(installed.config)
+
+    async def submit(factory, **kwargs):
+        return await factory()
+
+    runtime = SimpleNamespace(
+        check_rate_limits=AsyncMock(), submit=AsyncMock(side_effect=submit), priority_for=lambda *args: 1
+    )
+    history = bot_module.SessionHistory(max_tokens=4096)
+    monkeypatch.setattr(bot_module, "db", database)
+    monkeypatch.setattr(bot_module, "inference_runtime", runtime)
+    monkeypatch.setattr(bot_module, "session_history", history)
+    monkeypatch.setattr(bot_module, "config", SimpleNamespace(REPLY_DELAY=-100))
+    try:
+        assert await bot_module.process_message(event) == ANSWER
+        assert str(event.message) == event.raw_message == original
+        assert len(installed.calls) == 1
+        messages = installed.calls[0]["body"]["messages"]
+        assert any(row["role"] == "user" and original in row["content"] for row in messages)
+        (archived,) = database.get_messages(session_id="1001")
+        assert archived["message"] == original and archived["reply"] == ANSWER
+        assert history.get_history("1001") == [
+            {"role": "user", "content": original},
+            {"role": "assistant", "content": ANSWER},
+        ]
+        runtime.check_rate_limits.assert_awaited_once_with("qq", "1001", "1001")
+        assert runtime.submit.await_count == 1
+    finally:
+        database.close_connection()
+
+async def test_blank_message_does_not_enter_generation(bot_module, private_event, generation_control):
+    from nonebot.adapters.onebot.v11 import Message
+
+    event = private_event.model_copy(update={"message": Message(" \n\t "), "raw_message": " \n\t "})
+    runtime, history, generate = generation_control
+    assert await bot_module.process_message(event) == "嗯？怎么不说话呀？"
+    runtime.check_rate_limits.assert_not_awaited()
+    runtime.submit.assert_not_awaited()
+    generate.assert_not_awaited()
+    history.add_message.assert_not_called()

@@ -364,9 +364,9 @@ async def process_message(event: MessageEvent) -> str:
     NoneBot 只负责消息接收/回复条件/平台适配；模型生成统一走
     ChatGenerationService + InferenceRuntime，与 API/AstrBot 同一条链路。
     """
-    user_message = str(event.message).strip()
+    user_message = str(event.message)
 
-    if not user_message:
+    if not user_message.strip():
         return "嗯？怎么不说话呀？"
 
     logger.info(f"收到消息: 字符数={len(user_message)}")
