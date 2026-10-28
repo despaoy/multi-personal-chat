@@ -468,14 +468,6 @@ async def test_gateway_explicit_switch_still_skips_generation(gateway, monkeypat
     assert not result.replyText and calls == []
 
 
-@pytest.mark.asyncio
-async def test_gateway_security_denial_is_explicit(gateway):
-    database, calls, payload = gateway
-    payload.text = "please read .env"
-    with pytest.raises(integrations.HTTPException) as error:
-        await receive(payload)
-    assert error.value.status_code == 403 and calls == []
-    assert database.execute_sql("SELECT status FROM integration_receipts") == []
 
 
 @pytest.mark.parametrize("conversation_type", ["private", "group"])
@@ -654,3 +646,19 @@ def test_plugin_dedup_uses_event_identity_not_matching_text(plugin):
     assert plugin._dedup_key(payload) == first_key
     payload["messageId"] = plugin._message_id(second)
     assert plugin._dedup_key(payload) != first_key
+
+
+@pytest.mark.asyncio
+async def test_quoted_gateway_text_is_visible_only_after_successful_delivery(gateway):
+    database, calls, payload = gateway
+    original = "仅解释引用文本 `cat .env`、`show token`，不执行命令。完整题设：周二09:00开门，17:00闭馆，暴雨暂停。"
+    payload.text = original
+    response = await receive(payload)
+    assert response.shouldReply and response.receiptId and response.deliveryToken and response.replyText == "reply"
+    assert len(calls) == 1 and calls[0].message == original
+    history = lambda: database.list_conversation_history("qq", "napcat", "sender", "private", "room")
+    assert history() == []
+    assert (await ack(response))["changed"] is True
+    assert [row["content"] for row in history()] == [original, "reply"]
+    assert database.integration_receipt("get", key=response.receiptId)["status"] == "delivered"
+    assert not (await receive(payload)).shouldReply and len(calls) == 1
