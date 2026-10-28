@@ -5,12 +5,11 @@
 - AES-256-GCM加密算法
 - 密钥管理（显式加载、历史路径迁移）
 - 字段级加密/解密
-- 批量加密
 - 敏感字段自动识别
 - 由调用方显式执行加密和解密
 
 使用方式：
-    from encryption import EncryptionManager
+    from infra.encryption import EncryptionManager
 
     manager = EncryptionManager()
 
@@ -21,9 +20,6 @@
     # 字段级加密
     encrypted_value = manager.encrypt_field("my_api_key", "api_key")
 
-    # 批量加密
-    items = [{"api_key": "key1", "name": "test"}]
-    encrypted_items = manager.encrypt_batch(items, ["api_key"])
 """
 
 from __future__ import annotations
@@ -375,38 +371,6 @@ class EncryptionManager:
         return value
 
     # -------------------------------------------------------------------
-    # 批量加密/解密
-    # -------------------------------------------------------------------
-
-    def encrypt_batch(self, items: list[dict[str, Any]], fields: Optional[list[str]] = None) -> list[dict[str, Any]]:
-        """批量加密数据项中的指定字段。
-
-        如果未指定字段列表，则自动识别并加密所有敏感字段。
-
-        Args:
-            items: 待加密的数据项列表
-            fields: 需要加密的字段名列表。如果为None，自动识别敏感字段。
-
-        Returns:
-            加密后的数据项列表（原地修改并返回）
-        """
-        if not items:
-            return items
-
-        for item in items:
-            if not isinstance(item, dict):
-                continue
-
-            target_fields = fields if fields else self._find_sensitive_fields(item)
-
-            for field_name in target_fields:
-                if field_name in item:
-                    item[field_name] = self.encrypt_field(item[field_name], field_name)
-
-        logger.debug("批量加密完成，处理 %d 条数据", len(items))
-        return items
-
-    # -------------------------------------------------------------------
     # 工具方法
     # -------------------------------------------------------------------
 
@@ -438,19 +402,3 @@ class EncryptionManager:
             if pattern.search(field_name):
                 return True
         return False
-
-    @staticmethod
-    def _find_sensitive_fields(item: dict[str, Any]) -> list[str]:
-        """在数据项中查找所有敏感字段。
-
-        Args:
-            item: 数据项字典
-
-        Returns:
-            匹配敏感模式的字段名列表
-        """
-        sensitive_fields: list[str] = []
-        for field_name, value in item.items():
-            if isinstance(value, str) and value and EncryptionManager._is_sensitive_field(field_name):
-                sensitive_fields.append(field_name)
-        return sensitive_fields

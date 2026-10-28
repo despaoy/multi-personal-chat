@@ -143,10 +143,6 @@ class CharacterMemoryRepository(Protocol):
         metadata: Optional[dict[str, Any]] = None,
     ) -> dict[str, Any]: ...
 
-    async def delete_memory(
-        self, memory_id: int, character_id: str, user_scope: UserScope
-    ) -> bool: ...
-
     async def clear_memories(self, character_id: str, user_scope: UserScope) -> int: ...
 
     async def erase_memory(
@@ -541,22 +537,6 @@ class DatabaseCharacterMemoryRepository:
             metadata_json=json.dumps(metadata_payload, ensure_ascii=False),
         )
         return _decode_memory_record(record)
-
-    async def delete_memory(
-        self, memory_id: int, character_id: str, user_scope: UserScope
-    ) -> bool:
-        return bool(
-            await asyncio.to_thread(
-                self._database.delete_character_memory,
-                int(memory_id),
-                character_id,
-                user_scope.platform,
-                user_scope.adapter,
-                user_scope.sender_id,
-                user_scope.conversation_type,
-                user_scope.conversation_id,
-            )
-        )
 
     async def clear_memories(self, character_id: str, user_scope: UserScope) -> int:
         return int(

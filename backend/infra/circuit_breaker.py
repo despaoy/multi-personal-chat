@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import functools
 import logging
 import time
 from contextlib import asynccontextmanager
@@ -196,12 +195,6 @@ class CircuitBreaker:
     async def call(self, func: Callable[..., Awaitable[Any]], *args: Any, **kwargs: Any) -> Any:
         async with self():
             return await func(*args, **kwargs)
-
-    def protect(self, func: Callable[..., Awaitable[Any]]) -> Callable[..., Awaitable[Any]]:
-        @functools.wraps(func)
-        async def wrapper(*args: Any, **kwargs: Any) -> Any:
-            return await self.call(func, *args, **kwargs)
-        return wrapper
 
     def get_stats(self) -> dict[str, Any]:
         return {

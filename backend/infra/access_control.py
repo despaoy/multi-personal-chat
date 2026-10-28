@@ -111,11 +111,6 @@ class AuthenticationError(Exception):
     pass
 
 
-class AuthorizationError(Exception):
-    """授权失败异常。"""
-    pass
-
-
 class RateLimitError(Exception):
     """速率限制超出异常。"""
 
@@ -443,23 +438,6 @@ class AccessControlManager:
             "key_hash": stored_hash,
             "rate_limit": custom_limit or _DEFAULT_RATE_LIMIT,
         }
-
-    def authorize(self, user_info: dict[str, Any], required_permission: Permission) -> bool:
-        """检查用户是否拥有所需权限。"""
-        user_permissions: Permission = user_info.get("permissions", Permission(0))
-
-        if not (user_permissions & required_permission):
-            role = user_info.get("role", Role.VIEWER)
-            logger.warning(
-                "授权失败: 角色 %s 缺少权限 %s",
-                role.value if isinstance(role, Role) else role,
-                required_permission.name,
-            )
-            raise AuthorizationError(
-                f"权限不足：需要 {required_permission.name} 权限"
-            )
-
-        return True
 
     # -------------------------------------------------------------------
     # 审计日志
