@@ -259,7 +259,6 @@ async def test_normal_no_model_result_keeps_false_invocation_provenance(installe
     result = await receive()
     assert result.abstained and not result.modelInvoked and result.model_dump()["modelInvoked"] is False
     assert installed.calls == []
-    assert not generate._security_policy_response().modelInvoked
     assert not GenerateResponse(reply="已提交回复的幂等复用", model="fixture", costTime=0).modelInvoked
 
 

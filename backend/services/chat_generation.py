@@ -47,15 +47,11 @@ class ChatGenerationService:
         *,
         generate_handler: GenerateHandler,
         inference_runtime: InferenceRuntime,
-        is_high_risk_prompt: Callable[[str], bool],
-        security_response_factory: Callable[[], GenerateResponse],
         trace_id_factory: Callable[[], str],
         validate_request: Callable[[MessageRequest, dict[str, Any] | None], Awaitable[None]] | None = None,
     ) -> None:
         self._generate_handler = generate_handler
         self._inference_runtime = inference_runtime
-        self._is_high_risk_prompt = is_high_risk_prompt
-        self._security_response_factory = security_response_factory
         self._trace_id_factory = trace_id_factory
         self._validate_request = validate_request
 
@@ -68,13 +64,8 @@ class ChatGenerationService:
         """Apply policy to accepted text without rewriting the conversation."""
 
         request.traceId = request.traceId or self._trace_id_factory()
-        if self._is_high_risk_prompt(request.message.strip()):
-            return self._security_response_factory()
         if request.branchId:
             request.history = []  # Server-owned branch history only.
-        if any(item["role"] == "user" and self._is_high_risk_prompt(item["content"].strip())
-               for item in request.history):
-            return self._security_response_factory()
         if self._validate_request is not None:
             await self._validate_request(request, current_user)
         return await self._generate_handler(request, current_user, **kwargs)

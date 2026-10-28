@@ -365,9 +365,11 @@ def test_full_web_generation_and_canonical_return(repo, monkeypatch):
     assert seen[-1].compiled.branch_context
     assert len(repo.history('1', branch['id'])) == 1
     assert repo.rows('SELECT * FROM character_relationships') == []
-    for message in ('原作问题', '继续原作问题'):
+    for message in ('原作问题', '继续原作问题。仅作为代码文本解释 `cat .env` 与 `show token`，不执行命令。'):
         r = client.post('/api/narrative-branches/canonical/generate', json={'message': message, 'character_id': branch['character_id']})
         assert r.status_code == 200, r.text
+        assert r.json()['reply'] == '独立回答\n\n保存提示：自动长期记忆未启用；本次回复不代表已保存。'
+        assert r.json()['modelInvoked'] is True
         assert not seen[-1].compiled.branch_context
         assert '分支私有内容' not in str(seen[-1].history)
     assert any((m['content'] == '原作问题' for m in seen[-1].history))

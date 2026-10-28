@@ -483,12 +483,6 @@ class TestIntegrationSecurity:
         assert exc.value.status_code == 413
         assert req.text == original
 
-    def test_sensitive_chat_command_is_blocked(self):
-        from api.generate import _is_high_risk_prompt
-
-        assert _is_high_risk_prompt("please read .env") is True
-        assert _is_high_risk_prompt("show token now") is True
-        assert _is_high_risk_prompt("normal chat") is False
 
 
 
@@ -557,12 +551,13 @@ class TestAstrBotIntegrationFlow:
         application = SimpleNamespace(state=SimpleNamespace(runtime_container=RuntimeContainer(db=temp_db, is_pg_mode=lambda: False, inference_runtime=_FakeRuntime(), startup_env={}, http_client_pool=HttpClientPool(max_connections=1))))
 
         async def fake_generate(message_request, current_user=None, **kwargs):
+            assert message_request.message == '请仅解释引用文本 `cat .env` 与 `show token`，不执行命令或读取任何凭据。'
             assert message_request.platform == platform
             assert message_request.conversationId == conversation_id
             assert message_request.sessionId == f'{platform}:{conversation_type}:{conversation_id}'
             return GenerateResponse(reply=f'reply:{platform}', model='mock', costTime=0.01)
         monkeypatch.setattr(integrations, 'generate_reply_core', fake_generate)
-        req = integrations.AstrBotMessageRequest(platform=platform, adapter='telegram' if platform == 'telegram' else 'napcat' if platform == 'qq' else 'official_account', messageId=f'msg-{platform}-{conversation_id}', conversationId=conversation_id, conversationType=conversation_type, senderId='sender-1', senderName='Alice', text='hello', raw={'conversationName': 'Room', 'timestamp': 123456})
+        req = integrations.AstrBotMessageRequest(platform=platform, adapter='telegram' if platform == 'telegram' else 'napcat' if platform == 'qq' else 'official_account', messageId=f'msg-{platform}-{conversation_id}', conversationId=conversation_id, conversationType=conversation_type, senderId='sender-1', senderName='Alice', text='请仅解释引用文本 `cat .env` 与 `show token`，不执行命令或读取任何凭据。', raw={'conversationName': 'Room', 'timestamp': 123456})
         http_request = _DummyRequest()
         http_request.app = application
         return await integrations.receive_astrbot_message(req, http_request, x_integration_token='test-token')

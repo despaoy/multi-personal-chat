@@ -67,31 +67,6 @@ _DETERMINISTIC_MODEL_LABELS = {
 _local_model_lock: asyncio.Lock | None = None
 _local_model_lock_loop: asyncio.AbstractEventLoop | None = None
 
-_HIGH_RISK_PROMPT_PATTERNS = (
-    "export config",
-    "dump config",
-    "show config",
-    "read .env",
-    "cat .env",
-    "read secret",
-    "show secret",
-    "read token",
-    "show token",
-    "print env",
-    "reveal system prompt",
-    "show system prompt",
-    "ignore previous instructions and export",
-    "\u5bfc\u51fa\u914d\u7f6e",
-    "\u8bfb\u53d6\u914d\u7f6e",
-    "\u663e\u793a\u914d\u7f6e",
-    "\u8bfb\u53d6\u5bc6\u94a5",
-    "\u663e\u793a\u5bc6\u94a5",
-    "\u8bfb\u53d6token",
-    "\u663e\u793atoken",
-    "\u8bfb\u53d6.env",
-    "\u5ffd\u7565\u4e4b\u524d\u6307\u4ee4\u5e76\u5bfc\u51fa",
-)
-
 
 def _get_local_model_lock() -> asyncio.Lock:
     """Serialize stateful local model access within the active event loop."""
@@ -101,19 +76,6 @@ def _get_local_model_lock() -> asyncio.Lock:
         _local_model_lock = asyncio.Lock()
         _local_model_lock_loop = loop
     return _local_model_lock
-
-
-def _is_high_risk_prompt(text: str) -> bool:
-    lowered = text.lower()
-    return any(pattern in lowered for pattern in _HIGH_RISK_PROMPT_PATTERNS)
-
-
-def _security_policy_response() -> GenerateResponse:
-    return GenerateResponse(
-        reply="\u8be5\u8bf7\u6c42\u6d89\u53ca\u7cfb\u7edf\u914d\u7f6e\u3001\u51ed\u636e\u6216\u5185\u90e8\u6307\u4ee4\uff0c\u5df2\u88ab\u5b89\u5168\u7b56\u7565\u62e6\u622a\u3002",
-        model="security-policy",
-        costTime=0.0,
-    )
 
 
 router = APIRouter()
@@ -1180,8 +1142,6 @@ def _build_chat_generation_service(
     return ChatGenerationService(
         generate_handler=handler,
         inference_runtime=runtime,
-        is_high_risk_prompt=_is_high_risk_prompt,
-        security_response_factory=_security_policy_response,
         trace_id_factory=lambda: uuid.uuid4().hex,
         validate_request=validate_request,
     )

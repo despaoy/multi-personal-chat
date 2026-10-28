@@ -184,7 +184,6 @@ async def test_job_timeout_is_failure_while_expired_or_cancelled_wait_is_cancell
         return "occupied-source"
 
     service = ChatGenerationService(generate_handler=job, inference_runtime=runtime,
-        is_high_risk_prompt=lambda _: False, security_response_factory=Mock(),
         trace_id_factory=lambda: "fiction-queue-timeout")
     try:
         if ending == "queued_deadline":

@@ -33,16 +33,10 @@ class _FakeInferenceRuntime:
         return await job()
 
 
-def _make_service(handler, runtime=None, *, high_risk=lambda _message: False):
+def _make_service(handler, runtime=None):
     return ChatGenerationService(
         generate_handler=handler,
         inference_runtime=runtime or _FakeInferenceRuntime(),
-        is_high_risk_prompt=high_risk,
-        security_response_factory=lambda: GenerateResponse(
-            reply="blocked",
-            model="security-policy",
-            costTime=0.0,
-        ),
         trace_id_factory=lambda: "trace-generated",
     )
 
@@ -71,45 +65,8 @@ async def test_generate_preserves_original_and_delegates_to_injected_handler():
     }
 
 
-@pytest.mark.asyncio
-async def test_generate_short_circuits_high_risk_prompt():
-    handler_called = False
-
-    async def handler(_request, _current_user):
-        nonlocal handler_called
-        handler_called = True
-        raise AssertionError("high-risk prompt must not reach the model handler")
-
-    service = _make_service(handler, high_risk=lambda message: message == "secret")
-
-    response = await service.generate(MessageRequest(message=" secret "))
-
-    assert response.model == "security-policy"
-    assert handler_called is False
 
 
-@pytest.mark.asyncio
-async def test_generate_short_circuits_high_risk_history_user_message():
-    handler_called = False
-
-    async def handler(_request, _current_user):
-        nonlocal handler_called
-        handler_called = True
-        raise AssertionError("high-risk history must not reach the model handler")
-
-    service = _make_service(handler, high_risk=lambda message: message == "secret")
-    request = MessageRequest(
-        message="continue",
-        history=[
-            {"role": "user", "content": " \tsecret\n"},
-            {"role": "assistant", "content": "ok"},
-        ],
-    )
-
-    response = await service.generate(request)
-
-    assert response.model == "security-policy"
-    assert handler_called is False
 
 
 @pytest.mark.asyncio

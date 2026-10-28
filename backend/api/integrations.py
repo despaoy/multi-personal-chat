@@ -20,10 +20,7 @@ from typing import TYPE_CHECKING, Any, Literal, TypeVar
 from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from api.generate import (
-    _is_high_risk_prompt,
-    generate_reply_core,
-)
+from api.generate import generate_reply_core
 from app.runtime import RuntimeContainer, get_runtime_container
 from db.schemas import MessageRequest, MessageText
 from infra.concurrency_control import InferenceQueueFull, RateLimitExceeded
@@ -277,25 +274,6 @@ async def receive_astrbot_message(
     if raw_json_size(request.raw) > _RAW_MAX_BYTES:
         raise HTTPException(status_code=413, detail="Raw event payload is too large")
     text = request.text
-    if _is_high_risk_prompt(text.strip()):
-        log_event(
-            "integration_security_blocked",
-            level="warning",
-            traceId=trace_id,
-            platform=request.platform,
-            conversationId=request.conversationId,
-            senderId=redact_sensitive(request.senderId),
-            model="security-policy",
-            costTime=0,
-            errorType="SecurityPolicy",
-        )
-        logger.warning(
-            "AstrBot blocked sensitive chat command traceId=%s platform=%s sender=%s",
-            trace_id,
-            request.platform,
-            redact_sensitive(request.senderId),
-        )
-        raise HTTPException(status_code=403, detail="Request blocked by the system credential policy")
 
     try:
         container = _request_dependencies(http_request)
