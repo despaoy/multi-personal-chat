@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import Awaitable, Callable
 from typing import Any, Protocol
 
+from character.models import build_user_scope
 from db.schemas import GenerateResponse, MessageRequest
 
 GenerateHandler = Callable[
@@ -79,9 +81,19 @@ class ChatGenerationService:
 
         user_id = current_user.get("user_id")
         identity = str(user_id if user_id is not None else current_user["username"])
-        session_id = request.sessionId or f"manual:{identity}"
+        session_key = ("manual", identity, request.sessionId)
         if request.branchId:
-            session_id = f"narrative:{identity}:{request.branchId}"
+            session_key = ("narrative", identity, request.branchId)
+        elif request.platform == "web" and request.adapter == "web-character":
+            scope = build_user_scope(
+                request.platform,
+                request.adapter,
+                identity,
+                request.conversationId or request.sessionId,
+                request.conversationType or request.sessionType,
+            )
+            session_key = ("character", request.characterId, *scope.memory_scope_key)
+        session_id = json.dumps(session_key, separators=(",", ":"))
         priority = self._inference_runtime.priority_for("admin", request.sessionType)
         await self._inference_runtime.check_rate_limits(
             "admin",
