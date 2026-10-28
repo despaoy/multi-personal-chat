@@ -1,24 +1,25 @@
 from dataclasses import replace
 from datetime import datetime, timezone
-from types import SimpleNamespace
 
 import pytest
+from services.delivery_memory import freeze_completion
 
 from api.generate import _prepare_character_turn
 from character.memory_operation import render_operation_response
 from character.models import CompiledCharacterContext
+from db.schemas import MessageRequest
 from inference.generation_request import (
     DEFERRED_MEMORY_OPERATION_POLICY,
     RUNTIME_CAPABILITY_POLICY,
     GenerationRequest,
     build_generation_request,
 )
-from services.delivery_memory import freeze_completion
 
 
 def prepared():
-    from character.models import RelationshipState, UserScope
     from services.character_context import PreparedCharacterTurn
+
+    from character.models import RelationshipState, UserScope
 
     return PreparedCharacterTurn(
         character_id="role",
@@ -49,7 +50,7 @@ class Service:
 
 
 def request(message):
-    return SimpleNamespace(
+    value = MessageRequest(
         message=message,
         platform="qq",
         adapter="adapter",
@@ -60,9 +61,10 @@ def request(message):
         conversationType="private",
         sessionType="",
         history=[],
-        _source_received_at=datetime(2026, 10, 2, tzinfo=timezone.utc),
         sourceMessageId="original-id",
     )
+    value._source_received_at = datetime(2026, 10, 2, tzinfo=timezone.utc)
+    return value
 
 
 @pytest.mark.parametrize(
