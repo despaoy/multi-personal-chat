@@ -4,8 +4,6 @@
 提供敏感数据的加密和解密功能，包括：
 - AES-256-GCM加密算法
 - 密钥管理（显式加载、历史路径迁移）
-- 字段级加密/解密
-- 敏感字段自动识别
 - 由调用方显式执行加密和解密
 
 使用方式：
@@ -17,8 +15,6 @@
     encrypted = manager.encrypt("sensitive data")
     decrypted = manager.decrypt(encrypted)
 
-    # 字段级加密
-    encrypted_value = manager.encrypt_field("my_api_key", "api_key")
 
 """
 
@@ -27,9 +23,8 @@ from __future__ import annotations
 import base64
 import logging
 import os
-import re
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
@@ -43,22 +38,6 @@ logger = logging.getLogger(__name__)
 
 # 加密数据前缀标识
 _ENCRYPTION_PREFIX = "ENC:AES256GCM:"
-
-# 敏感字段名称模式（不区分大小写匹配）
-_SENSITIVE_FIELD_PATTERNS: list[re.Pattern[str]] = [
-    re.compile(r"(?:api[_-]?key|apikey)", re.IGNORECASE),
-    re.compile(r"password", re.IGNORECASE),
-    re.compile(r"passwd", re.IGNORECASE),
-    re.compile(r"secret", re.IGNORECASE),
-    re.compile(r"token", re.IGNORECASE),
-    re.compile(r"credential", re.IGNORECASE),
-    re.compile(r"private[_-]?key", re.IGNORECASE),
-    re.compile(r"access[_-]?key", re.IGNORECASE),
-    re.compile(r"auth[_-]?key", re.IGNORECASE),
-    re.compile(r"encryption[_-]?key", re.IGNORECASE),
-    re.compile(r"database[_-]?url", re.IGNORECASE),
-    re.compile(r"connection[_-]?string", re.IGNORECASE),
-]
 
 # 密钥长度：AES-256需要32字节
 _KEY_LENGTH = 32
@@ -79,18 +58,22 @@ _LEGACY_ENV_FILE_PATH = Path(__file__).resolve().parent / ".env"
 # 异常类
 # ---------------------------------------------------------------------------
 
+
 class EncryptionError(Exception):
     """加密操作失败时抛出的异常。"""
+
     pass
 
 
 class DecryptionError(Exception):
     """解密操作失败时抛出的异常。"""
+
     pass
 
 
 class KeyManagementError(Exception):
     """密钥管理操作失败时抛出的异常。"""
+
     pass
 
 
@@ -98,11 +81,12 @@ class KeyManagementError(Exception):
 # 加密管理器
 # ---------------------------------------------------------------------------
 
+
 class EncryptionManager:
     """管理敏感数据的加密和解密。
 
     使用AES-256-GCM加密算法，按配置优先级加载已有密钥。
-    支持字段级加密、解密和批量加密。
+    由调用方显式加解密；解密接受项目格式的密文和空值。
 
     Attributes:
         _key: 当前使用的加密密钥（32字节）
@@ -121,9 +105,7 @@ class EncryptionManager:
         """
         if key is not None:
             if len(key) != _KEY_LENGTH:
-                raise KeyManagementError(
-                    f"密钥长度必须为 {_KEY_LENGTH} 字节，实际为 {len(key)} 字节"
-                )
+                raise KeyManagementError(f"密钥长度必须为 {_KEY_LENGTH} 字节，实际为 {len(key)} 字节")
             self._key = key
         else:
             self._key = self._load_key()
@@ -157,7 +139,7 @@ class EncryptionManager:
                     continue
                 name, separator, value = line.partition("=")
                 if separator and name.strip() == _ENV_KEY_NAME:
-                    return value.strip().strip('"').strip("'") or None
+                    return value.strip().strip('"').strip("'")
         except OSError as exc:
             raise KeyManagementError(f"读取密钥文件 {path} 失败") from exc
         return None
@@ -166,17 +148,17 @@ class EncryptionManager:
         """Load a configured key or migrate its legacy path; never create a replacement."""
         source = "环境变量"
         encoded_key = os.environ.get(_ENV_KEY_NAME)
-        if not encoded_key:
+        if encoded_key is None:
             source = str(_ENV_FILE_PATH)
             encoded_key = self._read_key_from_file(_ENV_FILE_PATH)
-        if encoded_key:
+        if encoded_key is not None:
             key = self._decode_key(encoded_key, source)
             os.environ[_ENV_KEY_NAME] = encoded_key
             logger.info("从%s加载加密密钥成功", source)
             return key
 
         legacy_key = self._read_key_from_file(_LEGACY_ENV_FILE_PATH)
-        if legacy_key:
+        if legacy_key is not None:
             key = self._decode_key(legacy_key, str(_LEGACY_ENV_FILE_PATH))
             self._save_key_to_env(key)
             logger.warning(
@@ -199,17 +181,13 @@ class EncryptionManager:
         """
         encoded_key = base64.urlsafe_b64encode(key).decode("ascii")
 
-        temp_path = _ENV_FILE_PATH.with_name(
-            f".{_ENV_FILE_PATH.name}.{os.getpid()}.tmp"
-        )
+        temp_path = _ENV_FILE_PATH.with_name(f".{_ENV_FILE_PATH.name}.{os.getpid()}.tmp")
         try:
             env_lines: list[str] = []
             key_written = False
 
             if _ENV_FILE_PATH.exists():
-                env_lines = _ENV_FILE_PATH.read_text(encoding="utf-8").splitlines(
-                    keepends=True
-                )
+                env_lines = _ENV_FILE_PATH.read_text(encoding="utf-8").splitlines(keepends=True)
                 for index, line in enumerate(env_lines):
                     name, separator, _ = line.strip().partition("=")
                     if separator and name.strip() == _ENV_KEY_NAME:
@@ -231,9 +209,7 @@ class EncryptionManager:
             os.environ[_ENV_KEY_NAME] = encoded_key
             logger.info("加密密钥已保存到 %s", _ENV_FILE_PATH)
         except Exception as exc:
-            raise KeyManagementError(
-                f"保存密钥到 .env 文件失败: {exc}"
-            ) from exc
+            raise KeyManagementError(f"保存密钥到 .env 文件失败: {exc}") from exc
         finally:
             try:
                 temp_path.unlink(missing_ok=True)
@@ -308,21 +284,20 @@ class EncryptionManager:
             return ""
 
         if not encrypted_str.startswith(_ENCRYPTION_PREFIX):
-            # 未加密的数据直接返回（兼容性处理）
-            return encrypted_str
+            raise DecryptionError("加密数据格式错误：必须以 ENC:AES256GCM: 开头")
 
         try:
             # 解析加密字符串
-            parts = encrypted_str[len(_ENCRYPTION_PREFIX):].split(":")
+            parts = encrypted_str[len(_ENCRYPTION_PREFIX) :].split(":")
             if len(parts) != 3:
                 raise DecryptionError(f"加密数据格式错误，期望3部分，实际为{len(parts)}部分")
 
             iv_b64, ct_b64, tag_b64 = parts
 
             # Base64解码
-            nonce = base64.urlsafe_b64decode(iv_b64)
-            ciphertext = base64.urlsafe_b64decode(ct_b64)
-            tag = base64.urlsafe_b64decode(tag_b64)
+            nonce = base64.b64decode(iv_b64, altchars=b"-_", validate=True)
+            ciphertext = base64.b64decode(ct_b64, altchars=b"-_", validate=True)
+            tag = base64.b64decode(tag_b64, altchars=b"-_", validate=True)
 
             # 重组 ciphertext+tag（AESGCM.decrypt需要合并格式）
             ciphertext_with_tag = ciphertext + tag
@@ -339,66 +314,3 @@ class EncryptionManager:
         except Exception as exc:
             logger.error("解密失败: %s", exc)
             raise DecryptionError(f"解密失败: {exc}") from exc
-
-    # -------------------------------------------------------------------
-    # 字段级加密
-    # -------------------------------------------------------------------
-
-    def encrypt_field(self, value: Any, field_name: str) -> Any:
-        """对特定字段值进行加密。
-
-        如果字段名匹配敏感字段模式，则加密该值。
-        非字符串值和已加密的值不会被重复加密。
-
-        Args:
-            value: 字段值
-            field_name: 字段名称
-
-        Returns:
-            加密后的值（如果需要加密）或原值
-        """
-        if not isinstance(value, str) or not value:
-            return value
-
-        # 已加密的数据不重复加密
-        if self.is_encrypted(value):
-            return value
-
-        # 检查是否为敏感字段
-        if self._is_sensitive_field(field_name):
-            return self.encrypt(value)
-
-        return value
-
-    # -------------------------------------------------------------------
-    # 工具方法
-    # -------------------------------------------------------------------
-
-    @staticmethod
-    def is_encrypted(value: str) -> bool:
-        """检查字符串是否为加密数据。
-
-        Args:
-            value: 待检查的字符串
-
-        Returns:
-            True如果字符串是加密数据格式
-        """
-        if not isinstance(value, str):
-            return False
-        return value.startswith(_ENCRYPTION_PREFIX)
-
-    @staticmethod
-    def _is_sensitive_field(field_name: str) -> bool:
-        """判断字段名是否匹配敏感字段模式。
-
-        Args:
-            field_name: 字段名称
-
-        Returns:
-            True如果字段名匹配敏感字段模式
-        """
-        for pattern in _SENSITIVE_FIELD_PATTERNS:
-            if pattern.search(field_name):
-                return True
-        return False

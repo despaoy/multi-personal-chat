@@ -86,13 +86,21 @@ def test_every_environment_rejects_missing_key_without_generation_or_write(
     assert set(canonical.parent.rglob("*")) == before_paths
 
 
-def test_invalid_persisted_key_fails_closed(isolated_key_files):
-    canonical, _ = isolated_key_files
+@pytest.mark.parametrize("value", ["not-a-valid-key", ""], ids=["malformed", "empty"])
+def test_invalid_persisted_key_fails_closed(isolated_key_files, value):
+    canonical, legacy = isolated_key_files
     canonical.parent.mkdir(parents=True)
-    canonical.write_text("ENCRYPTION_KEY=not-a-valid-key\n", encoding="utf-8")
+    canonical.write_text(f"ENCRYPTION_KEY={value}\n", encoding="utf-8")
 
+    legacy.parent.mkdir(parents=True)
+    legacy.write_text(
+        "ENCRYPTION_KEY=" + base64.urlsafe_b64encode(bytes(range(32))).decode("ascii") + "\n", encoding="utf-8"
+    )
+    before = {path: path.read_bytes() for path in (canonical, legacy)}
     with pytest.raises(encryption.KeyManagementError, match="ENCRYPTION_KEY"):
         encryption.EncryptionManager()
+    assert all(path.read_bytes() == value for path, value in before.items())
+    assert "ENCRYPTION_KEY" not in os.environ
 
 
 def test_explicit_environment_key_never_reads_unused_key_files(monkeypatch, isolated_key_files):
@@ -114,12 +122,13 @@ def test_explicit_environment_key_never_reads_unused_key_files(monkeypatch, isol
     assert reads == [] and not canonical.exists()
 
 
-def test_invalid_environment_key_cannot_read_or_switch_to_valid_file(monkeypatch, isolated_key_files):
+@pytest.mark.parametrize("value", ["not-a-valid-key", ""], ids=["malformed", "empty"])
+def test_invalid_environment_key_cannot_read_or_switch_to_valid_file(monkeypatch, isolated_key_files, value):
     canonical, _ = isolated_key_files
     canonical.parent.mkdir(parents=True)
     persisted = b"ENCRYPTION_KEY=" + base64.urlsafe_b64encode(bytes(range(32))) + b"\n"
     canonical.write_bytes(persisted)
-    monkeypatch.setenv("ENCRYPTION_KEY", "not-a-valid-key")
+    monkeypatch.setenv("ENCRYPTION_KEY", value)
     reads = []
 
     def forbidden(path):
@@ -154,3 +163,31 @@ def test_selected_key_file_read_failure_is_not_hidden_by_legacy_or_generation(mo
         encryption.EncryptionManager()
     assert caught.value.__cause__ is cause and reads == [canonical]
     assert all(path.read_bytes() == value for path, value in before.items())
+
+
+def test_decryption_accepts_only_complete_authenticated_ciphertext():
+    manager = encryption.EncryptionManager(key=bytes(range(32)))
+    source = "完整合成原文：尚未付款，仅周五执行，出差顺延。"
+    ciphertext = manager.encrypt(source)
+    assert manager.decrypt(ciphertext) == source
+    assert manager.decrypt(manager.encrypt("")) == ""
+    prefix = "ENC:AES256GCM:"
+    nonce, body, tag = ciphertext.removeprefix(prefix).split(":")
+    altered_tag = bytearray(base64.urlsafe_b64decode(tag))
+    altered_tag[0] ^= 1
+    corrupt = prefix + ":".join([nonce, body, base64.urlsafe_b64encode(altered_tag).decode("ascii")])
+    invalid = {
+        "plaintext": source,
+        "wrong_prefix": ciphertext.replace("AES256GCM", "AES256GCX", 1),
+        "invalid_base64": prefix + ":".join([nonce + "$", body, tag]),
+        "corrupt_authentication_tag": corrupt,
+    }
+    accepted = []
+    for label, value in invalid.items():
+        try:
+            manager.decrypt(value)
+        except encryption.DecryptionError:
+            pass
+        else:
+            accepted.append(label)
+    assert not accepted, f"Invalid ciphertexts accepted as successes: {accepted}"
