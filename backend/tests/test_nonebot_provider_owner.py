@@ -277,11 +277,11 @@ async def test_indented_message_keeps_original_in_wire_archive_and_history(
         assert any(row["role"] == "user" and original in row["content"] for row in messages)
         (archived,) = database.get_messages(session_id="1001")
         assert archived["message"] == original and archived["reply"] == ANSWER
-        assert history.get_history("1001") == [
+        assert history.get_history(bot_module._message_scope(event)) == [
             {"role": "user", "content": original},
             {"role": "assistant", "content": ANSWER},
         ]
-        runtime.check_rate_limits.assert_awaited_once_with("qq", "1001", "1001")
+        runtime.check_rate_limits.assert_awaited_once_with("qq:nonebot", "private:1001", "1001")
         assert runtime.submit.await_count == 1
     finally:
         database.close_connection()

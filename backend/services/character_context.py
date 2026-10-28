@@ -100,9 +100,10 @@ class TurnInput:
     sender_id: str
     conversation_id: str
     conversation_type: str
-    # 调用方（bot/前端）自带的现场历史；非空时优先于数据库历史
+    # Loaded empty history is an explicit reset, not a request to restore storage.
     history: tuple[dict[str, str], ...] = ()
     received_at: datetime | None = None
+    history_loaded: bool = False
 
 
 @dataclass(frozen=True)
@@ -556,10 +557,13 @@ class CharacterContextService:
         return await self._memory_service.recall_with_diagnostics(character_id, user_scope, query, **kwargs)
 
     async def _load_history(self, turn: TurnInput, user_scope: UserScope, character_id: str) -> list[dict[str, str]]:
-        """调用方带现场历史时直接使用，否则从数据库读取。"""
-        history = list(turn.history) if turn.history else await self._message_repo.list_recent_conversation_history(
-            user_scope, limit=self._history_limit, max_chars=self._history_max_chars, character_id=character_id
-        )
+        """Use loaded history, including an explicit reset; otherwise read storage."""
+        if turn.history_loaded or turn.history:
+            history = list(turn.history)
+        else:
+            history = await self._message_repo.list_recent_conversation_history(
+                user_scope, limit=self._history_limit, max_chars=self._history_max_chars, character_id=character_id
+            )
         validate_history(history)
         return history
 

@@ -47,6 +47,7 @@ if _BACKEND_DIR not in sys.path:
 # 统一数据库访问 - 通过db.adapter
 # ============================================
 from db.adapter import db
+from character.models import UserScope, build_user_scope
 
 # 统一生成链路：NoneBot 不再自行组装 prompt/RAG/失败回退
 from api.generate import generate_reply_core
@@ -123,35 +124,28 @@ config = Config()
 # 会话历史管理 - 通过db.adapter读取
 # ============================================
 class SessionHistory:
-    """会话历史管理器 - 通过db.adapter恢复历史，内存中管理
-
-    C14 fix: 用 threading.Lock 保护 self.sessions 的 check-then-set 序列，
-    防止 async 协程在 await 点交错时同一 session_id 的历史列表损坏或消息丢失。
-    单个方法内无 await，GIL 下同步方法是原子的，但跨方法调用（如 get_history 后 add_message）
-    需要锁保护以避免其他协程在中间修改。
-    """
+    """Bounded history for one canonical user scope, serialized by its queue."""
 
     def __init__(self, max_tokens: int = 2000):
         self.max_tokens = max_tokens
-        self.sessions: Dict[str, List[Dict[str, str]]] = {}
+        self.sessions: Dict[tuple[str, ...], List[Dict[str, str]]] = {}
         self._lock = threading.Lock()
 
-    def _load_from_db(self, session_id: str):
-        """从数据库恢复最近N轮对话（通过db.adapter）"""
-        messages = db.get_messages(limit=10, session_id=session_id)
-        result = []
-        for msg in reversed(messages):
-            result.append({"role": "user", "content": msg.get("message", "")})
-            result.append({"role": "assistant", "content": msg.get("reply", "")})
-        if result:
-            self.sessions[session_id] = result
-            logger.info(f"会话 {session_id} 从数据库恢复 {len(result)//2} 轮历史")
+    def _load_from_db(self, scope: UserScope):
+        history = db.list_conversation_history(
+            scope.platform, scope.adapter, scope.sender_id,
+            scope.conversation_type, scope.conversation_id,
+            limit=10, max_chars=self.max_tokens * 2,
+        )
+        if history:
+            self.sessions[scope.memory_scope_key] = history
 
-    def get_history(self, session_id: str, tokenizer=None) -> List[Dict[str, str]]:
+    def get_history(self, scope: UserScope, tokenizer=None) -> List[Dict[str, str]]:
         """获取会话历史，按token数截断"""
+        session_id = scope.memory_scope_key
         with self._lock:
             if session_id not in self.sessions:
-                self._load_from_db(session_id)
+                self._load_from_db(scope)
                 if session_id not in self.sessions:
                     return []
 
@@ -166,15 +160,16 @@ class SessionHistory:
                 total += tokens
             return trimmed
 
-    def add_message(self, session_id: str, role: str, content: str):
+    def add_message(self, scope: UserScope, role: str, content: str):
         """添加消息到内存历史"""
+        session_id = scope.memory_scope_key
         with self._lock:
             if session_id not in self.sessions:
                 self.sessions[session_id] = []
             self.sessions[session_id].append({"role": role, "content": content})
             self._prune_by_tokens(session_id)
 
-    def _prune_by_tokens(self, session_id: str):
+    def _prune_by_tokens(self, session_id: tuple[str, ...]):
         """按token数裁剪历史"""
         history = self.sessions.get(session_id, [])
         total = 0
@@ -184,11 +179,10 @@ class SessionHistory:
             removed = history.pop(0)
             total -= self._count_tokens(removed["content"], None)
 
-    def clear_history(self, session_id: str):
-        """清除会话历史"""
+    def clear_history(self, scope: UserScope):
+        """Reset this process's context without restoring the archived turns."""
         with self._lock:
-            if session_id in self.sessions:
-                del self.sessions[session_id]
+            self.sessions[scope.memory_scope_key] = []
 
     @staticmethod
     def _count_tokens(text: str, tokenizer=None) -> int:
@@ -358,6 +352,15 @@ async def should_reply(event: MessageEvent) -> bool:
     return False
 
 
+def _message_scope(event: MessageEvent) -> UserScope:
+    private = isinstance(event, PrivateMessageEvent)
+    return build_user_scope(
+        "qq", "nonebot", str(event.user_id),
+        str(event.user_id) if private else str(event.group_id),
+        "private" if private else "group",
+    )
+
+
 async def process_message(event: MessageEvent) -> str:
     """处理消息并生成回复。
 
@@ -371,11 +374,11 @@ async def process_message(event: MessageEvent) -> str:
 
     logger.info(f"收到消息: 字符数={len(user_message)}")
 
-    is_private = isinstance(event, PrivateMessageEvent)
-    conversation_id = str(event.user_id) if is_private else str(event.group_id)
+    scope = _message_scope(event)
+    conversation_id = scope.conversation_id
     session_id = conversation_id
-    conversation_type = "private" if is_private else "group"
-    sender_id = str(event.user_id)
+    conversation_type = scope.conversation_type
+    sender_id = scope.sender_id
     sender_obj = getattr(event, "sender", None)
     sender_name = str(
         getattr(sender_obj, "card", None)
@@ -387,7 +390,7 @@ async def process_message(event: MessageEvent) -> str:
     lora_name = _selected_lora
     logger.info("开始处理消息: LoRA={}", lora_name or "backend-config")
 
-    await inference_runtime.check_rate_limits("qq", conversation_id, sender_id)
+    await inference_runtime.check_rate_limits("qq:nonebot", f"{conversation_type}:{conversation_id}", sender_id)
     msg = MessageRequest(
         message=user_message,
         sessionType=conversation_type,
@@ -407,19 +410,20 @@ async def process_message(event: MessageEvent) -> str:
 
     async def _queued_generation():
         # Read and update history under the runtime's session lock.
-        msg.history = session_history.get_history(session_id)
+        msg.history = session_history.get_history(scope)
+        msg._history_loaded = True
         result = await generate_reply_core(
             msg,
             current_user={"username": "nonebot", "user_id": 0},
             message_db=db,
         )
-        session_history.add_message(session_id, "user", user_message)
-        session_history.add_message(session_id, "assistant", result.reply)
+        session_history.add_message(scope, "user", user_message)
+        session_history.add_message(scope, "assistant", result.reply)
         return result
 
     result = await inference_runtime.submit(
         _queued_generation,
-        session_id=session_id,
+        session_id=json.dumps(scope.memory_scope_key, separators=(",", ":")),
         priority=inference_runtime.priority_for("nonebot", conversation_type),
         timeout=read_positive_float(os.environ, "MODEL_INFERENCE_TIMEOUT", 180.0),
     )
@@ -719,13 +723,19 @@ def init_bot():
 
     @clear_cmd.handle()
     async def handle_clear(bot: Bot, event: MessageEvent):
-        """清除对话历史命令"""
-        # 与 should_reply/process_message 使用相同的会话标识。
-        # 群消息使用 str(group_id)，私聊使用 str(user_id)
-        # 此前使用 f"{group_id}_{user_id}" 复合格式导致清除命令失效
-        session_id = str(event.user_id) if isinstance(event, PrivateMessageEvent) else str(event.group_id)
-        session_history.clear_history(session_id)
-        await clear_cmd.finish("好啦好啦，对话历史已经清除了~")
+        """Reset only the caller's context after earlier queued turns finish."""
+        scope = _message_scope(event)
+
+        async def clear_context():
+            session_history.clear_history(scope)
+
+        await inference_runtime.submit(
+            clear_context,
+            session_id=json.dumps(scope.memory_scope_key, separators=(",", ":")),
+            priority=inference_runtime.priority_for("nonebot", scope.conversation_type),
+            timeout=read_positive_float(os.environ, "MODEL_INFERENCE_TIMEOUT", 180.0),
+        )
+        await clear_cmd.finish("当前对话上下文已重置，聊天存档和长期记忆仍保留。")
 
     # LoRA切换命令
     lora_cmd = on_command("lora", priority=5)

@@ -323,16 +323,17 @@ async def test_private_reply_selection_preserves_explicit_setting(bot_module, pr
 async def test_generation_success_keeps_history_and_request_identity(bot_module, private_event, generation_control):
     runtime, history, generate = generation_control
     assert await bot_module.process_message(private_event) == generate.return_value.reply
-    runtime.check_rate_limits.assert_awaited_once_with("qq", "1001", "1001")
+    runtime.check_rate_limits.assert_awaited_once_with("qq:nonebot", "private:1001", "1001")
     runtime.submit.assert_awaited_once()
     request = generate.await_args.args[0]
     assert request.message == str(private_event.message)
     assert request.history == history.get_history.return_value
+    assert request._history_loaded is True
     assert (request.platform, request.adapter, request.conversationId, request.senderId) == (
         "qq", "nonebot", "1001", "1001")
     assert history.add_message.call_args_list == [
-        call("1001", "user", str(private_event.message)),
-        call("1001", "assistant", generate.return_value.reply),
+        call(bot_module._message_scope(private_event), "user", str(private_event.message)),
+        call(bot_module._message_scope(private_event), "assistant", generate.return_value.reply),
     ]
 
 
@@ -399,7 +400,7 @@ async def test_history_read_failure_stops_before_model(
     _, _, generate = generation_control
     failure = RuntimeError("synthetic-private-history-error")
     reader = Mock(side_effect=failure)
-    monkeypatch.setattr(bot_module, "db", SimpleNamespace(get_messages=reader))
+    monkeypatch.setattr(bot_module, "db", SimpleNamespace(list_conversation_history=reader))
     history = bot_module.SessionHistory()
     monkeypatch.setattr(bot_module, "session_history", history)
     with pytest.raises(RuntimeError) as caught:
@@ -409,16 +410,16 @@ async def test_history_read_failure_stops_before_model(
     assert history.sessions == {}
 
 
-def test_history_empty_result_and_recovery_remain_distinct(bot_module, monkeypatch):
+def test_history_empty_result_and_recovery_remain_distinct(bot_module, private_event, monkeypatch):
     failure = RuntimeError("Controlled history service unavailable")
-    reader = Mock(side_effect=[failure, [], [{"message": "周五执行，出差例外。", "reply": "已记录例外。"}]])
-    monkeypatch.setattr(bot_module, "db", SimpleNamespace(get_messages=reader))
+    reader = Mock(side_effect=[failure, [], [{"role": "user", "content": "周五执行，出差例外。"}, {"role": "assistant", "content": "已记录例外。"}]])
+    monkeypatch.setattr(bot_module, "db", SimpleNamespace(list_conversation_history=reader))
     history = bot_module.SessionHistory()
     with pytest.raises(RuntimeError) as caught:
-        history.get_history("fiction-owner")
+        history.get_history(bot_module._message_scope(private_event))
     assert caught.value is failure
-    assert history.get_history("fiction-owner") == []
-    assert history.get_history("fiction-owner") == [
+    assert history.get_history(bot_module._message_scope(private_event)) == []
+    assert history.get_history(bot_module._message_scope(private_event)) == [
         {"role": "user", "content": "周五执行，出差例外。"},
         {"role": "assistant", "content": "已记录例外。"},
     ]

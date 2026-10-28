@@ -823,6 +823,7 @@ def _character_turn_input(request: MessageRequest):
         conversation_type=request.conversationType or request.sessionType,
         history=tuple(request.history or []),
         received_at=request._source_received_at,
+        history_loaded=request._history_loaded,
     )
 
 
