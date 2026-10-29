@@ -199,7 +199,10 @@ def main() -> int:
         config["base_model_path"] = str(resolved_model)
     if args.resume:
         checkpoints = sorted(output_dir.glob("checkpoint-*"), key=_checkpoint_step)
-        config["resume_from_checkpoint"] = str(checkpoints[-1]) if checkpoints else None
+        if not checkpoints:
+            print(f"resume_checkpoint_missing={output_dir}", file=sys.stderr)
+            return 2
+        config["resume_from_checkpoint"] = str(checkpoints[-1])
     elif output_dir.exists() and any(output_dir.iterdir()):
         print(f"refusing_to_overwrite_nonempty_output={output_dir}", file=sys.stderr)
         return 2

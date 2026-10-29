@@ -257,6 +257,10 @@ class LoRATrainingConfig:
             errors.append(f"训练数据路径不存在: {self.train_data_path}")
         if self.eval_data_path and not Path(self.eval_data_path).exists():
             errors.append(f"Evaluation data path does not exist: {self.eval_data_path}")
+        if self.resume_from_checkpoint is not None and (
+            not self.resume_from_checkpoint or not Path(self.resume_from_checkpoint).is_dir()
+        ):
+            errors.append(f"resume_from_checkpoint must select an existing directory: {self.resume_from_checkpoint!r}")
         if self.lora_r <= 0:
             errors.append(f"lora_r必须大于0: {self.lora_r}")
         if self.learning_rate <= 0:
@@ -290,7 +294,7 @@ class LoRATrainingConfig:
     def from_dict(cls, d: Dict[str, Any]) -> "LoRATrainingConfig":
         valid_fields = {f.name for f in cls.__dataclass_fields__.values()}
         filtered = {k: v for k, v in d.items() if k in valid_fields}
-        for path_key in ("base_model_path", "train_data_path", "eval_data_path", "output_dir"):
+        for path_key in ("base_model_path", "train_data_path", "eval_data_path", "output_dir", "resume_from_checkpoint"):
             if filtered.get(path_key) and not _os.path.isabs(filtered[path_key]):
                 filtered[path_key] = _resolve_path(filtered[path_key])
         return cls(**filtered)
@@ -504,9 +508,7 @@ class LoRATrainer:
 
         config_errors = self.config.validate()
         if config_errors:
-            for err in config_errors:
-                logger.error(f"配置错误: {err}")
-            raise ValueError(f"训练配置有 {len(config_errors)} 个错误")
+            raise ValueError(f"训练配置错误: {'; '.join(config_errors)}")
 
         try:
             self.cleanup_gpu()
@@ -624,12 +626,7 @@ class LoRATrainer:
             self.print_gpu_memory("训练前")
 
             self._check_cancelled()
-            checkpoint = self.config.resume_from_checkpoint
-            if checkpoint and Path(checkpoint).exists():
-                logger.info(f"从检查点恢复训练: {checkpoint}")
-                trainer.train(resume_from_checkpoint=checkpoint)
-            else:
-                trainer.train()
+            trainer.train(resume_from_checkpoint=self.config.resume_from_checkpoint)
 
             self._check_cancelled()
             final_output = output_dir / "final"
@@ -707,8 +704,8 @@ def main():
         config.learning_rate = args.lr
     if args.lora_r:
         config.lora_r = args.lora_r
-    if args.resume:
-        config.resume_from_checkpoint = args.resume
+    if args.resume is not None:
+        config.resume_from_checkpoint = _resolve_path(args.resume) if args.resume else args.resume
 
     trainer = LoRATrainer(config)
     output_path = trainer.train()
