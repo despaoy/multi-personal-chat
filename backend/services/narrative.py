@@ -19,25 +19,22 @@ from services.character_context import CharacterContextService, TurnInput
 
 
 def parse_proposals(reply, active_ids):
-    """Malformed optional metadata never turns into database instructions."""
+    """Parse optional proposal metadata; malformed declared blocks are errors."""
     match = re.search(r"\n?```branch_proposals\s*\n(.*?)\n```\s*$", reply, re.S)
     if not match:
-        return reply, [], []
+        return reply, []
     body = reply[: match.start()].strip()
     if not body:
-        return "", [], ["proposal_without_reply"]
-    try:
-        if len(match[1]) > 8000:
-            raise ValueError("oversized")
-        raw = json.loads(match[1])
-        if not isinstance(raw, list) or len(raw) > 3:
-            raise ValueError("invalid proposal list")
-        proposals = [Proposal.model_validate(item) for item in raw]
-        if any(not set(item.source_assertion_ids).issubset(active_ids) for item in proposals):
-            raise ValueError("unknown dependency")
-        return body, proposals, []
-    except (ValueError, TypeError):
-        return body, [], ["invalid_branch_proposals"]
+        raise ValueError("proposal metadata requires a dialogue reply")
+    if len(match[1]) > 8000:
+        raise ValueError("oversized")
+    raw = json.loads(match[1])
+    if not isinstance(raw, list) or len(raw) > 3:
+        raise ValueError("invalid proposal list")
+    proposals = [Proposal.model_validate(item) for item in raw]
+    if any(not set(item.source_assertion_ids).issubset(active_ids) for item in proposals):
+        raise ValueError("unknown dependency")
+    return body, proposals
 
 
 class _BranchMemoryRepository(DatabaseCharacterMemoryRepository):
@@ -146,16 +143,17 @@ async def generate_branch_reply(request, current_user, database, *, generate):
     )
     if not response.reply.strip() or "character_abstention_fallback" in (response.warnings or []):
         raise HTTPException(503, "本轮未成功生成，分支状态未提交")
-    reply, proposals, warnings = parse_proposals(response.reply, {a["id"] for a in active})
-    if not reply:
-        raise HTTPException(503, "模型仅生成了提议元数据，分支状态未提交")
+    try:
+        reply, proposals = parse_proposals(response.reply, {a["id"] for a in active})
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(503, "模型分支提议格式无效，分支状态未提交，请检查生成结果后重试") from exc
     response = response.model_copy(
         update={
             "reply": reply,
             "branchId": branch["id"],
             "branchRevision": branch["revision"] + 1,
             "answerMode": "counterfactual",
-            "warnings": [*(response.warnings or []), *warnings],
+            "warnings": list(response.warnings or ()),
             # These describe supplied evidence, not a semantic verification of generated claims.
             "evidenceSources": [
                 {

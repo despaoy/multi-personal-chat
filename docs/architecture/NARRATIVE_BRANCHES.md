@@ -40,7 +40,7 @@
 
 分支请求绕过响应缓存。相同分支、traceId、消息和 LoRA 重试返回已提交回复，不重复更新关系或插入消息；相同 traceId 配不同内容返回 409。重放响应返回已保存正文，当前版本不保证还原原始耗时以外的全部证据元信息。无成功记录的失败请求可使用相同 traceId 重试。
 
-模型提议使用可选 `branch_proposals` JSON fenced block，最多3条，解析失败丢弃元数据并保留正常正文；不增加第二次模型调用。提议由服务器绑定本轮已提交的 sourceMessageId 和 branch_id，模型不能指定归属；依赖 ID 必须来自本轮有效事实白名单。所有提议先为 pending。
+模型提议使用可选 `branch_proposals` JSON fenced block，最多3条。未包含提议元数据是正常对话；已识别区块的 JSON、字段或来源依赖无效时返回503，分支版本、消息和提议均不提交，可修复后使用同一 traceId 重试；不增加第二次模型调用。提议由服务器绑定本轮已提交的 sourceMessageId 和 branch_id，模型不能指定归属；依赖 ID 必须来自本轮有效事实白名单。所有提议先为 pending。
 
 确认需要当前 revision。同一规范化 subject/predicate 的不同 object 要求显式选择替代，撤回其传递依赖。来源缺失或依赖失效拒绝确认。不同措辞、复杂否定、因果冲突没有自动判定保证，用户须先核对。原始 source_type 保持 model_proposal，active 表示已人工确认，并不把模型来源改写为原作。
 

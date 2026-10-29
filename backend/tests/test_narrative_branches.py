@@ -173,9 +173,9 @@ def test_context_trust_and_pending_exclusion(repo):
         '[{"subject":"X","predicate":"P","object":"V","source_assertion_ids":["other"]}]',
     ],
 )
-def test_invalid_model_proposals_are_discarded(raw):
-    reply, proposals, warnings = parse_proposals("自然回答\n```branch_proposals\n" + raw + "\n```", set())
-    assert reply == "自然回答" and proposals == [] and warnings
+def test_invalid_model_proposals_raise_protocol_errors(raw):
+    with pytest.raises((ValueError, TypeError)):
+        parse_proposals("自然回答\n```branch_proposals\n" + raw + "\n```", set())
 
 
 def test_api_auth_bounds_feature_gate(repo, monkeypatch):
@@ -519,3 +519,55 @@ async def test_canonical_missing_dependencies_stop_before_queue_or_model(monkeyp
         await narrative.canonical_generate(body, SimpleNamespace(app=app), {'user_id': 1})
     assert caught.value.status_code == 503
     assert caught.value.detail['stage'] == 'dependencies'
+
+
+def test_invalid_proposal_turn_is_uncommitted_and_valid_retry_succeeds(repo):
+    import json
+
+    branch = create(repo, hypothesis="在此分支中，妃今天到图书馆取书，尚未与琉璃见面。")
+    active = repo.assertions("1", branch["id"], status="active")
+    states = repo.rows("SELECT * FROM branch_states")
+    assertions = repo.rows("SELECT * FROM branch_assertions")
+    request = MessageRequest(
+        message="继续这个假想分支，不把假设当作原作事实。",
+        platform="web",
+        branchId=branch["id"],
+        traceId="synthetic-protocol-retry",
+    )
+    valid = json.dumps(
+        [{"subject": "妃", "predicate": "所在地", "object": "图书馆", "source_assertion_ids": [active[0]["id"]]}],
+        ensure_ascii=False,
+    )
+    payloads = iter(["not-json", valid])
+    calls = []
+
+    async def generate(req, user, **kwargs):
+        assert kwargs["persist_message"] is False and req.senderId == "1"
+        assert "妃今天到图书馆取书" in kwargs["prepared_override"].compiled.branch_context
+        calls.append(req.traceId)
+        return GenerateResponse(
+            reply="我们在图书馆继续聊。\n```branch_proposals\n" + next(payloads) + "\n```",
+            model="controlled-protocol-result",
+            costTime=0,
+            modelInvoked=True,
+            warnings=["existing_generation_notice"],
+        )
+
+    with pytest.raises(HTTPException) as raised:
+        asyncio.run(generate_branch_reply(request, {"user_id": 1}, repo.db, generate=generate))
+    assert raised.value.status_code == 503 and isinstance(raised.value.__cause__, ValueError)
+    assert "分支状态未提交" in str(raised.value.detail)
+    assert repo.get("1", branch["id"]) == branch
+    assert repo.history("1", branch["id"]) == []
+    assert (
+        repo.rows("SELECT * FROM branch_states") == states
+        and repo.rows("SELECT * FROM branch_assertions") == assertions
+    )
+    result = asyncio.run(generate_branch_reply(request, {"user_id": 1}, repo.db, generate=generate))
+    assert result.reply == "我们在图书馆继续聊。" and result.modelInvoked is True
+    assert result.warnings == ["existing_generation_notice"]
+    assert calls == [request.traceId, request.traceId]
+    assert repo.get("1", branch["id"])["revision"] == branch["revision"] + 1
+    assert len(repo.history("1", branch["id"])) == 1
+    pending = repo.assertions("1", branch["id"], status="pending")
+    assert len(pending) == 1 and pending[0]["object"] == "图书馆"
