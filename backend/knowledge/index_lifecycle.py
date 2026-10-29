@@ -96,7 +96,6 @@ class KnowledgeIndex:
 
         为避免大库一次性加载导致 OOM，使用流式哈希：每读一批更新一次 md5。
         """
-        import hashlib
 
         h = hashlib.md5()
         for row in self.db.iter_chunks_with_document(batch_size=500):
@@ -163,140 +162,133 @@ class KnowledgeIndex:
         - 落盘失败（clear_all/add_documents 抛异常）不会标记 complete，状态保持 building
         """
         with self._vector_index_lock:
-            try:
-                vector_db = self.vector_db
-                if (
-                    self._vector_index_owner is not None
-                    and self._vector_index_owner[0] is self.db
-                    and (self._vector_index_owner[1] is vector_db)
-                    and (self._vector_index_revision is not None)
-                    and (self._vector_index_revision == self._get_rebuild_revision())
-                ):
-                    return True
-                self._vector_index_revision = None
-                self._vector_index_owner = (self.db, vector_db)
-                stats = vector_db.get_stats()
-                expected_count = self._get_expected_chunk_count()
-                status, status_count, status_fp, status_rev = self._read_rebuild_status()
-                current_revision = self._get_rebuild_revision()
-                if expected_count == 0:
-                    needs_clear = (
-                        not getattr(vector_db, "snapshot_validated", False)
-                        or stats["total_documents"] != 0
-                        or stats["index_size"] != 0
-                        or (stats["bm25_corpus_size"] != 0)
-                        or (status != "complete")
-                        or (status_count != 0)
-                        or (status_rev != current_revision)
-                    )
-                    if needs_clear:
-                        logger.info("数据库无有效 chunk，清空向量索引并持久化空索引")
-                        vector_db.clear_all()
+            vector_db = self.vector_db
+            if (
+                self._vector_index_owner is not None
+                and self._vector_index_owner[0] is self.db
+                and (self._vector_index_owner[1] is vector_db)
+                and (self._vector_index_revision is not None)
+                and (self._vector_index_revision == self._get_rebuild_revision())
+            ):
+                return True
+            self._vector_index_revision = None
+            self._vector_index_owner = (self.db, vector_db)
+            stats = vector_db.get_stats()
+            expected_count = self._get_expected_chunk_count()
+            status, status_count, status_fp, status_rev = self._read_rebuild_status()
+            current_revision = self._get_rebuild_revision()
+            if expected_count == 0:
+                needs_clear = (
+                    not getattr(vector_db, "snapshot_validated", False)
+                    or stats["total_documents"] != 0
+                    or stats["index_size"] != 0
+                    or (stats["bm25_corpus_size"] != 0)
+                    or (status != "complete")
+                    or (status_count != 0)
+                    or (status_rev != current_revision)
+                )
+                if needs_clear:
+                    logger.info("数据库无有效 chunk，清空向量索引并持久化空索引")
+                    vector_db.clear_all()
+                with self._revision_lock:
+                    if self._get_rebuild_revision() != current_revision:
+                        logger.warning("空库清理期间检测到并发 CRUD，不标记 complete，等待下次重建")
+                        return False
+                    if not self.db.commit_knowledge_index_revision(current_revision, 0, _EMPTY_FINGERPRINT):
+                        return False
+                    logger.info("向量索引已清空并标记 complete:0:empty:%s", current_revision)
+                    self._vector_index_revision = current_revision
+                return True
+            if (
+                status == "complete"
+                and status_count == expected_count
+                and (status_rev == current_revision)
+                and (stats["total_documents"] == expected_count)
+                and (stats["index_size"] == expected_count)
+                and (stats["bm25_corpus_size"] == expected_count)
+            ):
+                current_fp = self._compute_chunk_fingerprint()
+                if status_fp and status_fp == current_fp and self._loaded_metadata_matches_database(vector_db):
                     with self._revision_lock:
                         if self._get_rebuild_revision() != current_revision:
-                            logger.warning("空库清理期间检测到并发 CRUD，不标记 complete，等待下次重建")
-                            return False
-                        if not self.db.commit_knowledge_index_revision(current_revision, 0, _EMPTY_FINGERPRINT):
-                            return False
-                        logger.info("向量索引已清空并标记 complete:0:empty:%s", current_revision)
-                        self._vector_index_revision = current_revision
-                    return True
-                if (
-                    status == "complete"
-                    and status_count == expected_count
-                    and (status_rev == current_revision)
-                    and (stats["total_documents"] == expected_count)
-                    and (stats["index_size"] == expected_count)
-                    and (stats["bm25_corpus_size"] == expected_count)
-                ):
-                    current_fp = self._compute_chunk_fingerprint()
-                    if status_fp and status_fp == current_fp and self._loaded_metadata_matches_database(vector_db):
-                        with self._revision_lock:
-                            if self._get_rebuild_revision() != current_revision:
-                                logger.info("跳过检查期间检测到并发 CRUD，放弃跳过，进入重建")
-                            else:
-                                if not self.db.commit_knowledge_index_revision(
-                                    current_revision, expected_count, current_fp
-                                ):
-                                    return False
-                                logger.info(
-                                    "向量索引已完整: %d 个文档（complete，数量+指纹+revision 匹配），跳过重建",
-                                    stats["total_documents"],
-                                )
-                                vector_db.clear_cache()
-                                self._vector_index_revision = current_revision
-                                return True
-                    else:
-                        logger.info("向量索引指纹不匹配: 状态=%s, 实际=%s，需要重建", status_fp or "(空)", current_fp)
+                            logger.info("跳过检查期间检测到并发 CRUD，放弃跳过，进入重建")
+                        else:
+                            if not self.db.commit_knowledge_index_revision(
+                                current_revision, expected_count, current_fp
+                            ):
+                                return False
+                            logger.info(
+                                "向量索引已完整: %d 个文档（complete，数量+指纹+revision 匹配），跳过重建",
+                                stats["total_documents"],
+                            )
+                            vector_db.clear_cache()
+                            self._vector_index_revision = current_revision
+                            return True
                 else:
-                    logger.info(
-                        "向量索引需要重建: 状态=%s:%d:%s:%d, 实际(meta/faiss/bm25)=%d/%d/%d, 预期=%d, revision=%d/%d",
-                        status or "none",
-                        status_count,
-                        status_fp or "(空)",
-                        status_rev,
-                        stats["total_documents"],
-                        stats["index_size"],
-                        stats["bm25_corpus_size"],
-                        expected_count,
-                        status_rev,
-                        current_revision,
-                    )
-                start_revision = self._get_rebuild_revision()
-                self.db.set_config_value(_VECTOR_REBUILD_STATUS_KEY, f"building:{expected_count}")
-                vector_db.clear_all()
-                kb_name_map: dict = {}
-                for kb in self.db.get_knowledge_bases():
-                    kb_name_map[kb["id"]] = kb["name"]
-                batch_vector_docs = []
-                vector_batch_size = 200
-                total_chunks_indexed = 0
-                import hashlib
+                    logger.info("向量索引指纹不匹配: 状态=%s, 实际=%s，需要重建", status_fp or "(空)", current_fp)
+            else:
+                logger.info(
+                    "向量索引需要重建: 状态=%s:%d:%s:%d, 实际(meta/faiss/bm25)=%d/%d/%d, 预期=%d, revision=%d/%d",
+                    status or "none",
+                    status_count,
+                    status_fp or "(空)",
+                    status_rev,
+                    stats["total_documents"],
+                    stats["index_size"],
+                    stats["bm25_corpus_size"],
+                    expected_count,
+                    status_rev,
+                    current_revision,
+                )
+            start_revision = self._get_rebuild_revision()
+            self.db.set_config_value(_VECTOR_REBUILD_STATUS_KEY, f"building:{expected_count}")
+            vector_db.clear_all()
+            kb_name_map = {kb["id"]: kb["name"] for kb in self.db.get_knowledge_bases()}
+            batch_vector_docs = []
+            vector_batch_size = 200
+            total_chunks_indexed = 0
 
-                fp_hash = hashlib.md5()
-                for row in self.db.iter_chunks_with_document(batch_size=500):
-                    doc_title = row.get("doc_title")
-                    if doc_title is None:
-                        continue
-                    batch_vector_docs.append(_vector_chunk_document(row, kb_name_map))
-                    fp_hash.update(_chunk_fingerprint_record(row))
-                    if len(batch_vector_docs) >= vector_batch_size:
-                        vector_db.add_documents(batch_vector_docs)
-                        total_chunks_indexed += len(batch_vector_docs)
-                        batch_vector_docs = []
-                if batch_vector_docs:
+            fp_hash = hashlib.md5()
+            for row in self.db.iter_chunks_with_document(batch_size=500):
+                doc_title = row.get("doc_title")
+                if doc_title is None:
+                    continue
+                batch_vector_docs.append(_vector_chunk_document(row, kb_name_map))
+                fp_hash.update(_chunk_fingerprint_record(row))
+                if len(batch_vector_docs) >= vector_batch_size:
                     vector_db.add_documents(batch_vector_docs)
                     total_chunks_indexed += len(batch_vector_docs)
-                if total_chunks_indexed != expected_count:
-                    logger.error(
-                        "向量索引重建数量不匹配: 已写入 %d, 预期 %d，保持 building 状态等待下次重建",
-                        total_chunks_indexed,
-                        expected_count,
+                    batch_vector_docs = []
+            if batch_vector_docs:
+                vector_db.add_documents(batch_vector_docs)
+                total_chunks_indexed += len(batch_vector_docs)
+            if total_chunks_indexed != expected_count:
+                logger.error(
+                    "向量索引重建数量不匹配: 已写入 %d, 预期 %d，保持 building 状态等待下次重建",
+                    total_chunks_indexed,
+                    expected_count,
+                )
+                return False
+            vector_db.flush()
+            final_fp = fp_hash.hexdigest()[:16]
+            with self._revision_lock:
+                final_revision = self._get_rebuild_revision()
+                if final_revision != start_revision:
+                    logger.warning(
+                        "重建期间检测到并发 CRUD: start_revision=%d, current=%d，不标记 complete，保持 building 等待下次重建",
+                        start_revision,
+                        final_revision,
                     )
                     return False
-                vector_db.flush()
-                final_fp = fp_hash.hexdigest()[:16]
-                with self._revision_lock:
-                    final_revision = self._get_rebuild_revision()
-                    if final_revision != start_revision:
-                        logger.warning(
-                            "重建期间检测到并发 CRUD: start_revision=%d, current=%d，不标记 complete，保持 building 等待下次重建",
-                            start_revision,
-                            final_revision,
-                        )
-                        return False
-                    if not self.db.commit_knowledge_index_revision(start_revision, total_chunks_indexed, final_fp):
-                        return False
-                    logger.info(
-                        "向量索引重建完成: %s 个 chunks（数量+指纹+revision CAS 校验通过，revision=%s）",
-                        total_chunks_indexed,
-                        start_revision,
-                    )
-                    self._vector_index_revision = start_revision
-                return True
-            except Exception as e:
-                logger.warning("向量索引重建失败: %s", type(e).__name__)
-                raise
+                if not self.db.commit_knowledge_index_revision(start_revision, total_chunks_indexed, final_fp):
+                    return False
+                logger.info(
+                    "向量索引重建完成: %s 个 chunks（数量+指纹+revision CAS 校验通过，revision=%s）",
+                    total_chunks_indexed,
+                    start_revision,
+                )
+                self._vector_index_revision = start_revision
+            return True
 
 
 # The process-default binding remains for standalone evaluation commands.
@@ -345,6 +337,3 @@ _get_rebuild_revision = default_knowledge_index._get_rebuild_revision
 _compute_chunk_fingerprint = default_knowledge_index._compute_chunk_fingerprint
 _get_expected_chunk_count = default_knowledge_index._get_expected_chunk_count
 _read_rebuild_status = default_knowledge_index._read_rebuild_status
-_invalidate_local_knowledge_index = default_knowledge_index._invalidate_local_knowledge_index
-_loaded_metadata_matches_database = default_knowledge_index._loaded_metadata_matches_database
-_ensure_vector_index = default_knowledge_index._ensure_vector_index
