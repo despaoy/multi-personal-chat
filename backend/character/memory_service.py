@@ -713,9 +713,9 @@ class CharacterMemoryService:
         返回 (选中的记忆元组按相关度降序, 候选总数)。
         没有记忆时返回 ((), 0)。
 
-        仅 active/current 且处于有效时间窗的 claim 参与检索；pending
-        默认排除，superseded/retracted/archived 永远排除。语义、多个
-        query expansion 的 bigram 词面排名、重要度和新近度分别排序，
+        普通检索按查询时间读取有效版本，pending 默认排除；撤回、删除
+        与禁止关系始终排除。语义、多个 query expansion 的 bigram 词面
+        排名、重要度和新近度分别排序，
         再用 RRF 融合，避免不同标尺被一个固定加权阈值误判。
 
         结构化意图兜底：名字/偏好/约定类问题（"我叫什么名字"）
@@ -730,8 +730,9 @@ class CharacterMemoryService:
         可强制保持当前版本模式，True 可强制读取历史候选。
 
         ``for_contextual_selection=True`` 只供语义选择器前置召回使用：
-        在授权范围内全量读取，强制生命周期/证据校验，融合相关性通道，
-        最多返回 24 个候选。这些候选不能未经选择直接编译进回答。
+        读取授权范围内的新旧版本，保留原时间与当前有效性，由选择器理解
+        问题的目标时间；查询时间规则只作排序提示，不能提前排除候选。
+        强制生命周期/证据校验，最多返回24项，不能未经选择直接编译入回答。
         ``retrieval_context`` 只影响该实验路径的检索，不改变事实或主体。
         """
         if reference_time is not None and (
@@ -748,7 +749,8 @@ class CharacterMemoryService:
         retrieval_query = query
         if for_contextual_selection and retrieval_context.strip():
             retrieval_query = f"{query}\n最近用户话题参考：{retrieval_context}"
-        historical_window = _historical_query_window(query, now)
+        semantic_time_selection = for_contextual_selection and include_historical is None
+        historical_window = _HistoricalWindow() if semantic_time_selection else _historical_query_window(query, now)
         historical_requested = historical_window is not None
         if include_historical is not None:
             historical_requested = bool(include_historical)
@@ -770,6 +772,8 @@ class CharacterMemoryService:
         historical_requested = historical_requested or any(window is not None for _, window in task_windows)
 
         def row_windows(row):
+            if semantic_time_selection:
+                return [historical_window]
             applicable = [window for task, window in task_windows if task.matches(row)]
             return applicable if applicable else [historical_window]
 
@@ -778,6 +782,8 @@ class CharacterMemoryService:
                     if window is not None else _is_current_record(row, now, include_pending=include_pending))
 
         def row_is_historical(row):
+            if semantic_time_selection:
+                return not _is_current_record(row, now, include_pending=False)
             windows = row_windows(row)
             return not any(window is None and temporal_eligible(row, window) for window in windows)
 
@@ -1115,7 +1121,9 @@ class CharacterMemoryService:
                         status=status,  # type: ignore[arg-type]
                         relation_type=relation_type,
                         source_message_ids=_source_ids(row) if evidence_enabled else (),
-                        historical=(row_is_historical(row) if tasks else historical_window is not None),
+                        historical=(
+                            row_is_historical(row) if tasks or semantic_time_selection else historical_window is not None
+                        ),
                         memory_key=str(row.get("memory_key") or ""),
                         qualifiers=_row_qualifiers(row),
                         temporal_mode=str(row.get('temporal_mode') or 'fact'),

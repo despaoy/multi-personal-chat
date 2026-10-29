@@ -9,6 +9,7 @@ from character.memory_service import CharacterMemoryService, _historical_query_w
 from character.models import UserScope
 from character.rule_memory_writer import write_rule_memory
 from character.source_memory import SourceMemoryService
+from test_semantic_memory_time_candidates import select_known_ids
 from db.database import SQLiteDB
 from repositories.character_memory import DatabaseCharacterMemoryRepository
 
@@ -70,6 +71,9 @@ async def test_actual_scoped_rule_correction_and_source_links_survive_unrelated_
     items, _, trace = await service.recall_with_diagnostics(
         "kisaki", scope, question, for_contextual_selection=True, reference_time=NOW
     )
+    assert len(items) == 2
+    expected_ids = {str(row["id"]) for row in before if row["source_message_ids"] == ["new"]}
+    items = await select_known_ids(question, items, expected_ids, reference_time=NOW)
     assert (
         len(items) == 1
         and items[0].memory_key == "user_residence"
@@ -77,7 +81,7 @@ async def test_actual_scoped_rule_correction_and_source_links_survive_unrelated_
         and not items[0].historical
         and items[0].source_message_ids == ("new",)
     )
-    assert trace["field_presence"]["residence"] is True and trace["selected_count"] == 1
+    assert trace["field_presence"]["residence"] is True and trace["selected_count"] == 2
     source = await SourceMemoryService(repo).recall("kisaki", scope, question, memories=items)
     assert source.diagnostics["selected_ids"] == ["new"] and "更正，我现在住在淮安。" in source.context
     other = UserScope("web", "test", "bob", "bob", "private")

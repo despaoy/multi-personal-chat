@@ -14,6 +14,7 @@ from character.context_builder import (
 from character.memory_service import CharacterMemoryService
 from character.models import MemoryItem, UserScope
 from repositories.character_memory import decode_legacy_memory_lifecycle
+from test_semantic_memory_time_candidates import select_known_ids
 
 
 class _Repo:
@@ -70,6 +71,8 @@ async def test_explicit_reference_clock_resolves_last_year_without_using_wall_cl
     selected, _ = await service.load_relevant_memories(
         "kisaki", _scope(), "去年我在哪座城市？", for_contextual_selection=True, reference_time=anchor
     )
+    assert {item.memory_id for item in selected} == {"1", "2"}
+    selected = await select_known_ids("去年我在哪座城市？", selected, {"1"}, reference_time=anchor)
     assert [item.memory_id for item in selected] == ["1"]
     assert selected[0].historical is True
     with pytest.raises(ValueError, match="timezone-aware"):

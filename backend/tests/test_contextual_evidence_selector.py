@@ -147,6 +147,8 @@ async def test_widened_recall_preserves_lifecycle_and_confidence_before_subject_
                  "evidence": [], "source_message_ids": [],"memory_type": "user_fact", "id": "c", "content": "用户喜欢咖啡", "memory_key": "preference_coffee"},
                 {
                  "evidence": [], "source_message_ids": [],"memory_type": "user_fact", "id": "d", "content": "用户在月球工作", "confidence": 0.1},
+                {"evidence": [], "source_message_ids": [], "memory_type": "user_fact", "id": "e", "content": "已撤回事实", "status": "retracted", "confidence": 0.99},
+                {"evidence": [], "source_message_ids": [], "memory_type": "user_fact", "id": "f", "content": "尚未确认事实", "status": "pending", "confidence": 0.99},
             ]
             for case_row in records:
                 case_row.update(decode_legacy_memory_lifecycle(case_row))
@@ -157,11 +159,12 @@ async def test_widened_recall_preserves_lifecycle_and_confidence_before_subject_
     baseline, _ = await service.load_relevant_memories("char", scope, "接下来呢")
     assert baseline == ()
     candidates, _ = await service.load_relevant_memories("char", scope, "你喜欢什么", for_contextual_selection=True)
-    assert {item.memory_id for item in candidates} == {"a", "c"}
+    assert {item.memory_id for item in candidates} == {"a", "b", "c"}
+    assert {item.memory_id: item.historical for item in candidates} == {"a": False, "b": True, "c": False}
 
     async def reviewer(messages):
         payload = json.loads(messages[1]["content"])
-        assert payload["query"] == "你喜欢什么" and set(payload["required_ids"]) == {"a", "c"}
+        assert payload["query"] == "你喜欢什么" and set(payload["required_ids"]) == {"a", "b", "c"}
         return json.dumps({"decisions": [{"id": item_id, "label": "wrong_subject"} for item_id in payload["required_ids"]]})
 
     assert not (await ContextualEvidenceSelector(reviewer).select("你喜欢什么", candidates)).memories

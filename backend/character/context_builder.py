@@ -212,7 +212,7 @@ def _memory_evidence_packet(item: MemoryItem) -> str:
     elif item.source_observation:
         metadata.append("原话完整性未核实")
     if item.historical:
-        metadata.append("历史版本，仅用于所问时间")
+        metadata.append("历史版本或未来状态，仅用于适用的目标时间")
     relation = str(item.relation_type or "ADD").strip().upper()
     relation_label = _REFERENCE_RELATION_LABELS.get(relation)
     if relation_label:

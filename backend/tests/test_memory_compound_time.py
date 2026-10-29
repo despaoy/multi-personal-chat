@@ -10,6 +10,7 @@ from character.memory_service import CharacterMemoryService
 from character.models import UserScope
 from character.rule_memory_writer import write_rule_memory
 from character.source_memory import SourceMemoryService
+from test_semantic_memory_time_candidates import select_known_ids
 from db.database import SQLiteDB
 from repositories.character_memory import DatabaseCharacterMemoryRepository
 
@@ -52,8 +53,8 @@ def test_unknown_clause_or_other_owner_defers_the_whole_query(query):
     [
         ("2026年9月我的居住地是什么？请告诉我，我的现居地是什么？", None, {"old": True, "new": False}),
         ("请告诉我，我的现居地是什么？2026年9月我的居住地是什么？", None, {"old": True, "new": False}),
-        ("2026年9月我的居住地是什么？2026年10月我的居住地是什么？", None, {"old": True, "new": True}),
-        ("2026年10月我的居住地是什么？2026年9月我的居住地是什么？", None, {"old": True, "new": True}),
+        ("2026年9月我的居住地是什么？2026年10月我的居住地是什么？", None, {"old": True, "new": False}),
+        ("2026年10月我的居住地是什么？2026年9月我的居住地是什么？", None, {"old": True, "new": False}),
         ("2026年9月我的居住地是什么？我的现居地是什么？", False, {"new": False}),
         ("2026年9月我的居住地是什么？我的现居地是什么？", True, {"old": True}),
     ],
@@ -81,6 +82,9 @@ async def test_actual_source_rule_versions_task_union_and_override(tmp_path, que
         for_contextual_selection=True,
         include_historical=override,
     )
+    if override is None:
+        expected_ids = {str(row["id"]) for row in original if set(row["source_message_ids"]) & set(expected)}
+        items = await select_known_ids(query, items, expected_ids, reference_time=datetime(2026, 10, 2, 2, tzinfo=timezone.utc))
     assert {item.source_message_ids[0]: item.historical for item in items} == expected
     assert all(item.status == ("superseded" if item.source_message_ids == ("old",) else "active") for item in items)
     if override is None:
@@ -126,6 +130,10 @@ async def test_different_fields_do_not_share_each_others_time_windows(tmp_path):
         reference_time=datetime(2026, 10, 2, 2, tzinfo=timezone.utc),
         for_contextual_selection=True,
     )
+    assert {item.source_message_ids[0] for item in items} == {"old-name", "new-name", "old-work", "new-work"}
+    expected_ids = {str(row["id"]) for row in original if set(row["source_message_ids"]) & {"old-name", "new-work"}}
+    items = await select_known_ids("2026年9月我的姓名是什么？我的当前工作单位是什么？", items, expected_ids,
+                                   reference_time=datetime(2026, 10, 2, 2, tzinfo=timezone.utc))
     assert {item.source_message_ids[0]: item.historical for item in items} == {"old-name": True, "new-work": False}
     assert [task["covered_fields"] for task in trace["personal_time_tasks"]] == [["name"], ["workplace"]]
     assert await repo.list_memory_records("kisaki", owner, limit=None, include_inactive=True) == original

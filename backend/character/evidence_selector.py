@@ -1,6 +1,6 @@
 """Context-conditioned evidence selection; model decisions never rewrite evidence.
 
-The caller owns authorization, temporal eligibility and candidate recall. This
+The caller owns authorization, lifecycle eligibility and candidate recall. This
 module only selects among that bounded set. Output is untrusted until validated.
 No per-request mutable state is stored on the shared selector.
 """
@@ -43,8 +43,9 @@ SELECTION_INSTRUCTION = """你选择足够完成当前任务的一组记忆，�
 先理解全部当前任务，确定一组充分且不冗余的证据，再给 required_ids 中每条候选分类。
 1. 确认主体：候选里的“用户”指提问者。query 里问“你”的问题通常问角色，
    用户及其家人的事实不能替代角色及角色家人的事实。结合上下文解析指代。
-2. 确认所问时间：以问题的目标时间而非今天为准。historical 的旧版本可以回答
-   其有效期内的历史问题；只有不适用于所问时间才是 stale。
+2. 确认所问时间：以完整问题的目标时间而非其中任意日期为准。
+   historical 表示不适用于本轮接收时间的版本，也可能是未来状态；结合有效期和
+   原始证据判断它是否适用于所问时间，不能仅凭标记认定 stale 或当前成立。
 若存在 query_tasks，分别按每个完整请求的时间判断；对任一请求仍有用的历史证据，
 不能因另一请求问当前或已有更新就一律标 stale。时间区间重叠只表示对应部分有证据，
 不证明整个目标期间都保持该状态；未覆盖的时间不可补写。query_tasks 是闭合读取任务，
