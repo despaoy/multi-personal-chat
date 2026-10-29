@@ -118,32 +118,10 @@ class KnowledgeIndex:
         return rows[0]["cnt"]
 
     def _read_rebuild_status(self) -> tuple[str, int, str, int]:
-        """读取重建状态，返回 (status, count, fingerprint, revision)。
+        """Read this owner's persisted status using the shared format contract."""
+        from db.knowledge_index_state import parse_status
 
-        status 为 'building'/'complete'/'dirty'/''。
-        count 为整数，fingerprint 为字符串，revision 为整数（仅 complete 时有意义）。
-        旧格式 "complete:{count}" / "complete:{count}:{fp}" 视为 revision 缺失（-1），
-        会触发重建。
-        """
-        raw = self.db.get_config_value(_VECTOR_REBUILD_STATUS_KEY, "")
-        if not raw:
-            return ("", 0, "", -1)
-        if raw == "dirty":
-            return ("dirty", 0, "", -1)
-        parts = raw.split(":")
-        if len(parts) < 2:
-            return ("", 0, "", -1)
-        status = parts[0]
-        try:
-            count = int(parts[1])
-        except (ValueError, IndexError):
-            return ("", 0, "", -1)
-        fingerprint = parts[2] if len(parts) >= 3 else ""
-        try:
-            revision = int(parts[3]) if len(parts) >= 4 else -1
-        except (ValueError, IndexError):
-            revision = -1
-        return (status, count, fingerprint, revision)
+        return parse_status(self.db.get_config_value(_VECTOR_REBUILD_STATUS_KEY, ""))
 
     def _invalidate_local_knowledge_index(self) -> None:
         """Reset local acceleration only after the durable document transaction."""

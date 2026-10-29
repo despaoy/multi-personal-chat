@@ -10,7 +10,6 @@ from threading import RLock
 
 import pytest
 
-from api import knowledge
 from db import knowledge_index_state as state
 from db.database import SQLiteDB
 
@@ -182,3 +181,64 @@ def test_document_transaction_precedes_local_cache_invalidation(tmp_path, monkey
     index_lifecycle._invalidate_local_knowledge_index()
     assert database.get_config_value(state.REVISION_KEY) == 1 and database.get_config_value(state.STATUS_KEY) == 'dirty'
     assert index_lifecycle._vector_index_revision is None
+
+
+@pytest.fixture
+def persisted_index(tmp_path):
+    from knowledge.index_lifecycle import KnowledgeIndex
+
+    database = SQLiteDB(tmp_path / "persisted-index.db")
+    body = "2026年10月周三晚办理，须携带签约原件；尚未付款，收到书面确认后才参加，出差可顺延。"
+    document = database.save_knowledge_document(dict(title="完整登记规则", content=body), chunks=[body])
+    vector = RecordingVector()
+    assert KnowledgeIndex(database, lambda: vector)._ensure_vector_index()
+    return database, vector, document["id"]
+
+
+@pytest.mark.parametrize("raw", ["complete:bad:recorded:1", "complete:1:recorded:bad"])
+def test_malformed_status_cannot_rebuild_over_its_own_failure(persisted_index, raw):
+    from knowledge.index_lifecycle import KnowledgeIndex
+
+    database, vector, document_id = persisted_index
+    database.set_config_value(state.STATUS_KEY, raw)
+    documents = database.get_knowledge_documents()
+    chunks = database.get_knowledge_chunks(document_id)
+    metadata, generation = list(vector.metadata), vector.cache_generation
+    owner = KnowledgeIndex(database, lambda: vector)
+    failure = None
+    try:
+        owner._ensure_vector_index()
+    except ValueError as exc:
+        failure = exc
+    assert failure is not None, {
+        "state_after": database.get_config_value(state.STATUS_KEY),
+        "index_changed": vector.cache_generation != generation,
+    }
+    assert database.get_config_value(state.STATUS_KEY) == raw
+    assert vector.metadata == metadata and vector.cache_generation == generation
+    assert database.get_knowledge_documents() == documents and database.get_knowledge_chunks(document_id) == chunks
+    database.set_config_value(state.STATUS_KEY, "dirty")
+    assert owner._ensure_vector_index()
+    assert owner._read_rebuild_status()[0] == "complete"
+
+
+@pytest.mark.parametrize("raw", ["complete:1", "complete:1:legacy-fingerprint"])
+def test_documented_legacy_status_upgrades_from_complete_source(persisted_index, raw):
+    from knowledge.index_lifecycle import KnowledgeIndex
+
+    database, vector, document_id = persisted_index
+    chunks = database.get_knowledge_chunks(document_id)
+    database.set_config_value(state.STATUS_KEY, raw)
+    generation = vector.cache_generation
+    owner = KnowledgeIndex(database, lambda: vector)
+    assert owner._ensure_vector_index()
+    status, count, fingerprint, revision = owner._read_rebuild_status()
+    assert (
+        status == "complete"
+        and count == 1
+        and fingerprint
+        and revision == database.get_config_value(state.REVISION_KEY)
+    )
+    assert database.get_config_value(state.STATUS_KEY) == state.complete_status(count, fingerprint, revision)
+    assert vector.cache_generation == generation + 1 and len(vector.metadata) == 1
+    assert database.get_knowledge_chunks(document_id) == chunks
