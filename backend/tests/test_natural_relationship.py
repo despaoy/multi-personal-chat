@@ -103,11 +103,12 @@ async def test_notes_deduplicate_and_do_not_enter_generic_recall(repo):
     assert "不要追问工资" in compile_notes(notes, "你好")
 
 
-def test_bad_expiry_and_resolved_fail_closed():
+def test_invalid_expiry_errors_while_missing_and_resolved_notes_are_inactive():
     row = {"memory_key": "relationship:transient", "metadata": {"category": "transient"}}
     assert not active_note(row)
     row["valid_to"] = "invalid"
-    assert not active_note(row)
+    with pytest.raises(ValueError):
+        active_note(row)
     row.update(valid_to=None, metadata={"category": "boundary", "resolved": True})
     assert not active_note(row)
 
@@ -255,3 +256,55 @@ def test_admin_note_crud_preserves_expiry_and_isolation(repo):
             params=params,
             json={"category": "preference", "content": "简短"},
         ).status_code in (401, 403)
+
+
+@pytest.mark.asyncio
+async def test_persisted_note_expiry_failure_preserves_data_and_recovers(repo, monkeypatch):
+    from fastapi import HTTPException
+    from api import generate
+    from db.schemas import MessageRequest
+    from services.character_context import build_character_context_service
+
+    for key in (
+        "DYNAMIC_CONTEXT_SEMANTIC_REVIEW_ENABLED",
+        "CONTEXTUAL_MEMORY_SELECTION_ENABLED",
+        "CONTEXTUAL_DECISION_POLICY_ENABLED",
+        "CAHM_SEMANTIC_MEMORY_ENABLED",
+    ):
+        monkeypatch.setenv(key, "false")
+    role = "tsukiyashiro_kisaki"
+    scope = build_user_scope("web", "expiry-test", "synthetic-owner", "synthetic-conversation", "private")
+    text = "今天请不要追问我的工作安排。"
+    note = await save_note(repo, role, scope, NoteCommand("transient", text))
+    database = repo.storage_owner
+    query = "SELECT * FROM character_memories WHERE id=:id"
+    original = database.execute_sql(query, {"id": note["id"]})
+    service = build_character_context_service(database, source_recall_enabled=False)
+    request = MessageRequest(
+        message="你好，请正常交流。",
+        characterId=role,
+        platform=scope.platform,
+        adapter=scope.adapter,
+        senderId=scope.sender_id,
+        userId=scope.sender_id,
+        conversationId=scope.conversation_id,
+        sessionId=scope.conversation_id,
+        conversationType=scope.conversation_type,
+    )
+    before = await generate._prepare_character_turn(request, role, character_service=service)
+    assert text in before.compiled.conversation_reference_context
+    database.execute_sql(
+        "UPDATE character_memories SET valid_to=:expiry WHERE id=:id", {"expiry": "invalid", "id": note["id"]}
+    )
+    damaged = database.execute_sql(query, {"id": note["id"]})
+    with pytest.raises(HTTPException) as raised:
+        await generate._prepare_character_turn(request, role, character_service=service)
+    assert raised.value.status_code == 503 and isinstance(raised.value.__cause__, ValueError)
+    assert database.execute_sql(query, {"id": note["id"]}) == damaged
+    assert database.execute_sql("SELECT COUNT(*) AS total FROM messages", {})[0]["total"] == 0
+    database.execute_sql(
+        "UPDATE character_memories SET valid_to=:expiry WHERE id=:id", {"expiry": note["valid_to"], "id": note["id"]}
+    )
+    after = await generate._prepare_character_turn(request, role, character_service=service)
+    assert after.compiled.conversation_reference_context == before.compiled.conversation_reference_context
+    assert database.execute_sql(query, {"id": note["id"]}) == original

@@ -126,13 +126,10 @@ def active_note(record: dict, now: datetime | None = None) -> bool:
     if category == "transient" and not expiry:
         return False  # Never make a temporary state permanent after a legacy write.
     if expiry:
-        try:
-            end = datetime.fromisoformat(str(expiry).replace("Z", "+00:00"))
-            if end.tzinfo is None:
-                end = end.replace(tzinfo=timezone.utc)
-            if end <= (now or datetime.now(timezone.utc)):
-                return False
-        except ValueError:
+        end = datetime.fromisoformat(str(expiry).replace("Z", "+00:00"))
+        if end.tzinfo is None:
+            end = end.replace(tzinfo=timezone.utc)
+        if end <= (now or datetime.now(timezone.utc)):
             return False
     return True
 
