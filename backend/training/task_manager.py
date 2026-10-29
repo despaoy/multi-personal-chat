@@ -155,7 +155,7 @@ class SimpleLoRATrainer:
         # handlers read the same state on the event-loop thread.
         self._lock = threading.RLock()
 
-        # 从数据库恢复未完成的任务到内存
+        # Reconcile abandoned work; only this process owns live runtime state.
         if self.db:
             self._restore_tasks_from_db()
 
@@ -208,13 +208,13 @@ class SimpleLoRATrainer:
             "output_dir": str(self.loras_dir / lora_name),
         }
 
+        # Publish runtime ownership only after durable admission succeeds.
+        if self.db:
+            self.db.save_training_task(task_id, task)
+
         with self._lock:
             self.tasks[task_id] = task
             self._cancel_events[task_id] = threading.Event()
-
-        # 持久化到数据库
-        if self.db:
-            self.db.save_training_task(task_id, task)
 
         runner = asyncio.create_task(
             self._run_training(task_id, lora_name, dataset_path, config),
@@ -255,9 +255,8 @@ class SimpleLoRATrainer:
             self.tasks[task_id]["started_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
             self.tasks[task_id]["updated_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
 
-        self._persist_task(task_id)
-
         try:
+            self._persist_task(task_id)
             from training.trainer import LoRATrainer
 
             train_config = self._build_config(lora_name, dataset_path, config)
@@ -344,7 +343,7 @@ class SimpleLoRATrainer:
             logger.error("训练任务协程异常 task_id=%s: %s", task_id, error)
 
     async def shutdown(self, timeout: float | None = None) -> None:
-        """Signal active trainers, retain state, and join owned runner tasks."""
+        """Stop and join owned runners even when durable state cannot be saved."""
         wait_timeout = (
             float(os.getenv("TRAINING_SHUTDOWN_TIMEOUT", "30"))
             if timeout is None
@@ -365,22 +364,21 @@ class SimpleLoRATrainer:
                 task["error_message"] = "服务关闭，训练任务已中断"
                 task["updated_at"] = now
                 task["finished_at"] = now
+        try:
             for task_id in interrupted_ids:
                 self._persist_task(task_id)
-
-        if not runners:
-            return
-
-        _, pending = await asyncio.wait(runners, timeout=wait_timeout)
-        if pending:
-            logger.warning(
-                "训练任务在 %.1f 秒内未结束，取消 %d 个等待协程",
-                wait_timeout,
-                len(pending),
-            )
-            for runner in pending:
-                runner.cancel()
-            await asyncio.gather(*pending, return_exceptions=True)
+        finally:
+            if runners:
+                _, pending = await asyncio.wait(runners, timeout=wait_timeout)
+                if pending:
+                    logger.warning(
+                        "训练任务在 %.1f 秒内未结束，取消 %d 个等待协程",
+                        wait_timeout,
+                        len(pending),
+                    )
+                    for runner in pending:
+                        runner.cancel()
+                    await asyncio.gather(*pending, return_exceptions=True)
 
     def _build_config(self, lora_name: str, dataset_path: Path, config: Dict[str, Any]) -> "LoRATrainingConfig":
         from training.trainer import LoRATrainingConfig
@@ -519,15 +517,13 @@ class SimpleLoRATrainer:
         return None
 
     async def get_all_tasks(self) -> List[Dict[str, Any]]:
+        """Combine durable history with the current state of runtime-owned jobs."""
+        stored = self.db.get_all_training_tasks() if self.db else []
         with self._lock:
             self._cleanup_old_tasks()
-
-        # 优先从数据库读取（重启后也能恢复）
-        if self.db:
-            return self.db.get_all_training_tasks()
-
-        with self._lock:
-            return [dict(task) for task in self.tasks.values()]
+            tasks = {task["task_id"]: task for task in stored}
+            tasks.update({task_id: dict(task) for task_id, task in self.tasks.items()})
+            return list(tasks.values())
 
     def _cleanup_old_tasks(self, max_completed: int = 50):
         """清理过多的已完成/失败/取消任务，防止tasks字典无限增长。
@@ -563,18 +559,14 @@ class SimpleLoRATrainer:
         return False
 
     def _persist_task(self, task_id: str):
-        """将内存中的任务状态同步到数据库。"""
-        if not self.db:
-            return
-        task = self.tasks.get(task_id)
-        if task:
-            try:
-                self.db.save_training_task(task_id, task)
-            except Exception as e:
-                logger.warning(f"持久化训练任务 {task_id} 失败: {e}")
+        """Save one live snapshot; storage errors remain visible to the owner."""
+        if self.db:
+            with self._lock:
+                task = dict(self.tasks[task_id])
+            self.db.save_training_task(task_id, task)
 
     def _restore_tasks_from_db(self):
-        """从数据库恢复任务到内存（服务重启后调用）。"""
+        """Mark abandoned work interrupted while keeping history in storage."""
         if not self.db:
             return
         db_tasks = self.db.get_all_training_tasks()
@@ -587,9 +579,8 @@ class SimpleLoRATrainer:
                 db_task["error_message"] = "服务重启，任务被中断"
                 db_task["updated_at"] = time.strftime("%Y-%m-%d %H:%M:%S")
                 self.db.save_training_task(task_id, db_task)
-            self.tasks[task_id] = db_task
         if db_tasks:
-            logger.info(f"从数据库恢复了 {len(db_tasks)} 个训练任务到内存")
+            logger.info("已核对数据库中的 %d 个训练任务", len(db_tasks))
 
 
 _simple_lora_trainer: Optional[SimpleLoRATrainer] = None
@@ -608,6 +599,8 @@ async def shutdown_simple_lora_trainer() -> None:
     trainer = _simple_lora_trainer
     if trainer is None:
         return
-    await trainer.shutdown()
-    if _simple_lora_trainer is trainer:
-        _simple_lora_trainer = None
+    try:
+        await trainer.shutdown()
+    finally:
+        if _simple_lora_trainer is trainer and all(runner.done() for runner in trainer._runner_tasks.values()):
+            _simple_lora_trainer = None
