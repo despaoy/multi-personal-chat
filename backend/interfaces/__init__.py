@@ -20,7 +20,7 @@ class DatabaseInterface(Protocol):
 
     @property
     def config(self) -> Dict[str, Any]:
-        """获取系统配置"""
+        """获取已解析持久化标量的配置字典；缓存和调用方直接使用这些值。"""
         ...
 
     @property

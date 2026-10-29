@@ -58,22 +58,29 @@ def test_database_configuration_failure_is_not_empty_defaults(monkeypatch):
     assert caught.value is failure
 
 
-def test_database_configuration_is_converted_once_and_cached(monkeypatch):
+def test_database_configuration_is_converted_once_and_cached(monkeypatch, tmp_path):
     from db import adapter
+    from db.database import SQLiteDB
     from inference import model_manager
 
     reads = []
 
-    class Database:
+    class Database(SQLiteDB):
         @property
         def config(self):
             reads.append(True)
-            return {"maxTokens": "733", "useKnowledgeBase": "false"}
+            return super().config
 
-    monkeypatch.setattr(adapter, "db", Database())
-    first = model_manager._get_db_config()
-    second = model_manager._get_db_config()
-    assert first == second == {"maxTokens": 733, "useKnowledgeBase": False} and reads == [True]
+    database = Database(tmp_path / "provider-config.db")
+    try:
+        database.execute_sql("DELETE FROM config")
+        database.update_config({"maxTokens": "733", "useKnowledgeBase": "false"})
+        monkeypatch.setattr(adapter, "db", database)
+        first = model_manager._get_db_config()
+        second = model_manager._get_db_config()
+        assert first == second == {"maxTokens": 733, "useKnowledgeBase": False} and reads == [True]
+    finally:
+        database.close_connection()
 
 
 def test_valid_ttl_cache_is_not_mutated_by_consumer(monkeypatch):

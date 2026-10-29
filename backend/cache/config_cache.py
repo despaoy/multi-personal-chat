@@ -4,8 +4,6 @@ import random
 import threading
 from time import monotonic
 
-from db.config_utils import coerce_config_value
-
 CONFIG_CACHE_TTL = 60
 _CONFIG_CACHE: tuple[object, float, dict] | None = None
 _config_lock = threading.Lock()
@@ -27,7 +25,7 @@ def read_config(database) -> tuple[dict, bool]:
         stored = database.config
         if not isinstance(stored, dict):
             raise TypeError("Configuration database must return a mapping")
-        value = {key: coerce_config_value(item) for key, item in stored.items()}
+        value = dict(stored)
         _CONFIG_CACHE = (database, monotonic() + _ttl_with_jitter(CONFIG_CACHE_TTL), value)
         return dict(value), False
 

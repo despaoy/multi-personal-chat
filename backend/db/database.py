@@ -1477,16 +1477,12 @@ class SQLiteDB:
         """获取配置"""
         conn = self._get_connection()
         cursor = conn.cursor()
-        cursor.execute('SELECT * FROM config')
+        cursor.execute("SELECT * FROM config")
         rows = cursor.fetchall()
 
-        config_dict = {}
         from db.config_utils import coerce_config_value
-        for row in rows:
-            key = row['key']
-            value = row['value']
-            config_dict[key] = coerce_config_value(value)
-        return config_dict
+
+        return {row["key"]: coerce_config_value(row["value"]) for row in rows}
 
     def get_config_value(self, key: str, default=None):
         """获取单个配置项的值"""

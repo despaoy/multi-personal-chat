@@ -518,14 +518,9 @@ class PgDatabase:
         """获取所有配置"""
         async with self.async_session() as session:
             result = await session.execute(config_table.select())
-            config_dict = {}
-            for row in result.fetchall():
-                d = _row_to_dict(row)
-                key, value = d["key"], d["value"]
-                from db.config_utils import coerce_config_value
+            from db.config_utils import coerce_config_value
 
-                config_dict[key] = coerce_config_value(value)
-            return config_dict
+            return {row["key"]: coerce_config_value(row["value"]) for row in result.mappings()}
 
     async def get_config_value(self, key: str, default=None):
         """获取单个配置项的值"""

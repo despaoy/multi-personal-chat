@@ -25,15 +25,20 @@ def isolated_snapshot(monkeypatch):
     return clock
 
 
-def test_valid_snapshot_is_copied_and_expires_at_the_declared_ttl(isolated_snapshot):
-    database = SimpleNamespace(config={"maxTokens": "733", "enabled": "false"})
-    first, hit = config_cache.read_config(database)
-    assert first == {"maxTokens": 733, "enabled": False} and not hit
-    first["maxTokens"] = 1
-    database.config["maxTokens"] = "377"
-    assert config_cache.read_config(database) == ({"maxTokens": 733, "enabled": False}, True)
-    isolated_snapshot[0] += 60
-    assert config_cache.read_config(database) == ({"maxTokens": 377, "enabled": False}, False)
+def test_valid_snapshot_is_copied_and_expires_at_the_declared_ttl(isolated_snapshot, tmp_path):
+    database = SQLiteDB(tmp_path / "snapshot.db")
+    try:
+        database.execute_sql("DELETE FROM config")
+        database.update_config({"maxTokens": "733", "enabled": "false"})
+        first, hit = config_cache.read_config(database)
+        assert first == {"maxTokens": 733, "enabled": False} and not hit
+        first["maxTokens"] = 1
+        database.update_config({"maxTokens": "377"})
+        assert config_cache.read_config(database) == ({"maxTokens": 733, "enabled": False}, True)
+        isolated_snapshot[0] += 60
+        assert config_cache.read_config(database) == ({"maxTokens": 377, "enabled": False}, False)
+    finally:
+        database.close_connection()
 
 
 def test_expired_snapshot_never_masks_a_database_failure(isolated_snapshot):
