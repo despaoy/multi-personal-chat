@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+from unittest.mock import Mock
+
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from api.messages import router
 from app.dependencies import get_current_admin, get_current_user
+from app.main import global_exception_handler
 from app.runtime import RuntimeContainer
 from repositories.messages import DatabaseMessageRepository, MessageQuery
 
@@ -146,6 +150,8 @@ def test_message_routes_resolve_repository_from_runtime_container() -> None:
             json={"sessionType": "all", "lora": "all", "platform": "all"},
         )
         single = client.delete("/api/messages/7")
+        missing = client.delete("/api/messages/404")
+        sessions = client.get("/api/sessions")
 
     assert response.status_code == 200
     assert response.json() == {
@@ -156,6 +162,8 @@ def test_message_routes_resolve_repository_from_runtime_container() -> None:
     assert toggle.status_code == 200
     assert batch.json()["deleted"] == 4
     assert single.status_code == 200
+    assert missing.status_code == 404 and missing.json() == {"detail": "消息不存在"}
+    assert sessions.status_code == 200 and sessions.json() == {"sessions": [{"sessionId": "session-1"}]}
 
     list_call = next(value for name, value in database.calls if name == "list")
     assert list_call == {
@@ -173,3 +181,39 @@ def test_message_routes_resolve_repository_from_runtime_container() -> None:
         "delete_filtered",
         {"search": None, "sessionType": None, "lora": None, "sessionName": None, "platform": None},
     ) in database.calls
+
+
+@pytest.mark.parametrize(
+    "method,path,payload,operation",
+    [
+        ("GET", "/api/messages", None, "get_message_count"),
+        ("GET", "/api/sessions", None, "get_session_summaries"),
+        ("PUT", "/api/sessions/bot-toggle", {"sessionId": "session-1", "enabled": False}, "set_session_bot_enabled"),
+        ("DELETE", "/api/messages/batch", {"search": "old"}, "delete_messages_by_filter"),
+        ("DELETE", "/api/messages/7", None, "delete_message"),
+    ],
+)
+def test_message_route_failure_reaches_one_error_owner(monkeypatch, caplog, method, path, payload, operation):
+    failure = OSError("synthetic-private-message-store")
+    database = FakeMessageDatabase()
+    failing = Mock(side_effect=failure)
+    monkeypatch.setattr(database, operation, failing)
+    application = FastAPI()
+    application.state.runtime_container = RuntimeContainer(db=database, is_pg_mode=lambda: False, startup_env={})
+    application.include_router(router)
+    application.dependency_overrides[get_current_admin] = lambda: {"user_id": 1, "username": "admin"}
+    errors = []
+
+    async def observe(request, error):
+        errors.append(error)
+        return await global_exception_handler(request, error)
+
+    application.add_exception_handler(Exception, observe)
+    with TestClient(application, raise_server_exceptions=False) as client:
+        response = client.request(method, path, **({"json": payload} if payload is not None else {}))
+    assert response.status_code == 500
+    assert response.json() == {"success": False, "error": "Internal Server Error", "message": "服务器内部错误"}
+    assert errors == [failure]
+    assert "synthetic-private" not in response.text + caplog.text
+    assert "OSError" in caplog.text
+    failing.assert_called_once()
