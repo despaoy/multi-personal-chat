@@ -64,6 +64,10 @@ class CharacterStyleConfig:
             self.sentence_enders = []
 
 
+class DatasetExistsError(FileExistsError):
+    """The requested dataset name already belongs to another creation."""
+
+
 class DatasetPreprocessor:
     """数据集预处理器，提供对话验证、风格分析和训练集切分功能。"""
 
@@ -138,6 +142,8 @@ class DatasetPreprocessor:
 
         Raises:
             ValueError: 有效数据不足时抛出
+            DatasetExistsError: 请求的数据集名称已存在
+            OSError: 写入失败时清理本次新目录并保留原异常
         """
         valid_data = []
         invalid_data = []
@@ -166,18 +172,6 @@ class DatasetPreprocessor:
         train_data = valid_data[:split_idx]
         eval_data = valid_data[split_idx:]
         
-        dataset_dir = self.data_dir / output_name
-        dataset_dir.mkdir(exist_ok=True)
-        
-        train_path = dataset_dir / "train.json"
-        with open(train_path, 'w', encoding='utf-8') as f:
-            json.dump(train_data, f, indent=2, ensure_ascii=False)
-        
-        if eval_data:
-            eval_path = dataset_dir / "eval.json"
-            with open(eval_path, 'w', encoding='utf-8') as f:
-                json.dump(eval_data, f, indent=2, ensure_ascii=False)
-        
         dataset_info = {
             "file_name": "train.json",
             "file_name_eval": "eval.json" if eval_data else None,
@@ -197,10 +191,25 @@ class DatasetPreprocessor:
             "created_at": datetime.now().isoformat()
         }
         
-        info_path = dataset_dir / "dataset_info.json"
-        with open(info_path, 'w', encoding='utf-8') as f:
-            json.dump(dataset_info, f, indent=2, ensure_ascii=False)
-        
+        artifacts = {"train.json": train_data}
+        if eval_data:
+            artifacts["eval.json"] = eval_data
+        artifacts["dataset_info.json"] = dataset_info
+        dataset_dir = self.data_dir / output_name
+        try:
+            dataset_dir.mkdir()
+        except FileExistsError as exc:
+            raise DatasetExistsError(f"数据集名称已存在：{output_name}，请使用其他名称") from exc
+        try:
+            for filename, data in artifacts.items():
+                with open(dataset_dir / filename, "w", encoding="utf-8") as stream:
+                    json.dump(data, stream, indent=2, ensure_ascii=False)
+        except BaseException:
+            import shutil
+
+            shutil.rmtree(dataset_dir)
+            raise
+
         stats = {
             "dataset_dir": str(dataset_dir),
             "total_samples": len(valid_data),

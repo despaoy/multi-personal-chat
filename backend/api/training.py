@@ -21,6 +21,7 @@ from typing import Optional
 
 from db.adapter import db
 from db.schemas import DatasetUploadRequest, TrainingStartRequest, DialogueGenerateRequest, SaveDialoguesRequest
+from training.preprocessor import DatasetExistsError
 from app.config import generation_state, get_generation_state_lock
 from infra.input_validator import TRAINING_SCHEMA, InputValidator
 
@@ -227,6 +228,8 @@ async def create_dataset(request: DatasetUploadRequest, current_user: dict = Dep
                 "stats": stats
             }
         }
+    except DatasetExistsError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except HTTPException:
         raise
     except Exception as e:
@@ -1023,6 +1026,8 @@ async def create_dataset_from_saved(
             output_name=ds_name,
             min_samples=1,
         )
+    except DatasetExistsError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ValueError as ve:
         # preprocessor 校验失败时给出更友好的错误
         raise HTTPException(status_code=400, detail=str(ve))
