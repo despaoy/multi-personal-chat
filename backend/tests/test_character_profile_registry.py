@@ -248,3 +248,29 @@ def test_compiled_context_contains_canonical_relationships_section(
     # 原作关系不会进入记忆参考区，也不进入动态区
     assert "琉璃" not in compiled.reference_context
     assert "琉璃" not in compiled.dynamic_context
+
+
+def test_default_registry_reports_each_failed_load_then_publishes_repaired_profiles(monkeypatch, tmp_path):
+    from character import profile_registry as module
+
+    monkeypatch.setattr(module, "PROFILES_DIR", tmp_path)
+    monkeypatch.setattr(module, "_default_registry", None)
+    _write_profile(tmp_path, {"character_id": "a", "display_name": "合成角色甲", "traits": ["准确保留否定"]}, "a_good.json")
+    broken = tmp_path / "z_bad.json"
+    broken.write_text('{"character_id":', encoding="utf-8")
+    for _ in range(2):
+        with pytest.raises(ValueError, match="人物画像 JSON 解析失败: z_bad.json"):
+            module.get_default_profile_registry()
+
+    _write_profile(tmp_path, {"character_id": "b", "display_name": "合成角色乙", "values": ["不推断未知事实"]}, "z_bad.json")
+    registry = module.get_default_profile_registry()
+    assert registry.list_profiles() == (
+        {"character_id": "a", "display_name": "合成角色甲", "version": "v1"},
+        {"character_id": "b", "display_name": "合成角色乙", "version": "v1"},
+    )
+    assert registry.get_profile("a").traits == ("准确保留否定",)
+    assert registry.get_profile("b").values == ("不推断未知事实",)
+    broken.write_text("not valid JSON anymore", encoding="utf-8")
+    assert module.get_default_profile_registry() is registry
+    assert registry.load_profiles() == 2
+    assert registry.get_profile("b").display_name == "合成角色乙"

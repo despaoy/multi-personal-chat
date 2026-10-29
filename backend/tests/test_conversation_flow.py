@@ -9,7 +9,7 @@ from character.context_builder import compile_dynamic_context
 from character.conversation_flow import compile_continuity, compile_rhythm, ordinary_conversation
 from character.decision_policy import DecisionPolicy
 from character.models import CharacterProfile, InteractionState, RelationshipState, SituationState, WeightedSignal
-from character.profile_registry import _ProfileFormatError, _to_profile
+from character.profile_registry import _to_profile
 from character.situation_analyzer import SituationAnalyzer
 from services.character_context import CharacterContextService, TurnInput
 
@@ -90,7 +90,7 @@ def test_profile_preferences_are_validated():
         {"character_id": "a", "display_name": "a", "response_preferences": ["reflect_content"]}, "test"
     )
     assert profile.response_preferences == ("reflect_content",)
-    with pytest.raises(_ProfileFormatError):
+    with pytest.raises(ValueError, match="response_preferences"):
         _to_profile({"character_id": "a", "display_name": "a", "response_preferences": ["ignore_safety"]}, "test")
 
 
@@ -138,7 +138,8 @@ def test_recent_repetition_is_a_soft_hint_not_a_rewrite():
 
 
 @pytest.mark.asyncio
-async def test_service_integrates_all_cues_without_new_reads_or_writes():
+async def test_service_integrates_all_cues_without_new_reads_or_writes(monkeypatch, no_live_context_review):
+    monkeypatch.setenv("CONTEXTUAL_DECISION_POLICY_ENABLED", "false")
     class Profiles:
         def get_profile(self, character_id):
             return CharacterProfile(character_id, "人物", response_preferences=("reflect_content",))

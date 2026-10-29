@@ -46,19 +46,16 @@ class CharacterProfileNotFoundError(KeyError):
     """
 
 
-class _ProfileFormatError(ValueError):
-    """画像 JSON 配置格式错误（内部转换用，聚合进加载异常信息）。"""
-
-
 def _to_profile(data: dict, source: str) -> CharacterProfile:
     """把一份 JSON 字典转换为 CharacterProfile，格式错误时抛异常。"""
+    context = f"人物画像配置格式错误: {source}"
     if not isinstance(data, dict):
-        raise _ProfileFormatError(f"{source}: 顶层必须是 JSON 对象")
+        raise ValueError(f"{context}: 顶层必须是 JSON 对象")
 
     for field in _REQUIRED_FIELDS:
         value = data.get(field)
         if not isinstance(value, str) or not value.strip():
-            raise _ProfileFormatError(f"{source}: 缺少必填字符串字段 {field!r}")
+            raise ValueError(f"{context}: 缺少必填字符串字段 {field!r}")
 
     kwargs: dict = {
         "character_id": data["character_id"].strip(),
@@ -67,24 +64,24 @@ def _to_profile(data: dict, source: str) -> CharacterProfile:
 
     identity = data.get("identity", "")
     if not isinstance(identity, str):
-        raise _ProfileFormatError(f"{source}: identity 必须是字符串")
+        raise ValueError(f"{context}: identity 必须是字符串")
     kwargs["identity"] = identity.strip()
 
     version = data.get("version", "v1")
     if not isinstance(version, str) or not version.strip():
-        raise _ProfileFormatError(f"{source}: version 必须是非空字符串")
+        raise ValueError(f"{context}: version 必须是非空字符串")
     kwargs["version"] = version.strip()
 
     for field in _LIST_FIELDS:
         items = data.get(field, [])
         if not isinstance(items, list) or any(not isinstance(i, str) for i in items):
-            raise _ProfileFormatError(f"{source}: {field} 必须是字符串列表")
+            raise ValueError(f"{context}: {field} 必须是字符串列表")
         # 转换为不可变元组，去除空项
         kwargs[field] = tuple(item.strip() for item in items if item.strip())
 
     allowed_preferences = {"reflect_content", "acknowledge_emotion", "stay_present", "brief_self_disclosure"}
     if set(kwargs["response_preferences"]) - allowed_preferences:
-        raise _ProfileFormatError(f"{source}: response_preferences 包含不支持的回应倾向")
+        raise ValueError(f"{context}: response_preferences 包含不支持的回应倾向")
     return CharacterProfile(**kwargs)
 
 
@@ -120,10 +117,7 @@ class CharacterProfileRegistry:
             except json.JSONDecodeError as exc:
                 raise ValueError(f"人物画像 JSON 解析失败: {path.name}: {exc}") from exc
 
-            try:
-                profile = _to_profile(data, source=path.name)
-            except _ProfileFormatError as exc:
-                raise ValueError(f"人物画像配置格式错误: {exc}") from exc
+            profile = _to_profile(data, source=path.name)
 
             if profile.character_id in profiles:
                 raise ValueError(
@@ -178,6 +172,7 @@ def get_default_profile_registry() -> CharacterProfileRegistry:
     """返回项目默认注册表实例（进程内单例，首次调用时加载）。"""
     global _default_registry
     if _default_registry is None:
-        _default_registry = CharacterProfileRegistry()
-        _default_registry.load_profiles()
+        registry = CharacterProfileRegistry()
+        registry.load_profiles()
+        _default_registry = registry
     return _default_registry
