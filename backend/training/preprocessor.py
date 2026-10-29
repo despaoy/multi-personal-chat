@@ -89,43 +89,29 @@ class DatasetPreprocessor:
         return self.user_styles.copy()
     
     def analyze_style(self, data: List[List[Dict[str, str]]]) -> Dict[str, Any]:
-        """Analyze the already validated messages without reparsing input formats."""
-        all_text = []
-        response_lengths = []
-        sentence_counts = []
-        question_count = 0
-        total_sentences = 0
-        
-        for messages in data:
-            response = next(message["content"] for message in messages if message["role"] == "assistant")
-            all_text.append(response)
-            response_lengths.append(len(response))
-
-            sentences = re.split(r'[.!?。！？]', response)
-            sentences = [sentence.strip() for sentence in sentences if sentence.strip()]
-            sentence_counts.append(len(sentences))
-            total_sentences += len(sentences)
-            for sentence in sentences:
-                if '?' in sentence or '？' in sentence:
-                    question_count += 1
-
-        if not all_text:
+        """Measure every validated assistant reply using sentence punctuation."""
+        if not data:
             return {}
-        
-        avg_length = sum(response_lengths) / len(response_lengths)
-        avg_sentences = sum(sentence_counts) / len(sentence_counts)
-        question_ratio = question_count / total_sentences if total_sentences > 0 else 0
-        
-        all_words = ' '.join(all_text)
-        words = re.findall(r'[\w]+', all_words)
-        word_freq = Counter(words).most_common(20)
-        
+        responses = [
+            message["content"]
+            for messages in data
+            for message in messages
+            if message["role"] == "assistant"
+        ]
+        endings = [
+            ending
+            for response in responses
+            for body, ending in re.findall(r"([^.!?。！？]+)([.!?。！？]*)", response)
+            if body.strip()
+        ]
+        question_count = sum("?" in ending or "？" in ending for ending in endings)
+        words = re.findall(r"[\w]+", " ".join(responses))
         return {
-            'total_samples': len(data),
-            'avg_response_length': round(avg_length, 1),
-            'avg_sentences_per_response': round(avg_sentences, 1),
-            'question_ratio': round(question_ratio, 2),
-            'common_words': word_freq
+            "total_samples": len(data),
+            "avg_response_length": round(sum(map(len, responses)) / len(responses), 1),
+            "avg_sentences_per_response": round(len(endings) / len(responses), 1),
+            "question_ratio": round(question_count / len(endings), 2) if endings else 0,
+            "common_words": Counter(words).most_common(20),
         }
     
     def prepare_training_data(

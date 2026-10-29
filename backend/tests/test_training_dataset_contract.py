@@ -112,3 +112,44 @@ def test_unspecified_training_persona_does_not_invent_a_character():
 def test_null_required_answer_is_never_repaired():
     with pytest.raises(ValueError):
         normalize_chat_record({"instruction": QUESTION, "input": EXTRA, "output": None}, default_system_prompt=PROMPT)
+
+
+def test_style_statistics_cover_all_assistant_turns_and_preserve_dataset(tmp_path):
+    conversations = [
+        [
+            {"role": "user", "content": "不要把用户的问号算入统计？"},
+            {"role": "assistant", "content": "好吗？很好。"},
+            {"role": "user", "content": "完整追加上下文"},
+            {"role": "assistant", "content": "后续回复更长一些？"},
+        ],
+        [
+            {"role": "user", "content": "Explain"},
+            {"role": "assistant", "content": "Yes! Why?? Tail"},
+        ],
+    ]
+    rows = [{"messages": copy.deepcopy(messages)} for _ in range(5) for messages in conversations]
+    original = copy.deepcopy(rows)
+    directory, stats = DatasetPreprocessor(base_dir=tmp_path).prepare_training_data(rows, output_name="statistics")
+    assert stats["style_analysis"] == {
+        "total_samples": 10,
+        "avg_response_length": 10.0,
+        "avg_sentences_per_response": 2.0,
+        "question_ratio": 0.5,
+        "common_words": [("好吗", 5), ("很好", 5), ("后续回复更长一些", 5), ("Yes", 5), ("Why", 5), ("Tail", 5)],
+    }
+    assert stats["train_samples"] == 9 and stats["eval_samples"] == 1 and stats["invalid_samples"] == 0
+    stored = [*json.loads((directory / "train.json").read_text()), *json.loads((directory / "eval.json").read_text())]
+    assert sorted(json.dumps(row, sort_keys=True) for row in stored) == sorted(
+        json.dumps(row, sort_keys=True) for row in original
+    )
+    assert rows == original
+    manifest = json.loads((directory / "dataset_info.json").read_text())
+    assert manifest["style_analysis"] == json.loads(json.dumps(stats["style_analysis"]))
+
+
+def test_dataset_without_assistant_responses_is_rejected_before_statistics(tmp_path):
+    rows = [{"messages": [{"role": "user", "content": f"完整用户问题{index}？"}]} for index in range(10)]
+    original = copy.deepcopy(rows)
+    with pytest.raises(ValueError, match="有效数据不足"):
+        DatasetPreprocessor(base_dir=tmp_path).prepare_training_data(rows, output_name="invalid")
+    assert rows == original and not (tmp_path / "data/invalid").exists()
