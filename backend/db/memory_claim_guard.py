@@ -25,10 +25,7 @@ class MemoryClaimConflict(ValueError):
 def _aware_time(value: str | None) -> datetime | None:
     if not value:
         return None
-    try:
-        parsed = datetime.fromisoformat(value)
-    except (ValueError, TypeError):
-        return None
+    parsed = datetime.fromisoformat(value)
     # Legacy storage timestamps may be local and lack a timezone. Do not
     # invent their timezone and reject legitimate updates on that assumption.
     return parsed if parsed.utcoffset() is not None else None

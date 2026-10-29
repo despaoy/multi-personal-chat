@@ -95,3 +95,48 @@ def test_nonactive_target_is_not_reopened_as_current_fact(tmp_path, status):
     rows = db.list_character_memory_claims(**SCOPE, include_inactive=True)
     assert len(rows) == 1
     assert rows[0]["status"] == status
+
+
+@pytest.mark.parametrize("broken", ["target", "incoming"])
+def test_invalid_clock_rolls_back_and_repaired_retry_succeeds(tmp_path, broken):
+    db = SQLiteDB(tmp_path / "invalid-clock.db")
+    original_clock = "2026-09-20T12:00:00+00:00"
+    new_clock = "2026-09-21T12:00:00+00:00"
+    first = write(db, content="用户说喜欢银杉茶", observed_at=original_clock, evidence_json='["我喜欢银杉茶。"]')
+    connection = db._get_connection()
+    try:
+        if broken == "target":
+            connection.execute(
+                "UPDATE character_memories SET observed_at=? WHERE id=?", ("synthetic-invalid-clock", first["id"])
+            )
+            connection.commit()
+        before = db.list_character_memory_claims(**SCOPE, include_inactive=True)
+        with pytest.raises(ValueError):
+            write(
+                db,
+                relation_type="SUPERSEDE",
+                supersedes_memory_id=first["id"],
+                content="用户说改为喜欢青栎茶",
+                evidence_json='["我现在改为喜欢青栎茶。"]',
+                observed_at="synthetic-invalid-clock" if broken == "incoming" else new_clock,
+            )
+        assert db.list_character_memory_claims(**SCOPE, include_inactive=True) == before
+        if broken == "target":
+            connection.execute("UPDATE character_memories SET observed_at=? WHERE id=?", (original_clock, first["id"]))
+            connection.commit()
+        current = write(
+            db,
+            relation_type="SUPERSEDE",
+            supersedes_memory_id=first["id"],
+            content="用户说改为喜欢青栎茶",
+            evidence_json='["我现在改为喜欢青栎茶。"]',
+            observed_at=new_clock,
+        )
+        rows = db.list_character_memory_claims(**SCOPE, include_inactive=True)
+        assert len(rows) == 2 and current["persisted"] is True
+        assert [(row["id"], row["observed_at"]) for row in rows if row["status"] == "active"] == [
+            (current["id"], new_clock)
+        ]
+        assert next(row for row in rows if row["id"] == first["id"])["status"] == "superseded"
+    finally:
+        db.close_connection()
