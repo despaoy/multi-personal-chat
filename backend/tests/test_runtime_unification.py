@@ -764,7 +764,7 @@ def test_response_cache_restarts_on_a_fresh_event_loop():
 
 
 @pytest.mark.asyncio
-async def test_enhanced_status_does_not_advertise_retired_failover(monkeypatch):
+async def test_enhanced_status_does_not_advertise_retired_features(monkeypatch):
     import httpx
     from fastapi import FastAPI
 
@@ -786,5 +786,7 @@ async def test_enhanced_status_does_not_advertise_retired_failover(monkeypatch):
         assert status.status_code == 200
         assert 'failover' not in status.json()['enhancedFeatures']
         assert 'failover' not in status.json()['availableFeatures']
+        assert 'llmOptimizer' not in status.json()['enhancedFeatures']
+        assert 'llmOptimizer' not in status.json()['availableFeatures']
         retired = await client.get('/api/enhanced/failover/status')
         assert retired.status_code == 404

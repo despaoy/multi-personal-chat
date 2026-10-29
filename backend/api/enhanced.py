@@ -49,7 +49,6 @@ async def get_enhanced_status(
         "inputValidator": True,
         "encryption": True,
         "accessControl": True,
-        "llmOptimizer": True,
     }
     vllm_stats = await _get_vllm_load_balancer_stats()
     active = {
