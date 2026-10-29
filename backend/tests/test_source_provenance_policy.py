@@ -16,7 +16,7 @@ def context(body="XR493-01：数值21，限制：未复核禁用。", status="av
     )
     return attach_sources(
         CompiledCharacterContext("角色", "", "", memory_status="no_match"),
-        SourceRecall(packet.context, {"status": status}),
+        SourceRecall(packet.context, diagnostics={"status": status}),
     )
 
 

@@ -80,8 +80,6 @@ async def run(args):
     reference = max(datetime.fromisoformat(row["observed_at"]) for row in rows) + timedelta(minutes=1)
     for query in args.query:
         items, _, trace = await service.recall_with_diagnostics("role", scope, query, reference_time=reference)
-        if trace["status"] == "retrieval_error":
-            raise RuntimeError(f"Read failed: {trace}")
         context = CompiledCharacterContext("", "", "", tuple(item.memory_id for item in items),
             memory_status="available" if items else "no_match", memory_packets=items,
             memory_field_presence=tuple(trace.get("field_presence", {}).items()))

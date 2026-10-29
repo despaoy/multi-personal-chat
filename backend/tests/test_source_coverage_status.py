@@ -31,7 +31,10 @@ def test_real_source_packet_budget_failure_propagates_to_storage_response():
 
 def test_empty_refresh_removes_old_source_packet_without_inventing_absence():
     first = attach_sources(CompiledCharacterContext('', '', '', memory_field_presence=(('major', False),)),
-                           SourceRecall('旧原话', {'status': 'available'}))
+                           SourceRecall('旧原话', diagnostics={'status': 'available'}))
+    with pytest.raises(KeyError, match='status'):
+        attach_sources(first, SourceRecall(diagnostics={}))
+    assert first.episodic_reference_context == '旧原话'
     refreshed = attach_sources(first, SourceRecall(diagnostics={'status': 'retrieval_error'}))
     assert refreshed.episodic_reference_context == ''
     assert dict(refreshed.memory_field_presence)['major'] is None

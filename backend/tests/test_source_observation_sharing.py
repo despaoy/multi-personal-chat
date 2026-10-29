@@ -44,7 +44,7 @@ def test_changing_or_clearing_sources_preserves_independent_memory_reference():
     updated = attach_sources(attached, source("新原话：同事课程取消，我本人仍未参加。", "new"))
     assert updated.reference_context == before.reference_context and updated.memory_packets == before.memory_packets
     assert updated.episodic_reference_context == source("新原话：同事课程取消，我本人仍未参加。", "new").context
-    cleared = attach_sources(updated, SourceRecall())
+    cleared = attach_sources(updated, SourceRecall(diagnostics={"status": "not_checked"}))
     assert not cleared.episodic_reference_context and cleared.reference_context == before.reference_context
     assert cleared.used_memory_ids == before.used_memory_ids
 

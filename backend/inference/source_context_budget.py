@@ -53,7 +53,7 @@ def admit_deferred_sources(request, build):
 
     if _parse_complete_packet(candidate) is None:
         raise ValueError("Invalid deferred source packet; restore complete attributed source records before retrying")
-    admitted = attach_sources(context, SourceRecall(candidate, {"status": "available"}))
+    admitted = attach_sources(context, SourceRecall(candidate, diagnostics={"status": "available"}))
     proposed = replace(request, character_context=admitted)
     # Public evidence may consume the remaining allowance, but cannot cause
     # separate packet attempts to silently change this private-source decision.

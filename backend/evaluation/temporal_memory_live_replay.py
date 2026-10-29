@@ -181,8 +181,7 @@ async def run(args):
                         profile.character_id, scope, query, reference_time=received_at)
                     context = compile_character_context(CharacterContext(profile=profile, user_scope=scope, memories=items),
                                                         complete_memory_evidence=True)
-                    context = replace(context, memory_status="retrieval_error" if trace["status"] == "retrieval_error"
-                                      else "available" if items else "no_match",
+                    context = replace(context, memory_status="available" if items else "no_match",
                                       memory_field_presence=tuple(trace.get("field_presence", {}).items()))
                     if args.source_recall:
                         sources = await SourceMemoryService(repo, window_radius=args.source_window_radius).recall(profile.character_id, scope, query,

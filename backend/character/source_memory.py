@@ -19,7 +19,7 @@ from db.memory_source_search import literal_project_source_terms, resolve_source
 @dataclass(frozen=True)
 class SourceRecall:
     context: str = ""
-    diagnostics: dict = field(default_factory=dict)
+    diagnostics: dict = field(kw_only=True)
     candidate_context: str = ""
 
 
@@ -96,11 +96,11 @@ def compile_sources(rows, *, max_chars=2400, max_items=4):
                 # Do not substitute older/lower-ranked excerpts when the best
                 # complete source (possibly a correction) cannot fit.
                 omitted.append(dict(source_id=row["source_message_id"], reason="whole_source_budget"))
-                return SourceRecall("", dict(status="budget_omitted", omitted=omitted, selected_ids=[]))
+                return SourceRecall(diagnostics=dict(status="budget_omitted", omitted=omitted, selected_ids=[]))
         records.append(record)
     packet = json.dumps(payload, ensure_ascii=False, separators=(",", ":")) if records else ""
-    return SourceRecall(packet, dict(status="available" if records else "no_match", omitted=omitted,
-                                    selected_ids=[row["source_id"] for row in records]))
+    return SourceRecall(packet, diagnostics=dict(status="available" if records else "no_match", omitted=omitted,
+                                                 selected_ids=[row["source_id"] for row in records]))
 
 
 class SourceMemoryService:
@@ -252,11 +252,11 @@ class SourceMemoryService:
         if self._defer_budget and result.diagnostics["status"] == "budget_omitted":
             candidate_context = compile_sources(selected, max_chars=None, max_items=None).context
         trace["candidate_budget_pending"] = bool(candidate_context)
-        return SourceRecall(result.context, trace, candidate_context)
+        return SourceRecall(result.context, diagnostics=trace, candidate_context=candidate_context)
 
 
 def attach_sources(context, result):
-    status = str(result.diagnostics.get('status') or 'not_checked')
+    status = result.diagnostics['status']
     context = replace(context, memory_source_status=status, episodic_reference_context='',
                       source_candidate_context=result.candidate_context)
     if not result.context:
