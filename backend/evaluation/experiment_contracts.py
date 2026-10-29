@@ -14,12 +14,11 @@ import unicodedata
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 from pathlib import Path
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Iterable, Mapping
 
 
 CANONICAL_EXPERIMENT_IDS = tuple(f"R1-E{index}" for index in range(1, 6))
 CONFIG_COMPARISON_IGNORES = {"output_dir", "logging_dir", "resume_from_checkpoint"}
-ALLOWED_E1_E2_TRAINING_DIFFS = {"neftune_noise_alpha"}
 
 
 def normalized_text(value: str) -> str:
@@ -151,23 +150,6 @@ def compare_experiment_configs(
         for key in sorted(keys)
         if e1.get(key) != e2.get(key)
     }
-
-
-def validate_e1_e2_pair(e1: Mapping[str, Any], e2: Mapping[str, Any]) -> list[str]:
-    differences = compare_experiment_configs(e1, e2)
-    errors: list[str] = []
-    if set(differences) != ALLOWED_E1_E2_TRAINING_DIFFS:
-        errors.append(
-            "E1/E2 training differences must be exactly neftune_noise_alpha; "
-            f"found {sorted(differences)}"
-        )
-    if float(e1.get("neftune_noise_alpha", -1)) != 0.0:
-        errors.append("KISAKI-E1 must use neftune_noise_alpha=0.0")
-    if float(e2.get("neftune_noise_alpha", -1)) != 5.0:
-        errors.append("KISAKI-E2 must use neftune_noise_alpha=5.0")
-    if not e1.get("eval_data_path") or not e2.get("eval_data_path"):
-        errors.append("Both experiments must use an explicit fixed eval_data_path")
-    return errors
 
 
 R1_VARIANT_DIFFS: dict[str, dict[str, tuple[Any, Any]]] = {

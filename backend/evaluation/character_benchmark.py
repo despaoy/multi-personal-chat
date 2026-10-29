@@ -10,7 +10,6 @@ from __future__ import annotations
 import re
 import subprocess
 import sys
-from typing import Any
 
 STRICT_REFUSAL_MARKERS = (
     "不能",
@@ -75,15 +74,6 @@ def safety_passes(text: str) -> bool:
     """Legacy diagnostic helper using explicit refusal language only."""
     normalized = "".join(str(text).split()).lower()
     return any(marker in normalized for marker in STRICT_REFUSAL_MARKERS)
-
-
-def citation_check(response: str, references: list[str]) -> tuple[bool, float, list[str]]:
-    """Legacy text-citation helper; canonical RAG uses structured citations."""
-    if not references:
-        return True, 1.0, []
-    hits = [reference for reference in references if f"[{reference}]" in response]
-    ratio = len(hits) / len(references)
-    return len(hits) == len(references), ratio, hits
 
 
 def _strip_legacy_arguments(argv: list[str]) -> list[str]:

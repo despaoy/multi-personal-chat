@@ -87,13 +87,3 @@ class GoldSetManager:
             "splits": splits,
             "path": str(self.path),
         }
-
-
-_manager: Optional[GoldSetManager] = None
-
-
-def get_gold_set_manager() -> GoldSetManager:
-    global _manager
-    if _manager is None:
-        _manager = GoldSetManager()
-    return _manager
