@@ -35,6 +35,7 @@ async def test_response_deadline_retains_exact_write_and_later_stage(monkeypatch
         owned_prepared,
         request,
         character_service=SimpleNamespace(complete_turn=complete),
+        message_db=SimpleNamespace(),
     )
     assert "尚未确认" in warning and "保存失败" not in warning
     assert runtime.active == 1 and seen == [(owned_prepared, request.message, at, "owned-original")]

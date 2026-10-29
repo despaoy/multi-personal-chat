@@ -28,6 +28,7 @@ async def test_actual_operation_receipt_is_visible_without_resubmitting_it(scena
         prepared,
         MessageRequest(message=turn.message, sourceMessageId="synthetic-source"),
         character_service=service,
+        message_db=repo.storage_owner,
     )
     assert expected in warning and "已完成" not in warning
     scheduler.schedule.assert_not_called()
@@ -48,6 +49,7 @@ async def test_missing_completion_fields_cannot_be_reported_as_clean_success(out
             SimpleNamespace(character_id="synthetic-role"),
             MessageRequest(message="完整的合成个人记录。"),
             character_service=SimpleNamespace(complete_turn=AsyncMock(return_value=outcome)),
+            message_db=SimpleNamespace(),
         )
 
 
@@ -61,6 +63,7 @@ async def test_normal_accepted_background_work_retains_existing_feedback(scenari
         prepared,
         MessageRequest(message=turn.message, sourceMessageId="synthetic-source"),
         character_service=service,
+        message_db=repo.storage_owner,
     )
     assert warning is None
     repo.capture_source.assert_awaited_once()
@@ -77,6 +80,7 @@ async def test_pending_operation_and_counter_failure_are_both_visible(scenario):
         prepared,
         MessageRequest(message=turn.message, sourceMessageId="synthetic-source"),
         character_service=service,
+        message_db=repo.storage_owner,
     )
     assert "交互统计" in warning and "尚未确认" in warning
     assert "synthetic-private-counter-detail" not in warning
@@ -88,7 +92,7 @@ async def test_unknown_operation_state_is_an_error_without_resubmission(scenario
     service, prepared, turn, repo, scheduler = scenario
     prepared.memory_operation_receipt = {"status": "unexpected-future-status", "persisted": 0, "accepted": 0}
     with pytest.raises(ValueError, match="Unrecognized memory completion result"):
-        await _complete_character_turn(prepared, MessageRequest(message=turn.message), character_service=service)
+        await _complete_character_turn(prepared, MessageRequest(message=turn.message), character_service=service, message_db=repo.storage_owner)
     scheduler.schedule.assert_not_called()
     repo.capture_source.assert_not_awaited()
     repo.increment_interaction.assert_awaited_once()

@@ -11,7 +11,7 @@ from db.schemas import MessageRequest
 
 @pytest.fixture
 def scenario(monkeypatch):
-    repo = SimpleNamespace(storage_owner=object(), increment_interaction=AsyncMock(return_value=1),
+    repo = SimpleNamespace(storage_owner=SimpleNamespace(), increment_interaction=AsyncMock(return_value=1),
                            capture_source=AsyncMock(return_value='recorded'))
     scheduler = SimpleNamespace(enabled=True, schedule=Mock(side_effect=OSError('private-storage-detail')))
     monkeypatch.setattr('character.memory_llm.get_memory_enrichment_scheduler', lambda _owner_database=None: scheduler)
@@ -39,10 +39,10 @@ async def test_scheduling_failure_preserves_source_receipt_and_reports_failure(s
 async def test_actual_service_failure_is_visible_through_web_completion(scenario, caplog):
     from api import generate
 
-    service, prepared, turn, _, _ = scenario
+    service, prepared, turn, repo, _ = scenario
     request = MessageRequest(message=turn.message, characterId='role', platform='web', adapter='web-character',
         senderId='reader', conversationId='reader', conversationType='private', sourceMessageId='source')
-    warning = await generate._complete_character_turn(prepared, request, character_service=service)
+    warning = await generate._complete_character_turn(prepared, request, character_service=service, message_db=repo.storage_owner)
     assert '原文已保存' in warning and '失败' in warning
     assert 'private-storage-detail' not in warning + caplog.text
 
@@ -54,7 +54,8 @@ async def test_partial_completion_warning_is_distinct_from_total_failure(scenari
     service, prepared, turn, repo, scheduler = scenario
     prepared.memory_operation_receipt = dict(status='partial', accepted=2, persisted=1)
     warning = await generate._complete_character_turn(prepared,
-        MessageRequest(message=turn.message, sourceMessageId='source'), character_service=service)
+        MessageRequest(message=turn.message, sourceMessageId='source'), character_service=service,
+                                                                        message_db=repo.storage_owner)
     assert '部分保存' in warning and '部分写入失败' in warning
     repo.capture_source.assert_not_awaited()
     scheduler.schedule.assert_not_called()
@@ -93,7 +94,7 @@ async def test_web_completion_preserves_memory_failure_alongside_counter_failure
     repo.increment_interaction.side_effect = OSError('private-counter-body')
     request = MessageRequest(message=turn.message, characterId='role', platform='web', adapter='web-character',
         senderId='reader', conversationId='reader', conversationType='private', sourceMessageId='source')
-    warning = await generate._complete_character_turn(prepared, request, character_service=service)
+    warning = await generate._complete_character_turn(prepared, request, character_service=service, message_db=repo.storage_owner)
     assert '交互统计' in warning and '原文已保存' in warning and '长期记忆处理失败' in warning
     assert 'private-counter-body' not in warning
 

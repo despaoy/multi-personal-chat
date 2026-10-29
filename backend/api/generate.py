@@ -844,35 +844,30 @@ async def _prepare_character_turn(
     request: MessageRequest,
     character_id: str,
     *,
-    character_service=None,
+    character_service,
     execute_memory_operations: bool = False,
     defer_memory_operations: bool = False,
 ):
     """Prepare the selected character; failures stop generation at this API boundary.
 
-    HTTP callers inject the application-scoped service. Direct non-HTTP callers
-    use the default service when none was supplied.
+    The caller supplies the service already bound to this turn's database.
     """
     from character.context_builder import MemoryContextBudgetError
     from character.event_memory import EventMemoryReadError
     from character.memory_read_authority import MemoryRecordError
 
     try:
-        from services.character_context import (
-            ContextAfterMemoryOperationError,
-            get_default_character_context_service,
-        )
+        from services.character_context import ContextAfterMemoryOperationError
 
         turn_input = _character_turn_input(request)
-        service = character_service or get_default_character_context_service()
         if execute_memory_operations:
             from character.memory_llm import is_memory_erasure_request
 
             if is_memory_erasure_request(request.message):
-                return await service.prepare_interactive_turn(
+                return await character_service.prepare_interactive_turn(
                     turn_input, character_id, source_message_id=request.sourceMessageId
                 )
-        prepared = await service.prepare_turn(turn_input, character_id)
+        prepared = await character_service.prepare_turn(turn_input, character_id)
         if defer_memory_operations and not execute_memory_operations:
             from dataclasses import replace
 
@@ -965,7 +960,7 @@ async def _persist_completion_feedback(receipt: dict, warning: str, *, database)
 
 
 async def _complete_character_turn(
-    prepared, request: MessageRequest, *, character_service=None, completion_slot=None, message_db=None
+    prepared, request: MessageRequest, *, character_service, message_db, completion_slot=None
 ) -> str | None:
     """生成成功后回写；保留已生成内容，向调用方返回独立的保存提示。
 
@@ -975,15 +970,10 @@ async def _complete_character_turn(
     from services.turn_completion import CompletionWaitTimeout, get_turn_completion_runtime
 
     try:
-        from services.character_context import (
-            get_default_character_context_service,
-        )
-
         turn_input = _character_turn_input(request)
-        service = character_service or get_default_character_context_service()
 
         outcome = await get_turn_completion_runtime(message_db).run(
-            lambda: service.complete_turn(
+            lambda: character_service.complete_turn(
                 prepared,
                 turn_input,
                 source_message_id=request.sourceMessageId,

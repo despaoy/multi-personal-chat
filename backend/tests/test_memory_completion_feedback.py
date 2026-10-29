@@ -45,7 +45,8 @@ async def test_capture_outcome_is_not_discarded(capture, expected):
         )
     )
     warning = await gen._complete_character_turn(
-        SimpleNamespace(character_id="tsukiyashiro_kisaki"), request(), character_service=service
+        SimpleNamespace(character_id="tsukiyashiro_kisaki"), request(), character_service=service,
+                                                                        message_db=SimpleNamespace()
     )
     assert warning is None if expected is None else expected in warning
     assert service.complete_turn.await_args.kwargs["source_message_id"] == "new-source"
@@ -69,6 +70,7 @@ async def test_real_coroutine_timeout_is_unknown_not_failed(monkeypatch):
     warning = await gen._complete_character_turn(
         SimpleNamespace(character_id="tsukiyashiro_kisaki"), request(),
         character_service=SimpleNamespace(complete_turn=slow),
+        message_db=SimpleNamespace(),
     )
     assert started.is_set() and not finished.is_set() and runtime.active == 1
     assert "尚未确认" in warning and "保存失败" not in warning and "稍后检查" in warning
@@ -84,7 +86,8 @@ async def test_unexpected_completion_failure_does_not_leak_exception():
     service = SimpleNamespace(complete_turn=AsyncMock(side_effect=RuntimeError("private-internal-detail")))
     with pytest.raises(RuntimeError, match="private-internal-detail"):
         await gen._complete_character_turn(
-            SimpleNamespace(character_id="tsukiyashiro_kisaki"), request(), character_service=service
+            SimpleNamespace(character_id="tsukiyashiro_kisaki"), request(), character_service=service,
+                                                                            message_db=SimpleNamespace()
         )
 
 
@@ -95,7 +98,8 @@ async def test_external_cancel_is_not_converted_to_success_feedback():
     service = SimpleNamespace(complete_turn=AsyncMock(side_effect=asyncio.CancelledError))
     with pytest.raises(asyncio.CancelledError):
         await gen._complete_character_turn(
-            SimpleNamespace(character_id="tsukiyashiro_kisaki"), request(), character_service=service
+            SimpleNamespace(character_id="tsukiyashiro_kisaki"), request(), character_service=service,
+                                                                            message_db=SimpleNamespace()
         )
 
 
@@ -166,4 +170,4 @@ async def test_unknown_capture_is_not_converted_to_success_feedback():
     service = SimpleNamespace(complete_turn=AsyncMock(return_value=_TurnOutcome(
         source_capture="unsupported_scope", memory_enrichment_status="skipped")))
     with pytest.raises(ValueError, match="Unrecognized memory completion result"):
-        await gen._complete_character_turn(SimpleNamespace(character_id="role"), request(), character_service=service)
+        await gen._complete_character_turn(SimpleNamespace(character_id="role"), request(), character_service=service, message_db=SimpleNamespace())

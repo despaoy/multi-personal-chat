@@ -236,7 +236,7 @@ async def test_explicit_completion_never_reinterprets_erasure_as_address(databas
             conversationType=kind,
             sourceMessageId=current_source,
         )
-        warning = await generate._complete_character_turn(prepared, request, character_service=service)
+        warning = await generate._complete_character_turn(prepared, request, character_service=service, message_db=database)
         after = database.get_character_relationship(*fields)
         assert after["preferred_address"] == before["preferred_address"] == "知禾"
         assert after["relationship_stage"] == before["relationship_stage"] == "familiar"
