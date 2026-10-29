@@ -7,7 +7,6 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import os
 import sys
 from pathlib import Path
 
@@ -71,6 +70,8 @@ def main():
             status = "✅" if hit else "❌"
             logger.info(f"  {status} query='{query}' expected={expected_id} found={found_ids[:3]}")
         logger.info(f"\n验证结果: {hits}/{len(test_queries)} 命中")
+        if hits != len(test_queries):
+            sys.exit(1)
 
 
 if __name__ == "__main__":
