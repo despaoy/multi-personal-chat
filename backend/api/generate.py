@@ -621,9 +621,8 @@ async def _generate_reply_body(
                 database=message_db,
                 purpose=invocation_purpose,
             )
-        archive_receipt = {}
         if persist_message:
-            await _save_message(
+            archive_receipt = await _save_message(
                 request,
                 reply,
                 stored_model_name,
@@ -631,7 +630,6 @@ async def _generate_reply_body(
                 cost_time,
                 database=message_db,
                 character_id=mapped_character_id,
-                saved_receipt=archive_receipt,
                 model_invoked=model_invoked,
             )
             message_saved = True
@@ -1318,17 +1316,14 @@ async def _save_message(
     *,
     database,
     character_id: str | None = None,
-    saved_receipt: dict | None = None,
     model_invoked: bool | None = None,
-) -> bool:
+) -> dict[str, Any]:
     """Save generated replies with platform-aware metadata.
 
-    Return True only with a valid storage receipt; errors stop generation.
+    Return the verified storage receipt; errors stop generation.
     A timed-out thread can still commit, so an error does not prove rollback.
     database is the owning database already bound by the request entry.
     """
-    if saved_receipt is not None:
-        saved_receipt.clear()
     try:
         stored = await asyncio.wait_for(
             asyncio.to_thread(
@@ -1359,9 +1354,7 @@ async def _save_message(
         )
         if not isinstance(stored, dict) or not stored.get("id"):
             raise ValueError("Message storage returned no valid receipt")
-        if saved_receipt is not None:
-            saved_receipt.update(stored)
-        return True
+        return stored
     except Exception as e:
         increment("db_write_failures")
         log_event(

@@ -39,10 +39,10 @@ def database(tmp_path):
 
 @pytest.mark.asyncio
 async def test_success_requires_real_receipt_and_keeps_scope(database):
-    receipt = {"id": "stale-other-owner"}
-    assert await generate._save_message(request(), REPLY, "fixture-model", "default", 0.1,
-        database=database, saved_receipt=receipt, model_invoked=True) is True
-    assert receipt["id"] != "stale-other-owner" and receipt["senderId"] == "fiction-owner"
+    receipt = await generate._save_message(
+        request(), REPLY, "fixture-model", "default", 0.1, database=database, model_invoked=True
+    )
+    assert receipt["id"] and receipt["senderId"] == "fiction-owner"
     assert receipt["characterId"] == "tsukiyashiro_kisaki"
     assert receipt["message"] == FACTS and receipt["reply"] == REPLY
     rows = database.execute_sql("SELECT id,message,reply FROM messages WHERE id=:id", {"id": receipt["id"]})
@@ -52,13 +52,13 @@ async def test_success_requires_real_receipt_and_keeps_scope(database):
 @pytest.mark.asyncio
 @pytest.mark.parametrize("result", [None, False, 1, {}, {"id": ""}])
 async def test_invalid_receipt_cannot_be_reported_as_saved(monkeypatch, result):
-    receipt = {"id": "stale-other-owner"}
     store = SimpleNamespace(add_message=lambda record: result)
     with pytest.raises(HTTPException) as error:
-        await generate._save_message(request(), REPLY, "fixture-model", "default", 0.1,
-            database=store, saved_receipt=receipt, model_invoked=True)
+        await generate._save_message(
+            request(), REPLY, "fixture-model", "default", 0.1, database=store, model_invoked=True
+        )
     assert error.value.status_code == 503 and error.value.detail["stage"] == "message_archive"
-    assert isinstance(error.value.__cause__, ValueError) and receipt == {}
+    assert isinstance(error.value.__cause__, ValueError)
     assert error.value.detail["modelInvoked"] is True and error.value.detail["messageSaved"] is None
 
 
@@ -81,6 +81,7 @@ async def test_database_error_preserves_cause_without_private_error_text(monkeyp
 @pytest.mark.parametrize("cancel", [False, True])
 async def test_timed_out_or_cancelled_thread_is_not_claimed_rolled_back(database, monkeypatch, cancel):
     entered, release, done = threading.Event(), threading.Event(), threading.Event()
+
     def delayed(record):
         entered.set()
         assert release.wait(2)
@@ -88,10 +89,19 @@ async def test_timed_out_or_cancelled_thread_is_not_claimed_rolled_back(database
             return database.add_message(record)
         finally:
             done.set()
+
     monkeypatch.setattr(generate, "_DB_WRITE_TIMEOUT", 1 if cancel else 0.02)
-    receipt = {"id": "stale"}
-    operation = asyncio.create_task(generate._save_message(request(), REPLY, "fixture-model", "default", 0.1,
-        database=SimpleNamespace(add_message=delayed), saved_receipt=receipt, model_invoked=True))
+    operation = asyncio.create_task(
+        generate._save_message(
+            request(),
+            REPLY,
+            "fixture-model",
+            "default",
+            0.1,
+            database=SimpleNamespace(add_message=delayed),
+            model_invoked=True,
+        )
+    )
     try:
         assert await asyncio.to_thread(entered.wait, 1)
         if cancel:
@@ -103,12 +113,12 @@ async def test_timed_out_or_cancelled_thread_is_not_claimed_rolled_back(database
                 await operation
             assert error.value.status_code == 503 and isinstance(error.value.__cause__, TimeoutError)
             assert error.value.detail["messageSaved"] is None
-        assert receipt == {} and database.execute_sql("SELECT id FROM messages") == []
+        assert database.execute_sql("SELECT id FROM messages") == []
     finally:
         release.set()
         assert await asyncio.to_thread(done.wait, 2)
     # The actual thread commits later; no synthetic receipt or retry was made.
-    assert len(database.execute_sql("SELECT id FROM messages")) == 1 and receipt == {}
+    assert len(database.execute_sql("SELECT id FROM messages")) == 1
 
 
 @pytest.fixture

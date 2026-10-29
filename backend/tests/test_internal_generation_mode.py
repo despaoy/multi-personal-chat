@@ -241,7 +241,7 @@ async def test_message_db_reaches_save_and_invocation_record(monkeypatch, provid
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', fake_vllm)
     captured = {}
 
-    async def fake_save(request, reply, model_name, lora_name, cost_time, *, database=None, character_id=None, saved_receipt=None, model_invoked=None):
+    async def fake_save(request, reply, model_name, lora_name, cost_time, *, database=None, character_id=None, model_invoked=None):
         captured['save_db'] = database
         return True
 
@@ -275,16 +275,12 @@ async def test_save_message_and_invocation_use_injected_database(monkeypatch):
     sentinel_db = FakeDB()
     request = _request()
 
-    ok = await gen._save_message(
-        request, "reply", "test-model", "default", 0.1, database=sentinel_db
-    )
-    assert ok is True
+    receipt = await gen._save_message(request, "reply", "test-model", "default", 0.1, database=sentinel_db)
+    assert receipt == {"id": "fixture-message", **calls[-1][1]}
     assert calls[-1][0] == "message"
     assert calls[-1][1]["message"] == request.message
 
-    await gen._record_model_invocation(
-        request, "test-model", "default", 0.1, database=sentinel_db
-    )
+    await gen._record_model_invocation(request, "test-model", "default", 0.1, database=sentinel_db)
     assert calls[-1][0] == "invocation"
     # 两次写入都落在注入的数据库上（而非全局单例）
     assert len(calls) == 2
