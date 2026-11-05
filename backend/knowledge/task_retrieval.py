@@ -114,17 +114,15 @@ def collect_task_candidates(
             coverage[-1]["reference_binding"] = deepcopy(question_binding)
         if not accepted:
             continue
-        for rank, result in enumerate(bucket, 1):
+        for result in bucket:
             key = stable_key(result)
             existing = combined.get(key)
             if existing is None:
                 existing = deepcopy(result)
                 existing["retrieval_tasks"] = ()
-                existing["retrieval_task_ranks"] = ()
                 combined[key] = existing
             elif any(existing.get(field) != result.get(field) for field in _AUTHORITY):
                 raise RuntimeError("Conflicting source authority between task buckets")
             if index not in existing["retrieval_tasks"]:
                 existing["retrieval_tasks"] += (index,)
-                existing["retrieval_task_ranks"] += ((index, rank),)
     return TaskCandidatePlan(list(combined.values()), tuple(coverage))

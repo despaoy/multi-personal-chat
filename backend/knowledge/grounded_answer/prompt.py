@@ -14,14 +14,11 @@
 
 from __future__ import annotations
 
-import logging
 from html import escape
 
 from inference.context_budget import InputBudgetError, ReviewContextBudget
 
 from .models import AnswerMode, EvidencePacket
-
-logger = logging.getLogger(__name__)
 
 GROUNDED_PROMPT_VERSION = "grounded-answer-v7"
 

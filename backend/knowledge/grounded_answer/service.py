@@ -14,7 +14,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 import os
 import re
 import time
@@ -42,8 +41,6 @@ from .modes import AnswerModeDecider, ModeDecision
 from .packet import EvidencePacketBuilder, is_structured_retrieval_bundle
 from .prompt import GroundedPromptBuilder
 from .validator import CitationValidator
-
-logger = logging.getLogger(__name__)
 
 # 生成函数协议：与 vLLM 客户端 / ModelManager 适配器同构
 GenerateFn = Callable[..., Awaitable[str]]

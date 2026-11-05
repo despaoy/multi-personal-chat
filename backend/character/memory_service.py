@@ -33,9 +33,8 @@ from infra.environment import parse_unit_interval, read_bool
 from repositories.character_memory import memory_record_qualifiers as _row_qualifiers
 
 if TYPE_CHECKING:
-    from repositories.character_memory import CharacterMemoryRepository
-
     from knowledge.retrieval_core.embedding import EmbeddingProvider
+    from repositories.character_memory import CharacterMemoryRepository
 
 # 综合得分权重：相关度 60% + 重要性 30% + 新近度 10%
 WEIGHT_RELEVANCE = 0.6
@@ -1135,12 +1134,11 @@ class CharacterMemoryService:
         else:
             limit = MAX_MEMORY_ITEMS
         # Cover explicit fields before filling the remaining relevance slots.
-        preferred: list[MemoryItem] = []
+        preferred: dict[str, MemoryItem] = {}
         for requested_field in query_plan.fields if len(query_plan.fields) > 1 else ():
             for _score, item in scored:
                 if query_plan.matches(rows_by_id.get(item.memory_id, {}), requested_field):
-                    if item not in preferred:
-                        preferred.append(item)
+                    preferred.setdefault(item.memory_id, item)
                     break
         # Reserve a relevant candidate for each requested field/time pair before
         # filling spare ranking slots. This does not expand the candidate cap.
@@ -1149,10 +1147,9 @@ class CharacterMemoryService:
                 for _score, item in scored:
                     row = rows_by_id.get(item.memory_id, {})
                     if task.matches(row, field) and temporal_eligible(row, window):
-                        if item not in preferred:
-                            preferred.append(item)
+                        preferred.setdefault(item.memory_id, item)
                         break
-        ordered = [*preferred, *(item for _score, item in scored if item not in preferred)]
+        ordered = [*preferred.values(), *(item for _score, item in scored if item.memory_id not in preferred)]
         selected = tuple(ordered[:limit])
         covered = [field for field in query_plan.fields
                    if any(query_plan.matches(rows_by_id.get(item.memory_id, {}), field) for item in selected)]

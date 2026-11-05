@@ -10,7 +10,6 @@
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 from math import isfinite
 from typing import TYPE_CHECKING, Any
@@ -21,8 +20,6 @@ from .models import AnswerMode, FailureKind
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
-
-logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)

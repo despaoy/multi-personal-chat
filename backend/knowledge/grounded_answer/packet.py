@@ -9,7 +9,6 @@
 
 from __future__ import annotations
 
-import logging
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any
 
@@ -20,8 +19,6 @@ from .models import AnswerMode, EvidenceItem, EvidencePacket
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
-
-logger = logging.getLogger(__name__)
 
 
 def _layer_label(doc: Mapping[str, Any]) -> str:
