@@ -365,7 +365,14 @@ async def _generate_reply_body(
             configuration = await _read_generation_config(
                 request, message_db, get_request_context(), select_active_lora=False, bound_character_id=character_id
             )
-            return functools.partial(_generate_reply_impl, _generation_config=configuration)
+            return functools.partial(
+                _generate_reply_body,
+                enable_rag=enable_rag,
+                record_invocation=record_invocation,
+                invocation_purpose=invocation_purpose,
+                _generation_config=configuration,
+                _turn_scope=_turn_scope,
+            )
 
         return await generate_branch_reply(request, current_user, message_db, configure_generate=configure_generate)
 
