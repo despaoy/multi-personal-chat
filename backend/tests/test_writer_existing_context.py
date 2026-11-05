@@ -88,6 +88,7 @@ async def test_old_claim_keeps_complete_original_conditions_and_identity(stored,
     assert old["evidence"] == [SOURCE] and old["qualifiers"] == QUALIFIERS
     assert old["source_message_ids"] == ["existing-complete-source"]
     assert old["content"] == CONTENT
+    assert old["fact_kind"] == "other_user_fact"
     assert SOURCE not in request[0]["content"] and CURRENT not in request[0]["content"]
     assert supplied[0]["metadata"]["qualifiers"] == QUALIFIERS
     assert await repository.list_memory_records("role", scope, limit=None) == before

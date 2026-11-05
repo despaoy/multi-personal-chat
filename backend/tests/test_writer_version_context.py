@@ -113,12 +113,14 @@ async def test_successive_merge_keeps_transitive_conditions_without_old_target_a
         (current,) = payload["existing_memories"]
         assert current["memory_id"] == str(active[0]["id"])
         assert current["parent_memory_id"] == middle["id"]
+        assert current["fact_kind"] == "other_user_fact"
         history = {row["memory_id"]: row for row in payload["memory_version_context"]}
         assert set(history) == {str(old["id"]), str(middle["id"])}
         assert history[str(old["id"])]["evidence"] == [SOURCE]
         assert history[str(old["id"])]["qualifiers"] == QUALIFIERS
         assert history[str(middle["id"])]["evidence"] == [CURRENT]
         assert all(row["status"] == "superseded" for row in history.values())
+        assert all(row["fact_kind"] == "other_user_fact" for row in history.values())
         assert all(row["was_injected_in_last_reply"] is False for row in history.values())
         proposal = json.dumps(
             {
