@@ -28,7 +28,8 @@ def test_fact_memory_keeps_own_contract_and_raw_evidence_cannot_promote_itself()
     ctx = replace(context(episodic_reference_context='小说角色住在北京'), reference_context='用户住在西安')
     plan = build_generation_request(GenerationRequest(message='我住哪？', character_context=ctx))
     user = plan.messages[-1]['content']
-    assert '<memory_response_contract' in user
+    assert '<memory_response_contract' not in user
+    assert plan.messages[0]['content'].count('【记忆归属】') == 1
     assert user.index('用户住在西安') < user.index('<dialogue_evidence') < user.index('小说角色住在北京')
 
 

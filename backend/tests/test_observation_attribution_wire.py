@@ -108,24 +108,14 @@ async def final_wire(rig):
     messages = rig.answers[0]["messages"]
     system = "\n".join(message["content"] for message in messages if message["role"] == "system")
     user = unescape(messages[-1]["content"])
-    contract, = re.findall(r'<memory_response_contract source="application">\n(.*?)\n</memory_response_contract>', user, re.S)
+    assert '<memory_response_contract' not in user
+    policy = generation_request.MEMORY_ATTRIBUTION_POLICY
+    assert system.count(policy) == 1
+    start = system.index(policy)
+    contract = system[start:start + len(policy)]
     reference, = re.findall(r'<character_memory trust="untrusted" purpose="historical_reference">\n(.*?)\n</character_memory>', user, re.S)
     packets = [json.loads(line[2:]) for line in reference.splitlines() if line.startswith("- {")]
     return system, user, contract, packets
-
-
-async def baseline_preflight(rig):
-    """Return scope/identity and conflict booleans; no private/raw output."""
-    system, user, contract, packets = await final_wire(rig)
-    return {
-        "mode": rig.mode, "packet_count": len(packets), "selector_calls": len(rig.reviews), "answer_calls": len(rig.answers),
-        "subject_scopes": sorted({packet["subject_scope"] for packet in packets}),
-        "observation_count": sum(packet["source_observation"] is True for packet in packets),
-        "old_universal_subject_assertion": "这些记忆的主体是当前对话者" in contract,
-        "system_and_user_contract_equal": contract.strip() == generation_request.MEMORY_ATTRIBUTION_POLICY.strip(),
-        "shared_policy_in_system": generation_request.MEMORY_ATTRIBUTION_POLICY in system,
-        "complete_sources_in_user": all(body in user for body in rig.expected.values()),
-    }
 
 
 @pytest.mark.asyncio

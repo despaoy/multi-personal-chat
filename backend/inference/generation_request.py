@@ -444,6 +444,7 @@ def _build_generation_request_core(request: GenerationRequest) -> GenerationPlan
             memory_context=(
                 request.character_context.reference_context if request.character_context is not None else ""
             ),
+            include_memory_contract=not request.apply_prompt_policy,
             memory_query_result=memory_query_result(request.message, request.character_context),
             # 对话者昵称（用户可控）同样只进不可信参考区。
             speaker=sanitize_speaker_label(request.interlocutor),

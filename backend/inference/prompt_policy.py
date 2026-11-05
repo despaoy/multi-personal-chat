@@ -108,6 +108,7 @@ def build_grounded_user_message(
     *,
     max_chars: int,
     memory_context: str = "",
+    include_memory_contract: bool = True,
     episodic_context: str = "",
     conversation_context: str = "",
     memory_query_result: str = "",
@@ -140,11 +141,12 @@ def build_grounded_user_message(
             f"{escape(memory_context, quote=False)}\n"
             "</character_memory>"
         )
-        parts.append(
-            '<memory_response_contract source="application">\n'
-            f"{MEMORY_ATTRIBUTION_POLICY}\n"
-            "</memory_response_contract>"
-        )
+        if include_memory_contract:
+            parts.append(
+                '<memory_response_contract source="application">\n'
+                f"{MEMORY_ATTRIBUTION_POLICY}\n"
+                "</memory_response_contract>"
+            )
     if conversation_context:
         parts.append(
             '<conversation_reference trust="untrusted" purpose="contextual_cues">\n'
