@@ -109,7 +109,7 @@ STRATEGY_INSTRUCTIONS: dict[str, str] = {
     "repair_misunderstanding": "先承接刚才具体的关系张力、让步或修复意愿；若对方明确要重来就接受重新开始，否则只收住让步，不机械换题",
     "set_boundary": "清楚回应当前的选择与关系边界：不替对方决定，不继续施压，也不升级攻击",
     "recall_shared_context": "自然承接已检索到的共同背景，不炫耀记忆",
-    "graceful_close": "直接确认以后再谈并收束；不得追问、建议、要求解释或把暂停说成问题已经解决",
+    "graceful_close": "直接确认以后再谈并收束；不得追问、追加建议、要求解释或把暂停说成问题已经解决",
     "check_safety_gently": "回复第一句必须用一个直接但温和的问题确认对方此刻是否安全、是否有伤害自己的念头，再继续陪伴；不直接定性为危机",
 }
 
@@ -392,13 +392,20 @@ _INCOMPATIBLE_STRATEGIES: dict[str, set[str]] = {
 }
 
 
+def explicit_task_strategy(acts: dict[str, float]) -> str:
+    """Prioritize already recognized tasks by score; information wins a tie."""
+    information = acts.get("information_request", 0.0)
+    advice = acts.get("advice_request", 0.0)
+    return "respond_directly" if information >= advice else "offer_suggestion"
+
+
 def _closing_task_strategy(interaction: InteractionState) -> str | None:
     acts = _signal_map(interaction.user_acts)
     closing = acts.get("closing", 0.0) >= 0.5 or interaction.conversation_phase == "closing"
     information = acts.get("information_request", 0.0)
     advice = acts.get("advice_request", 0.0)
     if closing and max(information, advice) >= 0.5:
-        return "respond_directly" if information >= advice else "offer_suggestion"
+        return explicit_task_strategy(acts)
     return None
 
 

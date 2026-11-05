@@ -36,7 +36,7 @@ import json
 from datetime import datetime, timezone
 from math import isfinite
 
-from character.decision_policy import STRATEGY_INSTRUCTIONS, advice_boundary_instruction
+from character.decision_policy import STRATEGY_INSTRUCTIONS, advice_boundary_instruction, explicit_task_strategy
 from character.memory_clock import parse_memory_timestamp
 from character.models import (
     CharacterContext,
@@ -387,6 +387,7 @@ def _compact_dynamic_projection(
     explicit_information = acts.get("information_request", 0.0) >= 0.5
     explicit_advice = acts.get("advice_request", 0.0) >= 0.5
     explicit_task = explicit_information or explicit_advice
+    task_strategy = explicit_task_strategy(acts)
     advice_constraint = advice_boundary_instruction(explicit_information=explicit_information)
     gratitude = acts.get("gratitude", 0.0) >= 0.5
     resolved_third_party_risk = acts.get("resolved_third_party_risk", 0.0) >= 0.5
@@ -424,7 +425,7 @@ def _compact_dynamic_projection(
         constraint = _GENTLE_SAFETY_AVOID
         compatible_strategies = frozenset(("check_safety_gently", "acknowledge_emotion", "stay_present"))
     elif closing and explicit_task:
-        fallback_strategy = "offer_suggestion" if explicit_advice > explicit_information else "respond_directly"
+        fallback_strategy = task_strategy
         constraint = f"{_FACTUAL_AVOID}；{_CLOSING_AVOID}"
         compatible_strategies = frozenset((fallback_strategy, "graceful_close"))
     elif closing:
@@ -460,11 +461,7 @@ def _compact_dynamic_projection(
         fallback_strategy = "repair_misunderstanding"
         constraint = _REPAIR_AVOID
     elif resolved_third_party_risk and explicit_task:
-        fallback_strategy = (
-            "offer_suggestion"
-            if acts.get("advice_request", 0.0) >= acts.get("information_request", 0.0)
-            else "respond_directly"
-        )
+        fallback_strategy = task_strategy
         constraint = f"{_RESOLVED_THIRD_PARTY_RISK_AVOID}；{_FACTUAL_AVOID}"
         compatible_strategies = frozenset((fallback_strategy, "acknowledge_resolved_risk"))
     elif resolved_third_party_risk:
@@ -480,11 +477,7 @@ def _compact_dynamic_projection(
         constraint = _NEGATIVE_DISCLOSURE_AVOID
         compatible_strategies = frozenset(("acknowledge_emotion", "reflect_content", "stay_present"))
     elif explicit_task:
-        fallback_strategy = (
-            "offer_suggestion"
-            if acts.get("advice_request", 0.0) >= acts.get("information_request", 0.0)
-            else "respond_directly"
-        )
+        fallback_strategy = task_strategy
         constraint = _FACTUAL_AVOID
 
     if fallback_strategy:

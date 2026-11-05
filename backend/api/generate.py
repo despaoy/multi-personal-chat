@@ -235,7 +235,6 @@ async def _generate_reply_impl(
     delivery_context: dict | None = None,
     prepared_override=None,
     _canonical_character_id: str | None = None,
-    _generation_config: _GenerationConfig | None = None,
 ):
     from inference.model_manager import get_model_manager
     from inference.request_context import get_request_context, resolve_request_context, use_request_context
@@ -263,7 +262,6 @@ async def _generate_reply_impl(
                 delivery_context=delivery_context,
                 prepared_override=prepared_override,
                 _canonical_character_id=_canonical_character_id,
-                _generation_config=_generation_config,
                 _turn_scope=turn_scope,
             )
         except (Exception, asyncio.CancelledError) as error:
