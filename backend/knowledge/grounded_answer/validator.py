@@ -11,7 +11,6 @@
 同时执行轻量回答后检查（不重建第二套大型审核系统）：
 - evidence 边界标签泄漏
 - 答案超预算告警
-- evidence 为空时是否输出确定性结论（abstention 结构性防护 + 模板校验）
 """
 
 from __future__ import annotations
@@ -125,7 +124,7 @@ class CitationValidator:
         return bound
 
     # -- 回答清理与后置检查 ---------------------------------------------------
-    def sanitize_answer(self, answer_text: str, validation: CitationValidation) -> str:
+    def sanitize_answer(self, answer_text: str) -> str:
         """移除全部 [S#] 标记（含非法标记），返回纯文本 answer。"""
         cleaned = CITATION_MARKER_RE.sub("", answer_text)
         cleaned = re.sub(r"[ \t]+([。！？，；、])", r"\1", cleaned)
@@ -134,7 +133,6 @@ class CitationValidator:
     def post_check(
         self,
         answer_text: str,
-        packet: EvidencePacket,
         *,
         answer_max_chars: int = 4000,
     ) -> list[str]:
@@ -146,32 +144,7 @@ class CitationValidator:
                 break
         if answer_max_chars > 0 and len(answer_text) > answer_max_chars:
             raise RuntimeError(f"Grounded model answer exceeds character limit: {len(answer_text)}>{answer_max_chars}")
-        if not packet.documents and answer_text.strip() and _looks_confident(answer_text):
-            warnings.append("confident_answer_without_evidence")
         return warnings
-
-
-def _looks_confident(text: str) -> bool:
-    """abstention 模板之外的"确定性结论"信号（保守：只识别强断言句式）。"""
-    stripped = text.strip()
-    if not stripped:
-        return False
-    # 弃答/不确定/请求澄清的表述不算确定性结论
-    hedge_markers = (
-        "不足",
-        "无法",
-        "没有找到",
-        "暂无",
-        "不确定",
-        "未能确认",
-        "补充",
-        "澄清",
-        "明确说",
-        "资料有限",
-    )
-    if any(marker in stripped for marker in hedge_markers):
-        return False
-    return stripped.endswith(("。", "！", "？", ".")) and len(stripped) >= 12
 
 
 def public_citation_view(citation: dict[str, Any], *, debug: bool = False) -> dict[str, Any]:

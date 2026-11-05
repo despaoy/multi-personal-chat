@@ -494,15 +494,14 @@ class GroundedAnswerService:
         validation = self.validator.validate(raw_answer, packet)
         warnings.extend(validation.warnings)
 
-        answer_text = self.validator.sanitize_answer(raw_answer, validation)
+        answer_text = self.validator.sanitize_answer(raw_answer)
         if not answer_text:
             raise RuntimeError("Grounded model returned empty answer")
         if not validation.valid_keys or validation.invalid_keys:
             raise RuntimeError("Grounded model answer failed citation validation")
         citations = self.validator.bind(validation, packet) if want_citations else []
 
-        post = self.validator.post_check(answer_text, packet, answer_max_chars=self.answer_max_chars)
-        warnings.extend(post)
+        warnings.extend(self.validator.post_check(answer_text, answer_max_chars=self.answer_max_chars))
         return citations, answer_text, warnings
 
     def _build_packet(
