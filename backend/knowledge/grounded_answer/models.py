@@ -34,7 +34,6 @@ class FailureKind(str, Enum):  # noqa: UP042 - runtime 仍兼容 Python 3.10
     NO_DOMAIN = "no_domain"
     NO_RETRIEVAL = "no_retrieval"
     LOW_CONFIDENCE = "low_confidence"
-    CONTEXT_BUDGET_EXCEEDED = "context_budget_exceeded"
 
 
 @dataclass(frozen=True)

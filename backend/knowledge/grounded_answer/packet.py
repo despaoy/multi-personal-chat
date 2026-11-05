@@ -13,6 +13,7 @@ import logging
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any
 
+from inference.context_budget import InputBudgetError
 from knowledge.curated_sources import curated_source_packet, curated_source_receipts
 
 from .models import AnswerMode, EvidenceItem, EvidencePacket
@@ -205,7 +206,7 @@ class EvidencePacketBuilder:
             size = len(block) + (2 if blocks else 0)
             if self.evidence_budget is not None and used + size > self.evidence_budget:
                 if curated:
-                    raise ValueError("Complete curated answer evidence exceeds its character budget")
+                    raise InputBudgetError("Complete curated answer evidence exceeds its character budget")
                 truncated = True
                 continue
 

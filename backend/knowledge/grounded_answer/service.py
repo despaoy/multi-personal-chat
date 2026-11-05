@@ -23,7 +23,7 @@ from functools import partial
 from math import isfinite
 from typing import Any
 
-from inference.context_budget import ReviewContextBudget
+from inference.context_budget import InputBudgetError, ReviewContextBudget
 from inference.history import validate_history
 from inference.provider_context import ProviderContextBudget, get_provider_context_budget
 from knowledge.curated_sources import CuratedSourceChangedError, curated_source_receipts, validate_curated_source
@@ -529,11 +529,10 @@ class GroundedAnswerService:
         )
         reason = decision.abstention_reason
         if not packet.documents:
+            if packet.truncated and decision.mode not in (AnswerMode.NO_RAG, AnswerMode.ABSTENTION):
+                raise InputBudgetError("No complete grounded evidence fits evidence_budget_chars")
             packet.answer_mode = AnswerMode.ABSTENTION
-            if not reason:
-                reason = (
-                    FailureKind.CONTEXT_BUDGET_EXCEEDED.value if packet.truncated else FailureKind.NO_RETRIEVAL.value
-                )
+            reason = reason or FailureKind.NO_RETRIEVAL.value
         if packet.answer_mode == AnswerMode.ABSTENTION:
             packet.abstention_reason = packet.abstention_reason or reason
             if not packet.abstention_reason:

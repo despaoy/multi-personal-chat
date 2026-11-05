@@ -11,6 +11,8 @@ from html import unescape
 
 import pytest
 import test_grounded_source_lifecycle as source_fixture
+
+from inference.context_budget import InputBudgetError
 from knowledge.grounded_answer.packet import EvidencePacketBuilder
 from knowledge.grounded_answer.prompt import GroundedPromptBuilder
 
@@ -47,7 +49,11 @@ def arrange_grounded_projection(tmp_path, monkeypatch):
 
 async def ask_projection(rig):
     return await rig.service.answer(
-        QUERY, domain_id=DOMAIN, top_k=1, generate=rig.generate, model_id=MODEL_ID,
+        QUERY,
+        domain_id=DOMAIN,
+        top_k=1,
+        generate=rig.generate,
+        model_id=MODEL_ID,
     )
 
 
@@ -83,7 +89,11 @@ async def test_ordinary_fact_answer_uses_only_fresh_declared_text_and_cache(tmp_
         fresh = await ask_projection(rig)
     else:
         stream = rig.service.answer_stream(
-            QUERY, domain_id=DOMAIN, top_k=1, generate=rig.generate, model_id=MODEL_ID,
+            QUERY,
+            domain_id=DOMAIN,
+            top_k=1,
+            generate=rig.generate,
+            model_id=MODEL_ID,
         )
         try:
             events = [event async for event in stream]
@@ -153,7 +163,7 @@ async def test_complete_curated_source_over_grounded_budget_fails_without_partia
     assert len(body.splitlines()) == 2
     assert rig.service.packet_builder.evidence_budget == 6000 < len(body) < rig.extractor.max_chars
     rig.path.write_bytes(body.encode("utf-8"))
-    with pytest.raises(ValueError, match="budget"):
+    with pytest.raises(InputBudgetError, match="budget"):
         await ask_projection(rig)
     assert not rig.generate_calls and rig.service.cache.stats()["entries"] == 0
     assert len(rig.embedding_calls) == len(rig.rerank_calls) == 1
@@ -178,14 +188,14 @@ async def test_old_index_budget_cannot_discard_legal_short_fresh_source(tmp_path
     assert_current_result(result, rig)
     assert result.model_invoked and not result.cache_hit
     assert len(rig.generate_calls) == 1 and rig.generate_calls[0]["source_body"] == BODY_B
-    wire = unescape("\n".join(
-        message["content"] for message in rig.generate_calls[0]["kwargs"]["messages"]
-    ))
+    wire = unescape("\n".join(message["content"] for message in rig.generate_calls[0]["kwargs"]["messages"]))
     assert BODY_B in wire and BODY_A not in wire
     assert rig.service.cache.stats()["entries"] == 1
 
 
-async def test_low_confidence_with_legal_large_original_abstains_without_generation_budget_failure(tmp_path, monkeypatch):
+async def test_low_confidence_with_legal_large_original_abstains_without_generation_budget_failure(
+    tmp_path, monkeypatch
+):
     from dataclasses import replace
 
     rig = arrange_grounded_projection(tmp_path, monkeypatch)
@@ -230,4 +240,3 @@ async def test_low_confidence_with_legal_large_original_abstains_without_generat
     assert BODY_A not in result.answer and BODY_B not in result.answer
     assert not rig.generate_calls and rig.service.cache.stats()["entries"] == 0
     assert len(rig.embedding_calls) == len(rig.rerank_calls) == 1
-

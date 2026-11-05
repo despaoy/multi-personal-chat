@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 from test_grounded_dependency_errors import _bundle
 
+from inference.context_budget import InputBudgetError
 from knowledge.grounded_answer.cache import AnswerCache
 from knowledge.grounded_answer.service import GroundedAnswerService
 
@@ -39,7 +40,6 @@ async def test_one_query_one_result_preserves_evidence_and_normal_business_state
         "low": "low_confidence",
         "no_domain": "no_domain",
         "no_results": "no_retrieval",
-        "budget": "context_budget_exceeded",
     }.get(outcome, "")
     original = deepcopy(data)
     retrieve = Mock(side_effect=[data, AssertionError("No second retrieval may be attempted")])
@@ -53,7 +53,17 @@ async def test_one_query_one_result_preserves_evidence_and_normal_business_state
     service = GroundedAnswerService(
         retriever=retrieve, cache=AnswerCache(ttl_seconds=60), index_version_resolver=lambda _: "v1"
     )
-    if transport == "normal":
+    if outcome == "budget":
+        events = []
+        with pytest.raises(InputBudgetError):
+            if transport == "normal":
+                await service.answer(QUERY, generate=model, domain_id="story", filters=FILTERS)
+            else:
+                async for event in service.answer_stream(QUERY, generate=model, domain_id="story", filters=FILTERS):
+                    events.append(event)
+        assert events == []
+        assert service.cache.stats()["entries"] == 0
+    elif transport == "normal":
         result = await service.answer(QUERY, generate=model, domain_id="story", filters=FILTERS)
         assert result.model_invoked is (outcome == "success")
         assert result.abstained is (outcome != "success")

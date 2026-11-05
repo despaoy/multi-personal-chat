@@ -150,7 +150,7 @@ class GroundedPromptBuilder:
         source_blocks = [item.to_block() for item in packet.documents]
         source_chars = sum(map(len, source_blocks)) + 2 * (len(source_blocks) - 1)
         if self.evidence_max_chars is not None and source_chars > self.evidence_max_chars:
-            raise ValueError("Complete evidence packet exceeds grounded prompt budget")
+            raise InputBudgetError("Complete evidence packet exceeds grounded prompt budget")
         for item, bounded in zip(packet.documents, source_blocks, strict=True):
             attrs = [f'id="{item.citation_key}"']
             if item.document_type:
