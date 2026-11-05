@@ -157,12 +157,9 @@ class RoutedMultiScaleService:
             reranker=self.reranker,
         )
 
-        context_blocks: list[str] = []
-        background_blocks: list[str] = []
         background_support: dict[str, list[str]] = {}
         block_ids: dict[str, list[str]] = {}
         citations: list[dict[str, Any]] = []
-        emitted_scenes: set[str] = set()
         for candidate in selected:
             doc = candidate.document
             evidence = self.evidence_by_parent.get(doc.id)
@@ -171,28 +168,23 @@ class RoutedMultiScaleService:
                 # Stored claim-specific evidence is already in the index. Do
                 # not replace it with the beginning of a much broader scene.
                 # This is not a fresh exact-source verification or quotation.
-                context_blocks.append(
-                    render_card_evidence(
-                        {
-                            "title": doc.title,
-                            "metadata": doc.metadata,
-                            "source": doc.source.to_dict(),
-                            **{key: getattr(doc, key) for key in ("reality_status", "temporal_scope", "content_scope")},
-                        },
-                        evidence_text,
-                    )
+                block = render_card_evidence(
+                    {
+                        "title": doc.title,
+                        "metadata": doc.metadata,
+                        "source": doc.source.to_dict(),
+                        **{key: getattr(doc, key) for key in ("reality_status", "temporal_scope", "content_scope")},
+                    },
+                    evidence_text,
                 )
             else:
-                context_blocks.append(f"【{doc.document_type}摘要】{doc.title}\n{doc.summary}")
-            block_ids.setdefault(context_blocks[-1], []).append(doc.id)
+                block = f"【{doc.document_type}摘要】{doc.title}\n{doc.summary}"
+            block_ids.setdefault(block, []).append(doc.id)
             citations.append({"id": doc.id, **doc.source.to_dict()})
             scene = self.by_id.get(str(doc.metadata.get("scene_id") or ""))
             if scene is not None and visible_to(scene, knowledge_boundary):
                 block = f"【父场景】{scene.title}\n{scene.summary}"
                 background_support.setdefault(block, []).append(doc.id)
-                if scene.id not in emitted_scenes:
-                    background_blocks.append(block)
-                    emitted_scenes.add(scene.id)
 
         timeline: list[dict[str, Any]] = []
         if len(analysis.entities) >= 2 and any(c.document.document_type == "relation" for c in selected):
@@ -245,14 +237,12 @@ class RoutedMultiScaleService:
         if raw_excerpt and raw_excerpt.get("text"):
             # Put exact source first so a long background cannot crowd it out
             # of the generation evidence budget. It remains untrusted data.
-            context_blocks.insert(
-                0,
-                (
-                    f"【原文摘录】{raw_excerpt['source_path']} "
-                    f"L{raw_excerpt['line_start']}-{raw_excerpt['line_end']}\n{raw_excerpt['text']}"
-                ),
+            raw_block = (
+                f"【原文摘录】{raw_excerpt['source_path']} "
+                f"L{raw_excerpt['line_start']}-{raw_excerpt['line_end']}\n{raw_excerpt['text']}"
             )
-            block_ids.setdefault(context_blocks[0], []).append(raw_excerpt["parent_id"])
+            block_ids.setdefault(raw_block, []).append(raw_excerpt["parent_id"])
+            block_ids = {raw_block: block_ids[raw_block], **block_ids}
 
         # Use the instance's generation evidence budget. Admit complete packets,
         # then background, so a late negation/qualification is never clipped.
@@ -260,7 +250,7 @@ class RoutedMultiScaleService:
         used_chars = 0
         skipped_blocks = 0
         admitted_ids: set[str] = set()
-        for block in [*context_blocks, *background_blocks]:
+        for block in [*block_ids, *background_support]:
             size = len(block) + (2 if admitted else 0)
             supported_background = bool(admitted_ids.intersection(background_support.get(block, ())))
             over_budget = self.context_max_chars is not None and used_chars + size > self.context_max_chars
