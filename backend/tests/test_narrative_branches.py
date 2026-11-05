@@ -14,7 +14,8 @@ from fastapi.testclient import TestClient
 
 from db.database import SQLiteDB
 from db.schemas import GenerateResponse, MessageRequest
-from repositories.narrative import NarrativeRepository, Proposal
+from repositories.narrative import NarrativeConflict, NarrativeError, NarrativeRepository, Proposal
+from app.main import global_exception_handler
 from services.narrative import generate_branch_reply, parse_proposals, prepare_branch
 from services.chat_answer import ChatAnswer
 
@@ -42,15 +43,15 @@ def test_owner_and_branch_isolation(repo):
     assert len(repo.history("1", a["id"])) == 1
     assert repo.history("1", b["id"]) == []
     for method in [repo.get, repo.history, repo.assertions]:
-        with pytest.raises(HTTPException) as exc:
+        with pytest.raises(NarrativeError) as exc:
             method("2", a["id"])
-        assert exc.value.status_code == 404
+        assert exc.value.reason == "not_found"
 
 
 def test_atomic_stale_commit_and_archive(repo):
     branch = create(repo)
     repo.archive("1", branch["id"], branch["revision"])
-    with pytest.raises(HTTPException):
+    with pytest.raises(NarrativeConflict):
         commit(repo, branch)
     assert repo.history("1", branch["id"]) == []
     assert repo.rows("SELECT interaction_count FROM branch_states")[0]["interaction_count"] == 0
@@ -61,7 +62,7 @@ def test_transaction_rolls_back_revision_on_statement_failure(repo):
 
     branch = create(repo)
     with pytest.raises(sqlite3.OperationalError):
-        repo.transaction([repo.cas(branch), ("INSERT INTO nonexistent VALUES (1)", {}, 1)])
+        repo.db.narrative_transaction([repo.cas(branch), ("INSERT INTO nonexistent VALUES (1)", {}, 1)])
     assert repo.get("1", branch["id"])["revision"] == 1
 
 
@@ -77,9 +78,9 @@ def test_pending_confirmation_conflict_and_source_preserved(repo):
     commit(repo, current, trace="two", proposals=[Proposal(subject="妃", predicate="所在地", object="教室")])
     other = repo.assertions("1", branch["id"], status="pending")[0]
     current = repo.get("1", branch["id"])
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(NarrativeError) as exc:
         repo.decide("1", branch["id"], other["id"], current["revision"], confirm=True)
-    assert exc.value.status_code == 409
+    assert exc.value.reason == "conflict"
     repo.decide("1", branch["id"], other["id"], current["revision"], confirm=True, replace_ids=[pending["id"]])
     active = repo.assertions("1", branch["id"], status="active")
     assert {a["object"] for a in active} == {branch["initial_hypothesis"], "教室"}
@@ -138,7 +139,7 @@ def test_archive_during_generation_rejects_commit(repo):
         repo.archive("1", branch["id"], 1)
         return GenerateResponse(reply="回答", model="fixture", costTime=0)
 
-    with pytest.raises(HTTPException) as exc:
+    with pytest.raises(NarrativeConflict) as exc:
         asyncio.run(
             generate_branch_reply(
                 MessageRequest(message="继续", branchId=branch["id"], traceId="race"),
@@ -147,7 +148,7 @@ def test_archive_during_generation_rejects_commit(repo):
                 generate=generate,
             )
         )
-    assert exc.value.status_code == 409
+    assert exc.value.reason == "conflict"
     assert repo.history("1", branch["id"]) == []
 
 
@@ -183,6 +184,7 @@ def test_api_auth_bounds_feature_gate(repo, monkeypatch):
     from app.dependencies import get_current_user
 
     app = FastAPI()
+    app.add_exception_handler(NarrativeError, global_exception_handler)
     app.include_router(router)
     app.dependency_overrides[repository] = lambda: repo
     app.dependency_overrides[get_current_user] = lambda: {"user_id": 1}
@@ -201,6 +203,16 @@ def test_api_auth_bounds_feature_gate(repo, monkeypatch):
         "/api/narrative-branches", json={"character_id": "tsukiyashiro_kisaki", "title": "T", "initial_hypothesis": "H"}
     )
     assert result.status_code == 200
+    branch_id = result.json()["id"]
+    stale = client.post(f"/api/narrative-branches/{branch_id}/archive", json={"revision": 2})
+    assert stale.status_code == 409 and stale.json() == {"detail": "分支状态已变化，请刷新后重试"}
+    archived = client.post(f"/api/narrative-branches/{branch_id}/archive", json={"revision": 1})
+    assert archived.status_code == 200
+    again = client.post(f"/api/narrative-branches/{branch_id}/archive", json={"revision": 2})
+    assert again.status_code == 409 and again.json() == {"detail": "分支已归档"}
+    app.dependency_overrides[get_current_user] = lambda: {"user_id": 1, "auth_type": "api_key"}
+    denied = client.get("/api/narrative-branches")
+    assert denied.status_code == 403 and denied.json() == {"detail": "分支功能需要登录用户账号"}
     app.dependency_overrides[get_current_user] = lambda: {"user_id": 2}
     assert client.get("/api/narrative-branches/" + result.json()["id"]).status_code == 404
 
@@ -245,7 +257,7 @@ def test_reject_and_missing_source(repo):
     commit(repo, branch, proposals=[Proposal(subject="a", predicate="b", object="c")])
     p = repo.assertions("1", branch["id"], status="pending")[0]
     repo.db.execute_sql('DELETE FROM messages WHERE "branchId"=:id', {"id": branch["id"]})
-    with pytest.raises(HTTPException):
+    with pytest.raises(NarrativeError):
         repo.decide("1", branch["id"], p["id"], 2, confirm=True)
     repo.decide("1", branch["id"], p["id"], 2, confirm=False)
     assert repo.assertions("1", branch["id"], status="rejected")[0]["id"] == p["id"]
@@ -295,16 +307,27 @@ def test_gateway_rejects_branch_instead_of_ignoring():
 
 
 def test_character_mismatch_rejected_before_provider_call(repo, monkeypatch):
-    monkeypatch.setenv('CONTEXTUAL_DECISION_POLICY_ENABLED', 'false')
+    monkeypatch.setenv("CONTEXTUAL_DECISION_POLICY_ENABLED", "false")
     import api.generate as gen
     from inference import model_manager as mm
+
     branch = create(repo)
-    request = MessageRequest(message='继续', branchId=branch['id'], loraName='wrong')
-    _, _, prepared = asyncio.run(prepare_branch(request, '1', repo))
-    database = SimpleNamespace(config={}, loras=[{'name': 'wrong', 'status': 'inactive'}])
-    monkeypatch.setattr(mm, 'get_model_manager', lambda *, database=None: SimpleNamespace(_current_provider=SimpleNamespace(value='vllm'), get_current_provider=lambda: SimpleNamespace(name='vllm')))
+    request = MessageRequest(message="继续", branchId=branch["id"], loraName="wrong")
+    _, _, prepared = asyncio.run(prepare_branch(request, "1", repo))
+    database = SimpleNamespace(config={}, loras=[{"name": "wrong", "status": "inactive"}])
+    monkeypatch.setattr(
+        mm,
+        "get_model_manager",
+        lambda *, database=None: SimpleNamespace(
+            _current_provider=SimpleNamespace(value="vllm"), get_current_provider=lambda: SimpleNamespace(name="vllm")
+        ),
+    )
     with pytest.raises(HTTPException) as exc:
-        asyncio.run(gen._generate_reply_impl(request, {'user_id': 1}, message_db=database, prepared_override=prepared, persist_message=False))
+        asyncio.run(
+            gen._generate_reply_impl(
+                request, {"user_id": 1}, message_db=database, prepared_override=prepared, persist_message=False
+            )
+        )
     assert exc.value.status_code == 422
 
 
@@ -317,7 +340,6 @@ def test_full_web_generation_and_canonical_return(repo, monkeypatch):
     from services.character_context import build_character_context_service
 
     class Runtime:
-
         def __bool__(self):
             return False
 
@@ -331,55 +353,97 @@ def test_full_web_generation_and_canonical_return(repo, monkeypatch):
             return await job()
 
     class ForbiddenCache:
-
         async def get(self, *args):
-            pytest.fail('stateful generation consulted cache')
+            pytest.fail("stateful generation consulted cache")
 
         async def set(self, *args, **kwargs):
-            pytest.fail('stateful generation wrote cache')
+            pytest.fail("stateful generation wrote cache")
+
     seen = []
 
     async def model(request, *args, **kwargs):
-        seen.append(kwargs['prepared_character_turn'])
-        return ChatAnswer(reply='独立回答', used_rag=False, model_invoked=True, metadata={})
-    monkeypatch.setenv('NARRATIVE_BRANCHES_ENABLED', 'true')
-    monkeypatch.setenv('MEMORY_LLM_ENABLED', 'false')
-    monkeypatch.setattr(mm, 'get_model_manager', lambda *, database=None: SimpleNamespace(_current_provider=SimpleNamespace(value='vllm'), get_current_provider=lambda: SimpleNamespace(name='vllm')))
-    monkeypatch.setattr(gen, 'get_vllm_client', AsyncMock(return_value=SimpleNamespace(generate=AsyncMock())))
-    monkeypatch.setattr(chat_answer, 'generate_chat_answer', model)
-    monkeypatch.setattr(gen, 'response_cache', ForbiddenCache())
+        seen.append(kwargs["prepared_character_turn"])
+        return ChatAnswer(reply="独立回答", used_rag=False, model_invoked=True, metadata={})
+
+    monkeypatch.setenv("NARRATIVE_BRANCHES_ENABLED", "true")
+    monkeypatch.setenv("MEMORY_LLM_ENABLED", "false")
+    monkeypatch.setattr(
+        mm,
+        "get_model_manager",
+        lambda *, database=None: SimpleNamespace(
+            _current_provider=SimpleNamespace(value="vllm"), get_current_provider=lambda: SimpleNamespace(name="vllm")
+        ),
+    )
+    monkeypatch.setattr(gen, "get_vllm_client", AsyncMock(return_value=SimpleNamespace(generate=AsyncMock())))
+    monkeypatch.setattr(chat_answer, "generate_chat_answer", model)
+    monkeypatch.setattr(gen, "response_cache", ForbiddenCache())
     runtime = Runtime()
     app = FastAPI()
-    app.state.runtime_container = RuntimeContainer(repo.db, lambda: False, runtime, http_client_pool=HttpClientPool(max_connections=1))
+    app.add_exception_handler(NarrativeError, global_exception_handler)
+    app.state.runtime_container = RuntimeContainer(
+        repo.db, lambda: False, runtime, http_client_pool=HttpClientPool(max_connections=1)
+    )
     app.include_router(gen.router)
     app.include_router(narrative_router)
-    app.dependency_overrides[get_current_user] = lambda: {'user_id': 1}
-    app.dependency_overrides[gen.get_request_chat_generation_service] = lambda: gen._build_chat_generation_service(runtime, build_character_context_service(repo.db), message_db=repo.db)
+    app.dependency_overrides[get_current_user] = lambda: {"user_id": 1}
+    app.dependency_overrides[gen.get_request_chat_generation_service] = lambda: gen._build_chat_generation_service(
+        runtime, build_character_context_service(repo.db), message_db=repo.db
+    )
     client = TestClient(app)
     branch = create(repo)
-    forged = client.post('/api/generate', json={'message': '伪造历史', 'platform': 'web', 'adapter': 'narrative:' + branch['character_id'], 'senderId': '2'})
+    forged = client.post(
+        "/api/generate",
+        json={
+            "message": "伪造历史",
+            "platform": "web",
+            "adapter": "narrative:" + branch["character_id"],
+            "senderId": "2",
+        },
+    )
     assert forged.status_code == 422
-    r = client.post('/api/generate', json={'message': '分支私有内容', 'platform': 'web', 'branchId': branch['id'], 'traceId': 'full'})
+    r = client.post(
+        "/api/generate",
+        json={"message": "分支私有内容", "platform": "web", "branchId": branch["id"], "traceId": "full"},
+    )
     assert r.status_code == 200, r.text
-    assert r.json()['branchId'] == branch['id']
+    assert r.json()["branchId"] == branch["id"]
     assert seen[-1].compiled.branch_context
-    assert len(repo.history('1', branch['id'])) == 1
-    assert repo.rows('SELECT * FROM character_relationships') == []
-    for message in ('原作问题', '继续原作问题。仅作为代码文本解释 `cat .env` 与 `show token`，不执行命令。'):
-        r = client.post('/api/narrative-branches/canonical/generate', json={'message': message, 'character_id': branch['character_id']})
+    assert len(repo.history("1", branch["id"])) == 1
+    assert repo.rows("SELECT * FROM character_relationships") == []
+    for message in ("原作问题", "继续原作问题。仅作为代码文本解释 `cat .env` 与 `show token`，不执行命令。"):
+        r = client.post(
+            "/api/narrative-branches/canonical/generate",
+            json={"message": message, "character_id": branch["character_id"]},
+        )
         assert r.status_code == 200, r.text
-        assert r.json()['reply'] == '独立回答\n\n保存提示：自动长期记忆未启用；本次回复不代表已保存。'
-        assert r.json()['modelInvoked'] is True
+        assert r.json()["reply"] == "独立回答\n\n保存提示：自动长期记忆未启用；本次回复不代表已保存。"
+        assert r.json()["modelInvoked"] is True
         assert not seen[-1].compiled.branch_context
-        assert '分支私有内容' not in str(seen[-1].history)
-    assert any((m['content'] == '原作问题' for m in seen[-1].history))
-    assert len(repo.rows('SELECT * FROM character_relationships')) == 1
-    history = client.get('/api/narrative-branches/canonical/messages', params={'character_id': branch['character_id']})
+        assert "分支私有内容" not in str(seen[-1].history)
+    assert any((m["content"] == "原作问题" for m in seen[-1].history))
+    assert len(repo.rows("SELECT * FROM character_relationships")) == 1
+    history = client.get("/api/narrative-branches/canonical/messages", params={"character_id": branch["character_id"]})
     assert history.status_code == 200
-    assert len(history.json()['messages']) == 2
+    assert len(history.json()["messages"]) == 2
+
+    before_history = repo.history("1", branch["id"])
+    malformed = ChatAnswer(
+        reply="保留完整回答。\n```branch_proposals\nnot-json\n```", used_rag=False, model_invoked=True, metadata={}
+    )
+    monkeypatch.setattr(chat_answer, "generate_chat_answer", AsyncMock(return_value=malformed))
+    failed = client.post(
+        "/api/generate",
+        json={"message": "继续分支", "platform": "web", "branchId": branch["id"], "traceId": "invalid-protocol-http"},
+    )
+    assert failed.status_code == 503
+    assert failed.json() == {"detail": "模型分支提议格式无效，分支状态未提交，请检查生成结果后重试"}
+    assert repo.history("1", branch["id"]) == before_history
 
 
-@pytest.mark.parametrize("value,enabled", [("true", True), (" ON ", True), ("1", True), ("false", False), ("off", False), ("0", False), (None, False)])
+@pytest.mark.parametrize(
+    "value,enabled",
+    [("true", True), (" ON ", True), ("1", True), ("false", False), ("off", False), ("0", False), (None, False)],
+)
 def test_branch_feature_gate_uses_explicit_boolean_configuration(monkeypatch, value, enabled):
     from app.dependencies import require_narrative_enabled
     from fastapi import HTTPException
@@ -408,7 +472,7 @@ def test_invalid_branch_setting_is_not_reported_as_disabled(monkeypatch, value):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('failure', [None, 'snapshot', 'prepare', 'budget', 'pool'])
+@pytest.mark.parametrize("failure", [None, "snapshot", "prepare", "budget", "pool"])
 async def test_canonical_preparation_and_generation_share_one_model_context(monkeypatch, failure):
     from api import narrative, generate
     from app.runtime import RuntimeContainer
@@ -416,21 +480,32 @@ async def test_canonical_preparation_and_generation_share_one_model_context(monk
     from inference.request_context import get_request_context
     from inference.provider_context import get_provider_context_budget
     from services import character_context
+
     events = []
     from character.context_builder import MemoryContextBudgetError
-    error = MemoryContextBudgetError('isolated budget failure') if failure == 'budget' else RuntimeError('isolated context preparation failure')
-    provider = SimpleNamespace(name='openai_compat', base_url='https://isolated.invalid/v1', model='isolated-model', api_key='')
-    manager = SimpleNamespace(_current_provider=SimpleNamespace(value='openai_compat'), get_current_provider=lambda: provider)
+
+    error = (
+        MemoryContextBudgetError("isolated budget failure")
+        if failure == "budget"
+        else RuntimeError("isolated context preparation failure")
+    )
+    provider = SimpleNamespace(
+        name="openai_compat", base_url="https://isolated.invalid/v1", model="isolated-model", api_key=""
+    )
+    manager = SimpleNamespace(
+        _current_provider=SimpleNamespace(value="openai_compat"), get_current_provider=lambda: provider
+    )
 
     def snapshot():
-        events.append('snapshot')
-        if failure == 'snapshot':
+        events.append("snapshot")
+        if failure == "snapshot":
             raise error
-        manager._current_provider.value = 'vllm'
+        manager._current_provider.value = "vllm"
         return provider
+
     provider.snapshot = snapshot
-    monkeypatch.setattr(model_manager, 'get_model_manager', lambda *, database=None: manager)
-    monkeypatch.setenv('OPENAI_COMPAT_CONTEXT_WINDOW_TOKENS', '32768')
+    monkeypatch.setattr(model_manager, "get_model_manager", lambda *, database=None: manager)
+    monkeypatch.setenv("OPENAI_COMPAT_CONTEXT_WINDOW_TOKENS", "32768")
     database = object()
     captured = []
     prepared = object()
@@ -440,66 +515,78 @@ async def test_canonical_preparation_and_generation_share_one_model_context(monk
         assert get_request_context() is not None
         captured.append(get_request_context())
         assert get_provider_context_budget().window_tokens == 32768
-        events.append('build')
+        events.append("build")
 
         async def prepare(turn, character_id):
-            assert turn.message == '核对已提供的完整记录，不推断实际办理结果。'
-            assert character_id == 'isolated-character'
-            assert (turn.platform, turn.adapter, turn.sender_id, turn.conversation_id, turn.conversation_type) == ('web', 'narrative:isolated-character', '1', 'canonical:isolated-character', 'private')
+            assert turn.message == "核对已提供的完整记录，不推断实际办理结果。"
+            assert character_id == "isolated-character"
+            assert (turn.platform, turn.adapter, turn.sender_id, turn.conversation_id, turn.conversation_type) == (
+                "web",
+                "narrative:isolated-character",
+                "1",
+                "canonical:isolated-character",
+                "private",
+            )
             assert turn.history == () and turn.received_at is None
             assert get_request_context() is captured[0]
-            events.append('prepare')
-            if failure in {'prepare', 'budget'}:
+            events.append("prepare")
+            if failure in {"prepare", "budget"}:
                 raise error
             return prepared
+
         return SimpleNamespace(prepare_turn=prepare)
 
     async def reply(request, user, **kwargs):
         assert get_request_context() is captured[0]
-        assert kwargs['prepared_override'] is prepared
-        assert kwargs['message_db'] is database
-        events.append('generate')
-        return GenerateResponse(reply='隔离测试回答', model='isolated-model', costTime=0)
+        assert kwargs["prepared_override"] is prepared
+        assert kwargs["message_db"] is database
+        events.append("generate")
+        return GenerateResponse(reply="隔离测试回答", model="isolated-model", costTime=0)
 
     async def submit(job, **kwargs):
         return await job()
+
     runtime = SimpleNamespace(check_rate_limits=AsyncMock(), priority_for=lambda *args: 1, submit=submit)
     app = FastAPI()
-    app.state.runtime_container = RuntimeContainer(database, lambda: False, runtime, http_client_pool=HttpClientPool(max_connections=1))
-    monkeypatch.setattr(narrative, 'validate_character', lambda _: None)
-    monkeypatch.setattr(character_context, 'build_character_context_service', build)
-    monkeypatch.setattr(generate, '_generate_reply_impl', reply)
-    body = narrative.CanonicalMessage(character_id='isolated-character', message='核对已提供的完整记录，不推断实际办理结果。')
+    app.state.runtime_container = RuntimeContainer(
+        database, lambda: False, runtime, http_client_pool=HttpClientPool(max_connections=1)
+    )
+    monkeypatch.setattr(narrative, "validate_character", lambda _: None)
+    monkeypatch.setattr(character_context, "build_character_context_service", build)
+    monkeypatch.setattr(generate, "_generate_reply_impl", reply)
+    body = narrative.CanonicalMessage(
+        character_id="isolated-character", message="核对已提供的完整记录，不推断实际办理结果。"
+    )
     assert get_request_context() is None
-    if failure == 'pool':
+    if failure == "pool":
         app.state.runtime_container.http_client_pool = None
         with pytest.raises(HTTPException) as caught:
-            await narrative.canonical_generate(body, SimpleNamespace(app=app), {'user_id': 1})
-        assert caught.value.status_code == 503 and '连接池' in caught.value.detail
+            await narrative.canonical_generate(body, SimpleNamespace(app=app), {"user_id": 1})
+        assert caught.value.status_code == 503 and "连接池" in caught.value.detail
         assert events == []
-    elif failure == 'snapshot':
+    elif failure == "snapshot":
         with pytest.raises(HTTPException) as caught:
-            await narrative.canonical_generate(body, SimpleNamespace(app=app), {'user_id': 1})
+            await narrative.canonical_generate(body, SimpleNamespace(app=app), {"user_id": 1})
         assert caught.value.status_code == 503 and caught.value.__cause__ is error
-        assert events == ['snapshot']
-    elif failure in {'prepare', 'budget'}:
+        assert events == ["snapshot"]
+    elif failure in {"prepare", "budget"}:
         with pytest.raises(HTTPException) as caught:
-            await narrative.canonical_generate(body, SimpleNamespace(app=app), {'user_id': 1})
+            await narrative.canonical_generate(body, SimpleNamespace(app=app), {"user_id": 1})
         assert caught.value.status_code == 503 and caught.value.__cause__ is error
-        assert events == ['snapshot', 'build', 'prepare']
+        assert events == ["snapshot", "build", "prepare"]
         assert str(error) not in str(caught.value.detail)
-        if failure == 'budget':
-            assert caught.value.detail['stage'] == 'memory_context'
-            assert caught.value.detail['reason'] == 'selected_evidence_budget_exceeded'
+        if failure == "budget":
+            assert caught.value.detail["stage"] == "memory_context"
+            assert caught.value.detail["reason"] == "selected_evidence_budget_exceeded"
     else:
-        response = await narrative.canonical_generate(body, SimpleNamespace(app=app), {'user_id': 1})
-        assert response.model == 'isolated-model'
-        assert events == ['snapshot', 'build', 'prepare', 'generate']
+        response = await narrative.canonical_generate(body, SimpleNamespace(app=app), {"user_id": 1})
+        assert response.model == "isolated-model"
+        assert events == ["snapshot", "build", "prepare", "generate"]
     assert get_request_context() is None
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('missing', ['db', 'scheduler'])
+@pytest.mark.parametrize("missing", ["db", "scheduler"])
 async def test_canonical_missing_dependencies_stop_before_queue_or_model(monkeypatch, missing):
     from api import narrative
     from app.runtime import RuntimeContainer
@@ -507,18 +594,24 @@ async def test_canonical_missing_dependencies_stop_before_queue_or_model(monkeyp
     from inference import model_manager
 
     def forbidden(*args, **kwargs):
-        pytest.fail('Missing application dependency must not use global runtime or model')
+        pytest.fail("Missing application dependency must not use global runtime or model")
+
     runtime = SimpleNamespace(check_rate_limits=forbidden, submit=forbidden, priority_for=forbidden)
-    monkeypatch.setattr(concurrency_control, 'inference_runtime', runtime)
-    monkeypatch.setattr(model_manager, 'get_model_manager', forbidden)
-    monkeypatch.setattr(narrative, 'validate_character', lambda _: None)
+    monkeypatch.setattr(concurrency_control, "inference_runtime", runtime)
+    monkeypatch.setattr(model_manager, "get_model_manager", forbidden)
+    monkeypatch.setattr(narrative, "validate_character", lambda _: None)
     app = FastAPI()
-    app.state.runtime_container = RuntimeContainer(None if missing == 'db' else object(), lambda: False, None if missing == 'scheduler' else runtime, http_client_pool=HttpClientPool(max_connections=1))
-    body = narrative.CanonicalMessage(character_id='isolated-character', message='继续已提供的正史记录。')
+    app.state.runtime_container = RuntimeContainer(
+        None if missing == "db" else object(),
+        lambda: False,
+        None if missing == "scheduler" else runtime,
+        http_client_pool=HttpClientPool(max_connections=1),
+    )
+    body = narrative.CanonicalMessage(character_id="isolated-character", message="继续已提供的正史记录。")
     with pytest.raises(HTTPException) as caught:
-        await narrative.canonical_generate(body, SimpleNamespace(app=app), {'user_id': 1})
+        await narrative.canonical_generate(body, SimpleNamespace(app=app), {"user_id": 1})
     assert caught.value.status_code == 503
-    assert caught.value.detail['stage'] == 'dependencies'
+    assert caught.value.detail["stage"] == "dependencies"
 
 
 def test_invalid_proposal_turn_is_uncommitted_and_valid_retry_succeeds(repo):
@@ -553,9 +646,9 @@ def test_invalid_proposal_turn_is_uncommitted_and_valid_retry_succeeds(repo):
             warnings=["existing_generation_notice"],
         )
 
-    with pytest.raises(HTTPException) as raised:
+    with pytest.raises(NarrativeError) as raised:
         asyncio.run(generate_branch_reply(request, {"user_id": 1}, repo.db, generate=generate))
-    assert raised.value.status_code == 503 and isinstance(raised.value.__cause__, ValueError)
+    assert raised.value.reason == "generation_failed" and isinstance(raised.value.__cause__, ValueError)
     assert "分支状态未提交" in str(raised.value.detail)
     assert repo.get("1", branch["id"]) == branch
     assert repo.history("1", branch["id"]) == []

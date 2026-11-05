@@ -7,14 +7,13 @@ import json
 import re
 from dataclasses import replace
 
-from fastapi import HTTPException
 
 from character.memory_extractor import next_relationship_stage
 from character.memory_service import CharacterMemoryService
 from character.profile_registry import get_default_profile_registry
 from db.schemas import GenerateResponse
 from repositories.character_memory import DatabaseCharacterMemoryRepository
-from repositories.narrative import NarrativeRepository, Proposal, owner_id
+from repositories.narrative import NarrativeConflict, NarrativeError, NarrativeRepository, Proposal, owner_id
 from services.character_context import CharacterContextService, TurnInput
 
 
@@ -67,15 +66,15 @@ async def prepare_branch(request, owner, repo):
     branch = await asyncio.to_thread(repo.get, owner, request.branchId, writable=True)
     active = await asyncio.to_thread(repo.assertions, owner, branch["id"], 101, 0, "active")
     if len(active) > 100:
-        raise HTTPException(409, "有效事实超出第一版上下文容量")
+        raise NarrativeError("conflict", "有效事实超出第一版上下文容量")
     rows = await asyncio.to_thread(repo.history, owner, branch["id"])
     states = await asyncio.to_thread(repo.rows, "SELECT * FROM branch_states WHERE branch_id=:id", id=branch["id"])
     if not states:
-        raise HTTPException(409, "分支关系状态缺失")
+        raise NarrativeError("conflict", "分支关系状态缺失")
     # Re-read revision after snapshot loads; commit CAS catches changes after this point.
     latest = await asyncio.to_thread(repo.get, owner, branch["id"], writable=True)
     if latest["revision"] != branch["revision"]:
-        raise HTTPException(409, "分支状态已变化，请重试")
+        raise NarrativeError("conflict", "分支状态已变化，请重试")
     memory_repo = _BranchMemoryRepository(repo.db, states[0])
     service = CharacterContextService(
         get_default_profile_registry(),
@@ -104,7 +103,7 @@ async def prepare_branch(request, owner, repo):
         ensure_ascii=False,
     )
     if len(packet) > 16000:
-        raise HTTPException(409, "分支事实超过当前上下文预算，请创建较小分支")
+        raise NarrativeError("conflict", "分支事实超过当前上下文预算，请创建较小分支")
     prepared = replace(prepared, compiled=replace(prepared.compiled, branch_context=packet))
     return branch, active, prepared
 
@@ -115,7 +114,7 @@ async def generate_branch_reply(request, current_user, database, *, generate):
     prior = await asyncio.to_thread(repo.prior, owner, request.branchId, request.traceId)
     if prior:
         if prior["message"] != request.message or (prior["loraName"] or "") != request.loraName:
-            raise HTTPException(409, "同一请求ID不能用于不同内容")
+            raise NarrativeError("conflict", "同一请求ID不能用于不同内容")
         return GenerateResponse(
             reply=prior["reply"],
             model=prior["modelName"],
@@ -142,11 +141,11 @@ async def generate_branch_reply(request, current_user, database, *, generate):
         internal, current_user, persist_message=False, message_db=database, prepared_override=prepared
     )
     if not response.reply.strip() or "character_abstention_fallback" in (response.warnings or []):
-        raise HTTPException(503, "本轮未成功生成，分支状态未提交")
+        raise NarrativeError("generation_failed", "本轮未成功生成，分支状态未提交")
     try:
         reply, proposals = parse_proposals(response.reply, {a["id"] for a in active})
     except (ValueError, TypeError) as exc:
-        raise HTTPException(503, "模型分支提议格式无效，分支状态未提交，请检查生成结果后重试") from exc
+        raise NarrativeError("generation_failed", "模型分支提议格式无效，分支状态未提交，请检查生成结果后重试") from exc
     response = response.model_copy(
         update={
             "reply": reply,
@@ -173,7 +172,7 @@ async def generate_branch_reply(request, current_user, database, *, generate):
     stage = next_relationship_stage(prepared.relationship.stage, prepared.interaction_count + 1)
     try:
         await asyncio.to_thread(repo.commit_turn, branch, internal, response, proposals, stage)
-    except HTTPException:
+    except NarrativeConflict:
         prior = await asyncio.to_thread(repo.prior, owner, request.branchId, request.traceId)
         if prior and prior["message"] == request.message and (prior["loraName"] or "") == request.loraName:
             return GenerateResponse(

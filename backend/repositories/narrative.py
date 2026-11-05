@@ -7,12 +7,23 @@ import uuid
 from datetime import datetime, timezone
 from typing import Literal
 
-from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 
-class NarrativeConflict(Exception):
+class NarrativeError(Exception):
+    """An expected branch failure; transport mapping belongs to the API."""
+
+    def __init__(self, reason, detail):
+        super().__init__(detail)
+        self.reason = reason
+        self.detail = detail
+
+
+class NarrativeConflict(NarrativeError):
     """A transaction lost its revision or assertion precondition."""
+
+    def __init__(self):
+        super().__init__("conflict", "分支状态已变化，请刷新后重试")
 
 
 class Proposal(BaseModel):
@@ -31,7 +42,7 @@ def now():
 def owner_id(user):
     value = (user or {}).get("user_id")
     if value is None or (user or {}).get("auth_type") in {"api_key", "managed_api_key"}:
-        raise HTTPException(403, "分支功能需要登录用户账号")
+        raise NarrativeError("account_required", "分支功能需要登录用户账号")
     return str(value)
 
 
@@ -47,10 +58,10 @@ class NarrativeRepository:
             "SELECT * FROM narrative_branches WHERE id=:id AND owner_user_id=:owner", id=branch_id, owner=owner
         )
         if not rows:
-            raise HTTPException(404, "分支不存在")
+            raise NarrativeError("not_found", "分支不存在")
         branch = rows[0]
         if writable and branch["status"] != "active":
-            raise HTTPException(409, "分支已归档")
+            raise NarrativeError("conflict", "分支已归档")
         return branch
 
     def list(self, owner, limit=50, offset=0):
@@ -62,18 +73,12 @@ class NarrativeRepository:
             offset=offset,
         )
 
-    def transaction(self, statements):
-        try:
-            self.db.narrative_transaction(statements)
-        except NarrativeConflict as exc:
-            raise HTTPException(409, "分支状态已变化，请刷新后重试") from exc
-
     def create(self, owner, character_id, title, hypothesis):
         branch_id, timestamp = uuid.uuid4().hex, now()
         params = dict(
             id=branch_id, owner=owner, character=character_id, title=title, hypothesis=hypothesis, now=timestamp
         )
-        self.transaction(
+        self.db.narrative_transaction(
             [
                 (
                     "INSERT INTO narrative_branches (id,owner_user_id,character_id,title,initial_hypothesis,"
@@ -122,7 +127,7 @@ class NarrativeRepository:
     def archive(self, owner, branch_id, revision):
         branch = self.get(owner, branch_id, writable=True)
         branch["revision"] = revision
-        self.transaction([self.cas(branch, archive=True)])
+        self.db.narrative_transaction([self.cas(branch, archive=True)])
         return self.get(owner, branch_id)
 
     def decide(self, owner, branch_id, assertion_id, revision, *, confirm, replace_ids=()):
@@ -132,7 +137,7 @@ class NarrativeRepository:
             "SELECT * FROM branch_assertions WHERE id=:id AND branch_id=:branch", id=assertion_id, branch=branch_id
         )
         if not targets:
-            raise HTTPException(404, "提议不存在")
+            raise NarrativeError("not_found", "提议不存在")
         target = targets[0]
         statements = [self.cas(branch)]
         if confirm:
@@ -143,13 +148,13 @@ class NarrativeRepository:
                 owner=owner,
             )
             if not sources:
-                raise HTTPException(409, "来源消息缺失，不能确认该提议")
+                raise NarrativeError("conflict", "来源消息缺失，不能确认该提议")
             active = self.assertions(owner, branch_id, limit=101, status="active")
             if len(active) >= 100:
-                raise HTTPException(409, "第一版每个分支最多100条有效事实")
+                raise NarrativeError("conflict", "第一版每个分支最多100条有效事实")
             dependencies = set(json.loads(target["source_assertion_ids"]))
             if not dependencies.issubset({a["id"] for a in active}):
-                raise HTTPException(409, "依赖事实已失效，请拒绝该提议并重新生成")
+                raise NarrativeError("conflict", "依赖事实已失效，请拒绝该提议并重新生成")
 
             def normalize(value):
                 return " ".join(value.split()).casefold()
@@ -163,8 +168,9 @@ class NarrativeRepository:
                 and normalize(a["object"]) != normalize(target["object"])
             }
             if conflicts != set(replace_ids):
-                raise HTTPException(
-                    409, {"message": "直接冲突需显式选择替代；语义冲突须人工核对", "conflictIds": sorted(conflicts)}
+                raise NarrativeError(
+                    "conflict",
+                    {"message": "直接冲突需显式选择替代；语义冲突须人工核对", "conflictIds": sorted(conflicts)},
                 )
             # Retract transitive dependants so replacing a premise cannot leave stale claims active.
             retract = set(conflicts)
@@ -174,7 +180,7 @@ class NarrativeRepository:
                     break
                 retract = expanded
             if dependencies & retract:
-                raise HTTPException(409, "新事实依赖即将撤回的事实，请重新提议")
+                raise NarrativeError("conflict", "新事实依赖即将撤回的事实，请重新提议")
             for old in retract:
                 statements.append(
                     (
@@ -192,7 +198,7 @@ class NarrativeRepository:
                 1,
             )
         )
-        self.transaction(statements)
+        self.db.narrative_transaction(statements)
         return self.get(owner, branch_id)
 
     def history(self, owner, branch_id, limit=20, offset=0):
@@ -274,4 +280,4 @@ class NarrativeRepository:
                     1,
                 )
             )
-        self.transaction(statements)
+        self.db.narrative_transaction(statements)
