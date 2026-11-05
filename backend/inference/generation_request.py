@@ -501,6 +501,7 @@ def _build_packet_budgeted_request(request: GenerationRequest) -> GenerationPlan
     accepted = []
     accepted_ids: set[str] = set()
     best = None
+    budget_error = None
     pending = list(request.retrieval.evidence_packets)
     while pending:
         deferred = []
@@ -512,6 +513,7 @@ def _build_packet_budgeted_request(request: GenerationRequest) -> GenerationPlan
                 continue
             evidence = "\n\n".join([*(p["text"] for p in accepted), text])
             if request.evidence_max_chars > 0 and len(evidence) > request.evidence_max_chars:
+                budget_error = InputBudgetError("Complete generation evidence exceeds evidence_max_chars")
                 continue
             candidate_ids = accepted_ids | set(ids)
             retrieval = replace(
@@ -533,7 +535,8 @@ def _build_packet_budgeted_request(request: GenerationRequest) -> GenerationPlan
             )
             try:
                 plan = _build_generation_request_core(replace(request, retrieval=retrieval))
-            except InputBudgetError:
+            except InputBudgetError as exc:
+                budget_error = exc
                 continue
             accepted.append(packet)
             accepted_ids = candidate_ids
@@ -543,6 +546,8 @@ def _build_packet_budgeted_request(request: GenerationRequest) -> GenerationPlan
         pending = deferred
     if best is not None:
         return replace(best, retrieval=replace(best.retrieval, evidence_packets=tuple(accepted)))
+    if budget_error is not None:
+        raise budget_error
     # Unknown evidence is not a license to generate from rejected summaries.
     retrieval = replace(
         request.retrieval,
@@ -556,10 +561,9 @@ def _build_packet_budgeted_request(request: GenerationRequest) -> GenerationPlan
         ),
         packet_coverage=packet_coverage(len(request.retrieval.evidence_packets), 0),
         citations=(),
-        reason="evidence_budget_exhausted",
+        reason="insufficient_retrieval_evidence",
     )
     return _build_generation_request_core(replace(request, retrieval=retrieval))
-
 
 
 async def _generate_text(generate: Callable[..., Awaitable[str]], **kwargs) -> str:

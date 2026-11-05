@@ -202,6 +202,7 @@ def test_unrooted_cycle_cannot_admit_itself_or_loop():
         replace(request, retrieval=replace(request.retrieval, evidence_packets=(parent, child)))
     )
     assert not plan.retrieval.evidence_packets and plan.retrieval.status == "character_abstention"
+    assert plan.retrieval.reason == "insufficient_retrieval_evidence"
 
 
 def test_stored_parent_id_without_actual_packets_is_not_dependency_evidence():

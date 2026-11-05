@@ -8,6 +8,7 @@ from html import unescape
 import pytest
 
 from inference.evidence_coverage import is_partial_coverage
+from inference.context_budget import InputBudgetError
 from inference.generation_request import GenerationRequest, RetrievalResult, build_generation_request
 from inference.task_evidence_coverage import TASK_COVERAGE_POLICY
 
@@ -106,12 +107,14 @@ def test_previously_settled_visibility_is_recomputed_from_new_actual_packets():
     assert wire(second)[2]["status"] == "not_admitted" and wire(second)[2]["semantic_coverage"] == "not_established"
 
 
-def test_no_admitted_packets_preserves_unavailable_task_metadata():
-    req, plan = positive()
+def test_no_packet_fits_reports_capacity_without_mutating_task_metadata():
+    req, first = positive()
+    original = wire(first)
     changed = tuple(dict(p, text=HUGE) for p in packets())
-    plan = build_generation_request(replace(req, retrieval=replace(req.retrieval, evidence_packets=changed)))
-    assert plan.retrieval.status == "character_abstention" and all(x["status"] == "not_admitted" for x in wire(plan))
-    assert HUGE[:300] not in unescape(plan.messages[-1]["content"])
+    with pytest.raises(InputBudgetError):
+        build_generation_request(replace(req, retrieval=replace(req.retrieval, evidence_packets=changed)))
+    assert wire(first) == original
+    assert all(packet["text"] == HUGE for packet in changed)
 
 
 def test_flat_opaque_evidence_cannot_certify_candidate_ids():

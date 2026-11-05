@@ -11,6 +11,7 @@ import pytest
 
 from inference.answer_citations import prepare_answer_citations
 from inference.evidence_coverage import SOURCE_COVERAGE_POLICY, is_partial_coverage, settle_source_coverage
+from inference.context_budget import InputBudgetError
 from inference.generation_request import GenerationRequest, RetrievalResult, build_generation_request
 from knowledge.source_expansion import expand_source_context
 from knowledge.vector_db import VectorDatabase
@@ -113,11 +114,11 @@ def test_index_scope_admitted_does_not_certify_original_full_document():
     assert "不能证明原始全文" in result.messages[0]["content"]
 
 
-def test_all_packets_omitted_keep_zero_coverage_and_abstention():
-    result = plan([packet("a", "大章" * 10000)], coverage(("a",)))
-    assert result.retrieval.status == "character_abstention"
-    assert wire_coverage(result)["sources"][0]["admitted_chunk_count"] == 0
-    assert is_partial_coverage(result.retrieval)
+def test_all_packets_over_budget_fail_instead_of_zero_coverage_success():
+    sources = coverage(("a",))
+    with pytest.raises(InputBudgetError):
+        plan([packet("a", "大章" * 10000)], sources)
+    assert sources == coverage(("a",))
 
 
 def test_untracked_curated_packets_still_report_actual_packet_pruning():

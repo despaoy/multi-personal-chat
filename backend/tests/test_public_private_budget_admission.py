@@ -13,7 +13,7 @@ from scope_fixtures import open_scope_response
 from character.models import CompiledCharacterContext, UserScope
 from character.source_memory import SourceMemoryService, attach_sources
 from db.database import SQLiteDB
-from inference.context_budget import CONTEXT_SAFETY_MARGIN_TOKENS, estimated_tokens
+from inference.context_budget import CONTEXT_SAFETY_MARGIN_TOKENS, InputBudgetError, estimated_tokens
 from inference.generation_request import (
     GenerationRequest,
     RetrievalResult,
@@ -193,6 +193,14 @@ async def test_final_public_admission_keeps_whole_granted_private_speech_and_exa
     request = GenerationRequest(
         message=QUERY, character_context=context, retrieval=retrieval, context_window_tokens=65536, max_tokens=2048
     )
+    if all(lengths):
+        original = context.source_candidate_context
+        assert json.loads(original)["records"][0]["text"] == PRIVATE_BODY
+        with pytest.raises(InputBudgetError):
+            build_generation_request(request)
+        assert context.source_candidate_context == original
+        assert context.memory_source_status == "budget_omitted" and not context.memory_packets
+        return
     plan = build_generation_request(request)
     wire = unescape("\n".join(message["content"] for message in plan.messages))
     assert private_packet(plan)["records"][0]["text"] == PRIVATE_BODY
@@ -208,13 +216,7 @@ async def test_final_public_admission_keeps_whole_granted_private_speech_and_exa
         <= 65536
     )
     row = render_curated_tasks(plan.retrieval)[0]
-    if all(lengths):
-        assert plan.retrieval.status == "character_abstention" and plan.retrieval.reason == "evidence_budget_exhausted"
-        assert not plan.retrieval.evidence_packets and not plan.retrieval.admitted_evidence_packets
-        assert row["status"] == "related_candidate_not_admitted" and row["limitations"] == ""
-        assert all("source_quote" not in proof and "source_reference" not in proof for proof in row["evidence"])
-        assert plan.should_generate
-    elif any(lengths):
+    if any(lengths):
         assert (
             SHORT in wire
             and row["status"] == "partial_source_evidence"
@@ -232,28 +234,30 @@ async def test_final_public_admission_keeps_whole_granted_private_speech_and_exa
         )
 
 
-async def test_public_empty_final_budget_does_not_skip_generation_with_private_sources(setup):
+async def test_public_empty_capacity_stops_generation_without_discarding_private_sources(setup):
     context = await context_from_granted_source(setup)
     retrieval = await public_retrieval(setup, (True, True))
+    original = context.source_candidate_context
+    assert json.loads(original)["records"][0]["text"] == PRIVATE_BODY
     observed = []
 
     async def generate(**kwargs):
         observed.append(kwargs["messages"])
-        assert private_packet(SimpleNamespace(messages=kwargs["messages"]))["records"][0]["text"] == PRIVATE_BODY
-        assert LONG_TAIL not in unescape("\n".join(message["content"] for message in kwargs["messages"]))
-        return "历史原话的提醒条件仍可核对，公共约定本轮未接纳，不能补造。"
+        return "must not turn a capacity error into a partial success"
 
-    result = await generate_character_response(
-        GenerationRequest(
-            message=QUERY, character_context=context, retrieval=retrieval, context_window_tokens=65536, max_tokens=2048
-        ),
-        generate,
-    )
-    assert len(observed) == 1 and result.model_invoked and not result.guard_retried
-    assert (
-        result.plan.character_context.memory_source_status == "available"
-        and result.plan.retrieval.status == "character_abstention"
-    )
+    with pytest.raises(InputBudgetError):
+        await generate_character_response(
+            GenerationRequest(
+                message=QUERY,
+                character_context=context,
+                retrieval=retrieval,
+                context_window_tokens=65536,
+                max_tokens=2048,
+            ),
+            generate,
+        )
+    assert observed == []
+    assert context.source_candidate_context == original and context.memory_source_status == "budget_omitted"
 
 
 @pytest.mark.parametrize("identity", [0, "0", False])

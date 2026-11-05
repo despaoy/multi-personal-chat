@@ -2,6 +2,7 @@ import asyncio
 
 import pytest
 
+from inference.context_budget import InputBudgetError
 from inference.generation_request import GenerationRequest, RetrievalResult, build_generation_request
 
 
@@ -19,17 +20,23 @@ def test_final_window_admits_whole_packets_and_updates_citations():
     assert plan.retrieval.evidence_packets == packets[:1]
 
 
-def test_no_packet_fits_does_not_use_background_as_fact():
-    packets = ({'text': '甲' * 8000, 'document_ids': ['a'], 'kind': 'evidence'},
-               {'text': '背景', 'document_ids': [], 'kind': 'background', 'supporting_document_ids': ['a']})
-    request = GenerationRequest(message='问题', max_tokens=100, context_window_tokens=2000,
-                                retrieval=RetrievalResult(status='ok', evidence='甲' * 8000,
-                                    evidence_packets=packets, citations=({'id': 'a'},)))
-    plan = build_generation_request(request)
-    assert plan.retrieval.status == 'character_abstention'
-    assert plan.retrieval.reason == 'evidence_budget_exhausted'
-    assert not plan.retrieval.citations
-    assert '背景' not in plan.messages[-1]['content']
+def test_no_packet_fits_reports_capacity_instead_of_background_or_abstention():
+    packets = (
+        {"text": "甲" * 8000, "document_ids": ["a"], "kind": "evidence"},
+        {"text": "背景", "document_ids": [], "kind": "background", "supporting_document_ids": ["a"]},
+    )
+    request = GenerationRequest(
+        message="问题",
+        max_tokens=100,
+        context_window_tokens=2000,
+        retrieval=RetrievalResult(
+            status="ok", evidence="甲" * 8000, evidence_packets=packets, citations=({"id": "a"},)
+        ),
+    )
+    with pytest.raises(InputBudgetError):
+        build_generation_request(request)
+    assert request.retrieval.evidence_packets == packets
+    assert request.retrieval.citations == ({"id": "a"},)
 
 
 def test_token_budget_rechecks_background_ownership():
