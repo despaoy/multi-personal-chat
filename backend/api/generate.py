@@ -319,9 +319,7 @@ async def _generate_reply_body(
             )
             return functools.partial(_generate_reply_impl, _generation_config=configuration)
 
-        return await generate_branch_reply(
-            request, current_user, message_db, configure_generate=configure_generate
-        )
+        return await generate_branch_reply(request, current_user, message_db, configure_generate=configure_generate)
 
     from inference.request_context import get_request_context
 
