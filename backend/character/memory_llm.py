@@ -41,7 +41,7 @@ from character.memory_extractor import (
     unretracted_memory_source,
 )
 from character.memory_query import lookup_fields
-from character.memory_subject import claims_other_subject_as_user, explicitly_other_subject
+from character.memory_subject import claims_other_subject_as_user, explicitly_other_subject, source_value_clauses
 from character.models import MemoryItem, UserScope
 from character.temporal_provenance import model_temporal_provenance
 from db.memory_claim_guard import MemoryClaimConflict
@@ -1021,6 +1021,12 @@ def _proposal_evidence(raw: dict[str, Any], source_message: str) -> str:
     return "".join(units[key] for key in references)
 
 
+def _only_other_subject_clauses(clauses: tuple[str, ...]) -> bool:
+    normalized = tuple(re.sub(r"\s+", " ", clause) for clause in clauses)
+    return bool(normalized) and all(_THIRD_PARTY_FACT_PATTERN.search(clause) or _NAMED_THIRD_PARTY_PATTERN.search(clause)
+                                    for clause in normalized)
+
+
 def _candidate_to_proposal(
     raw: dict[str, Any],
     *,
@@ -1089,14 +1095,14 @@ def _candidate_to_proposal(
             return None
     self_alias_exclusion = kind == "alias_exclusion"
     if (not event_observation and not self_alias_exclusion
-            and (_THIRD_PARTY_FACT_PATTERN.search(evidence) or _NAMED_THIRD_PARTY_PATTERN.search(evidence))):
+            and _only_other_subject_clauses(source_value_clauses(source=evidence, evidence=evidence, value=value_fragments or value))):
         return None
     if (kind in {'name', 'alias', 'alias_exclusion', 'like', 'dislike', 'major', 'study_stage', 'origin', 'residence', 'location', 'workplace'}
             and operation not in {'NOOP', 'RETRACT', 'ERASE'}
-            and explicitly_other_subject(source=source_message, evidence=evidence, value=value)):
+            and explicitly_other_subject(source=source_message, evidence=evidence, value=value_fragments or value)):
         return None
     if kind == "other_user_fact" and claims_other_subject_as_user(
-        source=source_message, evidence=evidence, value=value, content=proposed_content,
+        source=source_message, evidence=evidence, value=value_fragments or value, content=proposed_content,
     ):
         raise MemoryResponseError("content", "记忆 LLM 提案将明确的其他主体改写为用户")
     if not event_observation:
@@ -1113,12 +1119,12 @@ def _candidate_to_proposal(
     if kind in {"origin", "residence", "location"} and operation in {"ADD", "SUPERSEDE", "COEXIST", "MERGE"}:
         # Admission of a quote does not prove the original clause's actor or
         # factual scope. Keep this independent source boundary unchanged.
+        if _only_other_subject_clauses(source_value_clauses(source=source_message, evidence=evidence, value=value_fragments or value)):
+            return None
         occurrences = list(re.finditer(re.escape(evidence), source_message))
         if occurrences and not any(
             all(memory_evidence_allowed(clause.group())
                 and not fictional_memory_context(clause.group())
-                and not _NAMED_THIRD_PARTY_PATTERN.search(clause.group())
-                and not _THIRD_PARTY_FACT_PATTERN.search(clause.group())
                 for clause in re.finditer(r"[^，,。！？!?；;\n]+[。！？!?；;]?", source_message)
                 if clause.start() < occurrence.end() and clause.end() > occurrence.start())
             and all(not fictional_memory_context(sentence.group())

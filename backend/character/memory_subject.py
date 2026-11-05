@@ -33,34 +33,32 @@ _INVERSE_SUBJECT = re.compile(
 )
 
 
-def explicitly_other_subject(*, source: str, evidence: str, value: str) -> bool:
-    """Reject a value only when all matching source clauses explicitly belong elsewhere.
-
-    Inspect the original clause, not just a model-trimmed evidence quote.
-    Multiple occurrences/unknown subjects cannot establish this verdict.
-    No text is rewritten; callers retain the full source independently.
-    """
-    if not evidence or not value:
-        return False
-    positions = [m.start() for m in re.finditer(re.escape(evidence), source)]
-    if not positions:
-        return False
-    subjects = []
-    for start in positions:
-        end = start + len(evidence)
+def source_value_clauses(*, source: str, evidence: str, value: str | tuple[str, ...]) -> tuple[str, ...]:
+    """Bind the cited value to original clauses; whitespace is a matching view only."""
+    quoted = [re.escape(char) for char in evidence if not char.isspace()]
+    values = (value,) if isinstance(value, str) else value
+    targets = tuple(re.sub(r"\s+", "", part) for part in values)
+    if not quoted or not all(targets):
+        return ()
+    result = []
+    for match in re.finditer(r"\s*".join(quoted), source):
         for clause in _CLAUSES.finditer(source):
-            if clause.start() >= end or clause.end() <= start:
-                continue
-            overlap = source[max(start, clause.start()):min(end, clause.end())]
-            if value not in overlap:
-                continue
-            clause_text = clause.group().strip()
-            match = _DIRECT_SUBJECT.match(clause_text) or _INVERSE_SUBJECT.fullmatch(clause_text)
-            subjects.append(match['owner'] if match else None)
+            overlap = source[max(match.start(), clause.start()):min(match.end(), clause.end())]
+            if any(target in re.sub(r"\s+", "", overlap) for target in targets):
+                result.append(clause.group().strip())
+    return tuple(result)
+
+
+def explicitly_other_subject(*, source: str, evidence: str, value: str | tuple[str, ...]) -> bool:
+    """Only unanimous explicit other owners of this cited value establish rejection."""
+    subjects = []
+    for clause in source_value_clauses(source=source, evidence=evidence, value=value):
+        match = _DIRECT_SUBJECT.match(clause) or _INVERSE_SUBJECT.fullmatch(clause)
+        subjects.append(match['owner'] if match else None)
     return bool(subjects) and all(owner is not None and owner not in SELF_OWNERS for owner in subjects)
 
 
-def claims_other_subject_as_user(*, source: str, evidence: str, value: str, content: str) -> bool:
+def claims_other_subject_as_user(*, source: str, evidence: str, value: str | tuple[str, ...], content: str) -> bool:
     """Detect an explicit user claim whose cited source assigns the value elsewhere."""
     normalized = "我" + content.removeprefix("用户") if content.startswith("用户") else content
     subject = _DIRECT_SUBJECT.match(normalized)
