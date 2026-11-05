@@ -89,9 +89,10 @@ def _select_evidence_lines(evidence: str, markers: tuple[str, ...], *, limit: in
 
 
 def _evidence_vector_text(doc: KnowledgeIndexDocument, parent: KnowledgeIndexDocument | None) -> str:
+    embedding_evidence = doc.content.strip()
     if parent is None:
-        return _clip(f"原文证据：{doc.summary}。{doc.content}", 300)
-    return _clip(f"查询原文、出处、引用。{parent.title}。{parent.summary}。原文：{doc.content}", 340)
+        return _clip(f"原文证据：{doc.summary}。{embedding_evidence}", 300)
+    return _clip(f"查询原文、出处、引用。{parent.title}。{parent.summary}。原文：{embedding_evidence}", 340)
 
 
 def _scene_vector_text(doc: KnowledgeIndexDocument, children: list[KnowledgeIndexDocument]) -> str:

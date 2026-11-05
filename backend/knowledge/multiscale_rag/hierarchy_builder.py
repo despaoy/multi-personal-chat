@@ -53,7 +53,7 @@ class HierarchyDocumentBuilder:
         domain_id: str,
         index_version: str,
         aliases: dict[str, str],
-        source_extractor: OriginalTextExtractor | None = None,
+        source_extractor: OriginalTextExtractor,
     ) -> None:
         self.domain_id = domain_id
         self.index_version = index_version
@@ -70,12 +70,12 @@ class HierarchyDocumentBuilder:
         scenes = self._scene_documents(_read_jsonl(Path(enriched_scenes_path)))
         cards_with_parents: list[KnowledgeIndexDocument] = []
         evidence_docs: list[KnowledgeIndexDocument] = []
-        exact_matches = 0
         for card in cards:
             parent = self._find_parent_scene(card, scenes)
             data = card.to_dict()
+            card_metadata = {key: value for key, value in card.metadata.items() if key != "evidence_text"}
             data["metadata"] = {
-                **data["metadata"],
+                **card_metadata,
                 "scale": "card",
                 "parent_id": parent.id if parent else "",
                 "scene_id": parent.id if parent else "",
@@ -83,14 +83,8 @@ class HierarchyDocumentBuilder:
             card_with_parent = KnowledgeIndexDocument.from_dict(data)
             cards_with_parents.append(card_with_parent)
 
-            evidence = self._card_evidence(card)
-            if not evidence:
-                continue
-            evidence_source = card.source
-            match_status = "approved_evidence_fallback"
-            if self.source_extractor is not None:
-                evidence_source, match_status = self.source_extractor.tighten_to_evidence(card.source, evidence)
-            exact_matches += int(match_status == "exact_source_match")
+            evidence = card.metadata["evidence_text"]
+            evidence_source = self.source_extractor.tighten_to_evidence(card.source, evidence)
             evidence_docs.append(
                 KnowledgeIndexDocument(
                     id=f"evidence:{card.id}",
@@ -105,11 +99,11 @@ class HierarchyDocumentBuilder:
                     relations=list(card.relations),
                     source=evidence_source,
                     metadata={
-                        **card.metadata,
+                        **card_metadata,
                         "scale": "evidence",
                         "parent_id": card.id,
                         "scene_id": parent.id if parent else "",
-                        "evidence_match_status": match_status,
+                        "evidence_match_status": "exact_source_match",
                     },
                     reality_status=card.reality_status,
                     temporal_scope=card.temporal_scope,
@@ -127,7 +121,7 @@ class HierarchyDocumentBuilder:
         counts: dict[str, int] = defaultdict(int)
         for doc in documents:
             counts[str(doc.metadata.get("scale") or doc.document_type)] += 1
-        return MultiScaleBuildResult(tuple(documents), dict(counts), exact_matches)
+        return MultiScaleBuildResult(tuple(documents), dict(counts), len(evidence_docs))
 
     def _scene_documents(self, records: Iterable[dict[str, Any]]) -> list[KnowledgeIndexDocument]:
         docs: list[KnowledgeIndexDocument] = []
@@ -250,8 +244,3 @@ class HierarchyDocumentBuilder:
         if not candidates:
             return None
         return min(candidates, key=lambda scene: (scene.source.line_end or 0) - (scene.source.line_start or 0))
-
-    @staticmethod
-    def _card_evidence(card: KnowledgeIndexDocument) -> str:
-        marker = "\n证据："
-        return card.content.split(marker, 1)[1].strip() if marker in card.content else ""

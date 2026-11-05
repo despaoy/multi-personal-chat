@@ -91,29 +91,24 @@ class OriginalTextExtractor:
         self,
         source: SourceReference,
         evidence_text: str,
-    ) -> tuple[SourceReference, str]:
-        """Narrow a broad approved span when evidence is an exact substring.
-
-        Returns ``(source, status)``.  Failure to match is a safe fallback,
-        never a reason to rewrite the approved evidence or widen its source.
-        """
-        evidence = (evidence_text or "").strip().replace("\r\n", "\n")
-        if not evidence:
-            return source, "empty_evidence"
+    ) -> SourceReference:
+        """Bind the complete literal quote to its declared source; never guess a new span."""
+        evidence = evidence_text.replace("\r\n", "\n")
+        if not evidence.strip():
+            raise ValueError("evidence_text must be non-empty")
         excerpt = self.extract(source)
-
-        haystack = excerpt.text.replace("\r\n", "\n")
-        offset = haystack.find(evidence)
+        offset = excerpt.text.find(evidence)
         if offset < 0:
-            return source, "approved_evidence_fallback"
-
-        start_delta = haystack[:offset].count("\n")
+            raise ValueError(
+                f"evidence_text does not occur in {source.source_path}:{source.line_start}-{source.line_end}; "
+                "correct the evidence or its declared source span"
+            )
+        start_delta = excerpt.text[:offset].count("\n")
         end_delta = start_delta + evidence.count("\n")
-        narrowed = SourceReference(
+        return SourceReference(
             source_path=source.source_path,
             line_start=excerpt.line_start + start_delta,
             line_end=excerpt.line_start + end_delta,
             card_id=source.card_id,
             extra={**source.extra, "evidence_match": "exact"},
         )
-        return narrowed, "exact_source_match"

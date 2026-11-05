@@ -204,6 +204,9 @@ class ApprovedCardsLoader:
                 status = record.get("review_status")
                 if status != "approved":
                     raise UnapprovedDataError(f"{path.name}:{line_no} review_status={status!r}，未通过 approved 门禁")
+                evidence = record.get("evidence_text")
+                if not isinstance(evidence, str) or not evidence.strip():
+                    raise UnapprovedDataError(f"{path.name}:{line_no} evidence_text must be a non-empty string")
                 records.append(record)
         return records
 
@@ -218,7 +221,7 @@ class ApprovedCardsLoader:
 
     def _mentioned_entities(self, evidence: str) -> list[str]:
         """evidence 原文中提及的实体（降级存放，不参与实体通道）。"""
-        if self._normalizer is None or not evidence:
+        if self._normalizer is None:
             return []
         return self._normalizer.scan_text(evidence)
 
@@ -248,7 +251,7 @@ class ApprovedCardsLoader:
             value = str(card.get("value") or "")
             title = str(card.get("title") or "")
             summary = str(card.get("summary") or "")
-            evidence = str(card.get("evidence_text") or "")
+            evidence = card["evidence_text"]
             story = card.get("story") or {}
             layers = self._base_layers(card)
             story_info = _story_info_text(story)
@@ -258,7 +261,7 @@ class ApprovedCardsLoader:
                 f"{subject}的{predicate}是{value}。" if subject or predicate or value else "",
                 f"标题：{title}。" if title else "",
                 f"摘要：{_clean_sentence(summary)}。" if summary else "",
-                f"关键证据：{_evidence_excerpt(evidence)}。" if evidence else "",
+                f"关键证据：{_evidence_excerpt(evidence)}。",
                 f"故事信息：{story_info}。" if story_info else "",
             ]
             embedding_text = "".join(p for p in embedding_parts if p)
@@ -266,7 +269,7 @@ class ApprovedCardsLoader:
             content_parts = [
                 f"{subject}的{predicate}是{value}。" if subject or predicate or value else "",
                 f"（{summary}）" if summary else "",
-                f"\n证据：{evidence}" if evidence else "",
+                f"\n证据：{evidence}",
             ]
             content = "".join(p for p in content_parts if p)
 
@@ -289,6 +292,7 @@ class ApprovedCardsLoader:
                         "subject": subject,
                         "predicate": predicate,
                         "value": value,
+                        "evidence_text": evidence,
                         "mentioned_entities": self._mentioned_entities(evidence),
                         **{
                             k: story.get(k)
@@ -313,7 +317,7 @@ class ApprovedCardsLoader:
             target = str(card.get("target") or "")
             title = str(card.get("title") or "")
             summary = str(card.get("summary") or "")
-            evidence = str(card.get("evidence_text") or "")
+            evidence = card["evidence_text"]
             story = card.get("story") or {}
             layers = self._base_layers(card)
             story_info = _story_info_text(story)
@@ -325,12 +329,12 @@ class ApprovedCardsLoader:
                 else _clean_sentence(direction) + "。",
                 f"标题：{title}。" if title else "",
                 f"摘要：{_clean_sentence(summary)}。" if summary else "",
-                f"关键证据：{_evidence_excerpt(evidence)}。" if evidence else "",
+                f"关键证据：{_evidence_excerpt(evidence)}。",
                 f"故事信息：{story_info}。" if story_info else "",
             ]
             embedding_text = "".join(p for p in embedding_parts if p)
 
-            content = f"{direction}\n（{subject} —{relation}→ {target}）" + (f"\n证据：{evidence}" if evidence else "")
+            content = f"{direction}\n（{subject} —{relation}→ {target}）" + f"\n证据：{evidence}"
             keywords = [v for v in (subject, relation, target, title, *summary.split("，")) if v]
             relation_expr = f"{subject}-{relation}-{target}"
 
@@ -351,6 +355,7 @@ class ApprovedCardsLoader:
                         "subject": subject,
                         "relation": relation,
                         "target": target,
+                        "evidence_text": evidence,
                         "mentioned_entities": self._mentioned_entities(evidence),
                         **{
                             k: story.get(k)
@@ -375,7 +380,7 @@ class ApprovedCardsLoader:
             participants = [str(p) for p in (card.get("participants") or []) if p]
             causes = [str(c) for c in (card.get("causes") or []) if c]
             outcomes = [str(o) for o in (card.get("outcomes") or []) if o]
-            evidence = str(card.get("evidence_text") or "")
+            evidence = card["evidence_text"]
             story = card.get("story") or {}
             layers = self._base_layers(card)
             story_info = _story_info_text(story)
@@ -388,7 +393,7 @@ class ApprovedCardsLoader:
                 f"参与者：{_join(participants)}。" if participants else "",
                 f"起因：{_join(causes)}。" if causes else "",
                 f"结果：{_join(outcomes)}。" if outcomes else "",
-                f"关键证据：{_evidence_excerpt(evidence)}。" if evidence else "",
+                f"关键证据：{_evidence_excerpt(evidence)}。",
                 f"故事信息：{story_info}。" if story_info else "",
             ]
             embedding_text = "".join(p for p in embedding_parts if p)
@@ -398,7 +403,7 @@ class ApprovedCardsLoader:
                 f"\n参与者：{_join(participants)}" if participants else "",
                 f"\n起因：{_join(causes)}" if causes else "",
                 f"\n结果：{_join(outcomes)}" if outcomes else "",
-                f"\n证据：{evidence}" if evidence else "",
+                f"\n证据：{evidence}",
             ]
             content = "".join(p for p in content_parts if p)
             keywords = [title, *participants, *causes, *outcomes]
@@ -421,6 +426,7 @@ class ApprovedCardsLoader:
                         "participants": participants,
                         "causes": causes,
                         "outcomes": outcomes,
+                        "evidence_text": evidence,
                         "mentioned_entities": self._mentioned_entities(evidence),
                         **{
                             k: story.get(k)

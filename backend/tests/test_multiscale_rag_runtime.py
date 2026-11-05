@@ -245,10 +245,12 @@ def test_source_extractor_tightening_matches_complete_span_without_widening(tmp_
     (tmp_path / "source.txt").write_text("第一条。\n完整证据：禁止联网。\n第三条。", encoding="utf-8")
     extractor = OriginalTextExtractor(tmp_path)
     source = SourceReference("source.txt", 1, 3)
-    narrowed, status = extractor.tighten_to_evidence(source, "完整证据：禁止联网。")
-    assert status == "exact_source_match" and (narrowed.line_start, narrowed.line_end) == (2, 2)
-    unmatched, status = extractor.tighten_to_evidence(source, "未在来源出现的文字")
-    assert unmatched is source and status == "approved_evidence_fallback"
+    narrowed = extractor.tighten_to_evidence(source, "完整证据：禁止联网。")
+    assert (narrowed.line_start, narrowed.line_end) == (2, 2)
+    assert narrowed.extra["evidence_match"] == "exact"
+    for invalid in ("", "未在来源出现的文字"):
+        with pytest.raises(ValueError, match="evidence_text"):
+            extractor.tighten_to_evidence(source, invalid)
 
 
 @pytest.mark.parametrize("contract", [None, "prefix-only-v1"])
