@@ -207,6 +207,22 @@ def _decode_evidence(value: Any) -> list[str | dict[str, str]]:
     return values
 
 
+def memory_record_qualifiers(row: dict[str, Any]) -> tuple[tuple[str, str], ...]:
+    """Preserve an entire valid qualifier map as data, never repair partial logic."""
+    metadata = row.get('metadata')
+    if metadata is None:
+        return ()
+    if not isinstance(metadata, dict):
+        raise ValueError("Stored memory metadata must be an object")
+    values = metadata.get('qualifiers', {})
+    if not isinstance(values, dict) or not all(
+        isinstance(key, str) and key.strip() and isinstance(value, str) and value.strip()
+        for key, value in values.items()
+    ):
+        raise ValueError("Stored memory qualifiers must be a map of non-empty text")
+    return tuple(sorted(values.items()))
+
+
 def decode_legacy_memory_lifecycle(row: dict[str, Any]) -> dict[str, str]:
     """Normalize the documented legacy evaluation format before recall."""
     status = row.get("status", row.get("memory_status", "active"))

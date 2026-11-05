@@ -30,6 +30,7 @@ from character.models import MemoryItem, UserScope
 from character.source_fragment_provenance import source_fragment_fields
 from character.temporal_projection import project_temporal_record
 from infra.environment import parse_unit_interval, read_bool
+from repositories.character_memory import memory_record_qualifiers as _row_qualifiers
 
 if TYPE_CHECKING:
     from repositories.character_memory import CharacterMemoryRepository
@@ -575,22 +576,6 @@ def _is_current_record(row: dict[str, Any], now: datetime, *, include_pending: b
     if valid_from is not None and valid_from > now:
         return False
     return valid_to is None or valid_to > now
-
-
-def _row_qualifiers(row: dict[str, Any]) -> tuple[tuple[str, str], ...]:
-    """Preserve an entire valid qualifier map as data, never repair partial logic."""
-    metadata = row.get('metadata')
-    if metadata is None:
-        return ()
-    if not isinstance(metadata, dict):
-        raise ValueError("Stored memory metadata must be an object")
-    values = metadata.get('qualifiers', {})
-    if not isinstance(values, dict) or not all(
-        isinstance(key, str) and key.strip() and isinstance(value, str) and value.strip()
-        for key, value in values.items()
-    ):
-        raise ValueError("Stored memory qualifiers must be a map of non-empty text")
-    return tuple(sorted(values.items()))
 
 
 def _source_ids(row: dict[str, Any]) -> tuple[str, ...]:
