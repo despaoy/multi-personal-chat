@@ -13,6 +13,7 @@ import pytest
 from scope_fixtures import open_scope_response
 
 from character.models import CompiledCharacterContext
+from inference.context_budget import InputBudgetError
 from inference.generation_request import GenerationRequest, RetrievalResult, build_generation_request
 from knowledge.original_sources import attach_original_sources
 from knowledge.public_task_evidence import render_public_tasks, review_public_candidates
@@ -189,14 +190,15 @@ async def test_complete_review_budget_stops_before_call_without_prefix_clipping(
         await review_public_candidates(bundle(), dependencies(), QUERY, window_tokens=1, reviewer=fail)
 
 
-async def test_related_source_is_not_claimed_admitted_after_actual_budget_exclusion():
+async def test_related_source_capacity_failure_preserves_review_and_private_context():
     result, _ = await positive()
-    # Preserve complete source provenance but give the packet a genuinely huge
-    # representation. It must be omitted whole, not repaired into visible text.
     changed = request(result, huge=True)
-    plan = build_generation_request(changed)
-    assert render_public_tasks(plan.retrieval)[0]["status"] == "related_candidate_not_admitted"
-    assert PRIVATE in unescape(plan.messages[-1]["content"])
+    original = deepcopy(changed)
+    assert PRIVATE in changed.character_context.reference_context
+    with pytest.raises(InputBudgetError):
+        build_generation_request(changed)
+    assert changed == original
+    assert changed.retrieval.public_task_review == original.retrieval.public_task_review
 
 
 async def test_other_query_cannot_reuse_public_review_receipt():

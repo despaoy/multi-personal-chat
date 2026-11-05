@@ -9,6 +9,7 @@ from dataclasses import replace
 import pytest
 
 from inference.answer_citations import citation_marker, finalize_answer_citations, prepare_answer_citations
+from inference.context_budget import InputBudgetError
 from inference.generation_request import (
     GenerationRequest,
     GenerationResult,
@@ -122,27 +123,43 @@ def test_explicit_source_lookup_and_non_rag_literal_markers_stay_unchanged():
     assert finalize_answer_citations(result) is result
 
 
-async def test_api_propagates_budget_abstention_instead_of_claiming_grounded_answer(monkeypatch, semantic_plan, controlled_public_bundle):
+async def test_api_reports_capacity_before_answer_or_citation_generation(
+    monkeypatch, semantic_plan, controlled_public_bundle
+):
     from db.schemas import MessageRequest
     from inference.provider_context import ProviderContextBudget
 
-    class Client:
+    source = (
+        "虚构课程编号为QY-204，只对收到录取确认者开放。"
+        + "完整背景资料。" * 2000
+        + "末尾限定：未完成先修课程不得登记，支付费用也不豁免先修要求。"
+    )
+    calls = []
 
-        async def generate(self, **kwargs):
-            assert '<retrieved_evidence' not in kwargs['messages'][-1]['content']
-            return '目前无法核实课程编号。'
+    async def model(**kwargs):
+        calls.append(kwargs)
+        pytest.fail("Capacity failure must precede answer and citation generation")
 
     async def retrieve(query, top_k, filters, *, database):
-        return {'results': [{'id': 'oversized', 'content': '完整原始资料' * 2000}], 'citations': [{'source_id': 'oversized'}], 'confidence': 0.9, 'abstained': False}
-    monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieve)
-    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: 'persona')
-    monkeypatch.setattr(chat_answer, 'get_provider_context_budget', lambda: ProviderContextBudget(8192))
-    semantic_plan('课程编号', {'public_knowledge': [0]})
-    _chat_result_meta = await chat_answer.generate_chat_answer(MessageRequest(message='课程编号'), None, runtime_config={'useKnowledgeBase': True, 'maxTokens': 128}, model_generate=Client().generate)
-    _, _, meta = (_chat_result_meta.reply, _chat_result_meta.used_rag, _chat_result_meta.metadata)
-    assert meta['abstained'] is True
-    assert meta['answerMode'] == 'abstention'
-    assert meta['citations'] == []
+        return {
+            "results": [{"id": "oversized", "content": source}],
+            "citations": [{"source_id": "oversized"}],
+            "confidence": 0.9,
+            "abstained": False,
+        }
+
+    monkeypatch.setattr(chat_answer, "retrieve_chat_knowledge", retrieve)
+    monkeypatch.setattr(chat_answer, "get_lora_system_prompt", lambda _: "persona")
+    monkeypatch.setattr(chat_answer, "get_provider_context_budget", lambda: ProviderContextBudget(8192))
+    semantic_plan("课程编号", {"public_knowledge": [0]})
+    with pytest.raises(InputBudgetError, match="evidence_max_chars"):
+        await chat_answer.generate_chat_answer(
+            MessageRequest(message="课程编号"),
+            None,
+            runtime_config={"useKnowledgeBase": True, "maxTokens": 128},
+            model_generate=model,
+        )
+    assert calls == []
 
 
 def test_citation_preparation_keeps_uncited_and_uncitable_source_bodies():

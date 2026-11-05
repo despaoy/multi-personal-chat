@@ -10,6 +10,7 @@ from types import SimpleNamespace
 import pytest
 
 from inference.evidence_coverage import is_partial_coverage, requested_source_lookups
+from inference.context_budget import InputBudgetError
 from inference.generation_request import GenerationRequest, RetrievalResult, build_generation_request
 
 
@@ -59,7 +60,7 @@ def test_unperformed_lookup_is_not_a_certified_missing_source():
     assert coverage(plan)["requested_sources"][0]["lookup_status"] == "not_resolved"
 
 
-def test_matched_lookup_does_not_certify_a_budget_omitted_body():
+def test_matched_lookup_reports_capacity_without_certifying_a_source_body():
     lookups = (dict(title="A", lookup_status="matched_in_index_scope", source_ids=["doc_5"]),)
     retrieval = RetrievalResult(
         status="ok",
@@ -67,12 +68,13 @@ def test_matched_lookup_does_not_certify_a_budget_omitted_body():
         requested_sources=lookups,
         evidence_packets=(dict(kind="evidence", document_ids=["doc_5_chunk_0"], text="超长原文" * 10000),),
     )
-    plan = build_generation_request(
-        GenerationRequest(message="读取《A》", retrieval=retrieval, context_window_tokens=2048, max_tokens=128)
-    )
-    assert plan.retrieval.status == "character_abstention"
-    assert coverage(plan)["requested_sources"][0]["lookup_status"] == "matched_in_index_scope"
-    assert coverage(plan)["packets"]["admitted_packet_count"] == 0
+    with pytest.raises(InputBudgetError):
+        build_generation_request(
+            GenerationRequest(message="读取《A》", retrieval=retrieval, context_window_tokens=2048, max_tokens=128)
+        )
+    assert retrieval.requested_sources == lookups
+    assert retrieval.requested_sources[0]["lookup_status"] == "matched_in_index_scope"
+    assert retrieval.evidence_packets[0]["text"] == "超长原文" * 10000
 
 
 def test_lookup_titles_are_escaped_user_data_and_never_system_instructions():
@@ -122,7 +124,7 @@ async def test_shared_api_preserves_missing_title_status_without_extra_model_cal
     planning = semantic_plan('读取《A》《B》', dict(public_knowledge=[0]))
     monkeypatch.setenv('RAG_CITATIONS_ENABLED', 'false')
     _chat_result_metadata = await chat_answer.generate_chat_answer(MessageRequest(message='读取《A》《B》'), 'default', runtime_config={'useKnowledgeBase': True, 'maxTokens': 512}, model_generate=model, message_db=source_database)
-    reply, used, metadata = (_chat_result_metadata.reply, _chat_result_metadata.used_rag, _chat_result_metadata.metadata)
+    used, metadata = (_chat_result_metadata.used_rag, _chat_result_metadata.metadata)
     assert len(planning) == len(observed) == 1 and used and ('partial_source_context' in metadata['warnings'])
     actual = coverage(SimpleNamespace(messages=observed[0]))['requested_sources']
     assert actual[1]['lookup_status'] == 'not_found_in_index_scope'

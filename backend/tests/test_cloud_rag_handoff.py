@@ -8,6 +8,7 @@ import pytest
 
 from character.models import CompiledCharacterContext
 from character.source_memory import compile_sources
+from inference.context_budget import InputBudgetError
 from inference.generation_request import GenerationRequest, RetrievalResult, build_generation_request
 from inference.provider_context import ProviderContextBudget, get_provider_context_budget
 
@@ -119,14 +120,13 @@ def test_real_token_overflow_omits_whole_public_preserving_private_decision():
     )
 
 
-def test_local_character_cap_still_omits_whole_source():
+def test_local_character_cap_reports_capacity_without_omitting_source():
     text = "本地资料" * 2000 + "仅适用于先验审批通过者。"
-    plan = build_generation_request(
-        GenerationRequest(message="询问资料", retrieval=retrieval([text]), context_window_tokens=65536)
-    )
-    assert (
-        plan.retrieval.status == "character_abstention" and not plan.retrieval.evidence and not plan.retrieval.citations
-    )
+    request = GenerationRequest(message="询问资料", retrieval=retrieval([text]), context_window_tokens=65536)
+    with pytest.raises(InputBudgetError, match="evidence_max_chars"):
+        build_generation_request(request)
+    assert request.retrieval.evidence_packets[0]["text"] == text
+    assert request.retrieval.evidence == text
 
 
 def test_public_service_none_keeps_whole_packet(monkeypatch):

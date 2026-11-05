@@ -4,6 +4,7 @@ from types import SimpleNamespace
 import pytest
 
 from character.models import CompiledCharacterContext, MemoryItem
+from inference.context_budget import InputBudgetError
 from inference.generation_request import GenerationRequest, RetrievalResult, generate_character_response
 from inference.task_execution import prepare_independent_tasks
 
@@ -99,38 +100,47 @@ def test_source_lookup_and_quoted_tasks_remain_on_original_path():
 @pytest.mark.parametrize('admit', [False, True])
 async def test_composition_uses_only_final_budget_evidence(admit):
     original = request()
-    short = {'text': '林远是学生。', 'document_ids': ('kept',)}
-    large = {'text': '不应入模的证据' * 100, 'document_ids': ('rejected',)}
-    original = replace(original, evidence_max_chars=128, retrieval=replace(
-        original.retrieval, evidence=large['text'],
-        evidence_packets=(large, short) if admit else (large,),
-        documents=({'id': 'kept', 'title': '人物身份来源', 'content': short['text']},
-                   {'id': 'rejected', 'title': '超预算来源', 'content': large['text']}),
-        citations=({'id': 'kept'}, {'id': 'rejected'})))
+    short = {"text": "林远是学生。", "document_ids": ("kept",)}
+    large = {"text": "不应入模的证据" * 100, "document_ids": ("rejected",)}
+    original = replace(
+        original,
+        evidence_max_chars=128,
+        retrieval=replace(
+            original.retrieval,
+            evidence=large["text"],
+            evidence_packets=(large, short) if admit else (large,),
+            documents=(
+                {"id": "kept", "title": "人物身份来源", "content": short["text"]},
+                {"id": "rejected", "title": "超预算来源", "content": large["text"]},
+            ),
+            citations=({"id": "kept"}, {"id": "rejected"}),
+        ),
+    )
     calls = []
 
     async def model(**kwargs):
         import re
 
         calls.append(kwargs)
-        wire = str(kwargs['messages'])
-        assert '不应入模的证据' not in wire
+        wire = str(kwargs["messages"])
+        assert "不应入模的证据" not in wire
         if admit:
-            assert short['text'] in wire
-            marker = re.search(r'\[\[cite:[0-9a-f]{12}:S1\]\]', wire)
+            assert short["text"] in wire
+            marker = re.search(r"\[\[cite:[0-9a-f]{12}:S1\]\]", wire)
             assert marker is not None
-            return '林远是学生。' + marker.group(0)
-        return '人物资料暂时不足。'
+            return "林远是学生。" + marker.group(0)
+        return "人物资料暂时不足。"
 
+    if not admit:
+        with pytest.raises(InputBudgetError):
+            await generate_character_response(original, model)
+        assert calls == [] and original.retrieval.evidence_packets == (large,)
+        return
     result = await generate_character_response(original, model)
     assert len(calls) == 1
-    assert (result.response_mode == 'task_composite') is admit
-    assert [citation['source_id'] for citation in result.plan.retrieval.citations] == (['kept'] if admit else [])
-    assert [citation['source_id'] for citation in result.response_citations] == (['kept'] if admit else [])
-    if not admit:
-        assert original.message in calls[0]['messages'][-1]['content']
-        assert result.plan.retrieval.reason == 'evidence_budget_exhausted'
-        assert not result.task_results
+    assert (result.response_mode == "task_composite") is admit
+    assert [citation["source_id"] for citation in result.plan.retrieval.citations] == (["kept"] if admit else [])
+    assert [citation["source_id"] for citation in result.response_citations] == (["kept"] if admit else [])
 
 
 @pytest.mark.parametrize('state', ['unadmitted', 'conflicting', 'historical', 'retrieval_error'])

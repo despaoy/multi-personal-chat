@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from inference.context_budget import InputBudgetError
 from inference.generation_request import GenerationRequest, RetrievalResult, build_generation_request
 
 
@@ -70,19 +71,19 @@ def test_classified_identity_with_controls_keeps_full_current_user_message():
     assert request.history == original.history
 
 
-def test_packet_budget_preserves_contract_but_no_evidence_disables_it():
+def test_packet_budget_keeps_identity_contract_and_reports_overflow():
     request = identity_request()
-    packet = {'text': '实际原文', 'document_ids': ['one'], 'kind': 'evidence'}
+    packet = {"text": "实际原文", "document_ids": ["one"], "kind": "evidence"}
     retrieval = replace(request.retrieval, evidence_packets=(packet,))
     plan = build_generation_request(replace(request, retrieval=retrieval))
-    assert plan.history_policy == 'independent_identity'
+    assert plan.history_policy == "independent_identity"
     assert plan.excluded_assistant_messages == 1
     assert plan.retrieval.identity_task == retrieval.identity_task
-    huge = {**packet, 'text': '长' * 9000}
-    plan = build_generation_request(replace(request, retrieval=replace(retrieval, evidence_packets=(huge,))))
-    assert plan.retrieval.reason == 'evidence_budget_exhausted'
-    assert plan.history_policy == 'conversation'
-    assert any(m['role'] == 'assistant' for m in plan.messages)
+    huge = {**packet, "text": "长" * 9000}
+    with pytest.raises(InputBudgetError):
+        build_generation_request(replace(request, retrieval=replace(retrieval, evidence_packets=(huge,))))
+    assert plan.history_policy == "independent_identity"
+    assert request.history == identity_request().history
 
 
 @pytest.mark.asyncio
