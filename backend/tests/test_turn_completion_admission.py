@@ -262,12 +262,17 @@ async def test_real_context_failure_stops_generation_and_releases_slot(monkeypat
         request.characterId = None
         gen.db.loras = [{"id": "unit-lora", "name": "unit-persona", "status": "active"}]
         monkeypatch.setattr(gen, "get_lora_character_id", lambda name: "tsukiyashiro_kisaki")
+        client = SimpleNamespace(list_loras=AsyncMock(return_value=["unit-persona"]), generate=AsyncMock())
+        monkeypatch.setattr(gen, "get_vllm_client", AsyncMock(return_value=client))
     failure = RuntimeError("fiction-private-model-diagnostic")
     service = SimpleNamespace(prepare_turn=AsyncMock(side_effect=failure))
     try:
         with pytest.raises(HTTPException) as caught:
             await gen._generate_reply_impl(request, enable_rag=False, record_invocation=False, character_service=service, message_db=gen.db)
         assert caught.value.status_code == 503 and caught.value.__cause__ is failure
+        service.prepare_turn.assert_awaited_once()
+        if selection == "mapped":
+            client.list_loras.assert_awaited_once()
         assert "fiction-private" not in str(caught.value.detail)
         generation.assert_not_awaited()
         storage.assert_not_awaited()
