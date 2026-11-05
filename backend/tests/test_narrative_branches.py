@@ -118,13 +118,13 @@ def test_generation_uses_server_history_and_no_memory_write(repo):
             costTime=0,
         )
 
-    result = asyncio.run(generate_branch_reply(request, {"user_id": 1}, repo.db, generate=generate))
+    result = asyncio.run(generate_branch_reply(request, {"user_id": 1}, repo.db, configure_generate=AsyncMock(return_value=generate)))
     assert result.reply == "推演回答"
     assert len(repo.assertions("1", a["id"], status="pending")) == 1
     assert repo.rows("SELECT * FROM character_memories") == []
     assert repo.rows("SELECT * FROM character_relationships") == []
     assert repo.history("1", b["id"]) == []
-    asyncio.run(generate_branch_reply(request, {"user_id": 1}, repo.db, generate=generate))
+    asyncio.run(generate_branch_reply(request, {"user_id": 1}, repo.db, configure_generate=AsyncMock(return_value=generate)))
     assert len(calls) == 1
     assert (
         repo.rows("SELECT interaction_count FROM branch_states WHERE branch_id=:id", id=a["id"])[0]["interaction_count"]
@@ -145,7 +145,7 @@ def test_archive_during_generation_rejects_commit(repo):
                 MessageRequest(message="继续", branchId=branch["id"], traceId="race"),
                 {"user_id": 1},
                 repo.db,
-                generate=generate,
+                configure_generate=AsyncMock(return_value=generate),
             )
         )
     assert exc.value.reason == "conflict"
@@ -290,7 +290,7 @@ def test_no_model_write_on_failure(repo):
                 MessageRequest(message="test", branchId=branch["id"], traceId="failure"),
                 {"user_id": 1},
                 repo.db,
-                generate=fail,
+                configure_generate=AsyncMock(return_value=fail),
             )
         )
     assert repo.history("1", branch["id"]) == []
@@ -506,7 +506,7 @@ async def test_canonical_preparation_and_generation_share_one_model_context(monk
     provider.snapshot = snapshot
     monkeypatch.setattr(model_manager, "get_model_manager", lambda *, database=None: manager)
     monkeypatch.setenv("OPENAI_COMPAT_CONTEXT_WINDOW_TOKENS", "32768")
-    database = object()
+    database = SimpleNamespace(config={"topP": 1.0, "useKnowledgeBase": False}, loras=[])
     captured = []
     prepared = object()
 
@@ -647,7 +647,7 @@ def test_invalid_proposal_turn_is_uncommitted_and_valid_retry_succeeds(repo):
         )
 
     with pytest.raises(NarrativeError) as raised:
-        asyncio.run(generate_branch_reply(request, {"user_id": 1}, repo.db, generate=generate))
+        asyncio.run(generate_branch_reply(request, {"user_id": 1}, repo.db, configure_generate=AsyncMock(return_value=generate)))
     assert raised.value.reason == "generation_failed" and isinstance(raised.value.__cause__, ValueError)
     assert "分支状态未提交" in str(raised.value.detail)
     assert repo.get("1", branch["id"]) == branch
@@ -656,7 +656,7 @@ def test_invalid_proposal_turn_is_uncommitted_and_valid_retry_succeeds(repo):
         repo.rows("SELECT * FROM branch_states") == states
         and repo.rows("SELECT * FROM branch_assertions") == assertions
     )
-    result = asyncio.run(generate_branch_reply(request, {"user_id": 1}, repo.db, generate=generate))
+    result = asyncio.run(generate_branch_reply(request, {"user_id": 1}, repo.db, configure_generate=AsyncMock(return_value=generate)))
     assert result.reply == "我们在图书馆继续聊。" and result.modelInvoked is True
     assert result.warnings == ["existing_generation_notice"]
     assert calls == [request.traceId, request.traceId]

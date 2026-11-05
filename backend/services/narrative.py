@@ -108,7 +108,7 @@ async def prepare_branch(request, owner, repo):
     return branch, active, prepared
 
 
-async def generate_branch_reply(request, current_user, database, *, generate):
+async def generate_branch_reply(request, current_user, database, *, configure_generate):
     owner = owner_id(current_user)
     repo = NarrativeRepository(database)
     prior = await asyncio.to_thread(repo.prior, owner, request.branchId, request.traceId)
@@ -123,6 +123,7 @@ async def generate_branch_reply(request, current_user, database, *, generate):
             answerMode="counterfactual",
             warnings=["replayed_committed_response"],
         )
+    generate = await configure_generate()
     branch, active, prepared = await prepare_branch(request, owner, repo)
     internal = request.model_copy(
         update={
@@ -140,7 +141,7 @@ async def generate_branch_reply(request, current_user, database, *, generate):
     response = await generate(
         internal, current_user, persist_message=False, message_db=database, prepared_override=prepared
     )
-    if not response.reply.strip() or "character_abstention_fallback" in (response.warnings or []):
+    if not response.reply.strip():
         raise NarrativeError("generation_failed", "本轮未成功生成，分支状态未提交")
     try:
         reply, proposals = parse_proposals(response.reply, {a["id"] for a in active})

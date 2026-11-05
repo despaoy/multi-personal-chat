@@ -10,7 +10,7 @@ import time
 import uuid
 from contextlib import ExitStack, contextmanager, nullcontext
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, NamedTuple
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import ValidationError
@@ -84,6 +84,50 @@ class _ModelIdentityError(RuntimeError):
     """The invoked provider did not supply a usable model identity."""
 
 
+class _GenerationConfig(NamedTuple):
+    runtime_config: dict[str, Any]
+    loras: list[dict[str, Any]]
+    use_knowledge_base: bool
+
+
+async def _read_generation_config(request, message_db, request_context, *, select_active_lora):
+    """Own one generation-settings read before context work begins."""
+    request_provider = request_context.provider_name
+    if request_provider == "mock":
+        raise HTTPException(
+            status_code=503,
+            detail="当前模型提供商为 mock 模式，无法提供真实推理。"
+            "请在设置页面配置有效的模型提供商（如 vLLM / DeepSeek API / Ollama）。",
+        )
+
+    try:
+        if select_active_lora or request.loraName not in {"", "default"}:
+            runtime_config, loras = await asyncio.gather(
+                asyncio.to_thread(lambda: message_db.config),
+                asyncio.to_thread(lambda: list(message_db.loras)),
+            )
+        else:
+            runtime_config = await asyncio.to_thread(lambda: message_db.config)
+            loras = []
+        runtime_config = {**runtime_config}
+    except Exception as exc:
+        raise HTTPException(503, "生成配置读取失败，请检查数据库连接后重试") from exc
+
+    if request_provider == "openai_compat":
+        runtime_config.setdefault("topP", 1.0)
+    try:
+        runtime_config.update(read_generation_options(runtime_config))
+        use_knowledge_base = read_bool(runtime_config, "useKnowledgeBase", True)
+        if request_provider == "openai_compat":
+            validate_completion_options(request_context.provider.base_url, top_p=runtime_config["topP"])
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(
+            503, "生成参数配置无效，请检查 temperature、maxTokens、topP、useKnowledgeBase 及当前模型服务要求后重试"
+        ) from exc
+
+    return _GenerationConfig(runtime_config, loras, use_knowledge_base)
+
+
 def _response_cache_keys(
     request: MessageRequest,
     lora_name: str,
@@ -142,6 +186,7 @@ async def _generate_reply_impl(
     http_client_pool=None,
     delivery_context: dict | None = None,
     prepared_override=None,
+    _generation_config: _GenerationConfig | None = None,
 ):
     from inference.model_manager import get_model_manager
     from inference.request_context import get_request_context, resolve_request_context, use_request_context
@@ -168,6 +213,7 @@ async def _generate_reply_impl(
                 message_db=message_db,
                 delivery_context=delivery_context,
                 prepared_override=prepared_override,
+                _generation_config=_generation_config,
                 _turn_scope=turn_scope,
             )
         except (Exception, asyncio.CancelledError) as error:
@@ -237,6 +283,7 @@ async def _generate_reply_body(
     message_db,
     delivery_context: dict | None = None,
     prepared_override=None,
+    _generation_config: _GenerationConfig | None = None,
     _turn_scope: ExitStack,
 ):
     """Generate using the accepted request's database and provider snapshot.
@@ -264,52 +311,29 @@ async def _generate_reply_body(
             raise HTTPException(422, "假想分支第一版仅支持 Web 交互")
         from services.narrative import generate_branch_reply
 
+        async def configure_generate():
+            from inference.request_context import get_request_context
+
+            configuration = await _read_generation_config(
+                request, message_db, get_request_context(), select_active_lora=False
+            )
+            return functools.partial(_generate_reply_impl, _generation_config=configuration)
+
         return await generate_branch_reply(
-            request,
-            current_user,
-            message_db,
-            generate=_generate_reply_impl,
+            request, current_user, message_db, configure_generate=configure_generate
         )
 
-    # C11 fix: 主聊天端点 mock provider 防护
-    # 此前仅 training/generate-dialogues 有此检查，主聊天端点遗漏，
-    # 导致生产环境默认 mock 时静默返回罐头回复。现统一拦截。
     from inference.request_context import get_request_context
 
     request_context = get_request_context()
     request_provider = request_context.provider_name
-    if request_provider == "mock":
-        raise HTTPException(
-            status_code=503,
-            detail="当前模型提供商为 mock 模式，无法提供真实推理。"
-            "请在设置页面配置有效的模型提供商（如 vLLM / DeepSeek API / Ollama）。",
-        )
-
     select_active_lora = not request.loraName and not request.characterId and prepared_override is None
-    try:
-        if select_active_lora or request.loraName not in {"", "default"}:
-            runtime_config, loras = await asyncio.gather(
-                asyncio.to_thread(lambda: message_db.config),
-                asyncio.to_thread(lambda: list(message_db.loras)),
-            )
-        else:
-            runtime_config = await asyncio.to_thread(lambda: message_db.config)
-            loras = []
-        runtime_config = {**runtime_config}
-    except Exception as exc:
-        raise HTTPException(503, "生成配置读取失败，请检查数据库连接后重试") from exc
-
-    if request_provider == "openai_compat":
-        runtime_config.setdefault("topP", 1.0)
-    try:
-        runtime_config.update(read_generation_options(runtime_config))
-        use_knowledge_base = read_bool(runtime_config, "useKnowledgeBase", True)
-        if request_provider == "openai_compat":
-            validate_completion_options(request_context.provider.base_url, top_p=runtime_config["topP"])
-    except (TypeError, ValueError) as exc:
-        raise HTTPException(
-            503, "生成参数配置无效，请检查 temperature、maxTokens、topP、useKnowledgeBase 及当前模型服务要求后重试"
-        ) from exc
+    generation_config = _generation_config
+    if generation_config is None:
+        generation_config = await _read_generation_config(
+            request, message_db, request_context, select_active_lora=select_active_lora
+        )
+    runtime_config, loras, use_knowledge_base = generation_config
 
     selected_lora = None
     if request.loraName and request.loraName != "default":
