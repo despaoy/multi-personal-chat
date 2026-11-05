@@ -150,3 +150,142 @@ def test_target_predicate_must_match_the_declared_fact(kind, value, source, righ
         assert proposal.operation == "SUPERSEDE" and proposal.target_memory_id == "101"
         assert proposal.target_memory_key == proposal.memory.memory_key == right_key
         assert value in proposal.memory.content and proposal.evidence == source
+
+
+def withdrawal_case(operation="RETRACT", model_kind=None, metadata=None):
+    target = dict(
+        id="7",
+        memory_key="preference_纸艺",
+        memory_type="user_fact",
+        content="用户讨厌纸艺",
+        status="active",
+        importance=0.5,
+        scope_level="conversation",
+        metadata={"fact_kind": "dislike"} if metadata is None else metadata,
+    )
+    source = (
+        "我刚才说错了，我撤回之前那条关于纸艺的偏好；其他记忆保持不变。"
+        if operation == "RETRACT"
+        else "请从记忆中彻底删除之前那条纸艺偏好；其他记忆保持不变。"
+    )
+    raw = dict(
+        operation=operation,
+        target_memory_id="7",
+        target_memory_key="preference_纸艺",
+        evidence=source,
+        confidence=0.99,
+        attributed_to="user",
+    )
+    if model_kind is not None:
+        raw["kind"] = model_kind
+    return target, source, raw
+
+
+@pytest.mark.parametrize("operation", ["RETRACT", "ERASE"])
+@pytest.mark.parametrize("model_kind", [None, "like"])
+def test_target_operation_preserves_stored_kind_without_reading_display(operation, model_kind):
+    target, source, raw = withdrawal_case(operation, model_kind)
+    result = parse_llm_proposals(
+        json.dumps({"memories": [raw]}, ensure_ascii=False),
+        source_message=source,
+        existing_memories=(target,),
+    )
+    assert len(result) == 1
+    proposal = result[0]
+    assert proposal.operation == operation and proposal.target_memory_id == "7"
+    assert proposal.fact_kind == "dislike"
+    assert proposal.memory.content == target["content"]
+
+
+@pytest.mark.parametrize("operation", ["RETRACT", "ERASE"])
+def test_target_operation_keeps_legacy_unknown_type_unknown(operation):
+    target, source, raw = withdrawal_case(operation, "like", metadata={})
+    (proposal,) = parse_llm_proposals(
+        json.dumps({"memories": [raw]}, ensure_ascii=False),
+        source_message=source,
+        existing_memories=(target,),
+    )
+    assert proposal.fact_kind == ""
+    assert proposal.memory.memory_type == target["memory_type"]
+    assert proposal.memory.content == target["content"]
+
+
+@pytest.mark.asyncio
+async def test_retraction_persists_authoritative_type_and_preserves_other_fact(
+    tmp_path,
+):
+    from datetime import datetime, timezone
+    from types import SimpleNamespace
+
+    from character.memory_llm import MemoryEnrichmentScheduler, MemoryLlmConfig
+    from db.database import SQLiteDB
+
+    database = SQLiteDB(tmp_path / "typed-withdrawal.sqlite")
+    repository = DatabaseCharacterMemoryRepository(database)
+    scope = UserScope("web", "typed-withdrawal", "owner", "owner", "private")
+    observed = datetime(2026, 11, 6, tzinfo=timezone.utc)
+    target, source, raw = withdrawal_case()
+    worker = MemoryEnrichmentScheduler(config=MemoryLlmConfig(True, "unit-only", "unit-only"), completion=None)
+    try:
+        await repository.capture_source(
+            "role",
+            scope,
+            source_message_id="old-dislike",
+            body="我讨厌纸艺。",
+            observed_at=observed,
+        )
+        await repository.append_claim(
+            "role",
+            scope,
+            MemoryItem("", "user_fact", target["content"], 0.5),
+            memory_key=target["memory_key"],
+            evidence=("我讨厌纸艺。",),
+            source_message_id="old-dislike",
+            observed_at=observed.isoformat(),
+            metadata={"fact_kind": "dislike"},
+        )
+        await repository.append_claim(
+            "role",
+            scope,
+            MemoryItem("", "user_fact", "用户喜欢陶笛", 0.6),
+            memory_key="preference_陶笛",
+            evidence=("我喜欢陶笛。",),
+            metadata={"fact_kind": "like"},
+            observed_at=observed.isoformat(),
+        )
+        before = await repository.list_memory_records("role", scope, limit=None, include_inactive=True)
+        old = next(r for r in before if r["memory_key"] == target["memory_key"])
+        other = next(r for r in before if r["memory_key"] == "preference_陶笛")
+        raw["target_memory_id"] = str(old["id"])
+        (proposal,) = parse_llm_proposals(
+            json.dumps({"memories": [raw]}, ensure_ascii=False),
+            source_message=source,
+            existing_memories=tuple(before),
+        )
+        await repository.capture_source(
+            "role",
+            scope,
+            source_message_id="withdrawal",
+            body=source,
+            observed_at=observed,
+        )
+        job = SimpleNamespace(
+            repository=repository,
+            character_id="role",
+            user_scope=scope,
+            message=source,
+            source_message_id="withdrawal",
+            observed_at=observed,
+            write_mode="hot",
+            feedback_target_ids=(),
+        )
+        assert await worker._persist_proposal(job, proposal) == "saved"
+        after = await repository.list_memory_records("role", scope, limit=None, include_inactive=True)
+        withdrawn = next(r for r in after if r["relation_type"] == "RETRACT")
+        assert withdrawn["metadata"]["fact_kind"] == "dislike"
+        assert next(r for r in after if r["id"] == old["id"])["status"] == "retracted"
+        assert next(r for r in after if r["id"] == other["id"]) == other
+        sources = await repository.list_sources("role", scope)
+        assert any(r["source_message_id"] == "withdrawal" and r["body"] == source for r in sources)
+    finally:
+        database.close_connection()

@@ -824,38 +824,6 @@ def _target_key_matches_kind(kind: str, target_memory_key: str) -> bool:
     return target_memory_key.startswith(expected_prefix)
 
 
-def _infer_kind_from_target(record: dict[str, Any]) -> str:
-    key = str(record.get("memory_key") or "")
-    content = str(record.get("content") or "")
-    if key == "user_name":
-        return "name"
-    if key == "user_alias":
-        return "alias"
-    if key.startswith("user_alias_exclusion_"):
-        return "alias_exclusion"
-    if key.startswith("preference_"):
-        return "dislike" if "不喜欢" in content else "like"
-    if key == "user_major":
-        return "major"
-    if key == "user_study_stage":
-        return "study_stage"
-    if key == "user_origin":
-        return "origin"
-    if key == "user_residence":
-        return "residence"
-    if key == "user_location":
-        return "location"
-    if key == "user_workplace":
-        return "workplace"
-    if key.startswith("goal_"):
-        return "goal"
-    if key.startswith("promise_"):
-        return "promise"
-    if key.startswith("event_"):
-        return "shared_event"
-    return "other_user_fact"
-
-
 @dataclass(frozen=True)
 class MemoryScopeAuthorization:
     source_message: str = field(repr=False)
@@ -1153,13 +1121,8 @@ def _candidate_to_proposal(
             confidence=confidence,
         )
 
-    if kind not in _ALLOWED_KINDS:
-        # Target-only withdrawal and erasure may omit a new fact kind.
-        kind = _infer_kind_from_target(target_record)
-    if not value and target_record is not None and operation in {"RETRACT", "ERASE"}:
-        value = target_memory_key or "target"
-    if not value or (len(value) > _MAX_VALUE_CHARS and operation not in {"RETRACT", "ERASE"}):
-        return None
+    if not writes_content:
+        kind = (target_record.get("metadata") or {}).get("fact_kind") or ""
     if operation not in {"RETRACT", "ERASE"} and not all(
         _grounded_value(fragment, evidence=evidence, history=history, existing_memories=existing_memories)
         for fragment in (value_fragments or (value,))
