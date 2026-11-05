@@ -303,11 +303,12 @@ async def _generate_reply_body(
         runtime_config.setdefault("topP", 1.0)
     try:
         runtime_config.update(read_generation_options(runtime_config))
+        use_knowledge_base = read_bool(runtime_config, "useKnowledgeBase", True)
         if request_provider == "openai_compat":
             validate_completion_options(request_context.provider.base_url, top_p=runtime_config["topP"])
     except (TypeError, ValueError) as exc:
         raise HTTPException(
-            503, "生成参数配置无效，请检查 temperature、maxTokens、topP 及当前模型服务要求后重试"
+            503, "生成参数配置无效，请检查 temperature、maxTokens、topP、useKnowledgeBase 及当前模型服务要求后重试"
         ) from exc
 
     selected_lora = None
@@ -440,7 +441,7 @@ async def _generate_reply_body(
         response_cache is not None
         and prepared_character_turn is None
         and selected_lora is None
-        and not (read_bool(runtime_config, "useKnowledgeBase", True) and enable_rag)
+        and not (use_knowledge_base and enable_rag)
     )
     provider = request_context.provider
     if use_response_cache:

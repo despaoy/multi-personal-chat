@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from fastapi import HTTPException
 from provider_fixtures import cloud_connection
 
 from api import generate
@@ -106,8 +107,9 @@ async def test_cache_hit_requires_valid_configuration(installed, monkeypatch, se
     request = MessageRequest(message="按完整合成输入回答。", platform="web", adapter="cache-boolean",
                              senderId="fiction-owner", conversationId="fiction-owner", conversationType="private")
     if setting is None:
-        with pytest.raises(ValueError, match="useKnowledgeBase"):
+        with pytest.raises(HTTPException, match="useKnowledgeBase") as caught:
             await generate._generate_reply_impl(request, persist_message=False, record_invocation=False, message_db=generate.db)
+        assert caught.value.status_code == 503 and isinstance(caught.value.__cause__, ValueError)
         cache.get.assert_not_awaited()
     else:
         result = await generate._generate_reply_impl(request, persist_message=False, record_invocation=False, message_db=generate.db)
