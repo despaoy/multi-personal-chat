@@ -155,7 +155,9 @@ def test_no_advice_plus_direct_information_request_keeps_the_answer_not_silent_p
 
     _assert_compact_shape(text)
     assert "先完整回答对方明确提出的问题" in text
-    assert "不得提供建议、分析方案" in text
+    assert "只回答本轮仍明确要求的问题" in text
+    assert "不追加用户已拒绝的建议、分析或追问" in text
+    assert "不得提供建议、分析方案" not in text
     assert "证据不足就明确说明" in text
     assert "安静陪伴" not in text
 

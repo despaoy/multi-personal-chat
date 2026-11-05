@@ -579,7 +579,9 @@ def test_final_projection_removes_quiet_company_from_explicit_information_task()
     rendered = '\n'.join(priorities)
     assert STRATEGY_INSTRUCTIONS['respond_directly'] in rendered
     assert STRATEGY_INSTRUCTIONS['stay_present'] not in rendered
-    assert '不得提供建议' in rendered
+    assert '只回答本轮仍明确要求的问题' in rendered
+    assert '不追加用户已拒绝的建议、分析或追问' in rendered
+    assert '不得提供建议、分析方案' not in rendered
 
 
 def test_reflect_content_limits_questions_without_forcing_one():

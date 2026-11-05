@@ -521,6 +521,13 @@ def _tone(stage: str, interaction: InteractionState, acts: dict[str, float]) -> 
     return "；".join(parts)
 
 
+def advice_boundary_instruction(*, explicit_information: bool) -> str:
+    """Keep a simultaneous explicit task inside its original refusal scope."""
+    if explicit_information:
+        return "只回答本轮仍明确要求的问题；不追加用户已拒绝的建议、分析或追问，也不以追问变相推进这些内容。"
+    return "不得提供建议、分析方案或用追问变相推进；本轮不得追问。"
+
+
 def _avoid(
     stage: str,
     interaction: InteractionState,
@@ -533,7 +540,7 @@ def _avoid(
     practical = max(acts.get("information_request", 0.0), acts.get("advice_request", 0.0))
     emotional = max(acts.get("seek_support", 0.0), needs.get("validation", 0.0))
     if acts.get("advice_boundary", 0.0) >= 0.5:
-        items.append("不得提供建议、分析方案或用追问变相推进问题；本轮不得追问")
+        items.append(advice_boundary_instruction(explicit_information=acts.get("information_request", 0.0) >= 0.5))
     if acts.get("gratitude", 0.0) >= 0.5 and practical < 0.5:
         items.append("感谢回应应简短收住，不得转成邀约、服务承诺或追问")
     if acts.get("resolved_third_party_risk", 0.0) >= 0.5 and practical < 0.5:

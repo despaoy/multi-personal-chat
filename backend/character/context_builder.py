@@ -36,7 +36,7 @@ import json
 from datetime import datetime, timezone
 from math import isfinite
 
-from character.decision_policy import STRATEGY_INSTRUCTIONS
+from character.decision_policy import STRATEGY_INSTRUCTIONS, advice_boundary_instruction
 from character.memory_clock import parse_memory_timestamp
 from character.models import (
     CharacterContext,
@@ -137,7 +137,6 @@ _RESOLVED_THIRD_PARTY_RISK_AVOID = (
     "按对方已明确说明的现状处理：第三方当前已安全且正在接受帮助；不得重新危机化，"
     "不自动追加心理咨询、治疗、支持小组等建议，也不得追问。"
 )
-_ADVICE_BOUNDARY_AVOID = "不得提供建议、分析方案或用追问变相推进；本轮不得追问。"
 _CLOSING_AVOID = (
     "不得追问、追加建议或要求解释；避免替对方宣布问题已经没事、淡化未解决的情绪，也不得把暂停说成问题已经解决。"
 )
@@ -388,6 +387,7 @@ def _compact_dynamic_projection(
     explicit_information = acts.get("information_request", 0.0) >= 0.5
     explicit_advice = acts.get("advice_request", 0.0) >= 0.5
     explicit_task = explicit_information or explicit_advice
+    advice_constraint = advice_boundary_instruction(explicit_information=explicit_information)
     gratitude = acts.get("gratitude", 0.0) >= 0.5
     resolved_third_party_risk = acts.get("resolved_third_party_risk", 0.0) >= 0.5
     quiet_presence = advice_boundary and not explicit_information and needs.get("companionship", 0.0) >= 0.5
@@ -435,7 +435,7 @@ def _compact_dynamic_projection(
         fallback_strategy = "respond_about_self"
         constraints = [_META_AVOID]
         if advice_boundary:
-            constraints.append(_ADVICE_BOUNDARY_AVOID)
+            constraints.append(advice_constraint)
         if explicit_task:
             constraints.append(_FACTUAL_AVOID)
         constraint = "；".join(constraints)
@@ -443,15 +443,15 @@ def _compact_dynamic_projection(
         # "不要给建议" constrains the answer style; it does not turn a
         # simultaneous direct question into a request for silent company.
         fallback_strategy = "respond_directly"
-        constraint = f"{_ADVICE_BOUNDARY_AVOID}；{_FACTUAL_AVOID}"
+        constraint = f"{advice_constraint}；{_FACTUAL_AVOID}"
         compatible_strategies = frozenset(("respond_directly",))
     elif quiet_presence:
         fallback_strategy = "stay_present"
-        constraint = _ADVICE_BOUNDARY_AVOID
+        constraint = advice_constraint
         compatible_strategies = frozenset(("stay_present", "acknowledge_emotion", "reflect_content"))
     elif advice_boundary:
         fallback_strategy = "set_boundary"
-        constraint = _ADVICE_BOUNDARY_AVOID
+        constraint = advice_constraint
         compatible_strategies = frozenset(("set_boundary", "acknowledge_emotion", "reflect_content"))
     elif relationship_boundary:
         fallback_strategy = "set_boundary"
