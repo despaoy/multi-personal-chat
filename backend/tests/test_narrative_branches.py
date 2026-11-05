@@ -157,7 +157,7 @@ def test_context_trust_and_pending_exclusion(repo):
 
     branch = create(repo, hypothesis="UNTRUSTED_BRANCH_INSTRUCTION")
     commit(repo, branch, proposals=[Proposal(subject="X", predicate="P", object="PENDING_SECRET")])
-    _, _, prepared = asyncio.run(prepare_branch(MessageRequest(message="你好", branchId=branch["id"]), "1", repo))
+    _, _, prepared = asyncio.run(prepare_branch(MessageRequest(message="你好", branchId=branch["id"]), "1", repo, repo.get("1", branch["id"], writable=True)))
     assert "PENDING_SECRET" not in prepared.compiled.branch_context
     plan = build_generation_request(GenerationRequest(message="你好", character_context=prepared.compiled))
     system = "".join(m["content"] for m in plan.messages if m["role"] == "system")
@@ -313,7 +313,7 @@ def test_character_mismatch_rejected_before_provider_call(repo, monkeypatch):
 
     branch = create(repo)
     request = MessageRequest(message="继续", branchId=branch["id"], loraName="wrong")
-    _, _, prepared = asyncio.run(prepare_branch(request, "1", repo))
+    _, _, prepared = asyncio.run(prepare_branch(request, "1", repo, repo.get("1", branch["id"], writable=True)))
     database = SimpleNamespace(config={}, loras=[{"name": "wrong", "status": "inactive"}])
     monkeypatch.setattr(
         mm,

@@ -86,12 +86,14 @@ class _ModelIdentityError(RuntimeError):
 
 class _GenerationConfig(NamedTuple):
     runtime_config: dict[str, Any]
-    loras: list[dict[str, Any]]
+    selected_lora: dict[str, Any] | None
+    vllm_lora_name: str
     use_knowledge_base: bool
+    character_id: str | None
 
 
-async def _read_generation_config(request, message_db, request_context, *, select_active_lora):
-    """Own one generation-settings read before context work begins."""
+async def _read_generation_config(request, message_db, request_context, *, select_active_lora, bound_character_id):
+    """Read generation settings and resolve one adapter before context work begins."""
     request_provider = request_context.provider_name
     if request_provider == "mock":
         raise HTTPException(
@@ -125,7 +127,53 @@ async def _read_generation_config(request, message_db, request_context, *, selec
             503, "生成参数配置无效，请检查 temperature、maxTokens、topP、useKnowledgeBase 及当前模型服务要求后重试"
         ) from exc
 
-    return _GenerationConfig(runtime_config, loras, use_knowledge_base)
+    selected_lora = None
+    if request.loraName and request.loraName != "default":
+        selected_lora = next((item for item in loras if item["name"] == request.loraName), None)
+        if selected_lora is None:
+            raise HTTPException(status_code=422, detail="Specified LoRA does not exist")
+    elif select_active_lora:
+        selected_lora = next((item for item in loras if item["status"] == "active"), None)
+    lora_name = selected_lora["name"] if selected_lora else "default"
+
+    if selected_lora and request_provider not in {"vllm", "transformers_peft"}:
+        raise HTTPException(422, "所选模型提供商不支持 LoRA，请选择基础模型或显式选择支持 LoRA 的提供商")
+    vllm_lora_name = resolve_lora_served_name(lora_name) if lora_name != "default" else "default"
+
+    mapped_character_id = get_lora_character_id(lora_name) if lora_name != "default" else None
+    if request.characterId:
+        from character.profile_registry import CharacterProfileNotFoundError, get_default_profile_registry
+
+        try:
+            get_default_profile_registry().get_profile(request.characterId)
+        except CharacterProfileNotFoundError:
+            raise HTTPException(422, "所选人物不存在") from None
+        if lora_name != "default" and mapped_character_id != request.characterId:
+            raise HTTPException(422, "LoRA 与所选人物不匹配，请选择基础模型或对应 LoRA")
+        if bound_character_id is not None and bound_character_id != request.characterId:
+            raise HTTPException(422, "人物与当前分支不匹配")
+        mapped_character_id = request.characterId
+    if bound_character_id is not None:
+        if lora_name != "default" and mapped_character_id != bound_character_id:
+            raise HTTPException(422, "LoRA 与分支角色不匹配")
+        mapped_character_id = bound_character_id
+
+    # 检查vLLM是否实际支持该LoRA，避免404触发熔断
+    vllm_effective_lora = vllm_lora_name if lora_name != "default" else None
+    if request_provider == "vllm" and vllm_effective_lora:
+        try:
+            client = await get_vllm_client()
+            if client is None:
+                raise RuntimeError("Selected vLLM service is unavailable")
+            available_loras = await client.list_loras()
+            if vllm_effective_lora not in available_loras:
+                raise HTTPException(409, "所选 LoRA 尚未加载到 vLLM，请先重新激活")
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(503, "所选 LoRA 状态查询失败，请检查 vLLM 服务及适配器后重试") from exc
+
+    return _GenerationConfig(runtime_config, selected_lora, vllm_lora_name, use_knowledge_base, mapped_character_id)
 
 
 def _response_cache_keys(
@@ -311,11 +359,11 @@ async def _generate_reply_body(
             raise HTTPException(422, "假想分支第一版仅支持 Web 交互")
         from services.narrative import generate_branch_reply
 
-        async def configure_generate():
+        async def configure_generate(character_id):
             from inference.request_context import get_request_context
 
             configuration = await _read_generation_config(
-                request, message_db, get_request_context(), select_active_lora=False
+                request, message_db, get_request_context(), select_active_lora=False, bound_character_id=character_id
             )
             return functools.partial(_generate_reply_impl, _generation_config=configuration)
 
@@ -329,41 +377,19 @@ async def _generate_reply_body(
     generation_config = _generation_config
     if generation_config is None:
         generation_config = await _read_generation_config(
-            request, message_db, request_context, select_active_lora=select_active_lora
+            request,
+            message_db,
+            request_context,
+            select_active_lora=select_active_lora,
+            bound_character_id=prepared_override.character_id if prepared_override is not None else None,
         )
-    runtime_config, loras, use_knowledge_base = generation_config
-
-    selected_lora = None
-    if request.loraName and request.loraName != "default":
-        selected_lora = next((item for item in loras if item["name"] == request.loraName), None)
-        if selected_lora is None:
-            raise HTTPException(status_code=422, detail="Specified LoRA does not exist")
-    elif select_active_lora:
-        selected_lora = next((item for item in loras if item["status"] == "active"), None)
+    runtime_config, selected_lora, vllm_lora_name, use_knowledge_base, mapped_character_id = generation_config
     lora_name = selected_lora["name"] if selected_lora else "default"
-
-    if selected_lora and request_provider not in {"vllm", "transformers_peft"}:
-        raise HTTPException(422, "所选模型提供商不支持 LoRA，请选择基础模型或显式选择支持 LoRA 的提供商")
-    vllm_lora_name = resolve_lora_served_name(lora_name) if lora_name != "default" else "default"
+    vllm_effective_lora = vllm_lora_name if lora_name != "default" else None
 
     # ── 角色上下文准备（仅当 LoRA 显式映射了人物画像时启用） ──
     # 未映射的 LoRA（如 hutao/minamo）与 default 保持原有生成行为。
     prepared_character_turn = prepared_override
-    mapped_character_id = get_lora_character_id(lora_name) if lora_name != "default" else None
-    if request.characterId:
-        from character.profile_registry import CharacterProfileNotFoundError, get_default_profile_registry
-
-        try:
-            get_default_profile_registry().get_profile(request.characterId)
-        except CharacterProfileNotFoundError:
-            raise HTTPException(422, "所选人物不存在") from None
-        if lora_name != "default" and mapped_character_id != request.characterId:
-            raise HTTPException(422, "LoRA 与所选人物不匹配，请选择基础模型或对应 LoRA")
-        if prepared_override is not None and prepared_override.character_id != request.characterId:
-            raise HTTPException(422, "人物与当前分支不匹配")
-        mapped_character_id = request.characterId
-    if prepared_override is not None and request.loraName and mapped_character_id != prepared_override.character_id:
-        raise HTTPException(422, "LoRA 与分支角色不匹配")
     if request._history_after_id is not None:
         from character.models import build_user_scope
         from inference.provider_context import get_provider_context_budget
@@ -429,21 +455,6 @@ async def _generate_reply_body(
     if prepared_character_turn is not None:
         mapped_character_id = prepared_character_turn.character_id
         _turn_scope.enter_context(_report_memory_operation(prepared_character_turn))
-
-    # 检查vLLM是否实际支持该LoRA，避免404触发熔断
-    vllm_effective_lora = vllm_lora_name if lora_name != "default" else None
-    if request_provider == "vllm" and vllm_effective_lora:
-        try:
-            client = await get_vllm_client()
-            if client is None:
-                raise RuntimeError("Selected vLLM service is unavailable")
-            available_loras = await client.list_loras()
-            if vllm_effective_lora not in available_loras:
-                raise HTTPException(409, "所选 LoRA 尚未加载到 vLLM，请先重新激活")
-        except HTTPException:
-            raise
-        except Exception as exc:
-            raise HTTPException(503, "所选 LoRA 状态查询失败，请检查 vLLM 服务及适配器后重试") from exc
 
     memory_write_enabled = None
     if prepared_character_turn is not None:
@@ -557,7 +568,11 @@ async def _generate_reply_body(
                 try:
                     async with nullcontext() if request_provider == "openai_compat" else _get_local_model_lock():
                         try:
-                            lora_path = get_lora_path_by_id(selected_lora["id"], loras=loras) if selected_lora else None
+                            lora_path = (
+                                get_lora_path_by_id(selected_lora["id"], loras=[selected_lora])
+                                if selected_lora
+                                else None
+                            )
                         except OSError as exc:
                             raise HTTPException(503, "所选 LoRA 目录读取失败，请检查适配器存储后重试") from exc
                         if selected_lora and lora_path is None:

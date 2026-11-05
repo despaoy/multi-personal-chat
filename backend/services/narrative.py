@@ -62,8 +62,7 @@ class _BranchHistory:
         return history
 
 
-async def prepare_branch(request, owner, repo):
-    branch = await asyncio.to_thread(repo.get, owner, request.branchId, writable=True)
+async def prepare_branch(request, owner, repo, branch):
     active = await asyncio.to_thread(repo.assertions, owner, branch["id"], 101, 0, "active")
     if len(active) > 100:
         raise NarrativeError("conflict", "有效事实超出第一版上下文容量")
@@ -123,8 +122,9 @@ async def generate_branch_reply(request, current_user, database, *, configure_ge
             answerMode="counterfactual",
             warnings=["replayed_committed_response"],
         )
-    generate = await configure_generate()
-    branch, active, prepared = await prepare_branch(request, owner, repo)
+    branch = await asyncio.to_thread(repo.get, owner, request.branchId, writable=True)
+    generate = await configure_generate(branch["character_id"])
+    branch, active, prepared = await prepare_branch(request, owner, repo, branch)
     internal = request.model_copy(
         update={
             "history": [],

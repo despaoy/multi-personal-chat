@@ -90,6 +90,7 @@ async def workspace(tmp_path, monkeypatch):
             db=scoped,
             repo=repository,
             branch=branch,
+            entry=entry,
             call=call,
             original_prepare=CharacterContextService.prepare_turn,
         )

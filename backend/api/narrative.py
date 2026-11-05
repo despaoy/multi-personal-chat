@@ -107,7 +107,7 @@ async def canonical_generate(body: CanonicalMessage, request: Request, user=Depe
                 conversationType="private",
             )
             configuration = await _read_generation_config(
-                req, container.db, context, select_active_lora=False
+                req, container.db, context, select_active_lora=False, bound_character_id=body.character_id
             )
             service = build_character_context_service(container.db)
             prepared = await _prepare_character_turn(req, body.character_id, character_service=service)
