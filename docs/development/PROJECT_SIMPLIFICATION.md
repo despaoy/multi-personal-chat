@@ -62,9 +62,9 @@ CLI, dataset or offline experiment is disposable.
 - Retrieval snapshots, generation-bound cache keys, model/vector validation,
   source revisions and complete-query obligations prevent stale or unauthorized
   evidence. Mixed domains cannot borrow authority from one another.
-- Approved-evidence fallback preserves already approved evidence when narrowing
-  cannot match; it neither invents a quote nor widens approved spans. Missing raw
-  source files and invalid ranges still fail.
+- Literal evidence is passed explicitly and must match its declared original
+  source span. Empty or unmatched evidence, missing files and invalid ranges
+  fail construction; reviewed-card status cannot substitute for literal binding.
 - Character strategy selection, unresolved-risk handling and evidence abstention
   are policy outcomes, not hidden provider substitution.
 - Memory observations, superseded records, pending conflicts, temporal projections
@@ -74,9 +74,10 @@ CLI, dataset or offline experiment is disposable.
   metrics and diagnostic failures propagate through the context error boundary;
   a completed review is not reported as a successful turn when that step fails.
   Dashboard snapshots copy cached state and reject invalid configuration.
-- Offline probes, replay tools, experiment fixtures and benchmark compatibility
-  entrypoints retain distinct schemas. Explicit mock/ablation choices remain;
-  they do not activate after real generation fails.
+- Offline probes, replay tools and experiment fixtures retain distinct schemas.
+  Duplicate API load entrypoints use the maintained authenticated HTTP benchmark.
+  Explicit mock/ablation choices remain; they do not activate after real
+  generation fails.
 - TRL contract checks, GPTQ's third-party renamed-symbol alias and optional GPU
   telemetry/thermal protection remain. Removing them would require separate
   package or hardware validation. Already-running training logs secondary storage

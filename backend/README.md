@@ -111,7 +111,7 @@ SQLite 本地初始化也支持创建该表。已有历史数据不会删除，�
 python scripts/build_character_rag_index.py
 ```
 
-完整的数据层级、配置和降级行为见
+完整的数据层级、配置和失败行为见
 [`../docs/architecture/CHARACTER_KNOWLEDGE_RETRIEVAL.md`](../docs/architecture/CHARACTER_KNOWLEDGE_RETRIEVAL.md)。
 
 模型提供商选择：非空 `MODEL_PROVIDER` 优先于数据库 `modelProvider`；缺失或非法值明确失败，不切换为 mock。mock 仅可在 development/test 环境显式启用，日志会标明模拟推理。模型配置数据库读取失败不会使用空配置继续运行。
