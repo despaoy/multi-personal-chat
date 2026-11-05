@@ -234,6 +234,7 @@ async def _generate_reply_impl(
     http_client_pool=None,
     delivery_context: dict | None = None,
     prepared_override=None,
+    _canonical_character_id: str | None = None,
     _generation_config: _GenerationConfig | None = None,
 ):
     from inference.model_manager import get_model_manager
@@ -261,6 +262,7 @@ async def _generate_reply_impl(
                 message_db=message_db,
                 delivery_context=delivery_context,
                 prepared_override=prepared_override,
+                _canonical_character_id=_canonical_character_id,
                 _generation_config=_generation_config,
                 _turn_scope=turn_scope,
             )
@@ -331,6 +333,7 @@ async def _generate_reply_body(
     message_db,
     delivery_context: dict | None = None,
     prepared_override=None,
+    _canonical_character_id: str | None = None,
     _generation_config: _GenerationConfig | None = None,
     _turn_scope: ExitStack,
 ):
@@ -345,6 +348,7 @@ async def _generate_reply_body(
         raise HTTPException(503, detail=exc.public_detail()) from exc
     if (
         prepared_override is None
+        and _canonical_character_id is None
         and not request.branchId
         and (request.adapter == "narrative" or request.adapter.startswith("narrative:"))
     ):
@@ -380,7 +384,12 @@ async def _generate_reply_body(
 
     request_context = get_request_context()
     request_provider = request_context.provider_name
-    select_active_lora = not request.loraName and not request.characterId and prepared_override is None
+    select_active_lora = (
+        not request.loraName
+        and not request.characterId
+        and prepared_override is None
+        and _canonical_character_id is None
+    )
     generation_config = _generation_config
     if generation_config is None:
         generation_config = await _read_generation_config(
@@ -388,7 +397,9 @@ async def _generate_reply_body(
             message_db,
             request_context,
             select_active_lora=select_active_lora,
-            bound_character_id=prepared_override.character_id if prepared_override is not None else None,
+            bound_character_id=prepared_override.character_id
+            if prepared_override is not None
+            else _canonical_character_id,
         )
     runtime_config, selected_lora, vllm_lora_name, use_knowledge_base, mapped_character_id = generation_config
     lora_name = selected_lora["name"] if selected_lora else "default"
@@ -456,7 +467,7 @@ async def _generate_reply_body(
             request,
             mapped_character_id,
             character_service=character_service,
-            execute_memory_operations=persist_message and delivery_context is None,
+            execute_memory_operations=persist_message and delivery_context is None and _canonical_character_id is None,
             defer_memory_operations=persist_message and delivery_context is not None and not request.branchId,
         )
     if prepared_character_turn is not None:
