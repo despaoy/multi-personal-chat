@@ -267,7 +267,7 @@ def _decode_memory_record(row: dict[str, Any]) -> dict[str, Any]:
                            ("relation_type", _VALID_RELATION_TYPES)):
         _require_enum(record.get(field), field, allowed)
     semantic_observation_clock(metadata, record.get("observed_at"))
-    record["attributed_to"] = str(metadata.get("attributed_to") or "user")
+    record["attributed_to"] = _require_enum(metadata.get("attributed_to", "user"), "attributed_to", ("user",))
     record["qualifiers"] = metadata.get("qualifiers", [])
     return record
 
@@ -519,7 +519,7 @@ class DatabaseCharacterMemoryRepository:
             return {"id": 0, "persisted": False, "relation_type": "NOOP", "memory_key": key}
 
         metadata_payload = dict(metadata or {})
-        metadata_payload["attributed_to"] = str(attributed_to or "user")
+        metadata_payload["attributed_to"] = _require_enum(attributed_to, "attributed_to", ("user",))
         source_ids = list(source_message_ids)
         if source_message_id is not None and source_message_id != "" and source_message_id not in source_ids:
             source_ids.insert(0, source_message_id)

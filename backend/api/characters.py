@@ -17,8 +17,7 @@ from pydantic import BaseModel, Field
 
 from app.dependencies import get_current_admin
 from app.providers import get_character_memory_repository
-from character.models import build_user_scope
-from character.models import MemoryItem, RelationshipState
+from character.models import MemoryItem, RelationshipState, build_user_scope
 from character.natural_relationship import CATEGORIES, NoteCommand, is_note, save_note
 from character.profile_registry import get_default_profile_registry
 from repositories.character_memory import DatabaseCharacterMemoryRepository
@@ -236,24 +235,24 @@ async def update_character_memory(
             user_scope,
             MemoryItem(
                 memory_id=str(memory_id),
-                memory_type=target.get("memory_type", "user_fact"),
+                memory_type=target["memory_type"],
                 content=request.content.strip(),
                 importance=request.importance,
             ),
-            memory_key=str(target.get("memory_key") or f"memory_{memory_id}"),
+            memory_key=target["memory_key"],
             relation_type="SUPERSEDE",
-            scope_level=str(target.get("scope_level") or "conversation"),
+            scope_level=target["scope_level"],
             parent_memory_id=memory_id,
             supersedes_memory_id=memory_id,
-            evidence=tuple(target.get("evidence") or ()),
-            confidence=float(target.get("confidence") or 1.0),
-            attributed_to=str(target.get("attributed_to") or "user"),
+            evidence=tuple(target["evidence"]),
+            confidence=target["confidence"],
+            attributed_to=target["attributed_to"],
             valid_from=target.get("valid_from"),
             valid_to=target.get("valid_to"),
             source_message_id=target.get("source_message_id"),
-            source_message_ids=tuple(target.get("source_message_ids") or ()),
+            source_message_ids=tuple(target["source_message_ids"]),
             metadata={
-                **dict(target.get("metadata") or {}),
+                **target["metadata"],
                 "manual_correction": True,
                 "corrected_memory_id": memory_id,
                 **({"resolved": request.resolved} if request.resolved is not None else {}),
