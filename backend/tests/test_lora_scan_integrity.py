@@ -32,9 +32,8 @@ def test_scan_registers_multiple_adapters_with_unique_ids(tmp_path, monkeypatch)
 
     database = Database()
     monkeypatch.setattr(loras, "LORA_ROOT", tmp_path)
-    monkeypatch.setattr(loras, "db", database)
 
-    result = loras._scan_loras_sync()
+    result = loras._scan_loras_sync(database)
 
     added = [item for item in database.records if item["name"] in {"kisaki", "minamo"}]
     assert result["success"] is True

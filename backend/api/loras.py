@@ -1,20 +1,20 @@
 """LoRA管理API"""
+
 import asyncio
-import json
 import logging
+import os
 from datetime import datetime
 from pathlib import Path
-import os
-from typing import Optional
+from typing import Literal, Optional
 
-from fastapi import APIRouter, Request, HTTPException, Depends
-from app.dependencies import get_current_admin
+from fastapi import APIRouter, Body, Depends, HTTPException
 
-from db.adapter import db
-from db.lora_metadata import read_lora_metadata
+from app.dependencies import get_current_admin, get_request_database
+from app.providers import get_vllm_client
 from db.database import LORA_ROOT, refresh_lora_dir_map
-from inference.lora_utils import resolve_lora_served_name
+from db.lora_metadata import read_lora_metadata
 from inference.adapter_checker import AdapterChecker
+from inference.lora_utils import resolve_lora_served_name
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -38,29 +38,36 @@ async def _rollback_runtime_lora_state(
     loaded_adapter: tuple[str, str] | None,
     unloaded_adapter: tuple[str, str] | None,
 ) -> None:
-    """Best-effort compensation when a cross-system LoRA update fails."""
+    """Attempt both compensations; a failed recovery leaves runtime state unknown."""
     if client is None:
         return
+    errors = []
     if loaded_adapter is not None:
         try:
             await client.unload_lora_adapter(loaded_adapter[0])
-        except Exception:
-            logger.exception("Failed to remove newly loaded LoRA during rollback: %s", loaded_adapter[0])
+        except Exception as error:
+            errors.append(error)
     if unloaded_adapter is not None:
         try:
             await client.load_lora_adapter(*unloaded_adapter)
-        except Exception:
-            logger.exception("Failed to restore previous LoRA during rollback: %s", unloaded_adapter[0])
+        except Exception as error:
+            errors.append(error)
+    if errors:
+        from builtins import ExceptionGroup
+
+        raise HTTPException(
+            502,
+            detail={
+                "kind": "lora_recovery_failed",
+                "runtimeState": "unknown",
+                "message": "LoRA 操作失败且运行时恢复未完成，请检查 vLLM 后重新核对加载状态",
+                "errorTypes": [type(error).__name__ for error in errors],
+            },
+        ) from ExceptionGroup("LoRA runtime recovery failed", errors)
 
 
 def _allowed_real_roots() -> list[Path]:
-    """受信任的 LoRA 真实根目录集合。
-
-    LORA_ROOT 本身总是受信。运维可通过 LORA_ALLOWED_REAL_ROOTS（逗号分隔）
-    显式追加额外的根目录（例如 qqchat-data/loras），用于容纳指向根外的
-    符号链接目标。未列入该集合的根外真实路径将被拒绝，避免任意符号链接
-    把适配器指向受信边界之外的位置。
-    """
+    """Configured real roots are trusted; the primary LoRA root is always included."""
     roots = [LORA_ROOT.resolve()]
     extra = os.getenv("LORA_ALLOWED_REAL_ROOTS", "")
     for part in extra.split(","):
@@ -89,26 +96,17 @@ def _is_within_allowed_real(path: Path, allowed_roots: list[Path]) -> bool:
 
 
 def _resolve_vllm_adapter_path(lora_name: str) -> str:
-    """Map a trusted backend LoRA directory to the path visible by vLLM.
+    """Map a logical adapter to a trusted real directory and the vLLM container path.
 
-    安全模型分两层：
-    1. 逻辑路径检查：用 os.path.normpath 防止 lora_name 含 ../ 穿越，
-       但不跟随符号链接，因此 LORA_ROOT 下指向其他目录的合法链接不会被误判。
-    2. 真实目标受信边界检查：Path.resolve() 会展开符号链接得到真实路径，
-       要求该真实路径位于 LORA_ROOT 或 LORA_ALLOWED_REAL_ROOTS 之一之下，
-       避免任意符号链接把适配器指向受信边界之外的位置。
-    """
+    Symlink trust is checked independently from the logical served path."""
     local_root = LORA_ROOT.resolve()
-    # 1) 逻辑路径检查（不跟随符号链接）
     normalized = os.path.normpath(str(local_root / lora_name))
     normalized_root = os.path.normpath(str(local_root))
     if normalized != normalized_root and not normalized.startswith(normalized_root + os.sep):
         raise ValueError("LoRA path escapes the configured root")
 
-    # 逻辑相对路径（vLLM 看到的路径，不跟随符号链接）
     logical_rel = Path(lora_name)
 
-    # 2) resolve 检查文件是否存在（符号链接会被展开）
     real_path = (local_root / lora_name).resolve()
     if not (real_path / "adapter_config.json").exists():
         final_path = real_path / "final"
@@ -118,12 +116,13 @@ def _resolve_vllm_adapter_path(lora_name: str) -> str:
         else:
             raise FileNotFoundError("LoRA adapter_config.json was not found")
 
-    # 3) 受信边界检查：真实路径必须位于 LORA_ROOT 或显式配置的允许根之下
     allowed_roots = _allowed_real_roots()
     if not _is_within_allowed_real(real_path, allowed_roots):
         logger.warning(
             "LoRA symlink target outside trusted roots: name=%s real=%s allowed=%s",
-            lora_name, real_path, [str(r) for r in allowed_roots],
+            lora_name,
+            real_path,
+            [str(r) for r in allowed_roots],
         )
         raise ValueError("LoRA symlink target escapes the trusted roots")
 
@@ -132,25 +131,24 @@ def _resolve_vllm_adapter_path(lora_name: str) -> str:
 
 
 @router.get("/api/loras")
-async def get_loras(status: Optional[str] = None, current_user: dict = Depends(get_current_admin)):
+async def get_loras(
+    status: Optional[str] = None,
+    current_user: dict = Depends(get_current_admin),
+    database=Depends(get_request_database),
+):
     """获取LoRA模型列表"""
-    return {"loras": await asyncio.to_thread(db.get_loras, status)}
+    return {"loras": await asyncio.to_thread(database.get_loras, status)}
 
 
-def _scan_loras_sync():
+def _scan_loras_sync(database):
     """扫描 loras/ 目录，自动发现并注册新的 LoRA 适配器，更新已有记录元信息"""
     lora_base = LORA_ROOT
     if not lora_base.exists():
         return {"success": True, "message": "loras 目录不存在", "new_count": 0}
 
-    # 获取数据库中已有的 LoRA
-    existing_loras = db.get_loras()
+    existing_loras = database.get_loras()
     existing_map = {lora["name"]: lora for lora in existing_loras}
-    next_id = max((
-        int(str(item["id"]))
-        for item in existing_loras
-        if str(item.get("id", "")).isdigit()
-    ), default=0) + 1
+    next_id = max((int(str(item["id"])) for item in existing_loras if str(item.get("id", "")).isdigit()), default=0) + 1
 
     new_count = 0
     updated_count = 0
@@ -169,10 +167,8 @@ def _scan_loras_sync():
         if not config_path.exists():
             continue
 
-        # 读取元信息
         meta = read_lora_metadata(adapter_path)
 
-        # 计算 adapter 大小
         adapter_file = adapter_path / "adapter_model.safetensors"
         size_str = "未知"
         if adapter_file.exists():
@@ -185,35 +181,35 @@ def _scan_loras_sync():
         if d.name in existing_map:
             # 更新已有记录
             try:
-                db.execute_sql(
-                    'UPDATE loras SET size = :size, trainedSteps = :trained_steps, totalSteps = :total_steps WHERE name = :name',
-                    {"size": size_str, "trained_steps": trained_steps, "total_steps": total_steps, "name": d.name}
+                database.execute_sql(
+                    "UPDATE loras SET size = :size, trainedSteps = :trained_steps, totalSteps = :total_steps WHERE name = :name",
+                    {"size": size_str, "trained_steps": trained_steps, "total_steps": total_steps, "name": d.name},
                 )
                 updated_count += 1
             except Exception as e:
-                logger.error(f"更新 LoRA 失败 {d.name}: {e}")
+                logger.error("LoRA metadata update failed type=%s", type(e).__name__)
                 failed_names.append(d.name)
             continue
 
-        # 新增记录
-
         try:
-            db.add_lora({
-                "id": str(next_id),
-                "name": d.name,
-                "description": f"LoRA 适配器 - {d.name}",
-                "status": "inactive",
-                "style": "",
-                "size": size_str,
-                "trainedSteps": trained_steps,
-                "totalSteps": total_steps,
-                "createdAt": datetime.now().strftime("%Y-%m-%d"),
-            })
+            database.add_lora(
+                {
+                    "id": str(next_id),
+                    "name": d.name,
+                    "description": f"LoRA 适配器 - {d.name}",
+                    "status": "inactive",
+                    "style": "",
+                    "size": size_str,
+                    "trainedSteps": trained_steps,
+                    "totalSteps": total_steps,
+                    "createdAt": datetime.now().strftime("%Y-%m-%d"),
+                }
+            )
             new_count += 1
             next_id += 1
             logger.info(f"自动注册 LoRA: {d.name} (size={size_str})")
         except Exception as e:
-            logger.error(f"注册 LoRA 失败 {d.name}: {e}")
+            logger.error("LoRA registration failed type=%s", type(e).__name__)
             failed_names.append(d.name)
 
     msg_parts = []
@@ -239,30 +235,27 @@ def _scan_loras_sync():
 
 
 @router.post("/api/loras/scan")
-async def scan_loras(current_user: dict = Depends(get_current_admin)):
+async def scan_loras(current_user: dict = Depends(get_current_admin), database=Depends(get_request_database)):
     """Scan and register adapters without blocking or racing status changes."""
     async with _get_lora_status_lock():
-        return await asyncio.to_thread(_scan_loras_sync)
+        return await asyncio.to_thread(_scan_loras_sync, database)
 
 
 @router.put("/api/loras/{lora_id}/status")
-async def update_lora_status(lora_id: str, request: Request, current_user: dict = Depends(get_current_admin)):
-    """更新LoRA模型状态
-
-    s2 fix: 激活/停用 LoRA 直接影响全局推理路由和 vLLM 加载状态，限定 admin。
-    """
-    body = await request.json()
-    status = body.get("status", "inactive")
-    if status not in {"active", "inactive"}:
-        raise HTTPException(status_code=422, detail="LoRA 状态只能是 active 或 inactive")
-
+async def update_lora_status(
+    lora_id: str,
+    status: Literal["active", "inactive"] = Body(embed=True),
+    current_user: dict = Depends(get_current_admin),
+    database=Depends(get_request_database),
+):
+    """Apply an explicit adapter status under the runtime/database lock."""
     async with _get_lora_status_lock():
         # Read and update the active adapter under one lock so concurrent
         # activation requests cannot both act on stale database state.
         runtime_client = None
         loaded_adapter: tuple[str, str] | None = None
         unloaded_adapter: tuple[str, str] | None = None
-        all_loras = await asyncio.to_thread(db.get_loras)
+        all_loras = await asyncio.to_thread(database.get_loras)
         existing = next((item for item in all_loras if item["id"] == lora_id), None)
         if existing is None:
             raise HTTPException(status_code=404, detail="LoRA模型不存在")
@@ -273,18 +266,12 @@ async def update_lora_status(lora_id: str, request: Request, current_user: dict 
                 "lora": existing,
             }
         previous_active = next(
-            (
-                item
-                for item in all_loras
-                if item["status"] == "active" and item["id"] != lora_id
-            ),
+            (item for item in all_loras if item["status"] == "active" and item["id"] != lora_id),
             None,
         )
 
         if status == "active":
             try:
-                from api.generate import get_vllm_client
-
                 # 适配器兼容性检查（激活前验证）
                 checker = AdapterChecker(lora_root=str(LORA_ROOT))
                 compat_report = await asyncio.to_thread(checker.check_adapter, existing["name"])
@@ -317,9 +304,10 @@ async def update_lora_status(lora_id: str, request: Request, current_user: dict 
                         resolve_lora_served_name(previous_active["name"]),
                         _resolve_vllm_adapter_path(previous_active["name"]),
                     )
-                    await runtime_client.unload_lora_adapter(unloaded_adapter[0])
-                loaded_adapter = (served_name, adapter_path)
                 try:
+                    if unloaded_adapter is not None:
+                        await runtime_client.unload_lora_adapter(unloaded_adapter[0])
+                    loaded_adapter = (served_name, adapter_path)
                     await runtime_client.load_lora_adapter(*loaded_adapter)
                 except Exception:
                     await _rollback_runtime_lora_state(
@@ -331,15 +319,13 @@ async def update_lora_status(lora_id: str, request: Request, current_user: dict 
             except HTTPException:
                 raise
             except (FileNotFoundError, ValueError) as exc:
-                logger.warning("Invalid LoRA adapter id=%s error=%s", lora_id, exc)
+                logger.warning("Invalid LoRA adapter id=%s type=%s", lora_id, type(exc).__name__)
                 raise HTTPException(status_code=422, detail="LoRA 适配器文件无效或配置不完整") from exc
             except Exception as exc:
-                logger.exception("Failed to load LoRA into vLLM id=%s", lora_id)
+                logger.error("LoRA load failed id=%s type=%s", lora_id, type(exc).__name__)
                 raise HTTPException(status_code=502, detail="LoRA 无法加载到 vLLM，数据库状态未变更") from exc
 
         if status == "inactive" and existing.get("status") == "active":
-            from api.generate import get_vllm_client
-
             runtime_client = await get_vllm_client()
             if runtime_client is None:
                 raise HTTPException(
@@ -358,14 +344,14 @@ async def update_lora_status(lora_id: str, request: Request, current_user: dict 
                     loaded_adapter=None,
                     unloaded_adapter=unloaded_adapter,
                 )
-                logger.exception("Failed to unload active LoRA id=%s", lora_id)
+                logger.error("LoRA unload failed id=%s type=%s", lora_id, type(exc).__name__)
                 raise HTTPException(
                     status_code=502,
                     detail="LoRA 卸载失败，数据库状态未变更",
                 ) from exc
 
         try:
-            lora = await asyncio.to_thread(db.update_lora_status, lora_id, status)
+            lora = await asyncio.to_thread(database.update_lora_status, lora_id, status)
             if lora is None:
                 raise RuntimeError("LoRA record disappeared during status update")
         except Exception as exc:
@@ -374,7 +360,7 @@ async def update_lora_status(lora_id: str, request: Request, current_user: dict 
                 loaded_adapter=loaded_adapter,
                 unloaded_adapter=unloaded_adapter,
             )
-            logger.exception("Failed to persist LoRA status id=%s status=%s", lora_id, status)
+            logger.error("LoRA status write failed id=%s type=%s", lora_id, type(exc).__name__)
             raise HTTPException(
                 status_code=500,
                 detail="LoRA 状态保存失败，运行时已尝试恢复",
@@ -384,14 +370,16 @@ async def update_lora_status(lora_id: str, request: Request, current_user: dict 
 
 
 @router.delete("/api/loras/{lora_id}")
-async def delete_lora(lora_id: str, current_user: dict = Depends(get_current_admin)):
+async def delete_lora(
+    lora_id: str, current_user: dict = Depends(get_current_admin), database=Depends(get_request_database)
+):
     """Remove a LoRA registration after reconciling the live vLLM state.
 
     Adapter files are deliberately retained as research artifacts.
     """
     async with _get_lora_status_lock():
         try:
-            loras = await asyncio.to_thread(db.get_loras)
+            loras = await asyncio.to_thread(database.get_loras)
             lora = next((item for item in loras if item["id"] == lora_id), None)
             if lora is None:
                 raise HTTPException(status_code=404, detail="LoRA模型不存在")
@@ -399,8 +387,6 @@ async def delete_lora(lora_id: str, current_user: dict = Depends(get_current_adm
             runtime_client = None
             unloaded_adapter: tuple[str, str] | None = None
             if lora.get("status") == "active":
-                from api.generate import get_vllm_client
-
                 runtime_client = await get_vllm_client()
                 if runtime_client is None:
                     raise HTTPException(
@@ -419,14 +405,14 @@ async def delete_lora(lora_id: str, current_user: dict = Depends(get_current_adm
                         loaded_adapter=None,
                         unloaded_adapter=unloaded_adapter,
                     )
-                    logger.exception("Failed to unload LoRA before deletion id=%s", lora_id)
+                    logger.error("LoRA unload before delete failed id=%s type=%s", lora_id, type(exc).__name__)
                     raise HTTPException(
                         status_code=502,
                         detail="LoRA 卸载失败，注册记录未删除",
                     ) from exc
 
             try:
-                deleted = await asyncio.to_thread(db.delete_lora, lora_id)
+                deleted = await asyncio.to_thread(database.delete_lora, lora_id)
             except Exception as exc:
                 await _rollback_runtime_lora_state(
                     runtime_client,
@@ -449,5 +435,5 @@ async def delete_lora(lora_id: str, current_user: dict = Depends(get_current_adm
         except HTTPException:
             raise
         except Exception as exc:
-            logger.exception("删除 LoRA 注册记录失败 id=%s", lora_id)
+            logger.error("LoRA delete failed id=%s type=%s", lora_id, type(exc).__name__)
             raise HTTPException(status_code=500, detail="删除 LoRA 失败") from exc
