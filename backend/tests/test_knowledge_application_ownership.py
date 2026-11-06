@@ -150,3 +150,57 @@ def test_manual_training_source_reads_use_the_selected_database(stores, monkeypa
             "同名资料库": "【完整办理规则】\n" + body
         }
     stores.forbidden.assert_not_called()
+
+
+async def test_retrieval_evaluation_builds_and_refreshes_the_current_applications_index(stores):
+    from api import retrieval_eval
+    from db.schemas import RetrievalEvalQuestionCreate
+    from knowledge.index_lifecycle import get_knowledge_index
+
+    for database in stores.databases:
+        await retrieval_eval.create_question(RetrievalEvalQuestionCreate(
+            id='owned-question', question='办理费用与原件条件', expected_doc_ids=['1'],
+            expected_doc_titles=['完整办理规则'], gold_answer='仅使用当前资料库的完整办理规则。', category='owned'
+        ), current_user={'role': 'admin'}, database=database)
+    for database, body in zip(stores.databases, stores.bodies, strict=True):
+        result = await retrieval_eval.run_retrieval_eval(current_user={'role': 'admin'}, database=database)
+        assert result['success'] and result['total'] == 1
+        assert result['metrics']['mock'] is False and result['metrics']['avg_recall_at_k'] == 1.0
+        assert result['metrics']['per_question'][0]['retrieved_count'] == 1
+        index = get_knowledge_index(database)
+        assert index.db is database and index._vector_index_revision == index._get_rebuild_revision()
+        assert len(index.vector_db.metadata) == 1 and body in index.vector_db.metadata[0]['content']
+    revised = '甲库修订规则：仅周五办理，费用39元，必须携带原件；雨天暂停，预约不能代替原件。'
+    stores.databases[0].save_knowledge_document({'content': revised}, doc_id=1, chunks=[revised])
+    result = await retrieval_eval.run_retrieval_eval(current_user={'role': 'admin'}, database=stores.databases[0])
+    assert result['metrics']['avg_recall_at_k'] == 1.0
+    first, second = [get_knowledge_index(database) for database in stores.databases]
+    assert revised in first.vector_db.metadata[0]['content'] and stores.bodies[0] not in first.vector_db.metadata[0]['content']
+    assert stores.bodies[1] in second.vector_db.metadata[0]['content'] and revised not in second.vector_db.metadata[0]['content']
+    stores.forbidden.assert_not_called()
+
+
+async def test_unready_retrieval_evaluation_index_is_an_error_then_recovers(stores, monkeypatch):
+    from fastapi import HTTPException
+
+    from api import retrieval_eval
+    from db.schemas import RetrievalEvalQuestionCreate
+    from knowledge.index_lifecycle import get_knowledge_index
+
+    database = stores.databases[0]
+    await retrieval_eval.create_question(RetrievalEvalQuestionCreate(
+        id='complete-question', question='办理费用与原件条件', expected_doc_ids=['1'],
+        expected_doc_titles=['完整办理规则'], gold_answer=stores.bodies[0], category='complete'
+    ), current_user={'role': 'admin'}, database=database)
+    index = get_knowledge_index(database)
+    with monkeypatch.context() as patch:
+        unready = Mock(return_value=False)
+        patch.setattr(index, '_ensure_vector_index', unready)
+        with pytest.raises(HTTPException) as caught:
+            await retrieval_eval.run_retrieval_eval(current_user={'role': 'admin'}, database=database)
+        assert caught.value.status_code == 500 and isinstance(caught.value.__cause__, RuntimeError)
+        unready.assert_called_once_with()
+        assert index._rag_helper is None
+    result = await retrieval_eval.run_retrieval_eval(current_user={'role': 'admin'}, database=database)
+    assert result['success'] and result['metrics']['avg_recall_at_k'] == 1.0
+    stores.forbidden.assert_not_called()

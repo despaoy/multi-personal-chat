@@ -115,7 +115,7 @@ async def run_retrieval_eval(current_user: dict = Depends(get_current_admin), da
     """运行检索评估，计算 recall@k/MRR/nDCG 指标"""
     try:
         from evaluation.retrieval_metrics import RetrievalMetrics
-        from knowledge.rag_helper import get_rag_helper
+        from knowledge.index_lifecycle import get_knowledge_index
         rows = await asyncio.to_thread(database.execute_sql, "SELECT * FROM retrieval_eval_questions")
         questions = []
         for r in rows:
@@ -130,17 +130,16 @@ async def run_retrieval_eval(current_user: dict = Depends(get_current_admin), da
         if not questions:
             return {"success": True, "metrics": {}, "total": 0, "note": "no questions in dataset"}
 
-        helper = await asyncio.to_thread(get_rag_helper)
-        metrics = RetrievalMetrics()
+        def evaluate():
+            index = get_knowledge_index(database)
+            if not index._ensure_vector_index():
+                raise RuntimeError("Retrieval evaluation index is not ready")
+            helper = index.rag_helper
+            return RetrievalMetrics().evaluate_questions(
+                questions, lambda query: helper.retrieve_context(query, top_k=10, use_cache=False)
+            )
 
-        def retrieve_fn(query):
-            return helper.retrieve_context(query, top_k=10, use_cache=False)
-
-        results = await asyncio.to_thread(
-            metrics.evaluate_questions,
-            questions,
-            retrieve_fn,
-        )
+        results = await asyncio.to_thread(evaluate)
         return {"success": True, "metrics": results, "total": len(questions)}
     except ImportError as exc:
         raise HTTPException(

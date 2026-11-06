@@ -7,7 +7,6 @@ from unittest.mock import Mock
 import httpx
 import pytest
 
-from api import preferences, retrieval_eval
 from app.config import create_access_token
 from app.main import create_app
 from app.runtime import RuntimeContainer
@@ -26,7 +25,7 @@ def pair(owner):
 @pytest.fixture
 def stores(tmp_path, monkeypatch):
     from db.adapter import db as global_db
-    from knowledge import rag_helper
+    from knowledge import index_lifecycle
 
     databases = [SQLiteDB(tmp_path / f'owner-{i}.sqlite') for i in range(2)]
     for i, database in enumerate(databases):
@@ -45,13 +44,11 @@ def stores(tmp_path, monkeypatch):
         database.add_message(dict(sessionId='fixture-session', message=prompt(str(i)), reply='完整课程安排2026-12-20，12-18 19:00前确认。',
                                   modelName='synthetic', loraName='default', traceId='owner-'+str(i)))
     forbidden = Mock(side_effect=AssertionError('Research request used the global store'))
-    poison = SimpleNamespace(execute_sql=forbidden, execute_sql_insert=forbidden)
-    for module in [preferences, retrieval_eval]:
-        monkeypatch.setattr(module, 'db', poison, raising=False)
     monkeypatch.setattr(global_db, 'execute_sql', forbidden)
     monkeypatch.setattr(global_db, 'execute_sql_insert', forbidden)
     retrieve = Mock(return_value=[dict(document_id=42, title='课程安排', content='2026-12-20开课。')])
-    monkeypatch.setattr(rag_helper, 'get_rag_helper', lambda: SimpleNamespace(retrieve_context=retrieve))
+    monkeypatch.setattr(index_lifecycle, 'get_knowledge_index', lambda database: SimpleNamespace(
+        _ensure_vector_index=lambda: True, rag_helper=SimpleNamespace(retrieve_context=retrieve)))
     try:
         yield SimpleNamespace(databases=databases, forbidden=forbidden, retrieve=retrieve)
     finally:

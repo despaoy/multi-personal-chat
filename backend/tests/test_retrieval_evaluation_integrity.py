@@ -7,13 +7,13 @@ import json
 import sys
 
 import pytest
+from evaluation.retrieval_metrics import RetrievalMetrics
 from fastapi import HTTPException
 from pydantic import ValidationError
 
 from api import retrieval_eval
 from db.schemas import RetrievalEvalQuestionCreate
-from evaluation.retrieval_metrics import RetrievalMetrics
-from knowledge import rag_helper
+from knowledge import index_lifecycle
 
 
 def test_retrieval_metrics_match_document_ids_and_title_fallbacks():
@@ -72,7 +72,10 @@ def test_retrieval_api_uses_structured_results_without_mock(monkeypatch):
             return [{"document_id": 7, "id": "doc_7_chunk_0", "title": "Doc"}]
 
     database = Database()
-    monkeypatch.setattr(rag_helper, "get_rag_helper", lambda: Helper())
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(index_lifecycle, "get_knowledge_index", lambda owner: SimpleNamespace(
+        _ensure_vector_index=lambda: True, rag_helper=Helper()))
 
     response = asyncio.run(
         retrieval_eval.run_retrieval_eval(current_user={"role": "admin"}, database=database)
@@ -139,6 +142,7 @@ def test_missing_dataset_questions_is_not_an_empty_dataset(tmp_path):
 def complete_evaluation(monkeypatch, tmp_path):
     from types import SimpleNamespace
     from unittest.mock import Mock
+
     from db.database import SQLiteDB
 
     database = SQLiteDB(tmp_path / 'complete-evaluation.sqlite')
@@ -147,8 +151,9 @@ def complete_evaluation(monkeypatch, tmp_path):
         "VALUES ('complete','文档42规定会议2026-12-20举行，问日期对应哪份文档？','[\"42\"]','[]','2026-12-20','complete','2026-10-18')"
     )
     retrieve = Mock(return_value=[dict(document_id=42, title='会议安排', content='会议2026-12-20举行。')])
-    factory = Mock(return_value=SimpleNamespace(retrieve_context=retrieve))
-    monkeypatch.setattr(rag_helper, 'get_rag_helper', factory)
+    factory = Mock(return_value=SimpleNamespace(
+        _ensure_vector_index=lambda: True, rag_helper=SimpleNamespace(retrieve_context=retrieve)))
+    monkeypatch.setattr(index_lifecycle, 'get_knowledge_index', factory)
     try:
         yield SimpleNamespace(database=database, retrieve=retrieve, factory=factory)
     finally:
