@@ -418,12 +418,13 @@ class TestSelectCandidateScenes:
     def test_select_retry_failed_toggle(self, tmp_path):
         bundle = _load_bundle(tmp_path / "frozen")
         client = ScriptedClient(
-            ["坏 JSON", "坏 JSON", "坏 JSON"]  # scene_a1 耗尽重试
+            ["坏 JSON"]  # scene_a1 首次解析失败
             + [_candidate_json("scene_a2", 11), _candidate_json("scene_b1", 1)]  # 其余场景成功
         )
         result = generate_scene_candidates(bundle, create_candidate_run(bundle, model_id=MODEL_ID), client)
         assert select_candidate_scenes(result.new_state) == ["scene_a1"]  # 默认含失败重试
         assert select_candidate_scenes(result.new_state, retry_failed=False) == []
+        assert len(client.prompts) == 3
 
     def test_select_specified_ids_follow_frozen_order(self, tmp_path):
         bundle, state = _run_state(tmp_path / "frozen")
@@ -699,18 +700,17 @@ class TestGenerateSceneCandidates:
             generate_scene_candidates(bundle, state, client)
         assert client.calls == []
 
-    def test_invalid_json_exhausts_attempts(self, tmp_path):
+    def test_invalid_json_fails_once_per_scene(self, tmp_path):
         bundle = _load_bundle(tmp_path / "frozen")
-        client = ScriptedClient(["坏 JSON"] * 9)  # 3 场景 × max_attempts=3
-        result = generate_scene_candidates(
-            bundle, create_candidate_run(bundle, model_id=MODEL_ID), client, max_attempts=3
-        )
+        client = ScriptedClient(["坏 JSON"] * 3)  # 3 场景，每个只调用一次
+        result = generate_scene_candidates(bundle, create_candidate_run(bundle, model_id=MODEL_ID), client, max_attempts=3)
         assert result.succeeded_scene_ids == []
+        assert len(client.prompts) == 3
         assert result.failed_scene_ids == ["scene_a1", "scene_a2", "scene_b1"]
         state = result.new_state
         assert all(item.status.value == "failed" for item in state.scene_states)
         assert all(item.last_failure.error_kind == "invalid_json" for item in state.scene_states)
-        assert all(item.attempts == 3 for item in state.scene_states)
+        assert all(item.attempts == 1 for item in state.scene_states)
         assert all(item.candidate is None for item in state.scene_states)
 
     def test_timeout_failure_kind(self, tmp_path):
@@ -720,27 +720,20 @@ class TestGenerateSceneCandidates:
             bundle, create_candidate_run(bundle, model_id=MODEL_ID), client, scene_ids=["scene_a1"]
         )
         assert result.new_state.scene_states[0].last_failure.error_kind == "timeout"
+        assert len(client.prompts) == 3 and result.new_state.scene_states[0].attempts == 3
 
-    def test_model_error_failure_kind(self, tmp_path):
+    def test_model_error_propagates_without_persisting_private_text(self, tmp_path):
         bundle = _load_bundle(tmp_path / "frozen")
-        client = ScriptedClient([RuntimeError("连接被拒绝")] * 3)
-        result = generate_scene_candidates(
-            bundle, create_candidate_run(bundle, model_id=MODEL_ID), client, scene_ids=["scene_a1"]
-        )
-        failure = result.new_state.scene_states[0].last_failure
-        assert failure.error_kind == "model_error"
-        assert "RuntimeError" in failure.detail
-
-    def test_failure_detail_truncated_and_prompt_not_leaked(self, tmp_path):
-        bundle = _load_bundle(tmp_path / "frozen")
-        leak = "SECRET-SENTINEL-不得进入运行状态" * 50
-        client = ScriptedClient([RuntimeError(f"boom {leak}")] * 3)
-        result = generate_scene_candidates(
-            bundle, create_candidate_run(bundle, model_id=MODEL_ID), client, scene_ids=["scene_a1"]
-        )
-        detail = result.new_state.scene_states[0].last_failure.detail
-        assert "SECRET-SENTINEL" not in detail  # 失败摘要不携带完整错误内容
-        assert len(detail) <= 201  # 200 字符 + 截断标记
+        state = create_candidate_run(bundle, model_id=MODEL_ID)
+        failure = RuntimeError("SECRET-SENTINEL-不得进入运行状态" * 50)
+        client = ScriptedClient([failure])
+        path = tmp_path / "unexpected-state.json"
+        save_candidate_run(path, state)
+        before = path.read_bytes()
+        with pytest.raises(RuntimeError) as error:
+            generate_scene_candidates(bundle, state, client, state_path=path)
+        assert error.value is failure and len(client.prompts) == 1
+        assert path.read_bytes() == before and b"SECRET-SENTINEL" not in before
 
     def test_schema_failure_detail_does_not_persist_model_value(self, tmp_path):
         bundle = _load_bundle(tmp_path / "frozen")
@@ -756,13 +749,16 @@ class TestGenerateSceneCandidates:
     def test_retry_then_success_in_same_run(self, tmp_path):
         bundle = _load_bundle(tmp_path / "frozen")
         client = ScriptedClient(
-            ["坏 JSON", _candidate_json("scene_a1", 1), _candidate_json("scene_a2", 11), _candidate_json("scene_b1", 1)]
+            [
+                TimeoutError("temporary timeout"),
+                _candidate_json("scene_a1", 1),
+                _candidate_json("scene_a2", 11),
+                _candidate_json("scene_b1", 1),
+            ]
         )
-        result = generate_scene_candidates(
-            bundle, create_candidate_run(bundle, model_id=MODEL_ID), client, max_attempts=3
-        )
+        result = generate_scene_candidates(bundle, create_candidate_run(bundle, model_id=MODEL_ID), client, max_attempts=3)
         assert result.succeeded_scene_ids == ["scene_a1", "scene_a2", "scene_b1"]
-        assert result.new_state.scene_states[0].attempts == 2  # 失败一次后重试成功
+        assert result.new_state.scene_states[0].attempts == 2  # 临时超时一次后重试成功
         assert result.new_state.scene_states[0].last_failure is None
 
     def test_success_scene_skipped_without_rerun_reason(self, tmp_path):
@@ -845,13 +841,14 @@ class TestGenerateSceneCandidates:
     def test_state_path_persists_progress_per_scene(self, tmp_path):
         bundle = _load_bundle(tmp_path / "frozen")
         state_path = tmp_path / "run" / "candidate_run.json"
-        client = ScriptedClient(["坏 JSON"] * 3 + [_candidate_json("scene_a2", 11), _candidate_json("scene_b1", 1)])
+        client = ScriptedClient(["坏 JSON"] + [_candidate_json("scene_a2", 11), _candidate_json("scene_b1", 1)])
         result = generate_scene_candidates(
             bundle, create_candidate_run(bundle, model_id=MODEL_ID), client, max_attempts=3, state_path=state_path
         )
         assert result.failed_scene_ids == ["scene_a1"]
         persisted = load_candidate_run(state_path)
         assert [item.status.value for item in persisted.scene_states] == ["failed", "success", "success"]
+        assert len(client.prompts) == 3
 
     def test_crash_resume_from_persisted_state(self, tmp_path):
         bundle = _load_bundle(tmp_path / "frozen")
@@ -875,12 +872,12 @@ class TestGenerateSceneCandidates:
     def test_failed_scene_retried_in_next_run(self, tmp_path):
         bundle = _load_bundle(tmp_path / "frozen")
         state = create_candidate_run(bundle, model_id=MODEL_ID)
-        first = generate_scene_candidates(bundle, state, ScriptedClient(["坏 JSON"] * 9), max_attempts=3)
+        first = generate_scene_candidates(bundle, state, ScriptedClient(["坏 JSON"] * 3), max_attempts=3)
         assert all(item.status.value == "failed" for item in first.new_state.scene_states)
         second = generate_scene_candidates(bundle, first.new_state, PerSceneClient())
         assert second.succeeded_scene_ids == ["scene_a1", "scene_a2", "scene_b1"]
         item = second.new_state.scene_states[0]
-        assert item.attempts == 4  # 上一轮 3 次 + 本轮 1 次
+        assert item.attempts == 2  # 上一轮 1 次 + 本轮 1 次
         assert item.last_failure is None  # 成功后清空失败摘要
 
     def test_idempotent_full_run(self, tmp_path):
@@ -944,16 +941,15 @@ class TestLongSceneChunking:
 
     def test_single_chunk_failure_fails_scene(self, tmp_path):
         bundle = _long_scene_bundle(tmp_path / "frozen")
-        # 第 1 片成功，第 2 片 3 次全部失败 → 整场景失败
+        # 第1片成功，第2片解析失败后结束该场景 → 整场景失败
         client = ScriptedClient([_candidate_json("scene_long", 1), "坏 JSON", "坏 JSON", "坏 JSON"])
-        result = generate_scene_candidates(
-            bundle, create_candidate_run(bundle, model_id=MODEL_ID), client, max_attempts=3
-        )
+        result = generate_scene_candidates(bundle, create_candidate_run(bundle, model_id=MODEL_ID), client, max_attempts=3)
         assert result.failed_scene_ids == ["scene_long"]
         item = result.new_state.scene_states[0]
         assert item.status.value == "failed"
+        assert len(client.prompts) == 2
         assert item.candidate is None  # 无完整归并不产出部分候选
-        assert item.attempts == 4
+        assert item.attempts == 2
 
 
 # ---------- 候选合并进 P4A 审核文档 ----------

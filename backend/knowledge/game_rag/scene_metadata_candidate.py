@@ -70,9 +70,6 @@ GENERATOR_ID = "knowledge.game_rag.scene_metadata_candidate"
 # evidence 与决定归并回原 scene_id，绝不重切 P3 场景。
 CANDIDATE_CHUNK_MAX_LINES = 150
 
-# 失败摘要 detail 上限：不得把完整 prompt、模型全文或密钥写进运行状态。
-FAILURE_DETAIL_MAX_CHARS = 200
-
 DEFAULT_RUN_NOTES = (
     "P4B 场景元数据候选运行状态。候选由模型生成，仅供人工审核参考；"
     "合并进 P4A 审核文档后记录最多为 needs_review，绝不自动 approved。"
@@ -757,16 +754,8 @@ def parse_scene_candidate(
 # ---------- 候选生成（含分片归并） ----------
 
 
-def _truncate_detail(detail: str) -> str:
-    """压缩空白并截断失败 detail，防止多行 prompt/长响应进入运行状态。"""
-    text = " ".join(str(detail or "").split())
-    if len(text) <= FAILURE_DETAIL_MAX_CHARS:
-        return text
-    return text[:FAILURE_DETAIL_MAX_CHARS] + "…"
-
-
 def _failure_summary(error_kind: str, detail: str, attempts: int) -> FailureSummary:
-    return FailureSummary(error_kind=error_kind, detail=_truncate_detail(detail), attempts=attempts)
+    return FailureSummary(error_kind=error_kind, detail=detail, attempts=attempts)
 
 
 def _chunk_spans(scene: SceneDocument, *, chunk_max_lines: int) -> list[SourceSpan]:
@@ -838,7 +827,7 @@ def _generate_for_scene(
     chunk_max_lines: int,
     hint_contract: tuple[CategoryHint, ...] | list[CategoryHint],
 ) -> tuple[SceneMetadataCandidate | None, FailureSummary | None, int]:
-    """为单个场景生成候选：分片 → 逐片重试 → 归并。
+    """为单个场景生成候选：分片 → 仅超时有限重试 → 归并。
 
     返回 (候选, 失败摘要, 模型调用次数)；候选与失败摘要至多一个非 None。
     """
@@ -865,17 +854,13 @@ def _generate_for_scene(
                 failure = _failure_summary("timeout", type(exc).__name__, attempts)
                 continue
             except CandidateParseError as exc:
-                # 自定义校验消息可能包含模型提供的非法值；持久化时仅保留错误分类。
+                # 解析失败只记录类型；同一响应不通过再次生成掩盖。
                 failure = _failure_summary(exc.error_kind, type(exc).__name__, attempts)
-                continue
-            except Exception as exc:  # 模型客户端任意异常都收敛为可重试失败
-                # 异常消息可能携带密钥、URL 或回显 prompt：只落盘类型名，原文由调用方日志处理。
-                failure = _failure_summary("model_error", type(exc).__name__, attempts)
-                continue
+                return None, failure, attempts
             chunk_candidates.append(candidate)
             break
         else:
-            # 单个分片重试耗尽：整场景判失败，已成功分片的结果不产出（无完整归并）。
+            # 单个分片解析失败或超时重试耗尽：整场景判失败，已成功分片的结果不产出（无完整归并）。
             return None, failure, attempts
     final = chunk_candidates[0] if len(chunk_candidates) == 1 else _merge_chunk_candidates(scene, chunk_candidates)
     return final, None, attempts
@@ -904,8 +889,9 @@ def generate_scene_candidates(
     - 已成功场景无显式重跑原因 → 跳过（skipped，成功结果不被无意覆盖）；
     - 显式重跑：记录 RerunRecord（原因 + 前状态 + 结果）；重跑失败时保留旧候选
       与 success 状态（不损坏旧结果），仅更新 last_failure；
-    - 单场景（分片）最多 max_attempts 次尝试，耗尽置 failed 并保留失败摘要；
-    - 失败不影响其他场景；state_path 提供时每个已处理场景之后原子保存一次。
+    - 仅超时按 max_attempts 有限重试；解析失败直接置 failed 并保留失败摘要；
+    - 场景解析失败或超时耗尽不影响其他场景；意外错误原样终止，保留已保存进度。
+    - state_path 提供时每个已处理场景之后原子保存一次。
     """
     if max_attempts < 1:
         raise ValueError(f"max_attempts 必须 >= 1，当前为 {max_attempts}")

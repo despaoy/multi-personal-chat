@@ -634,7 +634,7 @@ def test_generate_skips_successful_scenes(tmp_path: Path) -> None:
     assert result3.new_state.scene_states[0].candidates == result.new_state.scene_states[0].candidates
 
 
-def test_generate_failure_retries_then_marks_failed(tmp_path: Path) -> None:
+def test_generate_parse_failure_marks_failed_without_retry(tmp_path: Path) -> None:
     bundle = _load_bundle(tmp_path, [_enriched_scene("scene_k1", 1, 10)])
     state = create_knowledge_run(bundle, model_id="m")
     client = ScriptedClient([KnowledgeParseError("bad", error_kind="invalid_json")] * 3)
@@ -642,14 +642,15 @@ def test_generate_failure_retries_then_marks_failed(tmp_path: Path) -> None:
     item = result.new_state.scene_states[0]
     assert item.status is KnowledgeGenerationStatus.failed
     assert item.candidates is None
-    assert item.attempts == 3
+    assert len(client.calls) == 1
+    assert item.attempts == 1
     assert item.last_failure is not None
     assert item.last_failure.error_kind == "invalid_json"
     assert item.last_failure.detail == "KnowledgeParseError"  # 只落盘类型名
 
 
-def test_generate_retries_when_all_cards_invalid(tmp_path: Path) -> None:
-    # 整片卡片全部非法（结构合法但全被丢弃）→ 视为失败并重试；耗尽则场景失败
+def test_generate_all_invalid_cards_fail_without_retry(tmp_path: Path) -> None:
+    # 整片卡片全部非法时直接记录失败，不再次生成
     bundle = _load_bundle(tmp_path, [_enriched_scene("scene_k1", 1, 10)])
     state = create_knowledge_run(bundle, model_id="m")
     all_invalid = _payload_json("scene_k1", facts=[_fact_item(predicate="职业")])
@@ -659,7 +660,7 @@ def test_generate_retries_when_all_cards_invalid(tmp_path: Path) -> None:
     assert item.status is KnowledgeGenerationStatus.failed
     assert item.last_failure is not None
     assert item.last_failure.error_kind == "schema_violation"
-    assert len(client.calls) == 3
+    assert len(client.calls) == 1
 
 
 def test_generate_partial_drop_success_keeps_valid_cards(tmp_path: Path) -> None:
@@ -681,26 +682,30 @@ def test_generate_partial_drop_success_keeps_valid_cards(tmp_path: Path) -> None
     assert item.candidates.dropped_invalid == 2
 
 
-def test_generate_timeout_and_model_error_converge(tmp_path: Path) -> None:
+def test_generate_timeout_is_bounded_and_unexpected_error_propagates(tmp_path: Path) -> None:
     bundle = _load_bundle(tmp_path / "t1", [_enriched_scene("scene_k1", 1, 10)])
     state = create_knowledge_run(bundle, model_id="m")
     client = ScriptedClient([TimeoutError("http://localhost secret")] * 3)
     result = generate_knowledge_candidates(bundle, state, client, max_attempts=3, alias_config=ALIASES)
     assert result.new_state.scene_states[0].last_failure.error_kind == "timeout"
+    assert len(client.calls) == 3 and result.new_state.scene_states[0].attempts == 3
     assert "localhost" not in result.new_state.scene_states[0].last_failure.detail
 
     bundle2 = _load_bundle(tmp_path / "t2", [_enriched_scene("scene_k1", 1, 10)])
     state2 = create_knowledge_run(bundle2, model_id="m")
-    client2 = ScriptedClient([RuntimeError("secret-key leaked")] * 3)
-    result2 = generate_knowledge_candidates(bundle2, state2, client2, max_attempts=3, alias_config=ALIASES)
-    failure = result2.new_state.scene_states[0].last_failure
-    assert failure.error_kind == "model_error"
-    assert failure.detail == "RuntimeError"
-    assert "secret" not in failure.detail
+    failure = RuntimeError("SECRET-SENTINEL-不得进入运行状态" * 50)
+    client2 = ScriptedClient([failure])
+    path = tmp_path / "unexpected-state.json"
+    save_knowledge_run(path, state2)
+    before = path.read_bytes()
+    with pytest.raises(RuntimeError) as error:
+        generate_knowledge_candidates(bundle2, state2, client2, max_attempts=3, alias_config=ALIASES, state_path=path)
+    assert error.value is failure and len(client2.calls) == 1
+    assert path.read_bytes() == before and b"SECRET-SENTINEL" not in before
 
 
 def test_generate_single_chunk_failure_fails_whole_scene(tmp_path: Path) -> None:
-    # 长场景分两片：第一片成功、第二片耗尽重试 → 整场景失败，不产出部分候选。
+    # 长场景分两片：第一片成功、第二片解析失败 → 整场景失败，不产出部分候选。
     long_text = "\n".join(f"第{i}行原文内容" for i in range(1, 121))
     scene = _enriched_scene("scene_k1", 1, 120, text=long_text)
     bundle = _load_bundle(tmp_path, [scene])
@@ -718,7 +723,7 @@ def test_generate_single_chunk_failure_fails_whole_scene(tmp_path: Path) -> None
     assert item.status is KnowledgeGenerationStatus.failed
     assert item.candidates is None
     assert item.chunk_count >= 2
-    assert len(client.calls) == 4
+    assert len(client.calls) == 2
 
 
 def test_generate_chunk_merge_union(tmp_path: Path) -> None:

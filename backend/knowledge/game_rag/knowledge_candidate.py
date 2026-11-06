@@ -720,9 +720,6 @@ RELATION_CONTENT_REWRITES: dict[tuple[str, int, str, str, str], tuple[str, str, 
     ),
 }
 
-# 失败摘要 detail 上限：不得把完整 prompt、模型全文或密钥写进运行状态。
-FAILURE_DETAIL_MAX_CHARS = 200
-
 # ---------- 词汇规范表（避免同义词无限分裂） ----------
 
 # fact.predicate 规范表：subject 的 {predicate} 相关事实。
@@ -2063,15 +2060,8 @@ def parse_knowledge_candidates(
 # ---------- 候选生成（分片 + 断点续跑） ----------
 
 
-def _truncate_detail(detail: str) -> str:
-    text = " ".join(str(detail or "").split())
-    if len(text) <= FAILURE_DETAIL_MAX_CHARS:
-        return text
-    return text[:FAILURE_DETAIL_MAX_CHARS] + "…"
-
-
 def _failure_summary(error_kind: str, detail: str, attempts: int) -> KnowledgeFailureSummary:
-    return KnowledgeFailureSummary(error_kind=error_kind, detail=_truncate_detail(detail), attempts=attempts)
+    return KnowledgeFailureSummary(error_kind=error_kind, detail=detail, attempts=attempts)
 
 
 def _merge_chunk_candidates(chunks: list[SceneKnowledgeCandidates]) -> SceneKnowledgeCandidates:
@@ -2093,10 +2083,10 @@ def _generate_for_scene(
     chunk_max_chars: int,
     alias_config: AliasConfig,
 ) -> tuple[SceneKnowledgeCandidates | None, KnowledgeFailureSummary | None, int, int]:
-    """为单个场景生成候选：按字符分片 → 逐片重试 → 归并。
+    """为单个场景生成候选：按字符分片 → 仅超时有限重试 → 归并。
 
     返回 (候选, 失败摘要, 模型调用次数, 分片数)；候选与失败摘要至多一个非 None。
-    单个分片重试耗尽 → 整场景判失败，不产出部分归并候选。
+    单个分片解析失败或超时重试耗尽 → 整场景判失败，不产出部分归并候选。
     """
     spans = _chunk_spans(scene, chunk_max_chars=chunk_max_chars)
     fact_limit, relation_limit, event_limit = chunk_limits(len(spans))
@@ -2127,19 +2117,13 @@ def _generate_for_scene(
                 failure = _failure_summary("timeout", type(exc).__name__, attempts)
                 continue
             except KnowledgeParseError as exc:
-                # 自定义校验消息可能包含模型提供的非法值；持久化时仅保留错误分类。
+                # 解析失败只记录类型；同一响应不通过再次生成掩盖。
                 failure = _failure_summary(exc.error_kind, type(exc).__name__, attempts)
-                continue
-            except Exception as exc:  # 模型客户端任意异常都收敛为可重试失败
-                # 异常消息可能携带密钥、URL 或回显 prompt：只落盘类型名。
-                failure = _failure_summary("model_error", type(exc).__name__, attempts)
-                continue
+                return None, failure, attempts, len(spans)
             kept = len(parsed.facts) + len(parsed.relations) + len(parsed.events)
             if kept == 0 and parsed.dropped_invalid > 0:
-                # 整片卡片全部非法：通常意味着模型对该片段的系统性误解，值得重试；
-                # 重试耗尽则整场景失败（不产出「全部丢弃」的空壳结果）。
                 failure = _failure_summary("schema_violation", "KnowledgeParseError", attempts)
-                continue
+                return None, failure, attempts, len(spans)
             chunk_candidates.append(parsed)
             failure = None
             break
@@ -2249,9 +2233,10 @@ def generate_knowledge_candidates(
 
     处理规则：
     - 按 enriched 场景顺序处理选中场景；已成功场景跳过（成功结果不被覆盖）；
-    - 单场景（分片）最多 max_attempts 次尝试，耗尽置 failed 并保留失败摘要
+    - 仅超时按 max_attempts 有限重试；解析失败直接置 failed 并保留失败摘要
       （detail 只含异常类型名）；
-    - 失败不影响其他场景；state_path 提供时每个已处理场景之后原子保存一次。
+    - 场景解析失败或超时耗尽不影响其他场景；意外错误原样终止，保留已保存进度。
+    - state_path 提供时每个已处理场景之后原子保存一次。
     """
     if max_attempts < 1:
         raise ValueError(f"max_attempts 必须 >= 1，当前为 {max_attempts}")

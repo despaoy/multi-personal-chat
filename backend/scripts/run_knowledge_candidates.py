@@ -200,13 +200,14 @@ def _run_phase(scene_ids: list[str] | None, label: str) -> None:
     save_knowledge_run_with_manifest(STATE_PATH, MANIFEST_OUT_PATH, result.new_state, manifest)
     _print_state_summary(result.new_state)
     print(
-        f"[P5] {label} 完成：attempted={len(result.attempted_scene_ids)} "
+        f"[P5] {label} 结束：attempted={len(result.attempted_scene_ids)} "
         f"succeeded={len(result.succeeded_scene_ids)} failed={len(result.failed_scene_ids)} "
         f"skipped={len(result.skipped_scene_ids)} 本次调用={result.total_attempts}"
     )
+    print(f"[P5] manifest 已提交：{MANIFEST_OUT_PATH}")
     if result.failed_scene_ids:
         print(f"[P5] 失败场景: {result.failed_scene_ids}")
-    print(f"[P5] manifest 已提交：{MANIFEST_OUT_PATH}")
+        _fail(f"候选已保存，但有{len(result.failed_scene_ids)}个场景失败；修复后重新运行。")
 
 
 def phase_smoke() -> None:

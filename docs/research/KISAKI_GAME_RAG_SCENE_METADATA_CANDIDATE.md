@@ -52,7 +52,8 @@ class CandidateModelClient(Protocol):
 ```
 
 - 领域模块**不初始化服务器、不下载模型、不读取环境密钥**：客户端由调用方按协议注入（真实接入时包装 vLLM/Ollama 等现有 Provider，属运行层工作）；
-- 客户端以异常表达失败（`TimeoutError` 或其他异常），本模块负责收敛为可重试的失败摘要；
+- 客户端的 `TimeoutError` 按次数上限重试；候选解析失败直接记录失败摘要，不再次生成；
+- 其他异常原样终止本次执行，保留已提交进度；运行器存在失败场景时，保存状态及清单后非零退出；
 - `KeyboardInterrupt` / `BaseException` **不被吞掉**：进程中断直接传播，未完成场景保持原状态（断点续跑的基础）。
 
 ## 5. 候选运行状态
@@ -79,7 +80,7 @@ class CandidateModelClient(Protocol):
 |---|---|
 | `status` | `pending` / `success` / `failed`（运行状态层，与人工 ReviewStatus 语义无关） |
 | `candidate` | status=success 时必须非 None；否则必须 None（模型强制） |
-| `attempts` | 累计模型调用次数（含分片调用） |
+| `attempts` | 已提交场景的累计尝试数（含分片）；中断场景尚未保存的调用不计入 |
 | `last_failure` | 最近一次失败摘要；成功即清空；显式重跑失败时保留（status 保持 success，旧候选不损坏） |
 | `rerun_history` | 全部显式重跑审计记录 |
 
@@ -87,8 +88,8 @@ class CandidateModelClient(Protocol):
 
 | 字段 | 说明 |
 |---|---|
-| `error_kind` | `markdown_fence` / `invalid_json` / `duplicate_json_key` / `invalid_output` / `schema_violation` / `scene_id_mismatch` / `evidence_out_of_range` / `timeout` / `model_error` |
-| `detail` | 截断至 200 字符（`FAILURE_DETAIL_MAX_CHARS`） |
+| `error_kind` | `markdown_fence` / `invalid_json` / `duplicate_json_key` / `invalid_output` / `schema_violation` / `scene_id_mismatch` / `evidence_out_of_range` / `timeout`（`model_error`仅兼容历史记录） |
+| `detail` | 只记录已知异常类型名，不保存错误消息、prompt 或模型原文 |
 | `attempts` | ≥1 |
 
 **安全设计**：模型客户端异常和候选解析异常的消息原文均**不落盘**。自定义校验消息也可能包含模型提供的非法值，因此持久化 detail 只记录异常类型名，具体失败原因由 `error_kind` 表达。完整 prompt、模型全文、非法字段值和密钥不进入运行状态。
@@ -141,10 +142,10 @@ class CandidateModelClient(Protocol):
 
 **处理规则**：
 
-- 按冻结场景顺序处理选中场景；失败不影响其他场景；
+- 按冻结场景顺序处理选中场景；解析失败或超时耗尽不影响其他场景，意外异常立即终止本次执行；
 - 已成功场景无显式重跑原因 → 跳过（skipped，**成功结果不被无意覆盖**，零模型调用）；
 - 显式重跑：先记录 `RerunRecord(rerun_reason, previous_status, outcome)`；重跑失败时**旧候选与 success 状态保留**（不损坏旧结果），仅更新 last_failure；
-- 单场景（分片）最多 max_attempts 次尝试，耗尽置 failed 并保留失败摘要；
+- 只有临时超时按 max_attempts 有限重试；解析失败直接置 failed 并保留失败摘要；
 - `state_path` 提供时**每个已处理场景之后原子保存一次**（断点续跑：中断场景保持原状态，已完成场景已落盘）。
 
 ## 10. 长场景分片归并
@@ -154,7 +155,7 @@ class CandidateModelClient(Protocol):
 - 分片只影响**候选生成**，evidence 与决定**归并回原 scene_id**，绝不重切 P3 场景（scene_states 仍每个场景一条）；
 - 分类字段（viewpoint / temporal_scope / reality_status）：分片意见一致取该值，**不一致取 unknown 并追加告警**（disagreement 交由人工复核，不擅自择优）；
 - 人物数组取并集（沿用 P4A 规范化）；evidence 取并集（各分片 evidence 已被限制在分片 span 内）；reasons / warnings 按分片顺序拼接（reasons 去重保持顺序）；
-- 单个分片重试耗尽 → 整场景判 failed，**不产出部分归并候选**。
+- 单个分片解析失败或超时重试耗尽 → 整场景判 failed，**不产出部分归并候选**。
 
 ## 11. 候选合并进 P4A 审核文档
 
@@ -198,7 +199,7 @@ class CandidateModelClient(Protocol):
 - 分片归并的"意见不一致→unknown"是保守策略：人工可改，但候选层不提供加权或多数决（避免伪精确）；
 - `generation_params` 只接受标量（int/float/str/bool），复杂参数结构需调用方自行序列化为字符串；
 - 运行 manifest 不记录 token 消耗（真实接入后由运行层补充）；
-- 运行 manifest 的 `run_counts` / 时间戳只描述**最近一次进程调用**，不代表跨 smoke、run、失败重试的完整时间线；运行层应另行保存本次进程统计，并从候选状态逐场景 `attempts` 推导全生命周期调用次数；
+- 运行 manifest 的 `run_counts` / 时间戳只描述**最近一次进程调用**，不代表跨 smoke、run、失败重试的完整时间线；运行层应另行保存本次进程统计，候选状态中的 `attempts` 只统计已提交场景，不能覆盖异常中断时未保存的调用；
 - 候选合并无字段级选择（整体 fill/overwrite/skip），细粒度合并由人工在 P4A 审核状态上直接编辑。
 
 ## 15. 公开 API

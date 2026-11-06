@@ -271,11 +271,13 @@ def phase_smoke() -> None:
     _write_call_stats(client, "smoke", bundle, result.new_state)
     _print_state_summary(result.new_state)
     print(
-        f"[P4C] smoke 完成：attempted={len(result.attempted_scene_ids)} "
+        f"[P4C] smoke 结束：attempted={len(result.attempted_scene_ids)} "
         f"succeeded={len(result.succeeded_scene_ids)} failed={len(result.failed_scene_ids)} "
         f"skipped={len(result.skipped_scene_ids)}"
     )
     print(f"[P4C] manifest 已提交：{MANIFEST_OUT_PATH}（attempted={len(manifest.attempted_scene_ids)}）")
+    if result.failed_scene_ids:
+        _fail(f"候选已保存，但有{len(result.failed_scene_ids)}个场景失败；修复后重新运行。")
 
 
 def phase_run() -> None:
@@ -306,11 +308,13 @@ def phase_run() -> None:
     _write_call_stats(client, "run", bundle, result.new_state)
     _print_state_summary(result.new_state)
     print(
-        f"[P4C] 全量运行完成：attempted={len(result.attempted_scene_ids)} "
+        f"[P4C] 全量运行结束：attempted={len(result.attempted_scene_ids)} "
         f"succeeded={len(result.succeeded_scene_ids)} failed={len(result.failed_scene_ids)} "
         f"skipped={len(result.skipped_scene_ids)}"
     )
     print(f"[P4C] manifest 已提交：{MANIFEST_OUT_PATH}（attempted={len(manifest.attempted_scene_ids)}）")
+    if result.failed_scene_ids:
+        _fail(f"候选已保存，但有{len(result.failed_scene_ids)}个场景失败；修复后重新运行。")
 
 
 def phase_status() -> None:
