@@ -218,12 +218,6 @@ class TestMultiPlatformStorage:
         assert len(rows) == 1
         assert rows[0]["platform"] == "telegram"
 
-    def test_integration_dedup_uses_platform_adapter_message(self):
-        db = self._make_db()
-        assert db.mark_integration_message_processed("qq", "napcat", "same-id") is True
-        assert db.mark_integration_message_processed("qq", "napcat", "same-id") is False
-        assert db.mark_integration_message_processed("telegram", "telegram", "same-id") is True
-
     def test_session_toggle_accepts_platform_context(self):
         db = self._make_db()
         sid = "telegram:private:42"

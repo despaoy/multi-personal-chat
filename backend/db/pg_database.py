@@ -2206,29 +2206,6 @@ class PgDatabase:
             await session.commit()
             return result.rowcount > 0
 
-    async def mark_integration_message_processed(self, platform: str, adapter: str, message_id: str) -> bool:
-        if not message_id:
-            return True
-        key = f"{platform}:{adapter}:{message_id}"
-        async with self.async_session() as session:
-            stmt = text(
-                'INSERT INTO integration_message_dedup ("dedupKey", platform, adapter, "messageId", "createdAt") '
-                "VALUES (:key, :platform, :adapter, :message_id, :created_at) "
-                'ON CONFLICT ("dedupKey") DO NOTHING'
-            )
-            result = await session.execute(
-                stmt,
-                {
-                    "key": key,
-                    "platform": platform,
-                    "adapter": adapter,
-                    "message_id": message_id,
-                    "created_at": datetime.now().isoformat(),
-                },
-            )
-            await session.commit()
-            return result.rowcount > 0
-
     async def get_claw_tools(self) -> List[Dict]:
         """获取所有自定义 Claw 工具"""
         async with self.async_session() as session:
@@ -3328,9 +3305,6 @@ class SyncPgAdapter:
 
     def integration_receipt(self, operation, **params):
         return self._run(self._pg.integration_receipt(operation, **params))
-
-    def mark_integration_message_processed(self, platform, adapter, message_id):
-        return self._run(self._pg.mark_integration_message_processed(platform, adapter, message_id))
 
     def upsert_conversation(self, data):
         return self._run(self._pg.upsert_conversation(data))

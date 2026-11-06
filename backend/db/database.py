@@ -2219,33 +2219,16 @@ class SQLiteDB:
     def integration_receipt(self, operation: str, **params):
         from db.integration_receipts import STATEMENTS
 
-        conn = self._get_connection()
-        if operation == "claim":
-            conn.execute(STATEMENTS["archive"], params)
-        cursor = conn.execute(STATEMENTS[operation], params)
-        if operation == "memory_pending":
-            return [dict(row) for row in cursor.fetchall()]
-        if operation == "get":
-            row = cursor.fetchone()
-            return dict(row) if row else None
-        conn.commit()
-        return cursor.rowcount > 0
-
-    def mark_integration_message_processed(self, platform: str, adapter: str, message_id: str) -> bool:
-        if not message_id:
-            return True
-        conn = self._get_connection()
-        cursor = conn.cursor()
-        key = f"{platform}:{adapter}:{message_id}"
-        try:
-            cursor.execute(
-                "INSERT INTO integration_message_dedup (dedupKey, platform, adapter, messageId, createdAt) VALUES (?, ?, ?, ?, ?)",
-                (key, platform, adapter, message_id, datetime.now().isoformat()),
-            )
-            conn.commit()
-            return True
-        except sqlite3.IntegrityError:
-            return False
+        with self._get_connection() as conn:
+            if operation == "claim":
+                conn.execute(STATEMENTS["archive"], params)
+            cursor = conn.execute(STATEMENTS[operation], params)
+            if operation == "memory_pending":
+                return [dict(row) for row in cursor.fetchall()]
+            if operation == "get":
+                row = cursor.fetchone()
+                return dict(row) if row else None
+            return cursor.rowcount > 0
 
     # ── Claw 工具 CRUD ──
 

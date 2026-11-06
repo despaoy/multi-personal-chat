@@ -662,3 +662,28 @@ async def test_quoted_gateway_text_is_visible_only_after_successful_delivery(gat
     assert [row["content"] for row in history()] == [original, "reply"]
     assert database.integration_receipt("get", key=response.receiptId)["status"] == "delivered"
     assert not (await receive(payload)).shouldReply and len(calls) == 1
+
+
+@pytest.mark.parametrize("status", ["processing", "failed"])
+def test_receipt_late_claim_failure_rolls_back_and_same_request_recovers(gateway, status):
+    import sqlite3
+
+    database, _, _ = gateway
+    assert database.integration_receipt("claim", key="claim-key", owner="old-owner", now=0, expires_at=5)
+    if status == "failed":
+        assert database.integration_receipt("finish", key="claim-key", owner="old-owner", status=status, response="")
+    original = database.integration_receipt("get", key="claim-key")
+    database.execute_sql("CREATE TRIGGER reject_receipt_claim BEFORE UPDATE ON integration_receipts WHEN NEW.owner='next-owner' BEGIN SELECT RAISE(ABORT,'synthetic-receipt-write'); END")
+    request = dict(key="claim-key", owner="next-owner", now=6, expires_at=15)
+    with pytest.raises(sqlite3.IntegrityError, match="synthetic-receipt-write"):
+        database.integration_receipt("claim", **request)
+    assert not database.get_connection().in_transaction
+    assert database.integration_receipt("get", key="claim-key") == original
+    assert database.integration_receipt("get", key="attempt:old-owner") is None
+    database.update_config({"maxTokens": 400})
+    assert database.integration_receipt("get", key="attempt:old-owner") is None
+    database.execute_sql("DROP TRIGGER reject_receipt_claim")
+    assert database.integration_receipt("claim", **request)
+    assert database.integration_receipt("get", key="claim-key")["owner"] == "next-owner"
+    assert database.integration_receipt("get", key="attempt:old-owner")["status"] == "superseded"
+    assert not database.get_connection().in_transaction
