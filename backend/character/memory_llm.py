@@ -63,22 +63,22 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-_ALLOWED_KINDS = {
-    "name",
-    "alias",
-    "alias_exclusion",
-    "like",
-    "dislike",
-    "major",
-    "study_stage",
-    "location",
-    "origin",
-    "residence",
-    "workplace",
-    "goal",
-    "promise",
-    "shared_event",
-    "other_user_fact",
+_MEMORY_KIND_DEFINITIONS = {
+    "name": "用户肯定声明的本人规范姓名，不表示昵称，也不表示对某个名字的否定。",
+    "alias": "用户肯定声明属于本人的别名、昵称或对话称呼，与它是不是规范姓名分别判断。",
+    "alias_exclusion": "用户否认某称呼是本人别名，或明确拒绝被这样称呼。否定规范姓名关系不能归入本类。",
+    "like": "用户明确喜欢某个对象，限定和强度保留在证据中。",
+    "dislike": "用户明确不喜欢或讨厌某个对象，保留实际否定的对象和限定。",
+    "major": "用户本人的专业或研究方向。",
+    "study_stage": "用户本人的学习阶段。",
+    "location": "用户表达的地点，原话未区分来处与现居。",
+    "origin": "用户本人的籍贯、家乡或来处。",
+    "residence": "用户本人的居住地。",
+    "workplace": "用户本人的工作单位或工作地点。",
+    "goal": "用户正在进行或准备的持续目标。",
+    "promise": "用户本人与当前角色的明确约定或承诺。",
+    "shared_event": "用户本人的经历或当前表达的未来计划原话观察；表达计划不证明已经实施。",
+    "other_user_fact": "其他明确的本人命题，包括否定某名称是规范姓名。保留实际被否定的关系，不将否定一种关系改成否定另一种关系。"
 }
 # Legacy wire observed_at remains recognized for recorded replies; only the job owns the clock.
 _PROPOSAL_FIELDS = {
@@ -178,7 +178,8 @@ content 可以显式留空，由后端按 kind/value/qualifiers 构建显示；�
 只输出严格 JSON，不要 Markdown、解释或思考过程：
 {"memories":[{"kind":"name|alias|alias_exclusion|like|dislike|major|study_stage|origin|residence|location|workplace|goal|promise|shared_event|other_user_fact","value":"连续短原文","content":"","evidence":{"start_unit":"q起始","end_unit":"q结束"},"confidence":0.0,"operation":"ADD|MERGE|SUPERSEDE|COEXIST|PENDING|RETRACT|NOOP|ERASE","target_memory_id":"","target_memory_key":"","attributed_to":"user","qualifiers":{},"valid_from":"","valid_to":"","scope_level":"conversation"}]}
 顶层只允许 memories、本轮明确提供的 erase_source_ids 和 source_retention_bindings，候选只能包含以上声明字段。
-没有合格记忆时输出 {"memories":[]}。"""
+没有合格记忆时输出 {"memories":[]}。
+kind的含义以proposal_constraints.kind_definitions为准，按原话实际肯定或否定的命题关系选择；不能按对象名称的话题选择。"""
 
 
 class MemoryCompletion(Protocol):
@@ -1017,7 +1018,7 @@ def _candidate_to_proposal(
     kind = _proposal_text(raw, "kind").strip()
     value, value_fragments = _proposal_value(raw)
     writes_content = operation not in {"NOOP", "RETRACT", "ERASE"}
-    if (kind or writes_content) and kind not in _ALLOWED_KINDS:
+    if (kind or writes_content) and kind not in _MEMORY_KIND_DEFINITIONS:
         raise MemoryResponseError("kind", "记忆 LLM kind 缺失或不受支持")
     if writes_content and (not value or len(value) > _MAX_VALUE_CHARS):
         raise MemoryResponseError("value", "记忆 LLM value 必须是约定长度内的非空短索引")
@@ -1061,8 +1062,8 @@ def _candidate_to_proposal(
             raise MemoryResponseError("evidence", "无法确认当前原话的引文边界") from exc
         if not outside.strip(" ，,。！？!?；;：:\n\t"):
             return None
-    self_alias_exclusion = kind == "alias_exclusion"
-    if (not event_observation and not self_alias_exclusion
+    identity_fact = kind in {"name", "alias", "alias_exclusion"}
+    if (not event_observation and not identity_fact
             and _only_other_subject_clauses(source_value_clauses(source=evidence, evidence=evidence, value=value_fragments or value))):
         return None
     if (kind in {'name', 'alias', 'alias_exclusion', 'like', 'dislike', 'major', 'study_stage', 'origin', 'residence', 'location', 'workplace'}
@@ -1449,7 +1450,8 @@ def build_memory_llm_messages(
         "write_mode": write_mode,
         "confidence_threshold": confidence_threshold,
         "proposal_constraints": {
-            "kinds": sorted(_ALLOWED_KINDS),
+            "kinds": sorted(_MEMORY_KIND_DEFINITIONS),
+            "kind_definitions": _MEMORY_KIND_DEFINITIONS,
             "max_value_chars": _MAX_VALUE_CHARS,
             "value_formats": ["literal_string", "ordered_literal_fragments"],
             "max_evidence_chars": _MAX_EVIDENCE_CHARS,

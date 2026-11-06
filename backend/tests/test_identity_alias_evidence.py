@@ -306,3 +306,12 @@ def test_exclusion_update_preserves_the_target_name(target_name):
         assert proposal.operation == "SUPERSEDE" and proposal.target_memory_id == "1"
         assert proposal.memory.memory_key == proposal.target_memory_key == target["memory_key"]
         assert proposal.evidence == NEGATIVE
+
+
+def test_self_name_can_also_be_a_nickname_without_guessing_a_different_speaker():
+    source = "我叫小沅。朋友平时也叫我小沅，小沅既是我的姓名也是我的昵称。"
+    name, = parse("我叫小沅。", value="小沅", kind="name", source=source, content="")
+    alias, = parse("朋友平时也叫我小沅，小沅既是我的姓名也是我的昵称。", value="小沅", kind="alias", source=source, content="")
+    assert name.memory.memory_key == "user_name" and alias.memory.memory_key == "user_alias"
+    assert "小沅" in name.memory.content and "小沅" in alias.memory.content
+    assert alias.evidence == "朋友平时也叫我小沅，小沅既是我的姓名也是我的昵称。"
