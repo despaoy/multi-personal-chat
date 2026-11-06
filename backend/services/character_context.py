@@ -628,16 +628,13 @@ def _observe_semantic_review(outcome: SemanticReviewOutcome) -> None:
     )
 
 
-_default_service: tuple[ProviderContextBudget, CharacterContextService] | None = None
-
-
-def get_default_character_context_service() -> CharacterContextService:
-    """Reuse the default service only while its request budget is unchanged."""
-    from db.adapter import db
+def get_character_context_service(database) -> CharacterContextService:
+    """Reuse this database's service while the selected request budget is unchanged."""
     from inference.provider_context import get_provider_context_budget
 
-    global _default_service
     budget = get_provider_context_budget()
-    if _default_service is None or _default_service[0] != budget:
-        _default_service = (budget, build_character_context_service(db, context_budget=budget))
-    return _default_service[1]
+    cached = getattr(database, "_character_context_service", None)
+    if cached is None or cached[0] != budget:
+        cached = (budget, build_character_context_service(database, context_budget=budget))
+        database._character_context_service = cached
+    return cached[1]

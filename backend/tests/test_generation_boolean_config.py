@@ -26,7 +26,7 @@ def control(monkeypatch):
     monkeypatch.setenv('CHARACTER_INDEPENDENT_TASKS_ENABLED', 'false')
     monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: '合成角色：准确回应当前问题。')
     source = Mock(side_effect=AssertionError('No public source read is expected'))
-    monkeypatch.setattr(generate, 'db', SimpleNamespace(get_knowledge_document=source))
+    monkeypatch.setattr("db.adapter.db", SimpleNamespace(get_knowledge_document=source))
     rag = AsyncMock(side_effect=AssertionError('Disabled or invalid configuration must not retrieve'))
     monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', rag)
     provider = cloud_connection('boolean-config-control')
@@ -108,11 +108,11 @@ async def test_cache_hit_requires_valid_configuration(installed, monkeypatch, se
                              senderId="fiction-owner", conversationId="fiction-owner", conversationType="private")
     if setting is None:
         with pytest.raises(HTTPException, match="useKnowledgeBase") as caught:
-            await generate._generate_reply_impl(request, persist_message=False, record_invocation=False, message_db=generate.db)
+            await generate._generate_reply_impl(request, persist_message=False, record_invocation=False, message_db=installed[2])
         assert caught.value.status_code == 503 and isinstance(caught.value.__cause__, ValueError)
         cache.get.assert_not_awaited()
     else:
-        result = await generate._generate_reply_impl(request, persist_message=False, record_invocation=False, message_db=generate.db)
+        result = await generate._generate_reply_impl(request, persist_message=False, record_invocation=False, message_db=installed[2])
         assert result.reply == cached.reply and result.model == cached.model
         assert result.modelInvoked is False and "cached_model_response" in result.warnings
         cache.get.assert_awaited_once()

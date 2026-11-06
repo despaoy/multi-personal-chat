@@ -27,7 +27,6 @@ from api import generate
 from app.runtime import RuntimeContainer
 from character import profile_registry
 from character.models import MemoryItem, UserScope
-from db import adapter
 from db.database import SQLiteDB
 from db.schemas import MessageRequest
 from inference import model_manager
@@ -50,7 +49,6 @@ async def arrange_provider_budget(tmp_path, monkeypatch):
     registry = profile_registry.CharacterProfileRegistry(profiles)
     registry.load_profiles()
     monkeypatch.setattr(profile_registry, '_default_registry', registry)
-    monkeypatch.setattr(character_context, '_default_service', None)
     for name, value in {'OPENAI_COMPAT_CONTEXT_WINDOW_TOKENS': '65536', 'VLLM_MAX_MODEL_LEN': '8192', 'CONTEXTUAL_MEMORY_SELECTION_ENABLED': 'true', 'CAHM_SEMANTIC_MEMORY_ENABLED': 'false', 'CONTEXTUAL_DECISION_POLICY_ENABLED': 'false', 'DYNAMIC_CONTEXT_SEMANTIC_REVIEW_ENABLED': 'false', 'MEMORY_SOURCE_RECALL_ENABLED': 'false', 'CHARACTER_INDEPENDENT_TASKS_ENABLED': 'false'}.items():
         monkeypatch.setenv(name, value)
     default_db = SQLiteDB(tmp_path / 'default-budget.sqlite')
@@ -92,8 +90,6 @@ async def arrange_provider_budget(tmp_path, monkeypatch):
     rig.manager = manager
     monkeypatch.setattr(model_manager, 'get_model_manager', lambda *, database=None: manager)
     monkeypatch.setattr('inference.review_client.get_context_review_client', AsyncMock(return_value=OpenAICompatibleReviewClient(connection)))
-    monkeypatch.setattr(adapter, 'db', default_db)
-    monkeypatch.setattr(generate, 'db', default_db)
     monkeypatch.setattr(generate, 'response_cache', None)
     monkeypatch.setattr(generate, 'circuit_breaker_registry', circuit_registry)
     monkeypatch.setattr(generate, 'get_llm_semaphore', lambda: asyncio.Semaphore(4))
@@ -135,7 +131,7 @@ async def observe_adjacent_provider_budgets(rig):
         context = await select_context(rig, provider)
         with use_request_context(context):
             current = get_provider_context_budget()
-            service = character_context.get_default_character_context_service()
+            service = character_context.get_character_context_service(rig.database)
             prepared = await service.prepare_turn(turn_input(), ROLE)
             observations.append(dict(
                 provider=provider, current_window=current.window_tokens,
@@ -152,16 +148,16 @@ async def test_default_factory_reuses_same_budget_and_refreshes_adjacent_provide
     rig = budget_rig
     local = await select_context(rig, "vllm")
     with use_request_context(local):
-        first = character_context.get_default_character_context_service()
-        assert character_context.get_default_character_context_service() is first
+        first = character_context.get_character_context_service(rig.database)
+        assert character_context.get_character_context_service(rig.database) is first
         prepared_local = await first.prepare_turn(turn_input(), ROLE)
         assert prepared_local.memory_budget["budget_chars"] == 6000
         assert BODY in prepared_local.compiled.reference_context
         original_history_cap = first._history_max_chars
     cloud = await select_context(rig, "openai_compat")
     with use_request_context(cloud):
-        second = character_context.get_default_character_context_service()
-        assert character_context.get_default_character_context_service() is second
+        second = character_context.get_character_context_service(rig.database)
+        assert character_context.get_character_context_service(rig.database) is second
         prepared_cloud = await second.prepare_turn(turn_input(), ROLE)
         assert prepared_cloud.memory_budget["budget_chars"] == get_provider_context_budget().reference_max_chars == 32768
         assert second._history_max_chars == get_provider_context_budget().history_max_chars == 65536
@@ -178,13 +174,13 @@ async def test_invalid_current_budget_errors_instead_of_reusing_old_service(budg
     rig = budget_rig
     cloud = await select_context(rig, "openai_compat")
     with use_request_context(cloud):
-        previous = character_context.get_default_character_context_service()
+        previous = character_context.get_character_context_service(rig.database)
         monkeypatch.setenv("OPENAI_COMPAT_CONTEXT_WINDOW_TOKENS", "4096")
         with pytest.raises(ValueError, match="Cloud working context window"):
-            character_context.get_default_character_context_service()
+            character_context.get_character_context_service(rig.database)
         assert previous._history_max_chars == 65536
         monkeypatch.setenv("OPENAI_COMPAT_CONTEXT_WINDOW_TOKENS", "65536")
-        assert character_context.get_default_character_context_service() is previous
+        assert character_context.get_character_context_service(rig.database) is previous
     assert not rig.reviews and not rig.answers
 
 
@@ -197,7 +193,7 @@ async def test_captured_local_preparation_is_not_mutated_by_overlapping_cloud_fa
 
     async def prepare_local():
         with use_request_context(local):
-            service = character_context.get_default_character_context_service()
+            service = character_context.get_character_context_service(rig.database)
             prepared = await service.prepare_turn(turn_input(), ROLE)
             assert get_request_context() is local
             return service, prepared
@@ -207,7 +203,7 @@ async def test_captured_local_preparation_is_not_mutated_by_overlapping_cloud_fa
         await asyncio.wait_for(entered.wait(), 1)
         cloud = await select_context(rig, "openai_compat")
         with use_request_context(cloud):
-            cloud_service = character_context.get_default_character_context_service()
+            cloud_service = character_context.get_character_context_service(rig.database)
             prepared_cloud = await cloud_service.prepare_turn(turn_input(), ROLE)
             assert get_request_context() is cloud
         release.set()
@@ -266,7 +262,7 @@ async def test_queued_http_turn_uses_execution_provider_and_one_owning_service(b
             return await job()
     local = await select_context(rig, 'vllm')
     with use_request_context(local):
-        old_default = character_context.get_default_character_context_service()
+        old_default = character_context.get_character_context_service(rig.database)
         assert old_default._history_max_chars == 16000
     application = create_app(RuntimeContainer(db=database, is_pg_mode=lambda: False, inference_runtime=QueueTiming(), startup_env={}, http_client_pool=HttpClientPool(max_connections=1)))
     service = generate.get_request_chat_generation_service(Request({'type': 'http', 'app': application}))
@@ -310,3 +306,64 @@ async def test_queued_http_turn_uses_execution_provider_and_one_owning_service(b
         if not pending.done():
             pending.cancel()
         await asyncio.gather(pending, return_exceptions=True)
+
+
+class _CountingMemoryEncoder:
+    def __init__(self):
+        self.input_counts = []
+
+    def embed_texts(self, texts):
+        self.input_counts.append(len(texts))
+        return [[1.0, 0.0] for _ in texts]
+
+
+async def _observe_owning_api_turns(rig, monkeypatch, databases):
+    monkeypatch.setenv("CAHM_SEMANTIC_MEMORY_ENABLED", "true")
+    rig.manager._current_provider = model_manager.ModelProvider.OPENAI_COMPAT
+    encoder = _CountingMemoryEncoder()
+    services = []
+    prepare = character_context.CharacterContextService.prepare_turn
+
+    async def observe(service, *args, **kwargs):
+        service._memory_service._embedding_provider = encoder
+        result = await prepare(service, *args, **kwargs)
+        services.append(service)
+        assert BODY in result.compiled.reference_context
+        assert reference_packet(result)["source_observation"] is True
+        return result
+
+    monkeypatch.setattr(character_context.CharacterContextService, "prepare_turn", observe)
+    pool = HttpClientPool(max_connections=1)
+    try:
+        for index, database in enumerate(databases):
+            request = MessageRequest(message=QUERY, characterId=ROLE, loraName="default", platform="web",
+                                     adapter="web-character", sessionId=OWNER, conversationId=OWNER,
+                                     sessionType="private", conversationType="private", senderId=OWNER, userId=OWNER,
+                                     traceId=f"isolated-context-cache-{index}")
+            result = await generate._generate_reply_impl(request, {"id": OWNER, "user_id": OWNER},
+                                                        persist_message=False, record_invocation=False,
+                                                        message_db=database, http_client_pool=pool)
+            assert result.reply == BODY and result.modelInvoked is True
+            assert services[-1]._memory_repo.storage_owner is database
+            assert database.execute_sql("SELECT * FROM messages") == []
+    finally:
+        await pool.close()
+    return services, encoder.input_counts
+
+
+@pytest.mark.parametrize("database_kind", ["default", "custom"])
+async def test_owning_api_reuses_context_and_record_vectors_across_turns(budget_rig, monkeypatch, database_kind):
+    database = budget_rig.database if database_kind == "default" else budget_rig.custom_db
+    services, counts = await _observe_owning_api_turns(budget_rig, monkeypatch, [database, database])
+    assert services[0] is services[1]
+    assert counts == [2, 1]
+    assert len(budget_rig.answers) == len(budget_rig.reviews) == 2
+
+
+async def test_context_record_vectors_are_owned_by_each_application_database(budget_rig, monkeypatch):
+    services, counts = await _observe_owning_api_turns(
+        budget_rig, monkeypatch, [budget_rig.database, budget_rig.custom_db, budget_rig.database]
+    )
+    assert services[0] is services[2] and services[0] is not services[1]
+    assert counts == [2, 2, 1]
+    assert len(budget_rig.answers) == len(budget_rig.reviews) == 3

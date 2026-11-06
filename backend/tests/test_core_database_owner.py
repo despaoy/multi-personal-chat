@@ -18,7 +18,7 @@ async def test_core_binds_source_admission_and_generation_to_selected_database(m
         admission.side_effect = OSError("synthetic selected database failure")
     selected = SimpleNamespace(memory_source_admission=admission)
     global_admission = Mock(side_effect=AssertionError("global database must not be read"))
-    monkeypatch.setattr(generate, "db", SimpleNamespace(memory_source_admission=global_admission))
+    monkeypatch.setattr("db.adapter.db", SimpleNamespace(memory_source_admission=global_admission))
     reply = GenerateResponse(reply="verified", model="synthetic", costTime=0)
     handler = AsyncMock(return_value=reply)
     monkeypatch.setattr(generate, "_generate_reply_impl", handler)

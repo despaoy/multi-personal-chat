@@ -74,7 +74,6 @@ async def circuit_rig(tmp_path, monkeypatch):
     manager = SimpleNamespace(_current_provider=SimpleNamespace(value='openai_compat'), get_current_provider=lambda: connection)
     rig.circuit_name = f'model_generate:{(await resolve_request_context(manager)).connection_id}'
     monkeypatch.setattr(model_manager, 'get_model_manager', lambda *, database=None: manager)
-    monkeypatch.setattr(generate, 'db', database)
     monkeypatch.setattr(generate, 'response_cache', None)
     monkeypatch.setattr(generate, 'circuit_breaker_registry', registry)
     monkeypatch.setattr(generate, 'get_llm_semaphore', lambda: semaphore)

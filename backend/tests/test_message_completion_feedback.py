@@ -168,7 +168,6 @@ async def test_both_consumers_use_actual_saved_row_and_keep_visible_failure(monk
     monkeypatch.setattr(mm, 'get_model_manager', lambda *, database=None: manager)
     monkeypatch.setattr(gen, 'response_cache', None)
     monkeypatch.setattr(gen, 'circuit_breaker_registry', None)
-    monkeypatch.setattr(gen, 'db', database)
     monkeypatch.setattr(gen, 'get_llm_semaphore', lambda: asyncio.Semaphore(1))
     monkeypatch.setattr(gen, 'get_vllm_client', AsyncMock(return_value=SimpleNamespace(generate=AsyncMock()) if provider == 'vllm' else None))
     meta = dict(warnings=['原有检索提示'], answerMode='unit', confidence=0.3, citations=[])

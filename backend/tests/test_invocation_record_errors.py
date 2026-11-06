@@ -37,7 +37,6 @@ def generation(monkeypatch, database):
     connection = cloud_connection('fixture-model')
     manager.get_current_provider = lambda: connection
     monkeypatch.setattr(model_manager, 'get_model_manager', lambda *, database=None: manager)
-    monkeypatch.setattr(generate, 'db', database)
     monkeypatch.setattr(generate, 'response_cache', None)
     monkeypatch.setattr(generate, 'circuit_breaker_registry', None)
     monkeypatch.setattr(generate, 'get_llm_semaphore', lambda: asyncio.Semaphore(1))
@@ -68,7 +67,7 @@ async def test_record_failure_after_generation_stops_before_archive(generation, 
     counts = []
     monkeypatch.setattr(generate, "increment", counts.append)
     with pytest.raises(HTTPException) as error:
-        await generate._generate_reply_impl(request(), enable_rag=False, message_db=generate.db)
+        await generate._generate_reply_impl(request(), enable_rag=False, message_db=database)
     assert error.value.status_code == 503 and error.value.__cause__ is failure
     detail = error.value.detail
     assert detail["stage"] == "model_invocation_record" and detail["modelInvoked"] is True
@@ -99,7 +98,7 @@ async def test_model_failure_keeps_primary_cause_and_reports_recording_failure(g
     counts = []
     monkeypatch.setattr(generate, "increment", counts.append)
     with pytest.raises(HTTPException) as error:
-        await generate._generate_reply_impl(request(), enable_rag=False, message_db=generate.db)
+        await generate._generate_reply_impl(request(), enable_rag=False, message_db=database)
     assert error.value.status_code == (503 if record_fault else 500)
     assert error.value.__cause__ is primary
     assert database.execute_sql("SELECT id FROM messages") == []
@@ -121,7 +120,7 @@ async def test_model_failure_keeps_primary_cause_and_reports_recording_failure(g
 @pytest.mark.parametrize("invoked,record", [(True, True), (False, True), (True, False)])
 async def test_success_deterministic_and_explicit_internal_modes_remain_distinct(generation, database, invoked, record):
     generation.return_value = ChatAnswer(reply=REPLY, used_rag=False, model_invoked=invoked, metadata={"answerMode": "generated" if invoked else "current_constraint"})
-    result = await generate._generate_reply_impl(request(), enable_rag=False, record_invocation=record, message_db=generate.db)
+    result = await generate._generate_reply_impl(request(), enable_rag=False, record_invocation=record, message_db=database)
     assert result.reply == REPLY and result.modelInvoked is invoked
     assert len(database.execute_sql("SELECT id FROM model_invocations")) == int(invoked and record)
     assert len(database.execute_sql("SELECT id FROM messages")) == 1

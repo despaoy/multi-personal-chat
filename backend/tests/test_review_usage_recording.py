@@ -27,7 +27,6 @@ def review_usage(installed, monkeypatch, tmp_path):
     original_writer = database.add_model_invocation
     writer = Mock(wraps=original_writer)
     monkeypatch.setattr(database, "add_model_invocation", writer)
-    monkeypatch.setattr(generate, "db", database)
 
     async def consume():
         provider = get_request_context().provider

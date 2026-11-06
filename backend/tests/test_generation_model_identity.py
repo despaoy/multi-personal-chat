@@ -48,7 +48,7 @@ def rig(monkeypatch, provider="ollama"):
 @pytest.mark.parametrize("provider", ["ollama", "llama_cpp", "transformers_peft"])
 async def test_inactive_status_fault_cannot_block_selected_provider_reply(monkeypatch, provider):
     state = rig(monkeypatch, provider)
-    result = await state.api._generate_reply_impl(request(), message_db=state.api.db)
+    result = await state.api._generate_reply_impl(request(), message_db=state.database)
     assert result.reply == "根据完整当前输入回答。" and result.model == f"selected-model ({provider})"
     state.selected.get_status.assert_called_once()
     state.other.get_status.assert_not_called()
@@ -67,7 +67,7 @@ async def test_missing_or_invalid_identity_never_becomes_a_successful_unknown_mo
     state = rig(monkeypatch)
     state.selected.get_status.return_value = status
     with pytest.raises(HTTPException) as caught:
-        await state.api._generate_reply_impl(request(), message_db=state.api.db)
+        await state.api._generate_reply_impl(request(), message_db=state.database)
     assert caught.value.status_code == 503
     assert caught.value.detail["stage"] == "model_status"
     assert caught.value.detail["modelInvoked"] and not caught.value.detail["messageSaved"]
@@ -86,7 +86,7 @@ async def test_selected_status_read_failure_preserves_original_cause_and_failure
     failure = OSError("synthetic-private-selected-status")
     state.selected.get_status.side_effect = failure
     with pytest.raises(HTTPException) as caught:
-        await state.api._generate_reply_impl(request(), message_db=state.api.db)
+        await state.api._generate_reply_impl(request(), message_db=state.database)
     assert caught.value.status_code == 503 and caught.value.__cause__.__cause__ is failure
     assert "synthetic-private" not in str(caught.value.detail) + caplog.text
     state.record.assert_awaited_once()
@@ -100,7 +100,7 @@ async def test_result_without_model_invocation_does_not_need_model_status(monkey
     state = rig(monkeypatch, provider)
     state.selected.get_status.side_effect = OSError("Status is irrelevant to a deterministic result")
     state.generation.return_value = ChatAnswer(reply='已依据当前存储记录完成查询。', used_rag=False, model_invoked=False, metadata={'answerMode': 'memory_lookup'})
-    result = await state.api._generate_reply_impl(request(), message_db=state.api.db)
+    result = await state.api._generate_reply_impl(request(), message_db=state.database)
     assert result.model == "memory/lookup" and not result.modelInvoked
     state.selected.get_status.assert_not_called()
     state.other.get_status.assert_not_called()
@@ -117,7 +117,7 @@ async def test_local_identity_uses_request_provider_even_if_selection_changes_af
         return ChatAnswer(reply='根据完整当前输入回答。', used_rag=False, model_invoked=True, metadata={})
 
     state.generation.side_effect = generated
-    result = await state.api._generate_reply_impl(request(), message_db=state.api.db)
+    result = await state.api._generate_reply_impl(request(), message_db=state.database)
     assert result.model == "selected-model (ollama)"
     state.other.get_status.assert_not_called()
 
@@ -131,7 +131,7 @@ async def test_cloud_identity_uses_bound_snapshot_after_runtime_selection_change
         return ChatAnswer(reply='根据完整当前输入回答。', used_rag=False, model_invoked=True, metadata={})
 
     state.generation.side_effect = generated
-    result = await state.api._generate_reply_impl(request(), message_db=state.api.db)
+    result = await state.api._generate_reply_impl(request(), message_db=state.database)
     assert result.model == "selected-model (openai_compat)"
     state.other.get_status.assert_not_called()
     state.selected.get_status.assert_called_once()
@@ -148,7 +148,7 @@ async def test_undeclared_no_model_result_fails_before_archive_without_invented_
         meta["answerMode"] = mode
     state.generation.return_value = ChatAnswer(reply='隔离合成结果。', used_rag=False, model_invoked=False, metadata=meta)
     with pytest.raises(HTTPException) as caught:
-        await state.api._generate_reply_impl(request(), message_db=state.api.db)
+        await state.api._generate_reply_impl(request(), message_db=state.database)
     assert caught.value.status_code == 503
     assert caught.value.detail["stage"] == "generation_result"
     assert caught.value.detail["reason"] == "unknown_response_mode"

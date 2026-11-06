@@ -56,7 +56,6 @@ def installed(monkeypatch):
     manager.get_current_provider = lambda: manager._providers[model_manager.ModelProvider(manager._current_provider.value)]
     monkeypatch.setattr(model_manager, 'get_model_manager', lambda *, database=None: manager)
     database = SimpleNamespace(config={'useKnowledgeBase': False}, loras=[])
-    monkeypatch.setattr(generate, 'db', database)
     monkeypatch.setattr(generate, 'response_cache', None)
     monkeypatch.setattr(generate, 'circuit_breaker_registry', None)
     monkeypatch.setattr(generate, 'get_lora_character_id', lambda _: None)
@@ -71,9 +70,9 @@ def installed(monkeypatch):
     return (state, manager, database, semaphore)
 
 
-async def receive(index=0, lora="default"):
+async def receive(database, index=0, lora="default"):
     return await generate._generate_reply_impl(MessageRequest(message=FACTS + f"独立编号{index}", loraName=lora),
-        persist_message=False, record_invocation=False, enable_rag=False, message_db=generate.db)
+        persist_message=False, record_invocation=False, enable_rag=False, message_db=database)
 
 
 @pytest.mark.asyncio
@@ -84,7 +83,7 @@ async def test_independent_cloud_requests_overlap_only_up_to_admission_capacity(
     monkeypatch.setattr(generate, "get_llm_semaphore", lambda: semaphore)
     state.expected_capacity = capacity
     state.release = asyncio.Event()
-    tasks = [asyncio.create_task(receive(i)) for i in range(3)]
+    tasks = [asyncio.create_task(receive(installed[2], i)) for i in range(3)]
     try:
         await asyncio.wait_for(state.capacity_reached.wait(), 1)
     finally:
@@ -100,7 +99,7 @@ async def test_independent_cloud_requests_overlap_only_up_to_admission_capacity(
 async def test_cloud_does_not_wait_for_unrelated_local_adapter_lock(installed):
     state, _, _, _ = installed
     async with generate._get_local_model_lock():
-        response = await asyncio.wait_for(receive(), timeout=1)
+        response = await asyncio.wait_for(receive(installed[2]), timeout=1)
     assert FACTS in response.reply and state.maximum == 1
 
 
@@ -109,7 +108,7 @@ async def test_local_adapter_selection_and_generation_remain_one_serial_operatio
     state, manager, database, semaphore = installed
     manager._current_provider.value = "transformers_peft"
     database.loras = [{"id": name, "name": name, "status": "inactive"} for name in ["fixture-a", "fixture-b"]]
-    await asyncio.gather(receive(0, "fixture-a"), receive(1, "fixture-b"))
+    await asyncio.gather(receive(installed[2], 0, "fixture-a"), receive(installed[2], 1, "fixture-b"))
     assert state.maximum == 1 and state.active == 0 and semaphore._value == 2
     assert {selection for _, selection in state.calls} == {"/fiction/fixture-a", "/fiction/fixture-b"}
     assert manager.set_lora_adapter.call_count == 2
@@ -121,7 +120,7 @@ async def test_failure_or_cancellation_releases_capacity_without_retry(installed
     state, _, _, semaphore = installed
     state.release = asyncio.Event()
     state.fault = RuntimeError("fiction-provider-error") if not cancel else None
-    task = asyncio.create_task(receive())
+    task = asyncio.create_task(receive(installed[2]))
     await asyncio.wait_for(state.entered.wait(), 1)
     if cancel:
         task.cancel()
@@ -141,7 +140,7 @@ async def test_failure_or_cancellation_releases_capacity_without_retry(installed
 async def test_provider_change_during_dispatch_does_not_relabel_the_completed_response(installed):
     state, manager, _, semaphore = installed
     state.release = asyncio.Event()
-    task = asyncio.create_task(receive())
+    task = asyncio.create_task(receive(installed[2]))
     try:
         await asyncio.wait_for(state.entered.wait(), 1)
         manager._current_provider.value = "ollama"
@@ -162,9 +161,9 @@ async def test_local_adapter_lock_wait_obeys_generation_deadline(installed, monk
     lock = generate._get_local_model_lock()
     async with lock:
         with pytest.raises(HTTPException) as caught:
-            await asyncio.wait_for(receive(), 1)
+            await asyncio.wait_for(receive(installed[2]), 1)
         assert caught.value.status_code == 503 and caught.value.detail["reason"] == "deadline_exceeded"
         assert lock.locked() and semaphore._value == 2 and state.calls == []
-    result = await receive()
+    result = await receive(installed[2])
     assert FACTS in result.reply and not lock.locked() and semaphore._value == 2
     assert len(state.calls) == 1 and state.active == 0

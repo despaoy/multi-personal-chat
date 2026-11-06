@@ -41,7 +41,6 @@ def test_backend_state_controls_capability_without_promoting_user_text(enabled):
 async def test_real_cloud_wire_uses_actual_write_path(installed, monkeypatch, tmp_path, enabled, persist):
     database = SQLiteDB(tmp_path / 'capability.sqlite')
     database.update_config(installed.config)
-    monkeypatch.setattr(generate, 'db', database)
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', actual_generation)
     monkeypatch.setattr(memory_llm, 'get_memory_enrichment_scheduler', lambda _owner_database=None: SimpleNamespace(enabled=enabled))
     complete = AsyncMock(return_value=None)

@@ -94,7 +94,7 @@ async def test_api_records_actual_usage_even_if_answer_rejected(installed, monke
     from fastapi import HTTPException
     from types import SimpleNamespace
     database = SQLiteDB(tmp_path / 'measured.sqlite')
-    monkeypatch.setattr(generate, 'db', SimpleNamespace(config=installed.config, loras=[], add_model_invocation=database.add_model_invocation))
+    store = SimpleNamespace(config=installed.config, loras=[], add_model_invocation=database.add_model_invocation)
     installed.state.finish = finish
     compiled = chat_answer.generate_chat_answer
 
@@ -104,10 +104,10 @@ async def test_api_records_actual_usage_even_if_answer_rejected(installed, monke
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', twice)
     request = MessageRequest(message='Synthetic facts: project A is approved; B is rejected. Which is approved?', loraName='default', traceId='usage-fixture')
     if finish == 'stop':
-        await generate._generate_reply_impl(request, persist_message=False, message_db=generate.db)
+        await generate._generate_reply_impl(request, persist_message=False, message_db=store)
     else:
         with pytest.raises(HTTPException):
-            await generate._generate_reply_impl(request, persist_message=False, message_db=generate.db)
+            await generate._generate_reply_impl(request, persist_message=False, message_db=store)
     rows = database.execute_sql('SELECT * FROM model_invocations')
     assert len(rows) == 1 and len(installed.calls) == expected_calls
     assert rows[0]['promptTokens'] == 100 * expected_calls
@@ -167,12 +167,10 @@ def test_both_databases_preserve_measurement_and_unknown(source_database, source
 
 @pytest.fixture
 def publication_database(installed, monkeypatch, tmp_path):
-    from api import generate
     from db.database import SQLiteDB
 
     database = SQLiteDB(tmp_path / "result-publication.sqlite")
     database.update_config(dict(installed.config, useKnowledgeBase=False))
-    monkeypatch.setattr(generate, "db", database)
     try:
         yield database
     finally:

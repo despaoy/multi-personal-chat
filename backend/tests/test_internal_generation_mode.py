@@ -36,7 +36,7 @@ def _request():
 async def test_deterministic_response_has_no_model_invocation(monkeypatch, mode, label, provider):
     import api.generate as gen
     from inference import model_manager as mm
-    saved, recorded = _install_common(monkeypatch, gen)
+    saved, recorded, database = _install_common(monkeypatch, gen)
     connection = cloud_connection('not-called')
     connection.name = provider
     connection.set_lora_adapter = lambda _: None
@@ -62,20 +62,20 @@ async def test_deterministic_response_has_no_model_invocation(monkeypatch, mode,
     monkeypatch.setattr(gen, 'get_vllm_client', AsyncMock(return_value=SimpleNamespace(generate=AsyncMock())))
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', deterministic)
     monkeypatch.setattr(gen, 'get_llm_semaphore', lambda: asyncio.Semaphore(2))
-    result = await gen._generate_reply_impl(_request(), persist_message=True, enable_rag=False, record_invocation=True, message_db=gen.db)
+    result = await gen._generate_reply_impl(_request(), persist_message=True, enable_rag=False, record_invocation=True, message_db=database)
     assert result.model == label and recorded == []
     assert len(saved) == 1 and saved[0][2] == label and (saved[0][3] == 'default')
 
 
 def _install_common(monkeypatch, gen):
     monkeypatch.setattr(gen, "response_cache", None)
-    monkeypatch.setattr(gen, "db", SimpleNamespace(config={}, loras=[]))
+    database = SimpleNamespace(config={}, loras=[])
     monkeypatch.setattr(gen, "circuit_breaker_registry", None)
     saved = []
     recorded = []
     monkeypatch.setattr(gen, "_save_message", _record_save(saved))
     monkeypatch.setattr(gen, "_record_model_invocation", _record_invocation(recorded))
-    return saved, recorded
+    return saved, recorded, database
 
 
 def _record_save(saved):
@@ -94,7 +94,7 @@ def _record_invocation(recorded):
 async def test_internal_mode_success_does_not_persist(monkeypatch):
     import api.generate as gen
     from inference import model_manager as mm
-    saved, recorded = _install_common(monkeypatch, gen)
+    saved, recorded, database = _install_common(monkeypatch, gen)
 
     class FakeManager:
         _current_provider = SimpleNamespace(value='vllm')
@@ -107,7 +107,7 @@ async def test_internal_mode_success_does_not_persist(monkeypatch):
     async def fake_vllm(*args, **kwargs):
         return ChatAnswer(reply='tool-reply', used_rag=False, model_invoked=True, metadata={})
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', fake_vllm)
-    result = await gen._generate_reply_impl(_request(), persist_message=False, enable_rag=False, record_invocation=False, message_db=gen.db)
+    result = await gen._generate_reply_impl(_request(), persist_message=False, enable_rag=False, record_invocation=False, message_db=database)
     assert result.reply == 'tool-reply'
     assert saved == []
     assert recorded == []
@@ -117,7 +117,7 @@ async def test_internal_mode_success_does_not_persist(monkeypatch):
 async def test_internal_mode_vllm_failure_does_not_persist(monkeypatch):
     import api.generate as gen
     from inference import model_manager as mm
-    saved, recorded = _install_common(monkeypatch, gen)
+    saved, recorded, database = _install_common(monkeypatch, gen)
 
     class FakeManager:
         _current_provider = SimpleNamespace(value='vllm')
@@ -141,7 +141,7 @@ async def test_internal_mode_vllm_failure_does_not_persist(monkeypatch):
         raise RuntimeError('vllm down')
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', fake_vllm)
     with pytest.raises(HTTPException) as caught:
-        await gen._generate_reply_impl(_request(), persist_message=False, enable_rag=False, record_invocation=False, message_db=gen.db)
+        await gen._generate_reply_impl(_request(), persist_message=False, enable_rag=False, record_invocation=False, message_db=database)
     assert caught.value.status_code == 503
     assert saved == []
     assert recorded == []
@@ -151,9 +151,9 @@ async def test_internal_mode_vllm_failure_does_not_persist(monkeypatch):
 async def test_internal_mode_model_manager_failure_does_not_record_invocation(monkeypatch, tmp_path):
     import api.generate as gen
     from inference import model_manager as mm
-    saved, recorded = _install_common(monkeypatch, gen)
+    saved, recorded, database = _install_common(monkeypatch, gen)
     from db.database import SQLiteDB
-    monkeypatch.setattr(gen, 'db', SQLiteDB(tmp_path / 'internal-provider-error.sqlite'))
+    database = SQLiteDB(tmp_path / 'internal-provider-error.sqlite')
     failure = RuntimeError('model manager down')
     connection = cloud_connection('fixture-model', completion=AsyncMock(side_effect=failure))
 
@@ -171,7 +171,7 @@ async def test_internal_mode_model_manager_failure_does_not_record_invocation(mo
     monkeypatch.setattr(mm, 'get_model_manager', lambda *, database=None: FakeManager())
     monkeypatch.setattr(gen, 'get_llm_semaphore', lambda: asyncio.Semaphore(2))
     with pytest.raises(HTTPException) as caught:
-        await gen._generate_reply_impl(_request(), persist_message=False, enable_rag=False, record_invocation=False, message_db=gen.db)
+        await gen._generate_reply_impl(_request(), persist_message=False, enable_rag=False, record_invocation=False, message_db=database)
     assert caught.value.status_code == 500 and caught.value.__cause__ is failure
     connection.async_complete.assert_awaited_once()
     assert saved == []
@@ -184,7 +184,7 @@ async def test_explicit_memory_operations_respect_internal_and_delivery_modes(mo
     import api.generate as gen
     from inference import model_manager as mm
     _install_common(monkeypatch, gen)
-    monkeypatch.setattr(gen, 'db', SimpleNamespace(config={}, loras=[]))
+    database = SimpleNamespace(config={}, loras=[])
     from character.models import RelationshipState, UserScope
     seen = []
 
@@ -200,7 +200,7 @@ async def test_explicit_memory_operations_respect_internal_and_delivery_modes(mo
     monkeypatch.setattr(gen, 'get_vllm_client', AsyncMock(return_value=SimpleNamespace(generate=AsyncMock())))
     monkeypatch.setattr(mm, 'get_model_manager', lambda *, database=None: SimpleNamespace(_current_provider=SimpleNamespace(value='vllm'), get_current_provider=lambda: SimpleNamespace(name='vllm')))
     request = MessageRequest(message='忘掉我的住址。', characterId='tsukiyashiro_kisaki', loraName='default', sessionType='private', sessionId='s1')
-    await gen._generate_reply_impl(request, persist_message=persist, delivery_context=delivery, enable_rag=False, record_invocation=False, message_db=gen.db)
+    await gen._generate_reply_impl(request, persist_message=persist, delivery_context=delivery, enable_rag=False, record_invocation=False, message_db=database)
     assert seen == [(allowed, persist and delivery is not None)]
     if persist and delivery is not None:
         assert delivery['completion_snapshot']['user_scope']['sender_id'] == 'owner'
@@ -306,14 +306,14 @@ async def test_unavailable_selected_vllm_never_dispatches_another_provider(monke
     """The removed fallback is an explicit unavailable error before any dispatch."""
     import api.generate as gen
     from inference import model_manager as mm
-    saved, recorded = _install_common(monkeypatch, gen)
+    saved, recorded, database = _install_common(monkeypatch, gen)
     manager = SimpleNamespace(_current_provider=SimpleNamespace(value='vllm'), get_current_provider=lambda: SimpleNamespace(name='vllm'), async_generate=AsyncMock())
     monkeypatch.setattr(mm, 'get_model_manager', lambda *, database=None: manager)
     monkeypatch.setattr(gen, 'get_vllm_client', AsyncMock(return_value=None))
     retrieval = AsyncMock()
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', retrieval)
     with pytest.raises(HTTPException) as error:
-        await gen._generate_reply_impl(_request(), persist_message=False, enable_rag=False, record_invocation=False, message_db=gen.db)
+        await gen._generate_reply_impl(_request(), persist_message=False, enable_rag=False, record_invocation=False, message_db=database)
     assert error.value.status_code == 503 and saved == recorded == []
     manager.async_generate.assert_not_awaited()
     retrieval.assert_not_awaited()
@@ -330,7 +330,7 @@ async def test_injected_character_service_reaches_prepare_and_complete(monkeypat
     import api.generate as gen
     from inference import model_manager as mm
     _install_common(monkeypatch, gen)
-    monkeypatch.setattr(gen, 'db', SimpleNamespace(config={}, loras=[]))
+    database = SimpleNamespace(config={}, loras=[])
 
     async def fake_save(*args, **kwargs):
         return True
@@ -361,7 +361,7 @@ async def test_injected_character_service_reaches_prepare_and_complete(monkeypat
     monkeypatch.setattr(gen, 'get_vllm_client', AsyncMock(return_value=SimpleNamespace(generate=AsyncMock())))
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', fake_vllm)
     request = MessageRequest(message='你好', characterId='tsukiyashiro_kisaki', loraName='default', sessionType='private', sessionId='s1')
-    result = await gen._generate_reply_impl(request, persist_message=True, enable_rag=False, record_invocation=False, character_service=container_service, message_db=gen.db)
+    result = await gen._generate_reply_impl(request, persist_message=True, enable_rag=False, record_invocation=False, character_service=container_service, message_db=database)
     assert result.reply == 'reply'
     assert seen['prepare_service'] is container_service
     assert seen['complete_service'] is container_service

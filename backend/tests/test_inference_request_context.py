@@ -59,14 +59,14 @@ def own_cloud_model(installed, monkeypatch, model="deepseek-flash"):
     return counted
 
 
-async def receive(trace="scope", *, character=False):
+async def receive(database, trace="scope", *, character=False):
     return await generate._generate_reply_impl(
         MessageRequest(
             message=QUERY, loraName="default", traceId=trace,
             **({"characterId": "tsukiyashiro_kisaki"} if character else {}),
         ),
         persist_message=False, record_invocation=False, enable_rag=False,
-        message_db=generate.db,
+        message_db=database,
     )
 
 
@@ -113,10 +113,10 @@ async def test_preparation_default_review_main_answer_and_counter_share_one_snap
 
     monkeypatch.setattr(generate, "_prepare_character_turn", prepare)
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', compile_with_observation)
-    first = await receive("first", character=True)
+    first = await receive(installed.database, "first", character=True)
     assert first.model == "deepseek-flash (openai_compat)" and first.reply == ANSWER
     assert snapshots.call_count == 1 and get_request_context() is None
-    second = await receive("second", character=True)
+    second = await receive(installed.database, "second", character=True)
     assert second.model == "deepseek-v4-pro (openai_compat)" and second.reply == ANSWER
     assert snapshots.call_count == 2 and get_request_context() is None
     assert len(installed.calls) == 4
@@ -154,7 +154,7 @@ async def test_concurrent_requests_keep_distinct_provider_and_thread_counter_con
 
     async def invoke(name):
         try:
-            return await receive(name)
+            return await receive(installed.database, name)
         finally:
             cleaned.append(get_request_context())
 
@@ -194,7 +194,7 @@ async def test_actual_api_failure_or_cancellation_resets_its_own_task_context(in
 
     async def invoke():
         try:
-            return await receive()
+            return await receive(installed.database)
         finally:
             # Inspect the actual failed task after _generate_reply_impl unwinds,
             # not just the parent's independently isolated ContextVar value.
@@ -221,7 +221,7 @@ async def test_actual_api_failure_or_cancellation_resets_its_own_task_context(in
     assert cleaned == [None] and get_request_context() is None
     assert installed.calls == []
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', compiled)
-    assert (await receive("healthy-after-failure")).reply == ANSWER
+    assert (await receive(installed.database, "healthy-after-failure")).reply == ANSWER
     assert snapshots.call_count == 2 and len(installed.calls) == 1
     assert get_request_context() is None
 
@@ -241,7 +241,7 @@ async def test_nested_api_body_reuses_outer_snapshot_without_claiming_full_narra
             return await generate._generate_reply_impl(
                 request.model_copy(update={"traceId": "inner"}), current_user,
                 persist_message=False, record_invocation=False, prepared_override=object(),
-                message_db=generate.db,
+                message_db=installed.database,
             )
         assert request.traceId == "inner"
         reply, _ = await context.provider.async_complete(
@@ -253,7 +253,7 @@ async def test_nested_api_body_reuses_outer_snapshot_without_claiming_full_narra
     result = await generate._generate_reply_impl(
         MessageRequest(message=QUERY, traceId="outer", branchId="synthetic-branch"),
         persist_message=False, record_invocation=False,
-        message_db=generate.db,
+        message_db=installed.database,
     )
     assert result.reply == ANSWER and result.model == "deepseek-flash"
     assert len(seen) == 2 and seen[0] is seen[1]

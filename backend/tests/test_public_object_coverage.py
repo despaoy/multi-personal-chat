@@ -224,7 +224,6 @@ async def test_same_object_quote_in_another_source_does_not_borrow_admission():
 @pytest.mark.asyncio
 async def test_actual_api_marks_partial_multi_object_scope_without_erasing_private(monkeypatch):
     from types import SimpleNamespace
-    from api import generate
     from character.models import CompiledCharacterContext
     from db.schemas import MessageRequest
     from knowledge import public_task_evidence, retrieval_query_plan
@@ -256,13 +255,13 @@ async def test_actual_api_marks_partial_multi_object_scope_without_erasing_priva
         return '青桥费用及末尾限定有依据，蓝岸本次缺对应资料；你的私人偏好保留。'
     monkeypatch.setattr(retrieval_query_plan, 'plan_retrieval', planner)
     monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieve)
-    install_public_source_reader(monkeypatch, generate, bundle(missing=True))
+    database = install_public_source_reader(bundle(missing=True))
     from knowledge import public_fact_coverage
     monkeypatch.setattr(public_fact_coverage, '_review_facts', facts)
     monkeypatch.setattr(public_task_evidence, '_review', review)
     monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: '人物规则')
     prepared = SimpleNamespace(compiled=CompiledCharacterContext('', '', PRIVATE, used_memory_ids=('fiction-private',)), history=())
-    _chat_result_meta = await chat_answer.generate_chat_answer(MessageRequest(message=QUERY), None, prepared_character_turn=prepared, runtime_config=dict(maxTokens=2048, useKnowledgeBase=True), model_generate=model, message_db=generate.db)
+    _chat_result_meta = await chat_answer.generate_chat_answer(MessageRequest(message=QUERY), None, prepared_character_turn=prepared, runtime_config=dict(maxTokens=2048, useKnowledgeBase=True), model_generate=model, message_db=database)
     _, used, meta = (_chat_result_meta.reply, _chat_result_meta.used_rag, _chat_result_meta.metadata)
     assert used and meta['abstained'] and (meta['answerMode'] == 'partial_answer') and ('partial_public_evidence' in meta['warnings'])
 

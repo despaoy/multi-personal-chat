@@ -31,13 +31,13 @@ COURSE_TEXTS = (*SQL_TEXTS,
 @pytest.mark.parametrize('message', COURSE_TEXTS)
 async def test_literal_course_text_reaches_compiled_provider_unchanged(installed, message):
     app = FastAPI()
-    app.state.runtime_container = RuntimeContainer(db=index_lifecycle.db, is_pg_mode=lambda: False, startup_env={}, http_client_pool=HttpClientPool(max_connections=1))
+    app.state.runtime_container = RuntimeContainer(db=installed.database, is_pg_mode=lambda: False, startup_env={}, http_client_pool=HttpClientPool(max_connections=1))
     app.add_middleware(InputValidationMiddleware)
     app.add_middleware(SecurityMiddleware, api_keys=['synthetic-text-key'])
 
     @app.post('/api/generate')
     async def reply(request: MessageRequest):
-        return await generate._generate_reply_impl(request, persist_message=False, record_invocation=False, message_db=generate.db)
+        return await generate._generate_reply_impl(request, persist_message=False, record_invocation=False, message_db=installed.database)
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://synthetic') as client:
         response = await client.post('/api/generate', json={'message': message, 'loraName': 'default'}, headers={'X-API-Key': 'synthetic-text-key'})
     assert response.status_code == 200 and response.json()['modelInvoked']

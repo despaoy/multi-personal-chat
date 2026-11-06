@@ -56,7 +56,7 @@ async def test_real_web_queue_preserves_history_order_and_independent_owners(
         memory_service=SimpleNamespace(recall_with_diagnostics=AsyncMock(return_value=((), 0, {"status": "no_match"}))),
         source_recall_enabled=False,
     )
-    monkeypatch.setattr(character_context, "build_character_context_service", lambda owner: service)
+    monkeypatch.setattr(character_context, "build_character_context_service", lambda owner, *, context_budget: service)
     first_started = asyncio.Event()
     independent_started = asyncio.Event()
     second_submitted = asyncio.Event()

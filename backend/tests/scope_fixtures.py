@@ -1,6 +1,7 @@
 """Explicit open-scope controls for tests that own other contracts."""
 
 import json
+from types import SimpleNamespace
 
 
 def open_scope_response(messages, rows, **options):
@@ -32,7 +33,7 @@ def literal_span_response(payload, value):
     return json.dumps(value, ensure_ascii=False)
 
 
-def install_public_source_reader(monkeypatch, generate, bundle):
+def install_public_source_reader(bundle):
     """The send-time reader sees the same complete synthetic source snapshots."""
     from knowledge.original_sources import document_authority_snapshot
 
@@ -45,4 +46,4 @@ def install_public_source_reader(monkeypatch, generate, bundle):
     for record in bundle["source_coverage"]:
         snapshot = record["source_authority_snapshot"]
         assert document_authority_snapshot(documents[snapshot["document_id"]]) == snapshot
-    monkeypatch.setattr(generate.db, "get_knowledge_document", lambda identity: documents[identity])
+    return SimpleNamespace(get_knowledge_document=lambda identity: documents[identity])

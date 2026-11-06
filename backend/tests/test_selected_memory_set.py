@@ -89,7 +89,6 @@ async def arrange_selected_memory(tmp_path, monkeypatch, *, cap=6000):
     connection = cloud_connection('fiction-selected-model', completion=answer)
     manager = SimpleNamespace(_current_provider=model_manager.ModelProvider.OPENAI_COMPAT, get_current_provider=lambda: connection)
     monkeypatch.setattr(model_manager, 'get_model_manager', lambda *, database=None: manager)
-    monkeypatch.setattr(generate, 'db', database)
     monkeypatch.setattr(generate, 'response_cache', None)
     monkeypatch.setattr(generate, 'circuit_breaker_registry', rig.registry)
     monkeypatch.setattr(generate, 'get_llm_semaphore', lambda: asyncio.Semaphore(4))

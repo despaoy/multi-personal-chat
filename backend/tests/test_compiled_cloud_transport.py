@@ -51,7 +51,7 @@ def installed(monkeypatch):
     manager.async_generate = AsyncMock(side_effect=AssertionError('Compiled cloud messages must not re-enter legacy generation'))
     monkeypatch.setattr(model_manager, 'get_model_manager', lambda *, database=None: manager)
     runtime_config = {'useKnowledgeBase': False, 'temperature': 0.83, 'maxTokens': 173}
-    monkeypatch.setattr(generate, 'db', SimpleNamespace(config=runtime_config, loras=[]))
+    database = SimpleNamespace(config=runtime_config, loras=[])
     monkeypatch.setattr(generate, 'response_cache', None)
     monkeypatch.setattr(generate, 'circuit_breaker_registry', None)
     monkeypatch.setattr(generate, 'get_llm_semaphore', lambda: asyncio.Semaphore(1))
@@ -79,19 +79,19 @@ def installed(monkeypatch):
         return ChatAnswer(reply=result.reply, used_rag=result.plan.retrieval.has_evidence, model_invoked=result.model_invoked, metadata={})
     state.evidence = False
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', compiled)
-    return SimpleNamespace(provider=provider, manager=manager, stored=stored, config=runtime_config, calls=calls, state=state)
+    return SimpleNamespace(provider=provider, manager=manager, database=database, stored=stored, config=runtime_config, calls=calls, state=state)
 
 
-async def receive():
+async def receive(database):
     return await generate._generate_reply_impl(MessageRequest(message=QUERY, loraName="default"),
-        persist_message=False, record_invocation=False, message_db=generate.db)
+        persist_message=False, record_invocation=False, message_db=database)
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("evidence", [False, True])
 async def test_compiled_temperature_limit_and_complete_messages_reach_wire(installed, evidence):
     installed.state.evidence = evidence
-    response = await receive()
+    response = await receive(installed.database)
     assert response.reply == ANSWER and response.modelInvoked
     assert len(installed.calls) == 1
     body = installed.calls[0]["body"]
@@ -136,7 +136,7 @@ async def test_completion_failure_never_switches_provider_or_returns_a_reply(ins
     else:
         installed.state.failure = httpx.ConnectError("fiction-private-error")
     with pytest.raises(HTTPException) as error:
-        await receive()
+        await receive(installed.database)
     assert error.value.status_code == (502 if failure == "http" else 500)
     assert installed.manager._current_provider == model_manager.ModelProvider.OPENAI_COMPAT
     if failure == "http":
@@ -150,7 +150,7 @@ async def test_completion_failure_never_switches_provider_or_returns_a_reply(ins
 async def test_explicit_unsupported_main_sampling_is_not_replaced_with_defaults(installed):
     installed.config["topP"] = 0.7
     with pytest.raises(HTTPException) as error:
-        await receive()
+        await receive(installed.database)
     assert error.value.status_code == 503 and isinstance(error.value.__cause__, ValueError)
     assert installed.config["topP"] == 0.7 and installed.calls == []
 
@@ -168,17 +168,17 @@ async def test_default_knowledge_request_is_supported_non_thinking_sampling(inst
 async def test_direct_cache_reuse_is_labelled_and_model_source_changes_miss(installed, monkeypatch):
     cache = Cache()
     monkeypatch.setattr(generate, "response_cache", cache)
-    first = await receive()
-    second = await receive()
+    first = await receive(installed.database)
+    second = await receive(installed.database)
     assert first.modelInvoked and not second.modelInvoked and first.reply == second.reply
     assert "cached_model_response" in second.warnings and len(installed.calls) == 1
     assert second.model_dump()["modelInvoked"] is False
     assert first.model_dump()["modelInvoked"] is True
     installed.stored["openaiCompatModel"] = "next-model"
-    third = await receive()
+    third = await receive(installed.database)
     assert third.modelInvoked and len(installed.calls) == 2 and installed.calls[-1]["body"]["model"] == "next-model"
     installed.stored["openaiCompatApiKey"] = "fiction-next-key"
-    fourth = await receive()
+    fourth = await receive(installed.database)
     assert fourth.modelInvoked and len(installed.calls) == 3 and installed.calls[-1]["auth"] == "Bearer fiction-next-key"
 
 
@@ -192,7 +192,7 @@ async def test_required_configuration_failure_cannot_fall_through_cache_handling
         raise failure
     monkeypatch.setattr(model_manager, '_get_db_config', fail)
     with pytest.raises(HTTPException) as error:
-        await receive()
+        await receive(installed.database)
     assert error.value.status_code == 503 and error.value.__cause__ is failure
     assert cache.reads == 0 and installed.calls == []
 
@@ -203,7 +203,7 @@ async def test_enabled_retrieval_never_reuses_chat_response_cache(installed, mon
     cache = Cache()
     monkeypatch.setattr(generate, "response_cache", cache)
     for _ in range(2):
-        assert (await receive()).modelInvoked
+        assert (await receive(installed.database)).modelInvoked
     assert len(installed.calls) == 2 and cache.reads == cache.writes == 0
 
 
@@ -236,7 +236,7 @@ async def test_response_cache_failures_are_explicit_and_never_become_success(ins
     monkeypatch.setattr(generate, "_save_message", saved)
     with pytest.raises(HTTPException) as error:
         await generate._generate_reply_impl(MessageRequest(message=QUERY, loraName="default"),
-            persist_message=failure in {"structure", "empty"}, record_invocation=False, message_db=generate.db)
+            persist_message=failure in {"structure", "empty"}, record_invocation=False, message_db=installed.database)
     assert error.value.status_code == 503
     assert "fiction-cache-private" not in str(error.value.detail)
     if failure == "write":
@@ -256,7 +256,7 @@ async def test_normal_no_model_result_keeps_false_invocation_provenance(installe
         return ChatAnswer(reply='当前资料未找到足够依据。', used_rag=False, model_invoked=False, metadata={'abstained': True, 'answerMode': 'abstention'})
 
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', abstain)
-    result = await receive()
+    result = await receive(installed.database)
     assert result.abstained and not result.modelInvoked and result.model_dump()["modelInvoked"] is False
     assert installed.calls == []
     assert not GenerateResponse(reply="已提交回复的幂等复用", model="fixture", costTime=0).modelInvoked
@@ -267,22 +267,22 @@ async def test_normal_no_model_result_keeps_false_invocation_provenance(installe
 async def test_cache_hit_checks_archive_result_without_new_model_call(installed, monkeypatch, saved):
     cache = Cache()
     monkeypatch.setattr(generate, "response_cache", cache)
-    assert (await receive()).modelInvoked
+    assert (await receive(installed.database)).modelInvoked
     failure = OSError("fiction-cache-archive-error")
     def add_message(record):
         if not saved:
             raise failure
         return {"id": "cached-fixture-row", **record}
-    generate.db.add_message = add_message
+    installed.database.add_message = add_message
     archive = AsyncMock(wraps=generate._save_message)
     monkeypatch.setattr(generate, "_save_message", archive)
     request = MessageRequest(message=QUERY, loraName="default")
     if saved:
-        result = await generate._generate_reply_impl(request, persist_message=True, record_invocation=False, message_db=generate.db)
+        result = await generate._generate_reply_impl(request, persist_message=True, record_invocation=False, message_db=installed.database)
         assert result.reply == ANSWER and not result.modelInvoked
     else:
         with pytest.raises(HTTPException) as error:
-            await generate._generate_reply_impl(request, persist_message=True, record_invocation=False, message_db=generate.db)
+            await generate._generate_reply_impl(request, persist_message=True, record_invocation=False, message_db=installed.database)
         assert error.value.status_code == 503 and error.value.detail["stage"] == "message_archive"
         assert error.value.detail["modelInvoked"] is False and error.value.detail["messageSaved"] is None
         assert error.value.__cause__ is failure
@@ -315,14 +315,14 @@ async def test_cache_identity_and_wire_use_same_snapshot_when_settings_change_be
         installed.provider._refresh_db_config()
         return await compiled(*args, **kwargs)
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', changed)
-    first = await receive()
+    first = await receive(installed.database)
     assert first.model == "fixture-model (openai_compat)"
     assert installed.calls[0]["body"]["model"] == "fixture-model" and installed.calls[0]["auth"] == "Bearer fiction-key"
-    second = await receive()
+    second = await receive(installed.database)
     assert second.model == "next-model (openai_compat)" and len(installed.calls) == 2
     assert installed.calls[1]["body"]["model"] == "next-model" and installed.calls[1]["auth"] == "Bearer fiction-next-key"
     installed.stored.update(openaiCompatModel="fixture-model", openaiCompatApiKey="fiction-key")
-    third = await receive()
+    third = await receive(installed.database)
     assert not third.modelInvoked and third.model == "fixture-model (openai_compat)" and len(installed.calls) == 2
 
 
@@ -332,7 +332,7 @@ async def test_configuration_change_during_transport_does_not_relabel_completed_
         installed.stored["openaiCompatModel"] = "next-model"
         installed.provider._refresh_db_config()
     installed.state.on_request = change
-    result = await receive()
+    result = await receive(installed.database)
     assert installed.calls[0]["body"]["model"] == "fixture-model"
     assert result.model == "fixture-model (openai_compat)" and installed.provider.model == "next-model"
 
@@ -346,7 +346,7 @@ async def test_multiple_model_calls_in_one_turn_share_configuration_snapshot(ins
         installed.provider._refresh_db_config()
         return await compiled(*args, **kwargs)
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', two_calls)
-    result = await receive()
+    result = await receive(installed.database)
     assert len(installed.calls) == 2 and {call["body"]["model"] for call in installed.calls} == {"fixture-model"}
     assert result.model == "fixture-model (openai_compat)"
 
@@ -354,14 +354,14 @@ async def test_multiple_model_calls_in_one_turn_share_configuration_snapshot(ins
 @pytest.mark.asyncio
 async def test_cache_snapshot_keeps_its_provider_type_when_manager_changes_during_lookup(installed, monkeypatch):
     monkeypatch.setattr(generate, "response_cache", Cache())
-    first = await receive()
+    first = await receive(installed.database)
     original = installed.provider.snapshot
     def changed():
         snapshot = original()
         installed.manager._current_provider = model_manager.ModelProvider.OLLAMA
         return snapshot
     monkeypatch.setattr(installed.provider, "snapshot", changed)
-    second = await receive()
+    second = await receive(installed.database)
     assert first.model == second.model == "fixture-model (openai_compat)"
     assert not second.modelInvoked and len(installed.calls) == 1
     installed.manager.async_generate.assert_not_awaited()

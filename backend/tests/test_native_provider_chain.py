@@ -47,7 +47,7 @@ async def test_selected_provider_receives_messages_and_budget_without_local_over
     manager._providers = {model_manager.ModelProvider(provider): manager}
     monkeypatch.setattr(model_manager, 'get_model_manager', lambda *, database=None: manager)
     monkeypatch.setattr(generate, 'response_cache', None)
-    monkeypatch.setattr(generate, 'db', SimpleNamespace(config={}, loras=[]))
+    database = SimpleNamespace(config={}, loras=[])
     monkeypatch.setattr(generate, 'circuit_breaker_registry', None)
     monkeypatch.setattr(generate, 'get_llm_semaphore', lambda: asyncio.Semaphore(1))
     local_call = AsyncMock(return_value='原生提供方回答', side_effect=None if provider == 'vllm' else AssertionError('Cloud must not call local inference'))
@@ -61,12 +61,12 @@ async def test_selected_provider_receives_messages_and_budget_without_local_over
     if provider == 'vllm' and (not available):
         from fastapi import HTTPException
         with pytest.raises(HTTPException) as caught:
-            await generate._generate_reply_impl(MessageRequest(message='我的当前住处是哪？'), persist_message=False, record_invocation=False, enable_rag=False, message_db=generate.db)
+            await generate._generate_reply_impl(MessageRequest(message='我的当前住处是哪？'), persist_message=False, record_invocation=False, enable_rag=False, message_db=database)
         assert caught.value.status_code == 503
         assert not calls
         local_call.assert_not_awaited()
         return
-    response = await generate._generate_reply_impl(MessageRequest(message='我的当前住处是哪？'), persist_message=False, record_invocation=False, enable_rag=False, message_db=generate.db)
+    response = await generate._generate_reply_impl(MessageRequest(message='我的当前住处是哪？'), persist_message=False, record_invocation=False, enable_rag=False, message_db=database)
     assert response.reply == '原生提供方回答'
     if provider != 'vllm':
         assert calls == [dict(messages=[{'role': 'system', 'content': '编译后角色及表达边界'}, {'role': 'user', 'content': '当前住处丽水；完整已知记忆和当前问题'}], temperature=0.17, max_tokens=733, top_p=1.0, frequency_penalty=0.0, repetition_penalty=1.0, enable_thinking=False, lora_name=None)]

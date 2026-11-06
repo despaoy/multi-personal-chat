@@ -10,7 +10,6 @@ import pytest
 from scope_fixtures import install_public_source_reader
 from tests.test_public_fact_coverage import FEE, FULL, QUERY, bundle, deps, obligations, run
 
-from api import generate
 from db.schemas import MessageRequest
 from knowledge import public_task_evidence, retrieval_query_plan
 from knowledge.retrieval_query_plan import RetrievalQueryPlan
@@ -20,7 +19,7 @@ from knowledge.retrieval_query_plan import RetrievalQueryPlan
 @pytest.mark.parametrize('mode,expected', [('fee', 'partial_answer'), ('full', 'grounded_answer')])
 async def test_unprepared_public_state_uses_final_fact_coverage(monkeypatch, mode, expected, provider_budget):
     reviewed, _ = await run(mode)
-    install_public_source_reader(monkeypatch, generate, reviewed)
+    database = install_public_source_reader(reviewed)
 
     async def planner(query, *, history, context_budget):
         assert query == QUERY and history == ()
@@ -43,7 +42,7 @@ async def test_unprepared_public_state_uses_final_fact_coverage(monkeypatch, mod
     monkeypatch.setattr('knowledge.public_question_binding.resolve_question_binding', no_binding)
     monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieved_or_reviewed)
     monkeypatch.setattr(public_task_evidence, 'review_public_candidates', retrieved_or_reviewed)
-    _chat_result_meta = await chat_answer.generate_chat_answer(MessageRequest(message=QUERY), None, runtime_config=dict(maxTokens=2048, useKnowledgeBase=True), model_generate=model, message_db=generate.db)
+    _chat_result_meta = await chat_answer.generate_chat_answer(MessageRequest(message=QUERY), None, runtime_config=dict(maxTokens=2048, useKnowledgeBase=True), model_generate=model, message_db=database)
     _, used, meta = (_chat_result_meta.reply, _chat_result_meta.used_rag, _chat_result_meta.metadata)
     assert len(inputs) == 1 and used and (meta['answerMode'] == expected)
     assert meta['abstained'] is (expected != 'grounded_answer')

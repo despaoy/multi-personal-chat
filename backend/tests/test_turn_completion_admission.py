@@ -107,7 +107,7 @@ def generation_environment(monkeypatch, provider):
     monkeypatch.setattr(mm, 'get_model_manager', lambda *, database=None: manager)
     monkeypatch.setattr(gen, 'response_cache', None)
     monkeypatch.setattr(gen, 'circuit_breaker_registry', None)
-    monkeypatch.setattr(gen, 'db', SimpleNamespace(config={}, loras=[]))
+    database = SimpleNamespace(config={}, loras=[])
     monkeypatch.setattr(gen, 'get_llm_semaphore', lambda: asyncio.Semaphore(1))
     monkeypatch.setattr(gen, 'get_vllm_client', AsyncMock(return_value=SimpleNamespace(generate=AsyncMock()) if provider == 'vllm' else None))
     prepared = SimpleNamespace(memory_operation_receipt=None, character_id='tsukiyashiro_kisaki', compiled=SimpleNamespace(profile_context='', dynamic_context='', reference_context=''), history=())
@@ -120,16 +120,16 @@ def generation_environment(monkeypatch, provider):
     monkeypatch.setattr(gen, '_persist_completion_feedback', AsyncMock(return_value=True))
     request = MessageRequest(message='朋友陶弈本人收到完整书面预约，回执EN-935-V，有效、未参加、未出发。', characterId='tsukiyashiro_kisaki', sourceMessageId='target', sessionId='scope-owned')
     request._source_received_at = datetime.now(timezone.utc)
-    return (gen, runtime, request, preparation, generation, storage)
+    return gen, runtime, request, preparation, generation, storage, database
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("provider", ["vllm", "openai_compat"])
 async def test_busy_route_rejects_before_prepare_model_and_archive(monkeypatch, provider):
-    gen, runtime, request, prepare, generation, storage = generation_environment(monkeypatch, provider)
+    gen, runtime, request, prepare, generation, storage, database = generation_environment(monkeypatch, provider)
     occupied = runtime.reserve()
     with pytest.raises(HTTPException) as error:
-        await gen._generate_reply_impl(request, enable_rag=False, record_invocation=False, message_db=gen.db)
+        await gen._generate_reply_impl(request, enable_rag=False, record_invocation=False, message_db=database)
     assert error.value.status_code == 503 and error.value.detail["code"] == "turn_completion_busy"
     prepare.assert_not_awaited()
     generation.assert_not_awaited()
@@ -142,7 +142,7 @@ async def test_busy_route_rejects_before_prepare_model_and_archive(monkeypatch, 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("provider", ["vllm", "openai_compat"])
 async def test_same_pre_generation_slot_survives_response_deadline(monkeypatch, provider):
-    gen, runtime, request, prepare, generation, storage = generation_environment(monkeypatch, provider)
+    gen, runtime, request, prepare, generation, storage, database = generation_environment(monkeypatch, provider)
     monkeypatch.setattr(gen, "_DB_WRITE_TIMEOUT", 0.005)
     release = asyncio.Event()
     observed = []
@@ -154,7 +154,7 @@ async def test_same_pre_generation_slot_survives_response_deadline(monkeypatch, 
 
     result = await gen._generate_reply_impl(
         request, enable_rag=False, record_invocation=False, character_service=SimpleNamespace(complete_turn=complete),
-        message_db=gen.db,
+        message_db=database,
     )
     assert result.reply.startswith("真实单元输出") and "尚未确认" in result.reply and result.warnings[0] == "检索提示"
     assert observed == [(0, 1, request.message, request._source_received_at, "target", "真实单元输出")]
@@ -170,10 +170,10 @@ async def test_same_pre_generation_slot_survives_response_deadline(monkeypatch, 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("failure", [HTTPException(503, "context unavailable"), asyncio.CancelledError()])
 async def test_preparation_error_or_cancel_releases_capacity(monkeypatch, failure):
-    gen, runtime, request, prepare, generation, storage = generation_environment(monkeypatch, "openai_compat")
+    gen, runtime, request, prepare, generation, storage, database = generation_environment(monkeypatch, "openai_compat")
     prepare.side_effect = failure
     with pytest.raises(type(failure)):
-        await gen._generate_reply_impl(request, enable_rag=False, record_invocation=False, message_db=gen.db)
+        await gen._generate_reply_impl(request, enable_rag=False, record_invocation=False, message_db=database)
     assert runtime.active == runtime.reserved == 0
     generation.assert_not_awaited()
     storage.assert_not_awaited()
@@ -182,14 +182,14 @@ async def test_preparation_error_or_cancel_releases_capacity(monkeypatch, failur
 
 @pytest.mark.asyncio
 async def test_archive_failure_releases_unused_slot_without_complete(monkeypatch):
-    gen, runtime, request, prepare, generation, storage = generation_environment(monkeypatch, "openai_compat")
+    gen, runtime, request, prepare, generation, storage, database = generation_environment(monkeypatch, "openai_compat")
     failure = HTTPException(503, detail={"stage": "message_archive", "modelInvoked": True, "messageSaved": None})
     storage.side_effect = failure
     complete = AsyncMock()
     with pytest.raises(HTTPException) as error:
         await gen._generate_reply_impl(
             request, enable_rag=False, record_invocation=False, character_service=SimpleNamespace(complete_turn=complete),
-            message_db=gen.db,
+            message_db=database,
         )
     assert error.value is failure
     storage.assert_awaited_once()
@@ -200,7 +200,7 @@ async def test_archive_failure_releases_unused_slot_without_complete(monkeypatch
 
 @pytest.mark.asyncio
 async def test_internal_no_archive_does_not_reserve_completion(monkeypatch):
-    gen, runtime, request, prepare, generation, storage = generation_environment(monkeypatch, "openai_compat")
+    gen, runtime, request, prepare, generation, storage, database = generation_environment(monkeypatch, "openai_compat")
     occupied = runtime.reserve()
     complete = AsyncMock()
     await gen._generate_reply_impl(
@@ -209,7 +209,7 @@ async def test_internal_no_archive_does_not_reserve_completion(monkeypatch):
         enable_rag=False,
         record_invocation=False,
         character_service=SimpleNamespace(complete_turn=complete),
-        message_db=gen.db,
+        message_db=database,
     )
     complete.assert_not_awaited()
     storage.assert_not_awaited()
@@ -256,11 +256,11 @@ async def test_real_context_failure_stops_generation_and_releases_slot(monkeypat
     from api import generate
 
     real_prepare = generate._prepare_character_turn
-    gen, runtime, request, _, generation, storage = generation_environment(monkeypatch, "vllm" if selection == "mapped" else "openai_compat")
+    gen, runtime, request, _, generation, storage, database = generation_environment(monkeypatch, "vllm" if selection == "mapped" else "openai_compat")
     monkeypatch.setattr(gen, "_prepare_character_turn", real_prepare)
     if selection == "mapped":
         request.characterId = None
-        gen.db.loras = [{"id": "unit-lora", "name": "unit-persona", "status": "active"}]
+        database.loras = [{"id": "unit-lora", "name": "unit-persona", "status": "active"}]
         monkeypatch.setattr(gen, "get_lora_character_id", lambda name: "tsukiyashiro_kisaki")
         client = SimpleNamespace(list_loras=AsyncMock(return_value=["unit-persona"]), generate=AsyncMock())
         monkeypatch.setattr(gen, "get_vllm_client", AsyncMock(return_value=client))
@@ -268,7 +268,7 @@ async def test_real_context_failure_stops_generation_and_releases_slot(monkeypat
     service = SimpleNamespace(prepare_turn=AsyncMock(side_effect=failure))
     try:
         with pytest.raises(HTTPException) as caught:
-            await gen._generate_reply_impl(request, enable_rag=False, record_invocation=False, character_service=service, message_db=gen.db)
+            await gen._generate_reply_impl(request, enable_rag=False, record_invocation=False, character_service=service, message_db=database)
         assert caught.value.status_code == 503 and caught.value.__cause__ is failure
         service.prepare_turn.assert_awaited_once()
         if selection == "mapped":

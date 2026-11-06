@@ -60,7 +60,7 @@ async def test_generation_failure_is_reported_and_recorded(monkeypatch, provider
     connection.name = provider
     manager.get_current_provider = lambda: connection
     monkeypatch.setattr(model_manager, 'get_model_manager', lambda *, database=None: manager)
-    monkeypatch.setattr(generate, 'db', SimpleNamespace(config={}, loras=[]))
+    database = SimpleNamespace(config={}, loras=[])
     monkeypatch.setattr(generate, 'response_cache', None)
     monkeypatch.setattr(generate, 'get_vllm_client', AsyncMock(return_value=SimpleNamespace(generate=AsyncMock())))
     monkeypatch.setattr(generate, 'set_consecutive', lambda *args: counters.append(args))
@@ -84,7 +84,7 @@ async def test_generation_failure_is_reported_and_recorded(monkeypatch, provider
     monkeypatch.setattr(generate, '_record_model_invocation', record)
     from fastapi import HTTPException
     with pytest.raises(HTTPException) as caught:
-        await generate._generate_reply_impl(MessageRequest(message='按当前完整资料回答，不使用已撤销版本。'), message_db=generate.db)
+        await generate._generate_reply_impl(MessageRequest(message='按当前完整资料回答，不使用已撤销版本。'), message_db=database)
     assert caught.value.status_code == (503 if provider == 'vllm' or failure_kind != 'provider' else 500)
     if failure_kind == 'context_authority':
         assert caught.value.detail['stage'] == 'context_authority'

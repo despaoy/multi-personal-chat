@@ -80,7 +80,7 @@ async def test_base_character_and_prepared_turns_do_not_read_loras(monkeypatch, 
     state = install_api(monkeypatch, "openai_compat")
     turn = prepare(state, monkeypatch)
     owned = OwnedDatabase(lora_error=OSError("Unused adapter storage must not be read"))
-    monkeypatch.setattr(state.api, "db", OwnedDatabase(config_error=AssertionError("Wrong database")))
+    monkeypatch.setattr("db.adapter.db", OwnedDatabase(config_error=AssertionError("Wrong database")))
     lookup = Mock(side_effect=AssertionError("Base generation must not look up an adapter directory"))
     monkeypatch.setattr(state.api, "get_lora_path_by_id", lookup)
     result = await state.api._generate_reply_impl(

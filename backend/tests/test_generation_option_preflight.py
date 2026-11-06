@@ -21,7 +21,7 @@ def rig(monkeypatch):
     state = install_api(monkeypatch, "openai_compat")
     state.manager.get_current_provider().base_url = "https://api.deepseek.com"
     # Another database has valid settings. The request must still use its own.
-    monkeypatch.setattr(state.api, "db", SimpleNamespace(config={"topP": 1.0}, loras=[]))
+    monkeypatch.setattr("db.adapter.db", SimpleNamespace(config={"topP": 1.0}, loras=[]))
     state.prepare = AsyncMock(side_effect=AssertionError("invalid configuration reached semantic preparation"))
     monkeypatch.setattr(state.api, "_prepare_character_turn", state.prepare)
     return state

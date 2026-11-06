@@ -24,7 +24,6 @@ from app.config import (
 from app.dependencies import get_current_admin, get_current_user, get_request_http_client_pool
 from app.providers import get_vllm_client
 from app.runtime import get_runtime_container
-from db.adapter import db
 from db.database import get_lora_path_by_id
 from db.message_feedback import reply_with_warning
 from db.schemas import GenerateResponse, MessageRequest
@@ -448,17 +447,10 @@ async def _generate_reply_body(
 
     if mapped_character_id and prepared_override is None:
         if character_service is None:
-            from services.character_context import (
-                build_character_context_service,
-                get_default_character_context_service,
-            )
+            from services.character_context import get_character_context_service
 
             try:
-                character_service = (
-                    get_default_character_context_service()
-                    if message_db is db
-                    else build_character_context_service(message_db)
-                )
+                character_service = get_character_context_service(message_db)
             except Exception as exc:
                 raise HTTPException(503, "角色上下文配置读取失败，请检查上下文及审核配置后重试") from exc
         prepared_character_turn = await _prepare_character_turn(

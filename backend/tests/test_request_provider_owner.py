@@ -77,7 +77,7 @@ def owned(monkeypatch):
         async with httpx.AsyncClient(transport=httpx.MockTransport(respond)) as client:
             yield client
     monkeypatch.setattr(model_manager.OpenAICompatProvider, '_acquire_http_client', acquire)
-    monkeypatch.setattr(generate, 'db', SimpleNamespace(config=config, loras=[]))
+    database = SimpleNamespace(config=config, loras=[])
     monkeypatch.setattr(generate, 'response_cache', None)
     monkeypatch.setattr(generate, 'circuit_breaker_registry', None)
     monkeypatch.setattr(generate, 'get_lora_character_id', lambda _: None)
@@ -93,12 +93,12 @@ def owned(monkeypatch):
         result = await generate_character_response(GenerationRequest(message=request.message, persona_prompt='保留完整虚构题设的金额、时间、否定和条件。', apply_prompt_policy=False, temperature=runtime_config['temperature'], max_tokens=runtime_config['maxTokens'], top_p=runtime_config['topP'], context_window_tokens=8192), model_generate)
         return ChatAnswer(reply=result.reply, used_rag=False, model_invoked=True, metadata={})
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', compiled)
-    return SimpleNamespace(manager=manager, resources=resources, reads=reads, snapshots=snapshots, local_calls=local_calls, http_calls=http_calls, legacy_calls=legacy_calls, state=state, semaphore=semaphore)
+    return SimpleNamespace(database=database, manager=manager, resources=resources, reads=reads, snapshots=snapshots, local_calls=local_calls, http_calls=http_calls, legacy_calls=legacy_calls, state=state, semaphore=semaphore)
 
 
-async def turn():
+async def turn(database):
     return await generate._generate_reply_impl(MessageRequest(message=FACTS, loraName="default"),
-        persist_message=False, record_invocation=False, enable_rag=False, message_db=generate.db)
+        persist_message=False, record_invocation=False, enable_rag=False, message_db=database)
 
 
 @pytest.mark.asyncio
@@ -119,7 +119,7 @@ async def test_bound_cloud_review_ignores_unrelated_default_change(owned):
 @pytest.mark.asyncio
 async def test_cloud_generation_keeps_owner_and_new_request_uses_new_default(owned):
     owned.state.pause_compile = True
-    task = asyncio.create_task(turn())
+    task = asyncio.create_task(turn(owned.database))
     try:
         await asyncio.wait_for(owned.state.compile_entered.wait(), 2)
         owned.manager.set_provider(model_manager.ModelProvider.OLLAMA)
@@ -127,7 +127,7 @@ async def test_cloud_generation_keeps_owner_and_new_request_uses_new_default(own
         owned.state.compile_release.set()
     first = await task
     assert first.reply == ANSWER and first.model == "deepseek-flash (openai_compat)"
-    second = await turn()
+    second = await turn(owned.database)
     assert second.reply == ANSWER and second.model == "owned-ollama (ollama)"
     assert len(owned.http_calls) == 1 and owned.local_calls == ["ollama"]
     assert owned.reads.call_count == 2 and owned.legacy_calls.call_count == 0
@@ -147,7 +147,7 @@ async def test_local_generation_keeps_resource_across_circuit_wait(owned, monkey
 
     registry = SimpleNamespace(get_or_create=AsyncMock(return_value=admission))
     monkeypatch.setattr(generate, "circuit_breaker_registry", registry)
-    task = asyncio.create_task(turn())
+    task = asyncio.create_task(turn(owned.database))
     try:
         await asyncio.wait_for(entered.wait(), 2)
         owned.manager.set_provider(model_manager.ModelProvider.OLLAMA)

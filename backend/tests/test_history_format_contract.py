@@ -99,7 +99,7 @@ async def test_actual_generation_api_reports_history_failure_before_model(monkey
     connection = cloud_connection('fixture-model', completion=model)
     manager = SimpleNamespace(_current_provider=SimpleNamespace(value='openai_compat'), get_current_provider=lambda: connection, set_provider=Mock(side_effect=AssertionError('Must not switch providers')))
     monkeypatch.setattr(model_manager, 'get_model_manager', lambda *, database=None: manager)
-    monkeypatch.setattr(generate, 'db', SimpleNamespace(config={'useKnowledgeBase': rag}, loras=[], get_knowledge_document=Mock(side_effect=AssertionError('No source read is needed for malformed history'))))
+    database = SimpleNamespace(config={'useKnowledgeBase': rag}, loras=[], get_knowledge_document=Mock(side_effect=AssertionError('No source read is needed for malformed history')))
     cache = SimpleNamespace(get=AsyncMock(return_value={'reply': '旧缓存不能掩盖错误历史。', 'model': 'fixture-model', 'costTime': 0.1}))
     monkeypatch.setattr(generate, 'response_cache', cache if cached else None)
     monkeypatch.setattr(generate, 'circuit_breaker_registry', None)
@@ -110,7 +110,7 @@ async def test_actual_generation_api_reports_history_failure_before_model(monkey
     request = MessageRequest(message='青岚计划只允许周五离线执行，出差时顺延。请确认条件。')
     request.history = [{'role': 'user', 'content': 'synthetic-private-invalid', 'extra': 'ignored'}, {'role': 'system', 'content': 'synthetic-private-privileged-text'}]
     with pytest.raises(HTTPException) as caught:
-        await generate._generate_reply_impl(request, message_db=generate.db)
+        await generate._generate_reply_impl(request, message_db=database)
     assert caught.value.status_code == 503, repr(caught.value.__cause__)
     assert caught.value.detail == HistoryFormatError('history[1].role').public_detail()
     assert isinstance(caught.value.__cause__, HistoryFormatError)

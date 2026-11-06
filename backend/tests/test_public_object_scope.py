@@ -219,7 +219,6 @@ async def test_scope_row_order_does_not_change_bound_objects():
 @pytest.mark.asyncio
 async def test_actual_api_uses_verified_object_links_and_retains_private_answer(monkeypatch):
     from types import SimpleNamespace
-    from api import generate
     from character.models import CompiledCharacterContext
     from db.schemas import MessageRequest
     from knowledge import public_task_evidence, retrieval_query_plan
@@ -261,14 +260,14 @@ async def test_actual_api_uses_verified_object_links_and_retains_private_answer(
         return '已有私人偏好及前者费用可答，后者时长本次没有对应依据。'
     monkeypatch.setattr(retrieval_query_plan, 'plan_retrieval', planner)
     monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', retrieve)
-    install_public_source_reader(monkeypatch, generate, bundle())
+    database = install_public_source_reader(bundle())
     from knowledge import public_fact_coverage
     monkeypatch.setattr(public_fact_coverage, '_review_facts', facts)
     monkeypatch.setattr(public_task_evidence, '_review', review)
     monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: '人物规则')
     context = CompiledCharacterContext('', '', PRIVATE, used_memory_ids=('fiction-private',))
     prepared = SimpleNamespace(compiled=context, history=())
-    _chat_result_meta = await chat_answer.generate_chat_answer(MessageRequest(message=QUERY), None, prepared_character_turn=prepared, runtime_config=dict(maxTokens=2048, useKnowledgeBase=True), model_generate=model, message_db=generate.db)
+    _chat_result_meta = await chat_answer.generate_chat_answer(MessageRequest(message=QUERY), None, prepared_character_turn=prepared, runtime_config=dict(maxTokens=2048, useKnowledgeBase=True), model_generate=model, message_db=database)
     _, used, meta = (_chat_result_meta.reply, _chat_result_meta.used_rag, _chat_result_meta.metadata)
     assert calls == ['scope', 'fact_scope', 'source', 'fact_evidence'] and used and meta['abstained'] and (meta['answerMode'] == 'partial_answer')
     assert 'partial_public_evidence' in meta['warnings']

@@ -115,7 +115,7 @@ async def test_generation_preserves_answer_and_existing_warnings(monkeypatch, pr
     monkeypatch.setattr(mm, 'get_model_manager', lambda *, database=None: manager)
     monkeypatch.setattr(gen, 'response_cache', None)
     monkeypatch.setattr(gen, 'circuit_breaker_registry', None)
-    monkeypatch.setattr(gen, 'db', SimpleNamespace(config={}, loras=[]))
+    database = SimpleNamespace(config={}, loras=[])
     monkeypatch.setattr(gen, 'get_llm_semaphore', lambda: asyncio.Semaphore(1))
     monkeypatch.setattr(gen, 'get_vllm_client', AsyncMock(return_value=SimpleNamespace(generate=AsyncMock()) if provider == 'vllm' else None))
     meta = dict(warnings=['原有检索提示'], answerMode='unit', confidence=0.3, citations=[])
@@ -125,7 +125,7 @@ async def test_generation_preserves_answer_and_existing_warnings(monkeypatch, pr
 
         def fail(record):
             raise failure
-        gen.db.add_message = fail
+        database.add_message = fail
     else:
         monkeypatch.setattr(gen, '_save_message', AsyncMock(return_value=True))
     prepared = SimpleNamespace(memory_operation_receipt=None, character_id='tsukiyashiro_kisaki', compiled=SimpleNamespace(profile_context='', dynamic_context='', reference_context=''), history=())
@@ -135,7 +135,7 @@ async def test_generation_preserves_answer_and_existing_warnings(monkeypatch, pr
         failure = TimeoutError('synthetic-private-completion-error')
         service.complete_turn.side_effect = failure
         with pytest.raises(HTTPException) as error:
-            await gen._generate_reply_impl(request(), enable_rag=False, record_invocation=False, character_service=service, message_db=gen.db)
+            await gen._generate_reply_impl(request(), enable_rag=False, record_invocation=False, character_service=service, message_db=database)
         assert error.value.status_code == 503 and error.value.detail['stage'] == 'turn_completion'
         assert error.value.detail['modelInvoked'] is True and error.value.detail['messageSaved'] is True
         assert error.value.__cause__ is failure and 'synthetic-private' not in str(error.value.detail)
@@ -144,13 +144,13 @@ async def test_generation_preserves_answer_and_existing_warnings(monkeypatch, pr
         return
     if mode == 'archive_failure':
         with pytest.raises(HTTPException) as error:
-            await gen._generate_reply_impl(request(), enable_rag=False, record_invocation=False, character_service=service, message_db=gen.db)
+            await gen._generate_reply_impl(request(), enable_rag=False, record_invocation=False, character_service=service, message_db=database)
         assert error.value.status_code == 503 and error.value.detail['stage'] == 'message_archive'
         assert error.value.detail['modelInvoked'] is True and error.value.detail['messageSaved'] is None
         assert error.value.__cause__ is failure
         service.complete_turn.assert_not_awaited()
         return
-    result = await gen._generate_reply_impl(request(), persist_message=mode != 'internal', enable_rag=False, record_invocation=False, character_service=service, message_db=gen.db)
+    result = await gen._generate_reply_impl(request(), persist_message=mode != 'internal', enable_rag=False, record_invocation=False, character_service=service, message_db=database)
     assert result.warnings[0] == '原有检索提示' and result.confidence == 0.3 and (result.citations == [])
     if mode == 'failed':
         assert result.reply.startswith('模型原始内容\n\n保存提示：') and '保存失败' in result.reply
