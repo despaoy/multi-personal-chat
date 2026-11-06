@@ -19,7 +19,6 @@ from inference.openai_protocol import ProviderResponseError
 from pydantic import BaseModel
 from typing import Optional
 
-from db.adapter import db
 from db.schemas import DatasetUploadRequest, TrainingStartRequest, DialogueGenerateRequest, SaveDialoguesRequest
 from training.preprocessor import DatasetExistsError
 from app.config import generation_state, get_generation_state_lock
@@ -384,7 +383,11 @@ async def list_model_configs(current_user: dict = Depends(get_current_admin)):
 
 
 @router.post("/api/training/start")
-async def start_training(request: TrainingStartRequest, current_user: dict = Depends(get_current_admin)):
+async def start_training(
+    request: TrainingStartRequest,
+    current_user: dict = Depends(get_current_admin),
+    database=Depends(get_request_database),
+):
     """启动LoRA训练
 
     C-S1 fix: 训练任务消耗大量 GPU/磁盘资源，限定 admin。
@@ -400,17 +403,16 @@ async def start_training(request: TrainingStartRequest, current_user: dict = Dep
 
         # 内存检查：训练需要大量GPU/CPU内存
         import psutil
+
         mem = psutil.virtual_memory()
         gpu_available = False
         gpu_mem_free = 0
 
-        try:
-            import torch
-            if torch.cuda.is_available():
-                gpu_available = True
-                gpu_mem_free = torch.cuda.mem_get_info(0)[0] / (1024**3)  # (free, total)
-        except (ImportError, RuntimeError):
-            pass
+        import torch
+
+        if torch.cuda.is_available():
+            gpu_available = True
+            gpu_mem_free = torch.cuda.mem_get_info(0)[0] / (1024**3)
 
         # 7B模型至少需要8GB GPU显存或16GB系统内存
         MIN_GPU_MEM_GB = 8.0
@@ -422,20 +424,20 @@ async def start_training(request: TrainingStartRequest, current_user: dict = Dep
                 raise HTTPException(
                     status_code=507,
                     detail=f"GPU显存不足：可用 {gpu_mem_free:.1f}GB，训练至少需要 {MIN_GPU_MEM_GB:.0f}GB。"
-                           f"建议将数据集导出后上传到服务器训练。"
+                    f"建议将数据集导出后上传到服务器训练。",
                 )
         else:
             if system_mem_free_gb < MIN_SYSTEM_MEM_FREE_GB:
                 raise HTTPException(
                     status_code=507,
                     detail=f"系统内存不足：可用 {system_mem_free_gb:.1f}GB，CPU训练至少需要 {MIN_SYSTEM_MEM_FREE_GB:.0f}GB。"
-                           f"建议将数据集导出后上传到服务器训练。"
+                    f"建议将数据集导出后上传到服务器训练。",
                 )
 
         from training.task_manager import get_simple_lora_trainer, ALL_GPU_CONFIGS
         from training.preprocessor import get_dataset_preprocessor
 
-        trainer = get_simple_lora_trainer(db=db)
+        trainer = await run_db(get_simple_lora_trainer, db=database)
         preprocessor = get_dataset_preprocessor()
 
         # 验证数据集是否存在
@@ -452,6 +454,7 @@ async def start_training(request: TrainingStartRequest, current_user: dict = Dep
 
         # 将 base_config 转换为字典
         from dataclasses import asdict
+
         base_config_dict = asdict(base_config)
 
         # 合并自定义配置
@@ -462,45 +465,41 @@ async def start_training(request: TrainingStartRequest, current_user: dict = Dep
 
         # 启动训练
         task_id = await trainer.start_training(
-            lora_name=request.lora_name,
-            dataset_path=dataset_dir,
-            config=merged_config
+            lora_name=request.lora_name, dataset_path=dataset_dir, config=merged_config
         )
 
-        return {
-            "success": True,
-            "message": "训练任务已启动",
-            "task_id": task_id
-        }
+        return {"success": True, "message": "训练任务已启动", "task_id": task_id}
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"启动训练失败: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Training operation failed operation=start_training type=%s", type(e).__name__)
+        raise HTTPException(status_code=500, detail="启动训练失败，请检查依赖、配置和存储") from e
 
 
 @router.get("/api/training/tasks")
-async def list_training_tasks(current_user: dict = Depends(get_current_admin)):
+async def list_training_tasks(current_user: dict = Depends(get_current_admin), database=Depends(get_request_database)):
     """列出所有训练任务"""
     try:
         from training.task_manager import get_simple_lora_trainer
-        trainer = get_simple_lora_trainer(db=db)
+
+        trainer = await run_db(get_simple_lora_trainer, db=database)
 
         tasks = await trainer.get_all_tasks()
         return {"success": True, "tasks": tasks}
     except Exception as e:
-        logger.error(f"获取训练任务列表失败: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Training operation failed operation=list_training_tasks type=%s", type(e).__name__)
+        raise HTTPException(status_code=500, detail="获取训练任务列表失败，请检查存储") from e
 
 
 @router.get("/api/training/tasks/{task_id}")
-async def get_training_task(task_id: str, current_user: dict = Depends(get_current_admin)):
+async def get_training_task(
+    task_id: str, current_user: dict = Depends(get_current_admin), database=Depends(get_request_database)
+):
     """获取训练任务状态"""
     try:
         from training.task_manager import get_simple_lora_trainer
-        trainer = get_simple_lora_trainer(db=db)
+
+        trainer = await run_db(get_simple_lora_trainer, db=database)
 
         task = await trainer.get_task_status(task_id)
         if not task:
@@ -510,19 +509,22 @@ async def get_training_task(task_id: str, current_user: dict = Depends(get_curre
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"获取训练任务状态失败: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Training operation failed operation=get_training_task type=%s", type(e).__name__)
+        raise HTTPException(status_code=500, detail="获取训练任务状态失败，请检查存储") from e
 
 
 @router.post("/api/training/tasks/{task_id}/cancel")
-async def cancel_training_task(task_id: str, current_user: dict = Depends(get_current_admin)):
+async def cancel_training_task(
+    task_id: str, current_user: dict = Depends(get_current_admin), database=Depends(get_request_database)
+):
     """取消训练任务
 
     s2 fix: 训练任务影响全局 LoRA 资源，限定 admin。
     """
     try:
         from training.task_manager import get_simple_lora_trainer
-        trainer = get_simple_lora_trainer(db=db)
+
+        trainer = await run_db(get_simple_lora_trainer, db=database)
 
         success = await trainer.cancel_task(task_id)
         if success:
@@ -532,8 +534,8 @@ async def cancel_training_task(task_id: str, current_user: dict = Depends(get_cu
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"取消训练任务失败: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error("Training operation failed operation=cancel_training_task type=%s", type(e).__name__)
+        raise HTTPException(status_code=500, detail="取消训练任务失败，请检查存储") from e
 
 
 @router.get("/api/training/styles")

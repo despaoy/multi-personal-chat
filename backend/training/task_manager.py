@@ -1,8 +1,4 @@
-"""
-LoRA训练任务管理层
-将训练API请求转换为training.trainer配置，并保留旧版SimpleLoRATrainer接口。
-负责任务队列管理、异步训练调度和状态跟踪。
-"""
+"""Training task admission, execution, durable state and cooperative shutdown."""
 
 import logging
 import os
@@ -310,9 +306,7 @@ class SimpleLoRATrainer:
             logger.info(f"训练任务完成: {task_id}")
 
         except Exception as e:
-            logger.error(f"训练任务失败: {task_id}, 错误: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
+            logger.error("Training worker failed task_id=%s type=%s", task_id, type(e).__name__)
             with self._lock:
                 # 如果已被取消，不覆盖cancelled状态
                 if self.tasks[task_id]["status"] in ("cancelled", "interrupted"):
@@ -335,20 +329,13 @@ class SimpleLoRATrainer:
                 self._runner_tasks.pop(task_id, None)
         if completed.cancelled():
             return
-        try:
-            error = completed.exception()
-        except asyncio.CancelledError:
-            return
+        error = completed.exception()
         if error is not None:
-            logger.error("训练任务协程异常 task_id=%s: %s", task_id, error)
+            logger.error("Training runner failed task_id=%s type=%s", task_id, type(error).__name__)
 
     async def shutdown(self, timeout: float | None = None) -> None:
         """Stop and join owned runners even when durable state cannot be saved."""
-        wait_timeout = (
-            float(os.getenv("TRAINING_SHUTDOWN_TIMEOUT", "30"))
-            if timeout is None
-            else max(float(timeout), 0.0)
-        )
+        wait_timeout = float(os.getenv("TRAINING_SHUTDOWN_TIMEOUT", "30")) if timeout is None else max(float(timeout), 0.0)
         now = time.strftime("%Y-%m-%d %H:%M:%S")
         with self._lock:
             runners = list(self._runner_tasks.values())
@@ -371,14 +358,7 @@ class SimpleLoRATrainer:
             if runners:
                 _, pending = await asyncio.wait(runners, timeout=wait_timeout)
                 if pending:
-                    logger.warning(
-                        "训练任务在 %.1f 秒内未结束，取消 %d 个等待协程",
-                        wait_timeout,
-                        len(pending),
-                    )
-                    for runner in pending:
-                        runner.cancel()
-                    await asyncio.gather(*pending, return_exceptions=True)
+                    raise TimeoutError("训练线程尚未停止，任务及管理器仍保留所有权")
 
     def _build_config(self, lora_name: str, dataset_path: Path, config: Dict[str, Any]) -> "LoRATrainingConfig":
         from training.trainer import LoRATrainingConfig
@@ -583,24 +563,28 @@ class SimpleLoRATrainer:
             logger.info("已核对数据库中的 %d 个训练任务", len(db_tasks))
 
 
-_simple_lora_trainer: Optional[SimpleLoRATrainer] = None
+_trainer_init_lock = threading.Lock()
 
 
-def get_simple_lora_trainer(db=None) -> SimpleLoRATrainer:
-    global _simple_lora_trainer
-    if _simple_lora_trainer is None:
-        _simple_lora_trainer = SimpleLoRATrainer(db=db)
-    return _simple_lora_trainer
+def get_simple_lora_trainer(db) -> SimpleLoRATrainer:
+    """Reuse only the trainer belonging to this application database."""
+    with _trainer_init_lock:
+        trainer = getattr(db, "_lora_trainer", None)
+        if trainer is None:
+            trainer = SimpleLoRATrainer(db=db)
+            db._lora_trainer = trainer
+        return trainer
 
 
-async def shutdown_simple_lora_trainer() -> None:
-    """Stop the process-wide trainer and clear it for the next app lifecycle."""
-    global _simple_lora_trainer
-    trainer = _simple_lora_trainer
+async def shutdown_simple_lora_trainer(db) -> None:
+    """Retain a live owner when stopping fails or a training thread outlives its deadline."""
+    with _trainer_init_lock:
+        trainer = getattr(db, "_lora_trainer", None)
     if trainer is None:
         return
     try:
         await trainer.shutdown()
     finally:
-        if _simple_lora_trainer is trainer and all(runner.done() for runner in trainer._runner_tasks.values()):
-            _simple_lora_trainer = None
+        with _trainer_init_lock:
+            if db._lora_trainer is trainer and all(runner.done() for runner in trainer._runner_tasks.values()):
+                db._lora_trainer = None

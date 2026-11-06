@@ -137,7 +137,7 @@ async def test_shutdown_joins_owned_worker_and_releases_singleton_when_save_fail
         ended.set()
 
     monkeypatch.setattr(manager, "_run_training", controlled_worker)
-    monkeypatch.setattr(task_manager, "_simple_lora_trainer", manager)
+    monkeypatch.setattr(database, "_lora_trainer", manager, raising=False)
     task_id = await manager.start_training("stopped", dataset, config)
     await started.wait()
     save = database.save_training_task
@@ -150,9 +150,9 @@ async def test_shutdown_joins_owned_worker_and_releases_singleton_when_save_fail
 
     monkeypatch.setattr(database, "save_training_task", fail_interrupt)
     with pytest.raises(OSError) as caught:
-        await asyncio.wait_for(task_manager.shutdown_simple_lora_trainer(), timeout=1)
+        await asyncio.wait_for(task_manager.shutdown_simple_lora_trainer(database), timeout=1)
     assert caught.value is failure and ended.is_set()
-    assert manager._runner_tasks == {} and task_manager._simple_lora_trainer is None
+    assert manager._runner_tasks == {} and database._lora_trainer is None
     assert (await manager.get_task_status(task_id))["status"] == "interrupted"
     monkeypatch.setattr(database, "save_training_task", save)
     restored = task_manager.get_simple_lora_trainer(db=database)
@@ -169,11 +169,11 @@ async def test_cancelled_shutdown_keeps_live_owner_until_the_same_worker_finishe
         await release.wait()
 
     monkeypatch.setattr(manager, "_run_training", controlled_worker)
-    monkeypatch.setattr(task_manager, "_simple_lora_trainer", manager)
+    monkeypatch.setattr(database, "_lora_trainer", manager, raising=False)
     task_id = await manager.start_training("held", dataset, config)
     runner = manager._runner_tasks[task_id]
     await started.wait()
-    stopping = asyncio.create_task(task_manager.shutdown_simple_lora_trainer())
+    stopping = asyncio.create_task(task_manager.shutdown_simple_lora_trainer(database))
     try:
         async with asyncio.timeout(1):
             while not manager._cancel_events[task_id].is_set():
@@ -191,5 +191,5 @@ async def test_cancelled_shutdown_keeps_live_owner_until_the_same_worker_finishe
         release.set()
         await asyncio.gather(runner, return_exceptions=True)
         await manager.shutdown(timeout=1)
-    await task_manager.shutdown_simple_lora_trainer()
-    assert task_manager._simple_lora_trainer is None
+    await task_manager.shutdown_simple_lora_trainer(database)
+    assert database._lora_trainer is None

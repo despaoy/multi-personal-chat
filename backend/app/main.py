@@ -184,7 +184,7 @@ async def lifespan(app: FastAPI):
         # Drain accepted work before closing its scheduler and database dependencies.
         resources = (
             ("评估任务", "evaluation.runtime_runner", "shutdown_generation_evaluations"),
-            ("LoRA 训练任务", "training.task_manager", "shutdown_simple_lora_trainer"),
+            ("LoRA 训练任务", "training.task_manager", "shutdown_simple_lora_trainer", database),
             ("RAG 意图任务", "api.knowledge", "shutdown_intent_tasks"),
             ("推理调度器", container.inference_runtime, "shutdown"),
             ("交付记忆任务", "services.delivery_memory", "shutdown_delivery_memory", database),

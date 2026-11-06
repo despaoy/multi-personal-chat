@@ -21,11 +21,12 @@ def test_training_shutdown_tracks_tasks_and_preserves_interrupted_state(
     async def scenario():
         started = asyncio.Event()
 
-        async def wait_forever(task_id, lora_name, dataset_path, config):
+        async def wait_for_stop(task_id, lora_name, dataset_path, config):
             started.set()
-            await asyncio.Event().wait()
+            while not trainer._cancel_events[task_id].is_set():
+                await asyncio.sleep(0)
 
-        monkeypatch.setattr(trainer, "_run_training", wait_forever)
+        monkeypatch.setattr(trainer, "_run_training", wait_for_stop)
         task_id = await trainer.start_training(
             "test-adapter",
             tmp_path / "dataset",
@@ -34,7 +35,7 @@ def test_training_shutdown_tracks_tasks_and_preserves_interrupted_state(
         await asyncio.wait_for(started.wait(), timeout=1)
 
         assert task_id in trainer._runner_tasks
-        await trainer.shutdown(timeout=0)
+        await trainer.shutdown(timeout=1)
 
         status = await trainer.get_task_status(task_id)
         assert status is not None
@@ -44,14 +45,6 @@ def test_training_shutdown_tracks_tasks_and_preserves_interrupted_state(
     asyncio.run(scenario())
 
 
-def test_global_training_shutdown_releases_singleton(monkeypatch, tmp_path):
-    monkeypatch.setenv("LORA_PATH", str(tmp_path / "loras"))
-    trainer = task_manager.SimpleLoRATrainer(base_dir=tmp_path)
-    monkeypatch.setattr(task_manager, "_simple_lora_trainer", trainer)
-
-    asyncio.run(task_manager.shutdown_simple_lora_trainer())
-
-    assert task_manager._simple_lora_trainer is None
 
 
 def test_dataset_directory_prefers_training_jsonl_over_metadata(monkeypatch, tmp_path):
