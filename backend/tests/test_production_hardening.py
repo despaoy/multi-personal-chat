@@ -274,51 +274,6 @@ async def test_vllm_runtime_lora_load_uses_official_endpoint(monkeypatch):
     ]
 
 
-@pytest.mark.asyncio
-async def test_lora_status_is_not_changed_when_runtime_load_fails(monkeypatch):
-    from api import loras
-
-    class FakeDb:
-        def __init__(self):
-            self.updated = False
-
-        def get_loras(self):
-            return [{"id": "1", "name": "minamo_lora", "status": "inactive"}]
-
-        def update_lora_status(self, lora_id, status):
-            self.updated = True
-            return {"id": lora_id, "name": "minamo_lora", "status": status}
-
-
-    class FailingClient:
-        async def load_lora_adapter(self, name, path):
-            raise RuntimeError("load failed")
-
-    async def fake_get_client():
-        return FailingClient()
-
-    class FakeChecker:
-        def __init__(self, **kwargs):
-            pass
-
-        def check_adapter(self, name):
-            return type(
-                "Report",
-                (),
-                {"compatible": True, "errors": [], "warnings": [], "base_model_mismatch": False},
-            )()
-
-    fake_db = FakeDb()
-    database = fake_db
-    monkeypatch.setattr(loras, "AdapterChecker", FakeChecker)
-    monkeypatch.setattr(loras, "_resolve_vllm_adapter_path", lambda name: "/loras/minamo")
-    monkeypatch.setattr(loras, "get_vllm_client", fake_get_client)
-
-    with pytest.raises(HTTPException) as exc:
-        await loras.update_lora_status("1", 'active', {"user_id": 1}, database=database)
-
-    assert exc.value.status_code == 502
-    assert fake_db.updated is False
 
 
 @pytest.mark.asyncio
@@ -669,69 +624,6 @@ async def test_active_lora_is_unloaded_before_registration_delete(monkeypatch):
     assert events == [("unload", "kisaki_lora"), ("delete", "1")]
 
 
-@pytest.mark.asyncio
-async def test_active_lora_delete_keeps_registration_when_unload_fails(monkeypatch):
-    from api import loras
-
-    class FakeDb:
-        deleted = False
-
-        def get_loras(self):
-            return [{"id": "1", "name": "kisaki_lora", "status": "active"}]
-
-        def delete_lora(self, lora_id):
-            self.deleted = True
-            return True
-
-    class Client:
-        async def unload_lora_adapter(self, name):
-            raise RuntimeError("vLLM unavailable")
-
-    async def get_client():
-        return Client()
-
-    fake_db = FakeDb()
-    database = fake_db
-    monkeypatch.setattr(loras, "_resolve_vllm_adapter_path", lambda name: f"/loras/{name}")
-    monkeypatch.setattr(loras, "get_vllm_client", get_client)
-
-    with pytest.raises(HTTPException) as exc_info:
-        await loras.delete_lora("1", current_user={"role": "admin"}, database=database)
-
-    assert exc_info.value.status_code == 502
-    assert fake_db.deleted is False
-@pytest.mark.asyncio
-async def test_lora_deactivation_keeps_database_active_when_unload_fails(monkeypatch):
-    from api import loras
-
-    class FakeDb:
-        updated = False
-
-        def get_loras(self):
-            return [{"id": "1", "name": "kisaki_lora", "status": "active"}]
-
-        def update_lora_status(self, lora_id, status):
-            self.updated = True
-            return {"id": lora_id, "name": "kisaki_lora", "status": status}
-
-
-    class Client:
-        async def unload_lora_adapter(self, name):
-            raise RuntimeError("vLLM unavailable")
-
-    async def get_client():
-        return Client()
-
-    fake_db = FakeDb()
-    database = fake_db
-    monkeypatch.setattr(loras, "_resolve_vllm_adapter_path", lambda name: f"/loras/{name}")
-    monkeypatch.setattr(loras, "get_vllm_client", get_client)
-
-    with pytest.raises(HTTPException) as exc_info:
-        await loras.update_lora_status("1", 'inactive', {"role": "admin"}, database=database)
-
-    assert exc_info.value.status_code == 502
-    assert fake_db.updated is False
 @pytest.mark.asyncio
 async def test_lora_switch_rolls_back_runtime_when_database_update_fails(monkeypatch):
     from api import loras

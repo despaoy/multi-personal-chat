@@ -7,9 +7,13 @@
 import inspect
 import logging
 import os
+import sqlite3
 import sys
+import traceback
 from collections.abc import Mapping
 from pathlib import Path
+
+from sqlalchemy.exc import SQLAlchemyError
 
 # 确保 backend 根目录在 Python 路径中，支持跨包导入
 _BACKEND_ROOT = Path(__file__).parent.parent
@@ -346,9 +350,25 @@ async def global_exception_handler(request: Request, exc: Exception):
     if isinstance(exc, (ProviderResponseError, InputBudgetError, UsageRecordingError)):
         detail = exc.public_detail()
         logger.warning("Request failed: %s upstream_status=%s", detail["kind"], detail.get("upstreamStatus"))
-        return JSONResponse(status_code=exc.http_status, content={
-            "success": False, "error": detail["kind"], **detail,
-        })
+        return JSONResponse(
+            status_code=exc.http_status,
+            content={
+                "success": False,
+                "error": detail["kind"],
+                **detail,
+            },
+        )
+    if isinstance(exc, (sqlite3.Error, SQLAlchemyError)):
+        frames = [(frame.filename, frame.lineno, frame.name) for frame in traceback.extract_tb(exc.__traceback__)]
+        logger.error("数据库请求失败: %s frames=%s", type(exc).__name__, frames)
+        return JSONResponse(
+            status_code=500,
+            content={
+                "success": False,
+                "error": "database_error",
+                "message": "数据库操作失败，请检查连接及存储状态",
+            },
+        )
     logger.error("请求异常: %s", type(exc).__name__)
     return JSONResponse(
         status_code=500,
@@ -374,7 +394,8 @@ def create_app(container: RuntimeContainer | None = None) -> FastAPI:
     application.state.runtime_container = runtime_container
     application.state.readiness_probe = ReadinessProbe(
         database_check=lambda: get_runtime_container(application).db.execute_sql("SELECT 1"),
-        model_check=runtime_container.model_check or (lambda: check_model_readiness(runtime_container.db, http_client_pool=runtime_container.http_client_pool)),
+        model_check=runtime_container.model_check
+        or (lambda: check_model_readiness(runtime_container.db, http_client_pool=runtime_container.http_client_pool)),
         model_required=True,
     )
     _install_middleware(application, runtime_container.startup_env)
@@ -384,7 +405,16 @@ def create_app(container: RuntimeContainer | None = None) -> FastAPI:
     application.add_api_route("/", root, methods=["GET"])
     application.add_api_route("/health", health_check, methods=["GET"])
     application.add_api_route("/ready", readiness_check, methods=["GET"])
-    for error_type in (NarrativeError, ProviderResponseError, InputBudgetError, UsageRecordingError, Exception):
+    for error_type in (
+        NarrativeError,
+        ProviderResponseError,
+        InputBudgetError,
+        UsageRecordingError,
+        sqlite3.Error,
+        SQLAlchemyError,
+        OSError,
+        Exception,
+    ):
         application.add_exception_handler(error_type, global_exception_handler)
     return application
 

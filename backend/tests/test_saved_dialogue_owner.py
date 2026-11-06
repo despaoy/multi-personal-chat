@@ -47,6 +47,7 @@ def client(database):
         return await global_exception_handler(request, error)
 
     app.add_exception_handler(Exception, observe)
+    app.add_exception_handler(OSError, observe)
     token = create_access_token("saved-owner", 1, "admin")
     return httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app, raise_app_exceptions=False),

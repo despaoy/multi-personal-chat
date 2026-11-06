@@ -64,9 +64,6 @@ async def rig(tmp_path, monkeypatch):
 
     getter = AsyncMock(return_value=SimpleNamespace(load_lora_adapter=load, unload_lora_adapter=unload))
     monkeypatch.setattr(loras, "get_vllm_client", getter, raising=False)
-    from api import generate
-
-    monkeypatch.setattr(generate, "get_vllm_client", getter)
     clients = []
     for store in stores:
         app = FastAPI()
@@ -218,4 +215,54 @@ async def test_switch_unload_fault_restores_previous_adapter_before_reporting_fa
     assert rig.events == [("unload", "old-adapter"), ("load", "old-adapter")]
     assert rig.stores[0].get_loras() == before
     update.assert_not_called()
+    rig.forbidden.assert_not_called()
+
+
+@pytest.mark.parametrize("operation", ["activate", "deactivate", "delete"])
+async def test_complete_client_failure_keeps_registration_and_restores_runtime(rig, monkeypatch, operation):
+    before = rig.stores[0].get_loras()
+    failure = RuntimeError("synthetic-primary-lora-fault")
+
+    async def load(name, path):
+        rig.events.append(("load", name))
+        if operation == "activate" and name == "candidate-adapter":
+            raise failure
+
+    async def unload(name):
+        rig.events.append(("unload", name))
+        if operation != "activate":
+            raise failure
+
+    monkeypatch.setattr(
+        loras,
+        "get_vllm_client",
+        AsyncMock(return_value=SimpleNamespace(load_lora_adapter=load, unload_lora_adapter=unload)),
+    )
+    update = Mock(wraps=rig.stores[0].update_lora_status)
+    delete = Mock(wraps=rig.stores[0].delete_lora)
+    monkeypatch.setattr(rig.stores[0], "update_lora_status", update)
+    monkeypatch.setattr(rig.stores[0], "delete_lora", delete)
+    if operation == "delete":
+        response = await rig.clients[0].delete("/api/loras/1")
+    else:
+        identifier, status = ("2", "active") if operation == "activate" else ("1", "inactive")
+        response = await rig.clients[0].put(f"/api/loras/{identifier}/status", json={"status": status})
+    assert response.status_code == 502
+    assert isinstance(response.json()["detail"], str), "complete compensation must not become an unknown-runtime error"
+    assert "synthetic-primary-lora-fault" not in response.text
+    assert rig.stores[0].get_loras() == before
+    update.assert_not_called()
+    delete.assert_not_called()
+    expected = (
+        [
+            ("unload", "old-adapter"),
+            ("load", "candidate-adapter"),
+            ("unload", "candidate-adapter"),
+            ("load", "old-adapter"),
+        ]
+        if operation == "activate"
+        else [("unload", "old-adapter"), ("load", "old-adapter")]
+    )
+    assert rig.events == expected
+    assert (rig.root / "old-adapter/adapter_model.safetensors").is_file()
     rig.forbidden.assert_not_called()
