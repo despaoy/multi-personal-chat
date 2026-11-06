@@ -1490,23 +1490,15 @@ class SQLiteDB:
         return config_dict.get(key, default)
 
     def update_config(self, new_config: Dict):
-        """更新配置"""
-        conn = self._get_connection()
-        cursor = conn.cursor()
-
-        for key, value in new_config.items():
-            # 转换为字符串存储
-            if isinstance(value, bool):
-                value_str = str(value).lower()
-            else:
-                value_str = str(value)
-
-            cursor.execute('''
-                INSERT OR REPLACE INTO config (key, value)
-                VALUES (?, ?)
-            ''', (key, value_str))
-
-        conn.commit()
+        """Commit the complete batch, or roll it back before releasing the connection."""
+        values = [
+            (key, str(value).lower() if isinstance(value, bool) else str(value))
+            for key, value in new_config.items()
+        ]
+        with self._get_connection() as connection:
+            connection.executemany(
+                "INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)", values
+            )
 
     # SyncPgAdapter 通过 set_config 别名对齐 PG 端方法名
     set_config = update_config

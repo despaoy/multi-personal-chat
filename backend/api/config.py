@@ -26,6 +26,10 @@ _SERVER_ONLY_CONFIG_KEYS = frozenset(
 _SERVER_ONLY_CONFIG_KEYS_NORMALIZED = frozenset(key.lower() for key in _SERVER_ONLY_CONFIG_KEYS)
 
 
+def _is_sensitive_key(key: str) -> bool:
+    return key != "maxTokens" and any(word in key.lower() for word in _SENSITIVE_KEYWORDS)
+
+
 def _mask_value(value: str) -> str:
     """对敏感值脱敏：长度>8显示前4+****+后4，否则整体替换为****"""
     if not value:
@@ -41,7 +45,7 @@ def _mask_config(config: dict) -> dict:
     for k, v in config.items():
         if str(k).lower() in _SERVER_ONLY_CONFIG_KEYS_NORMALIZED:
             continue
-        if k != "maxTokens" and any(s in k.lower() for s in _SENSITIVE_KEYWORDS) and v:
+        if _is_sensitive_key(k) and v:
             masked[k] = _mask_value(str(v))
         else:
             masked[k] = v
@@ -100,7 +104,9 @@ async def update_config(
             },
         ) from exc
     # 过滤掉含脱敏标记的未修改字段（前端回传的脱敏值不应覆盖真实凭证）
-    new_config = {k: v for k, v in new_config.items() if not (isinstance(v, str) and _MASK_MARKER in v)}
+    new_config = {
+        k: v for k, v in new_config.items() if not (_is_sensitive_key(k) and isinstance(v, str) and _MASK_MARKER in v)
+    }
     new_config.update(numeric_updates)
     # 输入验证 - 逐字段验证键值对
     for key, value in new_config.items():
@@ -108,22 +114,53 @@ async def update_config(
         is_valid, errors = InputValidator.validate(entry, CONFIG_SCHEMA)
         if not is_valid:
             raise HTTPException(status_code=422, detail={"message": f"配置项 '{key}' 验证失败", "errors": errors})
-    progress = {"stage": "config_persistence", "configPersisted": None}
-    try:
-        await run_db(database.update_config, new_config)
-        progress["configPersisted"] = True
-        progress["stage"] = "config_cache"
-        await run_db(invalidate_config_cache)
-        compat_keys = {"openaiCompatBaseUrl", "openaiCompatApiKey", "openaiCompatModel"}
-        if compat_keys & new_config.keys():
-            progress["stage"] = "runtime_config"
-            from inference.model_manager import ModelProvider, get_model_manager
+    provider = _requested_provider(new_config["modelProvider"], 422) if "modelProvider" in new_config else None
+    saved_config, _ = await _save_settings(new_config, database=database, provider=provider)
+    return {"success": True, "message": "配置已更新", "config": _mask_config(saved_config)}
 
-            provider = get_model_manager(database=database)._providers[ModelProvider.OPENAI_COMPAT]
-            await run_db(provider._refresh_db_config)
+
+def _requested_provider(value, status_code):
+    from inference.model_manager import validate_provider
+
+    try:
+        return validate_provider(value)
+    except ValueError as exc:
+        raise HTTPException(status_code, "提供商名称无效，或当前环境不允许使用该提供商") from exc
+
+
+async def _save_settings(updates, *, database, provider=None):
+    """Persist once, then publish the selected runtime and confirm saved settings."""
+    from inference.model_manager import ModelProvider, get_model_manager
+
+    progress = {"stage": "config_persistence", "configPersisted": None}
+    if provider is not None:
+        progress["providerSwitched"] = False
+    try:
+        await run_db(database.update_config, updates)
+        progress.update(stage="config_cache", configPersisted=True)
+        await run_db(invalidate_config_cache)
+        manager = None
+        if provider is not None:
+            progress["stage"] = "provider_selection"
+            manager = get_model_manager(database=database)
+            progress["providerSwitched"] = None
+            manager.set_provider(provider)
+            progress["providerSwitched"] = True
+        if (
+            provider == ModelProvider.OPENAI_COMPAT
+            or {"openaiCompatBaseUrl", "openaiCompatApiKey", "openaiCompatModel"} & updates.keys()
+        ):
+            progress["stage"] = "runtime_config"
+            if manager is None:
+                manager = get_model_manager(database=database)
+            await run_db(manager._providers[ModelProvider.OPENAI_COMPAT]._refresh_db_config)
         progress["stage"] = "config_readback"
-        saved_config = await run_db(lambda: database.config)
-        return {"success": True, "message": "配置已更新", "config": _mask_config(saved_config)}
+        saved_config, _ = await run_db(read_config, database)
+        status = None
+        if provider is not None:
+            progress["stage"] = "model_status"
+            status = await run_db(manager.get_status)
+        return saved_config, status
     except Exception as exc:
         raise HTTPException(
             503,
@@ -156,47 +193,9 @@ async def set_model_provider(
     request: Request, current_user: dict = Depends(get_current_admin), *, database=Depends(get_request_database)
 ):
     """设置提供商；失败时报告已确认和未确认的操作状态。"""
-    progress = {"stage": "request", "providerSwitched": False, "configPersisted": False}
-    try:
-        from inference.model_manager import ModelProvider, get_model_manager
-
-        body = await _request_json(request)
-        if not isinstance(body, dict):
-            raise HTTPException(400, "请求必须是包含 provider 的对象")
-        provider_name = body.get("provider")
-        try:
-            provider = ModelProvider(provider_name)
-        except ValueError as exc:
-            raise HTTPException(400, "提供商名称无效，或当前环境不允许使用该提供商") from exc
-
-        progress["stage"] = "provider_selection"
-        model_manager = get_model_manager(database=database)
-        progress["providerSwitched"] = None
-        try:
-            model_manager.set_provider(provider)
-        except ValueError as exc:
-            raise HTTPException(400, "提供商名称无效，或当前环境不允许使用该提供商") from exc
-        progress["providerSwitched"] = True
-
-        progress.update(stage="config_persistence", configPersisted=None)
-        await run_db(database.update_config, {"modelProvider": provider_name})
-        progress["configPersisted"] = True
-        progress["stage"] = "config_cache"
-        await run_db(invalidate_config_cache)
-        if provider == ModelProvider.OPENAI_COMPAT:
-            progress["stage"] = "runtime_config"
-            compat_provider = model_manager.get_current_provider()
-            await run_db(compat_provider._refresh_db_config)
-        progress["stage"] = "model_status"
-        status = await run_db(model_manager.get_status)
-        return {"success": True, "message": f"已切换到提供商: {provider_name}", "status": status}
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise HTTPException(
-            503,
-            detail={
-                **progress,
-                "message": "模型提供商设置未完整完成，请核对当前模型状态与已保存配置后重试。结果未确认时，请勿假定配置未变更。",
-            },
-        ) from exc
+    body = await _request_json(request)
+    if not isinstance(body, dict):
+        raise HTTPException(400, "请求必须是包含 provider 的对象")
+    provider = _requested_provider(body.get("provider"), 400)
+    _, status = await _save_settings({"modelProvider": provider.value}, database=database, provider=provider)
+    return {"success": True, "message": f"已切换到提供商: {provider.value}", "status": status}

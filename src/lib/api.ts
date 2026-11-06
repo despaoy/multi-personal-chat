@@ -1218,18 +1218,6 @@ class ApiClient {
   }
 
   /**
-   * 切换模型提供商（admin 端点）
-   * H1/H2 fix: 此前 settings/page.tsx 使用裸 fetch 调用，不处理 401 重定向。
-   * 现统一通过 api 助手调用，确保 token 过期时自动跳转登录页。
-   */
-  async setModelProvider(provider: string): Promise<{ success: boolean; provider: string }> {
-    return this.request<{ success: boolean; provider: string }>('/model/provider', {
-      method: 'PUT',
-      body: JSON.stringify({ provider }),
-    });
-  }
-
-  /**
    * 获取 vLLM 连接状态
    * H1 fix: 此前 settings/page.tsx 使用裸 fetch 调用，既不检查 response.ok
    * 也不处理 401 重定向。现统一通过 api 助手调用。

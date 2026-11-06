@@ -67,25 +67,12 @@ function SettingsContent() {
       const result = await api.updateConfig(config);
       if (result.success) {
         setConfig(result.config);
-        // 如果模型提供商变更，同步切换后端提供商
-        if (config.modelProvider) {
-          try {
-            // H2 fix: 此前使用裸 fetch，不处理 401 重定向。
-            // 现通过 api 助手调用，token 过期时自动跳转登录页。
-            await api.setModelProvider(String(config.modelProvider));
-          } catch (err) {
-            // 提供商切换失败不阻塞保存，但必须告知用户
-            toast.warning(
-              `配置已保存，但模型提供商切换失败：${err instanceof Error ? err.message : '未知错误'}`
-            );
-          }
-        }
         // 立即刷新全局设置，使语言/时区变更即时生效
         syncSettings(result.config);
         toast.success(t('settings.saved'));
       }
     } catch (err) {
-      toast.error(t('settings.saveFailed'));
+      toast.error(err instanceof Error ? err.message : t('settings.saveFailed'));
       console.error('Failed to save config:', err);
     } finally {
       setSaving(false);

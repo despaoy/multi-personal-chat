@@ -31,12 +31,13 @@ def rig(monkeypatch):
     def save(update):
         state.saved.update(update)
     manager = SimpleNamespace(set_provider=Mock(side_effect=select), get_status=Mock(side_effect=status), get_current_provider=Mock(return_value=SimpleNamespace(_refresh_db_config=refresh)))
+    manager._providers = {model_manager.ModelProvider.OPENAI_COMPAT: manager.get_current_provider.return_value}
     state.manager, state.refresh = (manager, refresh)
     state.acquire = Mock(return_value=manager)
     state.save = Mock(side_effect=save)
     state.invalidate = Mock()
     monkeypatch.setattr(model_manager, 'get_model_manager', state.acquire)
-    state.database = SimpleNamespace(update_config=state.save)
+    state.database = SimpleNamespace(update_config=state.save, config=state.saved)
     monkeypatch.setattr(config, 'invalidate_config_cache', state.invalidate)
     return state
 
@@ -86,9 +87,9 @@ async def test_malformed_json_is_a_request_error(rig):
 
 
 @pytest.mark.asyncio
-async def test_disallowed_provider_does_not_persist_or_select_another_provider(rig):
+async def test_disallowed_provider_does_not_persist_or_select_another_provider(rig, monkeypatch):
     failure = ValueError('synthetic-private-disallowed')
-    rig.manager.set_provider.side_effect = failure
+    monkeypatch.setattr(model_manager, "validate_provider", Mock(side_effect=failure))
     with pytest.raises(HTTPException) as caught:
         await config.set_model_provider(request({'provider': 'mock'}), current_user={'role': 'admin'}, database=rig.database)
     assert caught.value.status_code == 400 and caught.value.__cause__ is failure
@@ -98,7 +99,7 @@ async def test_disallowed_provider_does_not_persist_or_select_another_provider(r
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('stage,switched,persisted', [('acquire', False, False), ('selection', None, False), ('persistence', True, None), ('cache', True, True), ('refresh', True, True), ('status', True, True)])
+@pytest.mark.parametrize('stage,switched,persisted', [('acquire', False, True), ('selection', None, True), ('persistence', False, None), ('cache', False, True), ('refresh', True, True), ('status', True, True)])
 async def test_faults_report_confirmed_and_unconfirmed_partial_state(rig, caplog, stage, switched, persisted):
     failure = OSError('synthetic-private-operation-details')
     operations = {'acquire': rig.acquire, 'selection': rig.manager.set_provider, 'persistence': rig.save, 'cache': rig.invalidate, 'refresh': rig.refresh, 'status': rig.manager.get_status}
@@ -111,10 +112,10 @@ async def test_faults_report_confirmed_and_unconfirmed_partial_state(rig, caplog
     assert error.detail['stage'] == expected_stage
     assert error.detail['providerSwitched'] is switched and error.detail['configPersisted'] is persisted
     assert 'synthetic-private' not in str(error.detail) + caplog.text
-    assert rig.manager.set_provider.call_count == int(stage != 'acquire')
-    assert rig.selected == ('vllm' if stage in {'acquire', 'selection'} else 'openai_compat')
+    assert rig.manager.set_provider.call_count == int(stage not in {'acquire', 'persistence', 'cache'})
+    assert rig.selected == ('vllm' if stage in {'acquire', 'selection', 'persistence', 'cache'} else 'openai_compat')
     assert bool(rig.saved) == (persisted is True)
-    if stage in {'acquire', 'selection', 'persistence'}:
+    if stage == 'persistence':
         rig.invalidate.assert_not_called()
     if stage not in {'refresh', 'status'}:
         rig.refresh.assert_not_called()
@@ -131,9 +132,10 @@ async def test_persistence_acknowledgement_failure_is_not_claimed_as_unchanged(r
     with pytest.raises(HTTPException) as caught:
         await config.set_model_provider(request({'provider': 'ollama'}), current_user={'role': 'admin'}, database=rig.database)
     assert caught.value.detail['configPersisted'] is None
-    assert rig.saved == {'modelProvider': 'ollama'} and rig.selected == 'ollama'
+    assert rig.saved == {'modelProvider': 'ollama'} and rig.selected == 'vllm'
+    assert caught.value.detail['providerSwitched'] is False
     assert caught.value.__cause__ is failure
-    rig.manager.set_provider.assert_called_once()
+    rig.manager.set_provider.assert_not_called()
 
 
 @pytest.mark.asyncio
@@ -160,5 +162,5 @@ async def test_http_partial_failure_preserves_503_and_safe_state(rig):
         response = await client.put('/api/model/provider', json={'provider': 'ollama'})
     assert response.status_code == 503
     detail = response.json()['detail']
-    assert detail['providerSwitched'] and detail['configPersisted'] is None
+    assert detail['providerSwitched'] is False and detail['configPersisted'] is None
     assert 'synthetic-private' not in response.text
