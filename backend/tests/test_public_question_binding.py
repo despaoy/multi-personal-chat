@@ -208,3 +208,43 @@ async def test_complete_object_views_cannot_be_trimmed_or_rebound():
     complete = await resolve_question_binding(deps, query, window_tokens=65536, reviewer=scope, with_retrieval_scope=True)
     with pytest.raises(QuestionBindingCapacityError, match="Complete object view set"):
         bound_object_search_views(complete, query)
+
+
+@pytest.mark.parametrize("history", [False, True])
+async def test_named_mention_keeps_literal_name_and_user_origin_without_rewriting(history):
+    query = "请核对这份资料的开放时段，保留雨天例外。" if history else "请根据《虚构青屿档案馆志愿者资料》核对开放时段，保留雨天例外。"
+    history_rows = [{"role": "user", "content": "接下来只查《虚构青屿档案馆志愿者资料》，不要换成其他馆的资料。"}] if history else []
+    deps = parse_dependencies(dict(private_memory=[], public_knowledge=[0], current_input=[], control=[], unresolved_source=[]), query)
+    async def reviewer(messages):
+        assert "实际名称原文" in messages[0]["content"]
+        return open_scope_response(messages, [dict(task_id=0, objects=[dict(name="虚构青屿档案馆志愿者资料", mention="《虚构青屿档案馆志愿者资料》")])])
+    receipt = await resolve_question_binding(deps, query, window_tokens=65536, reviewer=reviewer, with_retrieval_scope=True, history=history_rows)
+    scopes = validate_question_binding(receipt, receipt["input"])
+    obj = scopes["objects"][0]
+    assert obj["query_text"] == "虚构青屿档案馆志愿者资料"
+    assert (obj.get("reference_origin") is not None) is history
+    assert receipt["input"]["query"] == query
+    assert json.loads(receipt["raw"])["scopes"][0]["objects"][0]["mention"] == "《虚构青屿档案馆志愿者资料》"
+
+
+@pytest.mark.parametrize("defect", ["other-name", "invented-mention", "assistant-only", "extra-field"])
+async def test_named_mention_cannot_invent_or_borrow_another_literal_origin(defect):
+    from knowledge.public_question_binding import QuestionBindingReviewError
+    query = "请根据《虚构青屿档案馆志愿者资料》核对押金，预约不能免除原件要求。"
+    deps = parse_dependencies(dict(private_memory=[], public_knowledge=[0], current_input=[], control=[], unresolved_source=[]), query)
+    item = dict(name="虚构青屿档案馆志愿者资料", mention="《虚构青屿档案馆志愿者资料》")
+    history = []
+    if defect == "other-name":
+        item["name"] = "晴湾档案馆"
+    elif defect == "invented-mention":
+        item["mention"] = "《虚构青屿档案馆志愿者资料新版》"
+    elif defect == "assistant-only":
+        item = dict(name="晴湾档案馆", mention="《晴湾档案馆》")
+        history = [dict(role="assistant", content="我猜是《晴湾档案馆》。")]
+    else:
+        item["authority"] = "trusted"
+    async def reviewer(messages):
+        return open_scope_response(messages, [dict(task_id=0, objects=[item])])
+    with pytest.raises(QuestionBindingReviewError) as caught:
+        await resolve_question_binding(deps, query, window_tokens=65536, reviewer=reviewer, with_retrieval_scope=True, history=history)
+    assert caught.value.reason == "invalid_or_incomplete_review"
