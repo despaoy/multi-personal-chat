@@ -41,7 +41,7 @@ class _FailingInsertDatabase:
 
 def _evaluation_client(database) -> TestClient:
     app = FastAPI()
-    app.state.runtime_container = RuntimeContainer(db=database, is_pg_mode=lambda: False, startup_env={})
+    app.state.runtime_container = RuntimeContainer(db=database, is_pg_mode=lambda: False, startup_env={}, http_client_pool=object())
     app.include_router(evaluation_api.router)
     app.dependency_overrides[get_current_admin] = lambda: {
         "user_id": 1,
@@ -72,7 +72,7 @@ def test_evaluation_shutdown_cancels_and_joins_tasks(monkeypatch):
         runtime_runner._evaluation_tasks.clear()
         started = asyncio.Event()
 
-        async def wait_forever(run_id, options, database):
+        async def wait_forever(run_id, options, database, *, http_client_pool=None):
             started.set()
             await asyncio.Event().wait()
 
@@ -81,7 +81,7 @@ def test_evaluation_shutdown_cancels_and_joins_tasks(monkeypatch):
             "execute_generation_evaluation",
             wait_forever,
         )
-        task = runtime_runner.schedule_generation_evaluation("eval_test", {}, object())
+        task = runtime_runner.schedule_generation_evaluation("eval_test", EvalRunRequest(), object())
         await asyncio.wait_for(started.wait(), timeout=1)
 
         assert task in runtime_runner._evaluation_tasks

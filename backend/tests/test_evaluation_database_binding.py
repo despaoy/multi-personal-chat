@@ -41,7 +41,7 @@ def stores(tmp_path, monkeypatch):
 
 def client(database):
     app = FastAPI()
-    app.state.runtime_container = RuntimeContainer(db=database, is_pg_mode=lambda: False, startup_env={})
+    app.state.runtime_container = RuntimeContainer(db=database, is_pg_mode=lambda: False, startup_env={}, http_client_pool=object())
     app.include_router(evaluation.router)
     return httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='https://isolated',
         headers={'Authorization': 'Bearer ' + create_access_token('synthetic-admin', 1, 'admin')})
@@ -52,13 +52,13 @@ async def test_two_applications_own_records_feedback_and_queued_completion(store
     scheduled_stores = []
     schedule = runtime_runner.schedule_generation_evaluation
 
-    async def controlled_worker(run_id, options, database):
+    async def controlled_worker(run_id, options, database, *, http_client_pool=None):
         await asyncio.to_thread(runtime_runner._update_run, database, run_id,
             metrics={'controlled': True, 'mock': False}, total=1, breakdown={'complete': 1}, note='completed')
 
-    def tracked_schedule(run_id, options, database):
+    def tracked_schedule(run_id, options, database, *, http_client_pool=None):
         scheduled_stores.append(database)
-        task = schedule(run_id, options, database)
+        task = schedule(run_id, options, database, http_client_pool=http_client_pool)
         tasks.append(task)
         return task
 

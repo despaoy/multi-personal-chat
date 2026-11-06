@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Depends
-from app.dependencies import get_current_admin, get_current_user, get_request_database
+from app.dependencies import get_current_admin, get_current_user, get_request_database, get_request_http_client_pool
 from db.json_fields import read_json_object
 from db.schemas import EvalRunRequest, FeedbackCreate
 
@@ -31,7 +31,7 @@ async def get_gold_set(
         prompts = dataset["prompts"]
         if category:
             prompts = [p for p in prompts if p.get("category") == category]
-        if split and any("split" in item for item in prompts):
+        if split:
             prompts = [p for p in prompts if p.get("split", "eval") == split]
         categories = {}
         for p in prompts:
@@ -57,6 +57,7 @@ async def get_gold_set(
 async def run_evaluation(
     req: EvalRunRequest, current_user: dict = Depends(get_current_admin),
     database=Depends(get_request_database),
+    http_client_pool=Depends(get_request_http_client_pool),
 ):
     """Persist and queue one bounded evaluation run."""
     run_id = f"eval_{secrets.token_hex(8)}"
@@ -88,7 +89,7 @@ async def run_evaluation(
     from evaluation.runtime_runner import schedule_generation_evaluation
 
     try:
-        schedule_generation_evaluation(run_id, req.model_dump(), database)
+        schedule_generation_evaluation(run_id, req, database, http_client_pool=http_client_pool)
     except Exception as exc:
         logger.error("failed to schedule evaluation run=%s type=%s", run_id, type(exc).__name__)
         try:

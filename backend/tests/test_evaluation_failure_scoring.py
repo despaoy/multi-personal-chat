@@ -9,10 +9,23 @@ from types import SimpleNamespace
 
 import pytest
 
+from db.schemas import EvalRunRequest
+from inference.request_context import InferenceRequestContext
 from evaluation import runtime_runner
 from evaluation.generation_metrics import GenerationMetrics
 from evaluation.gold_set_manager import GoldSetManager
 from evaluation.persona_metrics import PersonaMetrics
+
+
+def _install_selected_local_provider(monkeypatch, get_client):
+    context = InferenceRequestContext("vllm", SimpleNamespace(model="synthetic-local"), len)
+
+    async def resolve(manager, *, http_client_pool=None):
+        return context
+
+    monkeypatch.setattr(runtime_runner, "get_model_manager", lambda *, database: object())
+    monkeypatch.setattr(runtime_runner, "resolve_request_context", resolve)
+    monkeypatch.setattr(runtime_runner, "get_enabled_vllm_client", get_client)
 
 
 def test_generation_failures_do_not_change_successful_metrics():
@@ -100,7 +113,7 @@ def test_runtime_aggregates_only_completed_samples(monkeypatch, all_fail):
             raise RuntimeError("synthetic failure")
         return SimpleNamespace(reply="hello world")
 
-    monkeypatch.setitem(sys.modules, "api.generate", SimpleNamespace(get_vllm_client=get_client))
+    _install_selected_local_provider(monkeypatch, get_client)
     monkeypatch.setitem(
         sys.modules,
         "inference.generation_request",
@@ -111,7 +124,7 @@ def test_runtime_aggregates_only_completed_samples(monkeypatch, all_fail):
     )
     writes = []
     database = SimpleNamespace(execute_sql=lambda query, params: writes.append(params))
-    asyncio.run(runtime_runner.execute_generation_evaluation("run", {}, database))
+    asyncio.run(runtime_runner.execute_generation_evaluation("run", EvalRunRequest(), database))
     result = json.loads(writes[-1]["metrics"])
     assert calls == ["good", "bad"]
     assert result["scored_responses"] == (0 if all_fail else 1)
@@ -160,7 +173,7 @@ def test_runtime_partial_multiturn_failure_keeps_evidence_unscored(monkeypatch):
             raise RuntimeError("second turn failed")
         return SimpleNamespace(reply="first reply")
 
-    monkeypatch.setitem(sys.modules, "api.generate", SimpleNamespace(get_vllm_client=get_client))
+    _install_selected_local_provider(monkeypatch, get_client)
     monkeypatch.setitem(
         sys.modules,
         "inference.generation_request",
@@ -171,7 +184,7 @@ def test_runtime_partial_multiturn_failure_keeps_evidence_unscored(monkeypatch):
     )
     writes = []
     database = SimpleNamespace(execute_sql=lambda query, params: writes.append(params))
-    asyncio.run(runtime_runner.execute_generation_evaluation("run", {}, database))
+    asyncio.run(runtime_runner.execute_generation_evaluation("run", EvalRunRequest(), database))
     result = json.loads(writes[-1]["metrics"])
     assert result["scored_responses"] == 0
     assert result["generation_errors"] == 1
@@ -218,7 +231,7 @@ def test_runtime_blank_turn_stops_case_and_retains_only_completed_turns(monkeypa
         calls.append(request.message)
         return SimpleNamespace(reply=blank if request.message == blank_turn else "valid reply")
 
-    monkeypatch.setitem(sys.modules, "api.generate", SimpleNamespace(get_vllm_client=get_client))
+    _install_selected_local_provider(monkeypatch, get_client)
     monkeypatch.setitem(
         sys.modules,
         "inference.generation_request",
@@ -229,7 +242,7 @@ def test_runtime_blank_turn_stops_case_and_retains_only_completed_turns(monkeypa
     )
     writes = []
     database = SimpleNamespace(execute_sql=lambda query, params: writes.append(params))
-    asyncio.run(runtime_runner.execute_generation_evaluation("run", {}, database))
+    asyncio.run(runtime_runner.execute_generation_evaluation("run", EvalRunRequest(), database))
     result = json.loads(writes[-1]["metrics"])
     assert calls == (["first"] if blank_turn == "first" else ["first", "second"])
     assert result["scored_responses"] == 0
