@@ -19,7 +19,7 @@ class ProviderContextBudget:
     evidence_max_chars: int = 6000
 
 
-def get_provider_context_budget(manager=None, *, env=None):
+def get_provider_context_budget(manager=None, *, database=None, env=None):
     """An explicit cloud working window never changes local serving limits.
 
     Without a configured cloud allowance use 8192, not an assumed theoretical
@@ -32,7 +32,7 @@ def get_provider_context_budget(manager=None, *, env=None):
         if manager is None:
             from inference.model_manager import get_model_manager
 
-            manager = get_model_manager()
+            manager = get_model_manager(database=database)
         selected = manager._current_provider.value
     else:
         selected = context.provider_name

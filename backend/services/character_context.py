@@ -583,7 +583,7 @@ def build_character_context_service(
     from character.semantic_review_adapter import create_default_semantic_review_runtime
     from inference.provider_context import get_provider_context_budget
 
-    budget = get_provider_context_budget() if context_budget is None else context_budget
+    budget = get_provider_context_budget(database=database) if context_budget is None else context_budget
     semantic_runtime = create_default_semantic_review_runtime()
     contextual_policy = create_contextual_policy(context_budget=budget.review)
 
@@ -632,7 +632,7 @@ def get_character_context_service(database) -> CharacterContextService:
     """Reuse this database's service while the selected request budget is unchanged."""
     from inference.provider_context import get_provider_context_budget
 
-    budget = get_provider_context_budget()
+    budget = get_provider_context_budget(database=database)
     cached = getattr(database, "_character_context_service", None)
     if cached is None or cached[0] != budget:
         cached = (budget, build_character_context_service(database, context_budget=budget))

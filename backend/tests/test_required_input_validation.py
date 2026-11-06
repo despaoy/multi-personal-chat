@@ -60,7 +60,7 @@ else:
 async def test_accepted_message_cannot_change_before_context_model_or_archive(monkeypatch):
     from test_turn_completion_admission import generation_environment
 
-    _gen, runtime, request, prepare, generation, storage = generation_environment(monkeypatch, "openai_compat")
+    _gen, runtime, request, prepare, generation, storage, _database = generation_environment(monkeypatch, "openai_compat")
     original = request.message
     with pytest.raises(ValidationError) as raised:
         request.message = ""

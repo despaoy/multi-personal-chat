@@ -177,3 +177,45 @@ def test_concurrent_resolution_reuses_one_manager_per_database(stores, monkeypat
     monkeypatch.setattr(adapter, "db", database)
     assert model_manager.get_model_manager() is owners[0]
     stores.forbidden.assert_not_called()
+
+
+@pytest.mark.parametrize('factory', ['build_character_context_service', 'get_character_context_service'])
+async def test_standalone_context_budget_and_saved_history_follow_the_database(stores, monkeypatch, factory):
+    from services import character_context
+    from services.character_context import TurnInput
+
+    from character.models import UserScope
+
+    monkeypatch.delenv('MODEL_PROVIDER', raising=False)
+    monkeypatch.setattr(default_database, '_model_manager', None, raising=False)
+    monkeypatch.setenv('OPENAI_COMPAT_CONTEXT_WINDOW_TOKENS', '65536')
+    monkeypatch.setenv('VLLM_MAX_MODEL_LEN', '8192')
+    for name in ['CONTEXTUAL_MEMORY_SELECTION_ENABLED', 'CONTEXTUAL_DECISION_POLICY_ENABLED',
+                 'DYNAMIC_CONTEXT_SEMANTIC_REVIEW_ENABLED', 'MEMORY_SOURCE_RECALL_ENABLED']:
+        monkeypatch.setenv(name, 'false')
+    scope = UserScope('web', 'context-owner', 'synthetic-owner', 'synthetic-session', 'private')
+    role = 'synthetic-context-owner'
+    history = [
+        {'role': 'user', 'content': '虚构档案背景。' * 3000 + '末尾限定：未获批准，暴雨取消；预约不豁免。'},
+        {'role': 'assistant', 'content': '确认这是虚构档案，不是用户本人的经历。'},
+        {'role': 'user', 'content': '请核对档案中的批准状态、取消条件和例外。'},
+        {'role': 'assistant', 'content': '仅核对原始资料，不补写批准或豁免。'},
+    ]
+    from inference.request_context import get_request_context
+    assert get_request_context() is None
+    for database, provider in zip(stores.databases, ['vllm', 'openai_compat']):
+        database.update_config({'modelProvider': provider})
+        for index in range(0, len(history), 2):
+            database.add_message(dict(platform=scope.platform, adapter=scope.adapter,
+                senderId=scope.sender_id, userId=scope.sender_id, conversationId=scope.conversation_id,
+                sessionId=scope.conversation_id, conversationType='private', sessionType='private',
+                characterId=role, sourceMessageId=f'fiction-history-{index}',
+                message=history[index]['content'], reply=history[index + 1]['content']))
+        service = getattr(character_context, factory)(database)
+        observed = await service._load_history(TurnInput(
+            '核对完整档案', scope.platform, scope.adapter, scope.sender_id, scope.conversation_id, 'private'
+        ), scope, role)
+        assert observed == (history[2:] if provider == 'vllm' else history)
+        assert service._history_max_chars == (16000 if provider == 'vllm' else 65536)
+    stores.forbidden.assert_not_called()
+    assert not stores.calls
