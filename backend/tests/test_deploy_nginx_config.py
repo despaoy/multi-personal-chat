@@ -185,11 +185,13 @@ def test_compose_startup_waits_for_real_services_and_propagates_failure(tmp_path
     calls = tmp_path / "calls"
     env = {**os.environ, "PATH": f"{tmp_path}:{os.environ['PATH']}", "DOCKER_CALLS": str(calls)}
     command = functions + f'\nDEPLOY_DIR="{tmp_path}"\nMODEL_PATH="{tmp_path}"\nNGINX_PORT=80\nstart_docker\n'
-    result = subprocess.run(["bash", "-c", command], env=env, capture_output=True, text=True)
+    harness = tmp_path / "start_fixture.sh"
+    harness.write_text(command, encoding="utf-8")
+    result = subprocess.run(["bash", str(harness)], env=env, capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
     assert "compose up -d --wait --wait-timeout 300" in calls.read_text()
     assert "inspect" not in calls.read_text()
     calls.unlink()
-    failed = subprocess.run(["bash", "-c", command], env={**env, "DOCKER_RESULT": "17"}, capture_output=True, text=True)
+    failed = subprocess.run(["bash", str(harness)], env={**env, "DOCKER_RESULT": "17"}, capture_output=True, text=True)
     assert failed.returncode == 17
     assert calls.read_text().splitlines() == ["compose up -d --wait --wait-timeout 300"]
