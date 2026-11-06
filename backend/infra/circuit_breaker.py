@@ -55,8 +55,7 @@ class CircuitBreaker:
     """Reject OPEN work and bound concurrent HALF_OPEN recovery probes.
 
     Successful operations return their actual result; failed operations keep
-    their original exception. State callbacks are observational, so callback
-    failures are logged without replacing an operation's outcome.
+    their original exception.
     """
 
     def __init__(
@@ -65,9 +64,6 @@ class CircuitBreaker:
         failure_threshold: int = 5,
         recovery_timeout: float = 30.0,
         half_open_max_calls: int = 3,
-        on_open: Callable[[CircuitBreaker], None] | None = None,
-        on_close: Callable[[CircuitBreaker], None] | None = None,
-        on_half_open: Callable[[CircuitBreaker], None] | None = None,
     ) -> None:
         if type(failure_threshold) is not int or failure_threshold < 1:
             raise ValueError("failure_threshold must be a positive integer")
@@ -79,9 +75,6 @@ class CircuitBreaker:
         self.failure_threshold = failure_threshold
         self.recovery_timeout = recovery_timeout
         self.half_open_max_calls = half_open_max_calls
-        self.on_open = on_open
-        self.on_close = on_close
-        self.on_half_open = on_half_open
         self._state = CircuitState.CLOSED
         self._failure_count = 0
         self._half_open_calls = 0
@@ -126,16 +119,6 @@ class CircuitBreaker:
             return
         self._stats.last_state_change_time = time.monotonic()
         logger.info("Circuit [%s] %s -> %s", self.name, previous.value, state.value)
-        callback = {
-            CircuitState.OPEN: self.on_open,
-            CircuitState.CLOSED: self.on_close,
-            CircuitState.HALF_OPEN: self.on_half_open,
-        }[state]
-        if callback is not None:
-            try:
-                callback(self)
-            except Exception as exc:
-                logger.error("Circuit [%s] state callback failed: %s", self.name, type(exc).__name__)
 
     async def _record(self, success: bool, generation: int | None = None, *, probe: bool = False) -> None:
         async with self._get_lock():
@@ -239,9 +222,6 @@ class CircuitBreakerRegistry:
         failure_threshold: int = 5,
         recovery_timeout: float = 30.0,
         half_open_max_calls: int = 3,
-        on_open: Callable[[CircuitBreaker], None] | None = None,
-        on_close: Callable[[CircuitBreaker], None] | None = None,
-        on_half_open: Callable[[CircuitBreaker], None] | None = None,
     ) -> CircuitBreaker:
         async with self._get_lock():
             if name not in self._breakers:
@@ -250,9 +230,6 @@ class CircuitBreakerRegistry:
                     failure_threshold=failure_threshold,
                     recovery_timeout=recovery_timeout,
                     half_open_max_calls=half_open_max_calls,
-                    on_open=on_open,
-                    on_close=on_close,
-                    on_half_open=on_half_open,
                 )
             return self._breakers[name]
 
