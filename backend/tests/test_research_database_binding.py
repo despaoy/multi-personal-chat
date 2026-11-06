@@ -6,10 +6,10 @@ from unittest.mock import Mock
 
 import httpx
 import pytest
-from fastapi import FastAPI
 
 from api import preferences, retrieval_eval
 from app.config import create_access_token
+from app.main import create_app
 from app.runtime import RuntimeContainer
 from db.database import SQLiteDB
 
@@ -60,10 +60,8 @@ def stores(tmp_path, monkeypatch):
 
 
 def client(database):
-    app = FastAPI()
-    app.state.runtime_container = RuntimeContainer(db=database, is_pg_mode=lambda: False, startup_env={})
-    app.include_router(preferences.router)
-    app.include_router(retrieval_eval.router)
+    app = create_app(RuntimeContainer(db=database, is_pg_mode=lambda: False,
+        startup_env={'ENVIRONMENT': 'test'}, model_check=lambda: {'loaded': True}))
     token = create_access_token('synthetic-owner', 1, 'admin')
     return httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='https://isolated',
                              headers={'Authorization': 'Bearer ' + token})
@@ -158,13 +156,82 @@ async def test_absent_optional_preference_objects_and_genuine_empty_results(stor
 
 
 async def test_preference_write_failure_keeps_cause_without_logging_content(stores, monkeypatch, caplog):
-    from fastapi import HTTPException
-    from db.schemas import PreferencePairCreate
+    from unittest.mock import AsyncMock
+
+    from app import main
 
     database = stores.databases[0]
     error = OSError('synthetic-private-preference-content')
     monkeypatch.setattr(database, 'execute_sql_insert', Mock(side_effect=error))
-    with pytest.raises(HTTPException) as caught:
-        await preferences.create_preference(PreferencePairCreate(**pair('complete')), current_user={'role': 'admin'}, database=database)
-    assert caught.value.status_code == 500 and caught.value.__cause__ is error
+    handled = AsyncMock(wraps=main.global_exception_handler)
+    monkeypatch.setattr(main, 'global_exception_handler', handled)
+    async with client(database) as api:
+        response = await api.post('/api/preferences/', json=pair('complete'))
+    assert response.status_code == 500 and handled.await_args.args[1] is error
     assert 'OSError' in caplog.text and str(error) not in caplog.text
+
+
+@pytest.mark.parametrize('operation', ['list', 'create', 'update', 'delete', 'export', 'sample'])
+async def test_preference_store_fault_uses_shared_handler_and_recovers(stores, monkeypatch, caplog, operation):
+    import sqlite3
+    from unittest.mock import AsyncMock
+
+    from app.main import create_app, global_exception_handler
+
+    database = stores.databases[0]
+    app = create_app(RuntimeContainer(db=database, is_pg_mode=lambda: False,
+        startup_env={'ENVIRONMENT': 'test'}, model_check=lambda: {'loaded': True}))
+    handled = AsyncMock(wraps=global_exception_handler)
+    app.add_exception_handler(sqlite3.Error, handled)
+    marker = 'synthetic_private_preference_store_fault'
+    original = database.execute_sql
+    faults = []
+    operations = {
+        'list': ('execute_sql', 'GET', '/api/preferences/', None),
+        'create': ('execute_sql_insert', 'POST', '/api/preferences/', pair('new-complete')),
+        'update': ('execute_sql', 'PUT', '/api/preferences/shared', {'annotator': 'updated-reviewer'}),
+        'delete': ('execute_sql', 'DELETE', '/api/preferences/shared', None),
+        'export': ('execute_sql', 'POST', '/api/preferences/export', {'review_status': 'approved', 'limit': 10}),
+        'sample': ('execute_sql', 'POST', '/api/preferences/sample-from-history',
+                   {'session_id': 'fixture-session', 'limit': 1, 'min_length': 10}),
+    }
+    method, verb, url, body = operations[operation]
+
+    def fail(*args, **kwargs):
+        try:
+            return original('SELECT ' + marker)
+        except sqlite3.Error as exc:
+            faults.append(exc)
+            raise
+
+    def snapshot():
+        return {table: original('SELECT * FROM ' + table) for table in ['preference_pairs', 'messages']}
+
+    before = snapshot()
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='https://isolated',
+        headers={'Authorization': 'Bearer ' + create_access_token('synthetic-owner', 1, 'admin')}) as api:
+        with monkeypatch.context() as patch:
+            patch.setattr(database, method, fail)
+            failed = await api.request(verb, url, json=body)
+            assert failed.status_code == 500 and failed.json()['success'] is False
+            assert failed.json()['error'] == 'database_error'
+            assert handled.await_args.args[1] is faults[-1]
+            assert marker not in failed.text and marker not in caplog.text
+            assert snapshot() == before
+        repaired = await api.request(verb, url, json=body)
+        assert repaired.status_code == 200 and repaired.json()['success'] is True
+        result = repaired.json()
+        if operation == 'create':
+            assert original('SELECT prompt FROM preference_pairs WHERE id=:id',
+                {'id': result['id']})[0]['prompt'] == prompt('new-complete')
+        elif operation == 'update':
+            assert original("SELECT annotator FROM preference_pairs WHERE id='shared'")[0]['annotator'] == 'updated-reviewer'
+        elif operation == 'delete':
+            assert original("SELECT * FROM preference_pairs WHERE id='shared'") == []
+        elif operation == 'export':
+            assert result['count'] == 1 and result['data'][0]['prompt'] == prompt('0')
+        elif operation == 'sample':
+            assert result['total'] == 1 and result['candidates'][0]['trace_id'] == 'owner-0'
+        else:
+            assert result['total'] == 1 and result['preferences'][0]['metadata'] == {'owner': '0'}
+    stores.forbidden.assert_not_called()

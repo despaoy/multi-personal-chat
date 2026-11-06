@@ -54,7 +54,7 @@ async def list_preferences(
                 "created_at": r["created_at"],
             })
         return {"success": True, "preferences": pairs, "total": total, "limit": limit, "offset": offset}
-    except Exception as e:
+    except ValueError as e:
         logger.error("列出偏好对失败: %s", type(e).__name__)
         raise HTTPException(status_code=500, detail="偏好数据操作失败") from e
 
@@ -65,24 +65,20 @@ async def create_preference(
 ):
     """创建偏好对"""
     pid = f"pref_{secrets.token_hex(8)}"
-    try:
-        await asyncio.to_thread(
-            database.execute_sql_insert,
-            "INSERT INTO preference_pairs (id, prompt, chosen, rejected, rubric, annotator, metadata, review_status, created_at) "
-            "VALUES (:id, :prompt, :chosen, :rejected, :rubric, :annotator, :metadata, :review_status, :created_at)",
-            {
-                "id": pid, "prompt": req.prompt, "chosen": req.chosen,
-                "rejected": req.rejected,
-                "rubric": json.dumps(req.rubric or {}, ensure_ascii=False),
-                "annotator": req.annotator,
-                "metadata": json.dumps(req.metadata or {}, ensure_ascii=False),
-                "review_status": req.review_status, "created_at": _now(),
-            },
-        )
-        return {"success": True, "id": pid}
-    except Exception as e:
-        logger.error("创建偏好对失败: %s", type(e).__name__)
-        raise HTTPException(status_code=500, detail="偏好数据操作失败") from e
+    await asyncio.to_thread(
+        database.execute_sql_insert,
+        "INSERT INTO preference_pairs (id, prompt, chosen, rejected, rubric, annotator, metadata, review_status, created_at) "
+        "VALUES (:id, :prompt, :chosen, :rejected, :rubric, :annotator, :metadata, :review_status, :created_at)",
+        {
+            "id": pid, "prompt": req.prompt, "chosen": req.chosen,
+            "rejected": req.rejected,
+            "rubric": json.dumps(req.rubric or {}, ensure_ascii=False),
+            "annotator": req.annotator,
+            "metadata": json.dumps(req.metadata or {}, ensure_ascii=False),
+            "review_status": req.review_status, "created_at": _now(),
+        },
+    )
+    return {"success": True, "id": pid}
 
 
 @router.put("/api/preferences/{pid}")
@@ -91,34 +87,28 @@ async def update_preference(
     database=Depends(get_request_database),
 ):
     """更新偏好对（审核状态变更等）"""
-    try:
-        updates = []
-        params: dict = {}
-        if req.review_status is not None:
-            updates.append("review_status=:review_status")
-            params["review_status"] = req.review_status
-        if req.rubric is not None:
-            updates.append("rubric=:rubric")
-            params["rubric"] = json.dumps(req.rubric, ensure_ascii=False)
-        if req.annotator is not None:
-            updates.append("annotator=:annotator")
-            params["annotator"] = req.annotator
-        if not updates:
-            return {"success": True, "id": pid, "note": "no fields to update"}
-        params["id"] = pid
-        updated = await asyncio.to_thread(
-            database.execute_sql,
-            f"UPDATE preference_pairs SET {', '.join(updates)} WHERE id=:id",
-            params,
-        )
-        if not updated:
-            raise HTTPException(status_code=404, detail="偏好对不存在")
-        return {"success": True, "id": pid}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error("更新偏好对失败: %s", type(e).__name__)
-        raise HTTPException(status_code=500, detail="偏好数据操作失败") from e
+    updates = []
+    params: dict = {}
+    if req.review_status is not None:
+        updates.append("review_status=:review_status")
+        params["review_status"] = req.review_status
+    if req.rubric is not None:
+        updates.append("rubric=:rubric")
+        params["rubric"] = json.dumps(req.rubric, ensure_ascii=False)
+    if req.annotator is not None:
+        updates.append("annotator=:annotator")
+        params["annotator"] = req.annotator
+    if not updates:
+        return {"success": True, "id": pid, "note": "no fields to update"}
+    params["id"] = pid
+    updated = await asyncio.to_thread(
+        database.execute_sql,
+        f"UPDATE preference_pairs SET {', '.join(updates)} WHERE id=:id",
+        params,
+    )
+    if not updated:
+        raise HTTPException(status_code=404, detail="偏好对不存在")
+    return {"success": True, "id": pid}
 
 
 @router.delete("/api/preferences/{pid}")
@@ -126,20 +116,14 @@ async def delete_preference(
     pid: str, current_user: dict = Depends(get_current_admin), database=Depends(get_request_database),
 ):
     """删除偏好对"""
-    try:
-        deleted = await asyncio.to_thread(
-            database.execute_sql,
-            "DELETE FROM preference_pairs WHERE id=:id",
-            {"id": pid},
-        )
-        if not deleted:
-            raise HTTPException(status_code=404, detail="偏好对不存在")
-        return {"success": True}
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error("删除偏好对失败: %s", type(e).__name__)
-        raise HTTPException(status_code=500, detail="偏好数据操作失败") from e
+    deleted = await asyncio.to_thread(
+        database.execute_sql,
+        "DELETE FROM preference_pairs WHERE id=:id",
+        {"id": pid},
+    )
+    if not deleted:
+        raise HTTPException(status_code=404, detail="偏好对不存在")
+    return {"success": True}
 
 
 @router.post("/api/preferences/export")
@@ -162,7 +146,7 @@ async def export_preferences(
                 "rubric": read_json_object(r["rubric"], "rubric"),
             })
         return {"success": True, "format": req.format, "count": len(pairs), "data": pairs}
-    except Exception as e:
+    except ValueError as e:
         logger.error("导出偏好对失败: %s", type(e).__name__)
         raise HTTPException(status_code=500, detail="偏好数据操作失败") from e
 
@@ -173,26 +157,22 @@ async def sample_from_history(
     database=Depends(get_request_database),
 ):
     """从消息历史采样候选偏好对（待人工标注）"""
-    try:
-        session_filter = ' AND "sessionId"=:sid' if req.session_id else ""
-        params = {"min_len": req.min_length, "lim": req.limit}
-        if req.session_id:
-            params["sid"] = req.session_id
-        rows = await asyncio.to_thread(
-            database.execute_sql,
-            'SELECT message, reply, "loraName", "traceId" FROM messages '
-            f'WHERE "branchId" IS NULL{session_filter} '
-            "AND reply != '' AND LENGTH(reply) >= :min_len ORDER BY RANDOM() LIMIT :lim",
-            params,
-        )
-        candidates = []
-        for r in rows:
-            candidates.append({
-                "prompt": r["message"], "response": r["reply"],
-                "lora_name": r["loraName"], "trace_id": r["traceId"],
-                "needs_annotation": True,
-            })
-        return {"success": True, "candidates": candidates, "total": len(candidates)}
-    except Exception as e:
-        logger.error("采样历史失败: %s", type(e).__name__)
-        raise HTTPException(status_code=500, detail="偏好数据操作失败") from e
+    session_filter = ' AND "sessionId"=:sid' if req.session_id else ""
+    params = {"min_len": req.min_length, "lim": req.limit}
+    if req.session_id:
+        params["sid"] = req.session_id
+    rows = await asyncio.to_thread(
+        database.execute_sql,
+        'SELECT message, reply, "loraName", "traceId" FROM messages '
+        f'WHERE "branchId" IS NULL{session_filter} '
+        "AND reply != '' AND LENGTH(reply) >= :min_len ORDER BY RANDOM() LIMIT :lim",
+        params,
+    )
+    candidates = []
+    for r in rows:
+        candidates.append({
+            "prompt": r["message"], "response": r["reply"],
+            "lora_name": r["loraName"], "trace_id": r["traceId"],
+            "needs_annotation": True,
+        })
+    return {"success": True, "candidates": candidates, "total": len(candidates)}

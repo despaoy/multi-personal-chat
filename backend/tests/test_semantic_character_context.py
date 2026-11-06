@@ -220,7 +220,9 @@ def test_production_service_factory_wires_the_environment_controlled_reviewer(mo
     monkeypatch.setenv("DYNAMIC_CONTEXT_SEMANTIC_REVIEW_ENABLED", "true")
     monkeypatch.setenv("DYNAMIC_CONTEXT_SEMANTIC_REVIEW_TIMEOUT_SECONDS", "1.75")
 
-    service = build_character_context_service(object())
+    from inference.provider_context import ProviderContextBudget
+
+    service = build_character_context_service(object(), context_budget=ProviderContextBudget(8192))
 
     assert service._semantic_estimator is not None
     assert service._semantic_estimator._reviewer is not None
@@ -301,9 +303,10 @@ async def test_manual_review_fixture_supports_current_preparation_contract():
 
 @pytest.mark.parametrize("diagnostic", ["increment", "log_event"])
 async def test_review_diagnostic_failure_reaches_api_with_original_cause(monkeypatch, diagnostic):
+    from fastapi import HTTPException
+
     from api import generate
     from db.schemas import MessageRequest
-    from fastapi import HTTPException
     from infra import observability
 
     failure = OSError("synthetic review diagnostic failure")
