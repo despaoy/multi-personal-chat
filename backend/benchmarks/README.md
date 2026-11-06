@@ -22,4 +22,6 @@ python -m benchmarks.vllm_benchmark
 
 旧 `auth_benchmark.py`、`inference_benchmark.py`、`concurrency_benchmark.py` 已删除，旧命令需要改为上述统一入口。原有健康检查、受保护 API、推理负载、并发阶梯及429／503统计继续提供；旧队列开关没有实现，旧缓存速度推断没有记录真实命中，不再作为评测能力或容量证据。
 
+统一入口原样发送`--message`，编号仅放入sessionId和traceId。推理模式复用正式GenerateResponse契约进行严格校验，只有非空完整响应且modelInvoked=true才计入成功；缓存或非模型回复明确计为未完成新推理，预热遇到此类结果会终止。它们可能是正常应用行为，但不能证明新的模型吞吐；需要新推理时，应在隔离部署显式准备相应缓存配置或有差异的完整工作负载，工具不会改写消息或修改服务配置。
+
 真实负载可能消耗模型配额或 GPU 资源，只对隔离测试部署显式运行。统一 HTTP 入口测量应用请求；直接 vLLM 入口测量配置服务的已完成回复，两者均不证明回答质量或生产容量。

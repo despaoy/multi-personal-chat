@@ -39,6 +39,8 @@ from typing import Any, Sequence
 
 import httpx
 
+from db.schemas import GenerateResponse
+
 
 DEFAULT_BASE_URL = "http://localhost"
 DEFAULT_CONCURRENCY_STEPS = {
@@ -410,18 +412,15 @@ async def _request_once(
 
     if success and require_inference_reply:
         try:
-            payload = response.json()
+            result = GenerateResponse.model_validate(response.json(), strict=True)
         except ValueError:
             success = False
-            error = "invalid inference JSON response"
+            error = "invalid inference response (expected GenerateResponse)"
         else:
-            reply = payload.get("reply") if isinstance(payload, dict) else None
-            if not isinstance(reply, str) or not reply.strip():
-                success = False
-                error = "inference response has no non-empty reply"
-            cost_time = payload.get("costTime") if isinstance(payload, dict) else None
-            if isinstance(cost_time, (int, float)):
-                server_cost_ms = float(cost_time) * 1000
+            success = result.modelInvoked
+            if not success:
+                error = "inference response did not invoke the model; cached or non-model output is not fresh inference"
+            server_cost_ms = result.costTime * 1000
 
     return RequestOutcome(
         success=success,
@@ -446,7 +445,7 @@ async def issue_scenario_request(
         raise BenchmarkConfigurationError(f"Unsupported mode: {scenario.mode}")
 
     payload: dict[str, Any] = {
-        "message": f"{scenario.message} [{request_id}]",
+        "message": scenario.message,
         "sessionType": "private",
         "sessionId": f"http-load:{request_id}",
         "traceId": request_id.replace(":", "-"),

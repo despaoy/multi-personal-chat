@@ -70,11 +70,12 @@ async def test_inference_step_reuses_client_and_assigns_unique_sessions():
     async def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.path == "/api/generate"
         body = json.loads(request.content)
+        assert body["message"] == ScenarioConfig(mode="inference").message
         session_ids.append(body["sessionId"])
         authorization_headers.append(request.headers.get("Authorization", ""))
         return httpx.Response(
             200,
-            json={"reply": "ok", "model": "test", "costTime": 0.01},
+            json={"reply": "ok", "model": "test", "costTime": 0.01, "modelInvoked": True},
         )
 
     transport = httpx.MockTransport(handler)
@@ -114,9 +115,7 @@ async def test_username_login_promotes_secure_cookie_to_bearer_on_shared_client(
             return httpx.Response(
                 200,
                 json={"success": True},
-                headers={
-                    "Set-Cookie": "access_token=login-jwt; Path=/; Secure; HttpOnly"
-                },
+                headers={"Set-Cookie": "access_token=login-jwt; Path=/; Secure; HttpOnly"},
             )
         if request.url.path == "/api/stats":
             api_calls += 1
@@ -206,3 +205,128 @@ def test_auth_validation_and_safe_default_entrypoint(monkeypatch):
         AuthConfig(bearer_token="jwt", api_key="key").validate()
     with pytest.raises(BenchmarkConfigurationError):
         AuthConfig(username="bench-user").validate()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "changes,error",
+    [
+        ({"modelInvoked": False, "warnings": ["cached_model_response"]}, "did not invoke"),
+        ({"modelInvoked": False, "model": "memory/lookup"}, "did not invoke"),
+        ({"modelInvoked": "true"}, "invalid inference"),
+        ({"model": None}, "invalid inference"),
+        ({"reply": "   "}, "invalid inference"),
+        ({"costTime": float("inf")}, "invalid inference"),
+    ],
+    ids=["cached", "non-model", "invalid-invocation", "invalid-model", "blank-reply", "invalid-cost"],
+)
+async def test_inference_statistics_require_complete_fresh_model_response(changes, error):
+    body = {"reply": "完整合成回复", "model": "synthetic-model", "costTime": 0.125, "modelInvoked": True}
+    body.update(changes)
+
+    def handler(request):
+        return httpx.Response(200, content=json.dumps(body), headers={"Content-Type": "application/json"})
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://localhost") as client:
+        result = await run_step(
+            client, ScenarioConfig(mode="inference"), concurrency=1, total_requests=1, run_id="truth"
+        )
+
+    assert result.success_count == 0 and result.other_failure_count == 1
+    assert result.success_rps == 0 and result.status_counts == {200: 1}
+    assert error in result.outcomes[0].error
+    assert Thresholds().evaluate(result)
+
+
+@pytest.mark.asyncio
+async def test_cached_warmup_stops_without_measured_load():
+    from benchmarks.http_load_benchmark import BenchmarkPreflightError, warm_up
+
+    calls = []
+
+    def handler(request):
+        calls.append(json.loads(request.content))
+        return httpx.Response(
+            200,
+            json={
+                "reply": "完整缓存回复",
+                "model": "synthetic-model",
+                "costTime": 0.01,
+                "modelInvoked": False,
+                "warnings": ["cached_model_response"],
+            },
+        )
+
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler), base_url="http://localhost") as client:
+        with pytest.raises(BenchmarkPreflightError, match="did not invoke"):
+            await warm_up(
+                client, ScenarioConfig(mode="inference", message="只报告绿筹码；不要统计红筹码。"), 3, "warmup"
+            )
+
+    assert len(calls) == 1
+    assert calls[0]["message"] == "只报告绿筹码；不要统计红筹码。"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("invoked,expected", [(True, 0), (False, 1)], ids=["fresh", "cached"])
+async def test_cli_result_reports_actual_invocation_and_preserves_input(monkeypatch, tmp_path, invoked, expected):
+    from benchmarks import http_load_benchmark as benchmark
+
+    real_client = httpx.AsyncClient
+    clients, messages = [], []
+    message = "桌上原有4枚绿筹码、2枚红筹码；移走1枚绿筹码后，只问绿筹码还剩几枚，不计算红筹码。"
+
+    def handler(request):
+        if request.url.path == "/health":
+            return httpx.Response(200, json={"status": "ok"})
+        assert request.url.path == "/api/generate"
+        assert request.headers["Authorization"] == "Bearer synthetic-benchmark-token"
+        messages.append(json.loads(request.content))
+        return httpx.Response(
+            200,
+            json={"reply": "还剩3枚绿筹码。", "model": "synthetic-model", "costTime": 0.125, "modelInvoked": invoked},
+        )
+
+    def factory(*args, **kwargs):
+        client = real_client(*args, **kwargs, transport=httpx.MockTransport(handler))
+        clients.append(client)
+        return client
+
+    monkeypatch.setattr(benchmark.httpx, "AsyncClient", factory)
+    for key in ("BENCH_API_KEY", "BENCH_USERNAME", "BENCH_PASSWORD", "BENCH_BEARER_TOKEN"):
+        monkeypatch.delenv(key, raising=False)
+    report = tmp_path / "report.json"
+    args = benchmark.build_parser().parse_args(
+        [
+            "--mode",
+            "inference",
+            "--url",
+            "http://localhost",
+            "--bearer-token",
+            "synthetic-benchmark-token",
+            "--warmup-requests",
+            "0",
+            "--concurrency-steps",
+            "1,2",
+            "--requests-per-step",
+            "2",
+            "--step-delay",
+            "0",
+            "--message",
+            message,
+            "--json-out",
+            str(report),
+        ]
+    )
+    code, results = await benchmark.run_benchmark(args)
+    payload = json.loads(report.read_text())
+
+    assert code == expected
+    assert [r.success_count for r in results] == [2 if invoked else 0] * 2
+    assert len(messages) == 4 and all(m["message"] == message for m in messages)
+    assert len({m["sessionId"] for m in messages}) == 4
+    assert len({m["traceId"] for m in messages}) == 4
+    assert len(clients) == 1 and clients[0].is_closed
+    assert [s["success"] for s in payload["steps"]] == [2 if invoked else 0] * 2
+    assert bool(payload["gate_failures"]) is (not invoked)
+    assert "synthetic-benchmark-token" not in report.read_text()
