@@ -104,6 +104,14 @@ def retrieve_domains(plan, query, top_k, *, curated, generic):
     }
 
 
+def public_review_input(payload):
+    """Transmit source authority without repeating its internal binding receipt."""
+    if "domain_plan" not in payload:
+        return payload
+    plan = payload["domain_plan"]
+    return {**payload, "domain_plan": {key: plan[key] for key in ("domain_id", "objects", "tasks", "mixed")}}
+
+
 def constrain_generic_sources(payload, plan):
     """A business source cannot certify a curated object with the same name."""
     validate_domain_plan(plan)

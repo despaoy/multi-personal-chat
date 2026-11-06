@@ -7,6 +7,7 @@ from functools import partial
 from inference.context_budget import CONTEXT_SAFETY_MARGIN_TOKENS, estimated_tokens
 from inference.json_decoding import load_unique_json
 from inference.review_client import review_context
+from knowledge.public_domains import public_review_input
 from knowledge.public_identity_dependencies import quote_admitted, validate_identity_receipt, verified_object_proof
 from knowledge.public_object_scope import scope_input_digest, validate_object_scopes
 
@@ -226,7 +227,7 @@ async def resolve_fact_scope(payload, scopes, reviewer, window_tokens):
 
 
 async def review_fact_evidence(payload, scopes, scoped, decisions, reviewer, window_tokens):
-    data = fact_input(payload, scoped, decisions)
+    data = public_review_input(fact_input(payload, scoped, decisions))
     digest = scope_input_digest(data)
     if validate_fact_scope(payload, scopes) is None:
         raise ValueError("Fact evidence review requires a completed question-first scope")
@@ -254,7 +255,7 @@ def settle_fact_coverage(retrieval, payload, scopes, scoped, decisions, receipt)
     if (
         not isinstance(receipt, dict)
         or set(receipt) != keys
-        or scope_input_digest(fact_input(payload, scoped, decisions)) != receipt["input_sha256"]
+        or scope_input_digest(public_review_input(fact_input(payload, scoped, decisions))) != receipt["input_sha256"]
     ):
         raise ValueError("Fact coverage discarded complete original review inputs")
     if (

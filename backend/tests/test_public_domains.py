@@ -373,3 +373,41 @@ async def test_actual_chat_branch_failure_stops_review_and_answer(config, monkey
         assert caught.value.__cause__ is error
     assert len(planning) == len(scopes) == 1 and not reviews and not answers
     assert installed.calls == (["curated"] if failed == "curated" else ["curated", "fresh", "generic"])
+
+
+async def test_fact_and_source_review_share_one_view_with_complete_receipt_and_history(config):
+    from test_public_fact_coverage import QUERY as query
+    from test_public_fact_coverage import TASK, bundle, deps, evidence_reply, obligations, scope_reply, source_reply
+
+    from knowledge.public_object_scope import scope_input_digest
+    history = [dict(role="user", content="接下来查柳港续租；预约不能免去原件，请保留完整条件。")]
+    async def objects(messages):
+        return open_scope_response(messages, [dict(task_id=TASK, objects=["柳港续租"])])
+    binding = await resolve_question_binding(deps(), query, window_tokens=65536, public_obligations=obligations(), history=history, reviewer=objects, with_retrieval_scope=True)
+    plan = domain_plan(binding, config)
+    expected_domain = {k:v for k,v in plan.items() if k != "binding"}
+    inputs = {}
+    async def source(messages):
+        data = json.loads(messages[-1]["content"])
+        inputs["source"] = data
+        assert data["domain_plan"] == expected_domain
+        assert data["object_scopes"]["reference_context"]["history"] == history
+        return json.dumps(source_reply())
+    async def facts(messages):
+        data = json.loads(messages[-1]["content"])
+        inputs["facts"] = data
+        assert data["domain_plan"] == expected_domain
+        assert data["object_scopes"]["reference_context"]["history"] == history
+        assert data["approved_decisions"] and data["aspect_allowed_sources"]
+        return json.dumps(evidence_reply())
+    async def fact_scope(messages):
+        return json.dumps(scope_reply())
+    result = await review_public_candidates({**bundle(), "generic_domain_plan":plan}, deps(), query, window_tokens=65536, public_obligations=obligations(), question_binding=binding, reviewer=source, fact_scope_reviewer=fact_scope, fact_reviewer=facts)
+    receipt = result["public_task_review"]
+    assert receipt["object_scope_input"]["domain_plan"] == plan
+    assert receipt["fact_review"]["input_sha256"] == scope_input_digest(inputs["facts"])
+    assert receipt["fact_review"]["review_status"] == "reviewed"
+    assert len(receipt["fact_review"]["assessments"]) == 4
+    assert all(item["evidence"] for item in receipt["fact_review"]["assessments"])
+    assert inputs["facts"]["sources"] == inputs["source"]["sources"]
+    assert binding["input"]["reference_context"]["history"] == history
