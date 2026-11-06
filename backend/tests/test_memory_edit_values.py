@@ -7,14 +7,15 @@ from types import SimpleNamespace
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from repositories.character_memory import DatabaseCharacterMemoryRepository, _decode_memory_record
 
 from api.characters import router
 from app.dependencies import get_current_admin
+from app.main import global_exception_handler
 from app.providers import get_character_memory_repository
 from character.memory_read_authority import MemoryRecordError
 from character.models import MemoryItem, build_user_scope
 from db.database import SQLiteDB
-from repositories.character_memory import DatabaseCharacterMemoryRepository, _decode_memory_record
 
 BODY = "我可能喜欢蓝莓茶，还没有确定；只有夜间休息时才考虑，出差时不适用。"
 QUALIFIERS = {"condition": "只有夜间休息时才考虑", "exception": "出差时不适用"}
@@ -26,6 +27,7 @@ def rig(tmp_path):
     repository = DatabaseCharacterMemoryRepository(database)
     scope = build_user_scope("web", "manual-values", "owner", "isolated-room", "private")
     app = FastAPI()
+    app.add_exception_handler(Exception, global_exception_handler)
     app.include_router(router)
     # Existing authorization behavior has its own tests; this fixture exercises
     # the actual route, repository, version transaction and source links.
@@ -36,7 +38,7 @@ def rig(tmp_path):
         for name in ("platform", "adapter", "sender_id", "conversation_id", "conversation_type")
     }
     try:
-        with TestClient(app) as client:
+        with TestClient(app, raise_server_exceptions=False) as client:
             yield SimpleNamespace(database=database, repo=repository, scope=scope, client=client, params=params)
     finally:
         database.close_connection()

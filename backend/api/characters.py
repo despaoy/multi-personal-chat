@@ -10,8 +10,6 @@ create_app(custom_container) 的多实例/测试注入不会串到全局数据�
 
 from __future__ import annotations
 
-import logging
-
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
@@ -22,7 +20,6 @@ from character.natural_relationship import CATEGORIES, NoteCommand, is_note, sav
 from character.profile_registry import get_default_profile_registry
 from repositories.character_memory import DatabaseCharacterMemoryRepository
 
-logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -94,11 +91,7 @@ def _build_scope(
 async def list_characters():
     """列出已注册的人物画像（不含完整画像内容）。"""
     registry = get_default_profile_registry()
-    try:
-        profiles = registry.list_profiles()
-    except Exception:
-        logger.error("加载人物画像列表失败", exc_info=True)
-        raise HTTPException(status_code=500, detail="加载人物画像失败") from None
+    profiles = registry.list_profiles()
     return {"success": True, "characters": list(profiles)}
 
 
@@ -119,11 +112,7 @@ async def get_character_relationship(
     user_scope = _build_scope(
         platform, adapter, sender_id, conversation_type, conversation_id
     )
-    try:
-        record = await repo.get_relationship_record(character_id, user_scope)
-    except Exception:
-        logger.error("查询角色关系失败 character=%s", character_id, exc_info=True)
-        raise HTTPException(status_code=500, detail="查询关系失败") from None
+    record = await repo.get_relationship_record(character_id, user_scope)
     if record is None:
         return {"success": True, "relationship": None}
     return {"success": True, "relationship": record}
@@ -147,19 +136,15 @@ async def update_character_relationship(
     user_scope = _build_scope(
         platform, adapter, sender_id, conversation_type, conversation_id
     )
-    try:
-        record = await repo.upsert_relationship(
-            character_id,
-            user_scope,
-            RelationshipState(
-                stage=request.stage,
-                preferred_address=request.preferred_address.strip(),
-                summary=request.summary.strip(),
-            ),
-        )
-    except Exception:
-        logger.error("更新角色关系失败 character=%s", character_id, exc_info=True)
-        raise HTTPException(status_code=500, detail="更新关系失败") from None
+    record = await repo.upsert_relationship(
+        character_id,
+        user_scope,
+        RelationshipState(
+            stage=request.stage,
+            preferred_address=request.preferred_address.strip(),
+            summary=request.summary.strip(),
+        ),
+    )
     return {"success": True, "relationship": record}
 
 
@@ -187,17 +172,13 @@ async def list_character_memories(
         "user_global", "user_character", "conversation"
     }:
         raise HTTPException(status_code=400, detail="scope_level 必须是 user_global、user_character 或 conversation")
-    try:
-        records = await repo.list_memory_records(
-            character_id,
-            user_scope,
-            limit=max(1, min(limit, 500)),
-            include_inactive=include_inactive,
-            scope_levels=(scope_level,) if scope_level else None,
-        )
-    except Exception:
-        logger.error("查询角色记忆失败 character=%s", character_id, exc_info=True)
-        raise HTTPException(status_code=500, detail="查询记忆失败") from None
+    records = await repo.list_memory_records(
+        character_id,
+        user_scope,
+        limit=max(1, min(limit, 500)),
+        include_inactive=include_inactive,
+        scope_levels=(scope_level,) if scope_level else None,
+    )
     return {"success": True, "memories": records}
 
 
@@ -220,49 +201,43 @@ async def update_character_memory(
     user_scope = _build_scope(
         platform, adapter, sender_id, conversation_type, conversation_id
     )
-    try:
-        target = await repo.get_memory_record(memory_id, character_id, user_scope)
-        if target is None:
-            raise HTTPException(status_code=404, detail="记忆不存在")
-        if not request.content.strip():
-            raise HTTPException(status_code=400, detail="内容不能为空")
-        if is_note(target) and target.get("status") not in {"active", "current"}:
-            raise HTTPException(status_code=409, detail="该备忘录已被更正，请刷新后编辑当前版本")
-        if request.resolved is not None and not is_note(target):
-            raise HTTPException(status_code=400, detail="只有关系备忘录支持结束状态")
-        record = await repo.append_claim(
-            character_id,
-            user_scope,
-            MemoryItem(
-                memory_id=str(memory_id),
-                memory_type=target["memory_type"],
-                content=request.content.strip(),
-                importance=request.importance,
-            ),
-            memory_key=target["memory_key"],
-            relation_type="SUPERSEDE",
-            scope_level=target["scope_level"],
-            parent_memory_id=memory_id,
-            supersedes_memory_id=memory_id,
-            evidence=tuple(target["evidence"]),
-            confidence=target["confidence"],
-            attributed_to=target["attributed_to"],
-            valid_from=target.get("valid_from"),
-            valid_to=target.get("valid_to"),
-            source_message_id=target.get("source_message_id"),
-            source_message_ids=tuple(target["source_message_ids"]),
-            metadata={
-                **target["metadata"],
-                "manual_correction": True,
-                "corrected_memory_id": memory_id,
-                **({"resolved": request.resolved} if request.resolved is not None else {}),
-            },
-        )
-    except HTTPException:
-        raise
-    except Exception:
-        logger.error("更新角色记忆失败 character=%s memory=%s", character_id, memory_id, exc_info=True)
-        raise HTTPException(status_code=500, detail="更新记忆失败") from None
+    target = await repo.get_memory_record(memory_id, character_id, user_scope)
+    if target is None:
+        raise HTTPException(status_code=404, detail="记忆不存在")
+    if not request.content.strip():
+        raise HTTPException(status_code=400, detail="内容不能为空")
+    if is_note(target) and target.get("status") not in {"active", "current"}:
+        raise HTTPException(status_code=409, detail="该备忘录已被更正，请刷新后编辑当前版本")
+    if request.resolved is not None and not is_note(target):
+        raise HTTPException(status_code=400, detail="只有关系备忘录支持结束状态")
+    record = await repo.append_claim(
+        character_id,
+        user_scope,
+        MemoryItem(
+            memory_id=str(memory_id),
+            memory_type=target["memory_type"],
+            content=request.content.strip(),
+            importance=request.importance,
+        ),
+        memory_key=target["memory_key"],
+        relation_type="SUPERSEDE",
+        scope_level=target["scope_level"],
+        parent_memory_id=memory_id,
+        supersedes_memory_id=memory_id,
+        evidence=tuple(target["evidence"]),
+        confidence=target["confidence"],
+        attributed_to=target["attributed_to"],
+        valid_from=target.get("valid_from"),
+        valid_to=target.get("valid_to"),
+        source_message_id=target.get("source_message_id"),
+        source_message_ids=tuple(target["source_message_ids"]),
+        metadata={
+            **target["metadata"],
+            "manual_correction": True,
+            "corrected_memory_id": memory_id,
+            **({"resolved": request.resolved} if request.resolved is not None else {}),
+        },
+    )
     return {"success": True, "memory": record}
 
 
@@ -284,20 +259,16 @@ async def delete_character_memory(
     user_scope = _build_scope(
         platform, adapter, sender_id, conversation_type, conversation_id
     )
-    try:
-        target = await repo.get_memory_record(memory_id, character_id, user_scope)
-        if target is not None and is_note(target):
-            deleted = await repo.erase_memory(
-                character_id, user_scope, memory_key=target["memory_key"],
-                scope_level=target.get("scope_level") or "conversation",
-            )
-        else:
-            deleted = await repo.erase_memory(
-                character_id, user_scope, memory_id=memory_id
-            )
-    except Exception:
-        logger.error("删除角色记忆失败 character=%s memory=%s", character_id, memory_id, exc_info=True)
-        raise HTTPException(status_code=500, detail="删除记忆失败") from None
+    target = await repo.get_memory_record(memory_id, character_id, user_scope)
+    if target is not None and is_note(target):
+        deleted = await repo.erase_memory(
+            character_id, user_scope, memory_key=target["memory_key"],
+            scope_level=target.get("scope_level") or "conversation",
+        )
+    else:
+        deleted = await repo.erase_memory(
+            character_id, user_scope, memory_id=memory_id
+        )
     if not deleted:
         raise HTTPException(status_code=404, detail="记忆不存在")
     return {"success": True, "deleted": deleted, "message": "记忆已物理删除"}
@@ -320,9 +291,5 @@ async def clear_character_memories(
     user_scope = _build_scope(
         platform, adapter, sender_id, conversation_type, conversation_id
     )
-    try:
-        deleted = await repo.clear_memories(character_id, user_scope)
-    except Exception:
-        logger.error("清空角色记忆失败 character=%s", character_id, exc_info=True)
-        raise HTTPException(status_code=500, detail="清空记忆失败") from None
+    deleted = await repo.clear_memories(character_id, user_scope)
     return {"success": True, "deleted": deleted, "message": f"已删除 {deleted} 条记忆"}
