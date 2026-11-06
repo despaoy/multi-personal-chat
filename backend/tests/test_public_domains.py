@@ -152,6 +152,7 @@ async def test_business_same_name_cannot_certify_curated_object_and_final_prompt
     async def reviewer(messages):
         payload = json.loads(messages[-1]["content"])
         assert payload["query"] == QUERY and payload["public_task_ids"] == [0, 1]
+        assert payload["domain_plan"] == {key: value for key, value in plan.items() if key != "binding"}
         return json.dumps(
             dict(
                 decisions=[
@@ -175,6 +176,8 @@ async def test_business_same_name_cannot_certify_curated_object_and_final_prompt
         result, deps, QUERY, window_tokens=65536, reviewer=reviewer, question_binding=binding
     )
     assert bundle["public_task_review"]["decisions"] == [dict(source_id="doc_1", task_ids=[1])]
+    assert bundle["public_task_review"]["object_scope_input"]["domain_plan"] == plan
+    assert bundle["public_domain_branches"]["plan"]["binding"] == binding
     retrieval = RetrievalResult(
         status="ok",
         evidence=bundle["context_text"],
