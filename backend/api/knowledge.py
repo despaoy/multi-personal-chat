@@ -848,12 +848,9 @@ async def generate_intent_samples(
 @router.get("/api/knowledge/train-intent/generate/status")
 async def get_generation_status(current_user: dict = Depends(get_current_admin)):
     """查询样本生成进度"""
-    try:
-        from knowledge.intent_trainer import get_generation_status as get_status
+    from knowledge.intent_trainer import get_generation_status as get_status
 
-        return {"success": True, "status": get_status()}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+    return {"success": True, "status": get_status()}
 
 
 def _intent_samples_error(exc: Exception) -> HTTPException:
@@ -952,46 +949,34 @@ async def train_intent_classifier(
 @router.get("/api/knowledge/train-intent/status")
 async def get_intent_training_status(current_user: dict = Depends(get_current_admin)):
     """查询训练进度"""
-    try:
-        from knowledge.intent_trainer import get_training_status
+    from knowledge.intent_trainer import get_training_status
 
-        return {"success": True, "status": get_training_status()}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+    return {"success": True, "status": get_training_status()}
 
 
 @router.post("/api/knowledge/train-intent/cancel")
 async def cancel_intent_training(current_user: dict = Depends(get_current_admin)):
     """取消训练/生成"""
-    try:
-        from knowledge.intent_trainer import cancel_training
+    from knowledge.intent_trainer import cancel_training
 
-        result = cancel_training()
-        return {"success": result, "message": "已发送取消请求" if result else "没有正在进行的任务"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+    result = cancel_training()
+    return {"success": result, "message": "已发送取消请求" if result else "没有正在进行的任务"}
 
 
 @router.get("/api/knowledge/train-intent/model")
 async def get_intent_model_info(current_user: dict = Depends(get_current_admin)):
     """获取当前模型信息"""
-    try:
-        from knowledge.intent_trainer import get_model_info
+    from knowledge.intent_trainer import get_model_info
 
-        return {"success": True, "model": get_model_info()}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+    return {"success": True, "model": get_model_info()}
 
 
 @router.get("/api/knowledge/train-intent/active-kbs")
 async def get_active_knowledge_bases(current_user: dict = Depends(get_current_admin)):
     """获取参与检索的知识库"""
-    try:
-        from knowledge.intent_trainer import get_active_knowledge_bases as get_kbs
+    from knowledge.intent_trainer import get_active_knowledge_bases as get_kbs
 
-        return {"success": True, "active_kbs": get_kbs()}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+    return {"success": True, "active_kbs": get_kbs()}
 
 
 @router.post("/api/knowledge/train-intent/active-kbs")
@@ -999,14 +984,9 @@ async def set_active_knowledge_bases(
     request: dict, current_user: dict = Depends(get_current_admin), *, database=Depends(get_request_database)
 ):
     """设置参与检索的知识库"""
-    try:
-        from knowledge.intent_trainer import set_active_knowledge_bases as set_kbs
+    from knowledge.intent_trainer import set_active_knowledge_bases as set_kbs
 
-        result = set_kbs(request.get("kb_ids", []), database=database)
-        if "error" in result:
-            raise HTTPException(status_code=400, detail=result["error"])
-        return {"success": True, "active_kbs": result.get("active_kbs", [])}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
+    result = set_kbs(request.get("kb_ids", []), database=database)
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return {"success": True, "active_kbs": result["active_kbs"]}

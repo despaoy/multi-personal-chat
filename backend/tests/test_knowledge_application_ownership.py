@@ -204,3 +204,55 @@ async def test_unready_retrieval_evaluation_index_is_an_error_then_recovers(stor
     result = await retrieval_eval.run_retrieval_eval(current_user={'role': 'admin'}, database=database)
     assert result['success'] and result['metrics']['avg_recall_at_k'] == 1.0
     stores.forbidden.assert_not_called()
+
+
+@pytest.mark.parametrize('operation', ['model-read', 'active-read', 'active-write'])
+async def test_intent_metadata_file_failure_uses_shared_error_protocol_then_recovers(stores, tmp_path, monkeypatch, caplog, operation):
+    import json
+
+    from app.main import create_app, global_exception_handler
+    from knowledge import intent_trainer
+
+    database = stores.databases[0]
+    base = database.get_knowledge_bases()[0]
+    marker = 'synthetic_private_intent_metadata_path'
+    directory = tmp_path / marker
+    directory.mkdir()
+    monkeypatch.setattr(intent_trainer, 'MODEL_DIR', directory)
+    # These endpoints read metadata; this does not claim trained/loaded weights.
+    metadata = dict(model_type='multiclass_logistic_regression', version='synthetic-complete',
+        label_names=['synthetic-class', 'none'], training_samples=12,
+        samples_per_class={'synthetic-class': 6, 'none': 6}, train_accuracy=1.0,
+        cv_accuracy_mean=0.9, trained_at='2026-11-06 00:00:00')
+    for name, payload in [('config.json', metadata), ('active_kbs.json', [base])]:
+        (directory / name).write_text(json.dumps(payload), encoding='utf-8')
+    app = create_app(RuntimeContainer(db=database, is_pg_mode=lambda: False,
+        startup_env={'ENVIRONMENT': 'test'}, model_check=lambda: {'loaded': True}))
+    handled = []
+
+    async def observe(request, error):
+        handled.append(error)
+        return await global_exception_handler(request, error)
+
+    app.add_exception_handler(OSError, observe)
+    path = directory / ('config.json' if operation == 'model-read' else 'active_kbs.json')
+    url = '/api/knowledge/train-intent/' + ('model' if operation == 'model-read' else 'active-kbs')
+    verb = 'POST' if operation == 'active-write' else 'GET'
+    body = {'kb_ids': [base['id']]} if operation == 'active-write' else None
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='https://isolated',
+        headers={'Authorization': 'Bearer ' + create_access_token('synthetic-admin', 1, 'admin')}) as api:
+        healthy = await api.request(verb, url, json=body)
+        assert healthy.status_code == 200 and healthy.json()['success'] is True
+        original = path.read_bytes()
+        path.unlink()
+        path.mkdir()
+        failed = await api.request(verb, url, json=body)
+        assert failed.status_code == 500 and failed.json()['success'] is False
+        assert failed.json()['error'] == 'Internal Server Error'
+        assert isinstance(handled[-1], IsADirectoryError) and handled[-1].filename == str(path)
+        assert marker not in failed.text and marker not in caplog.text
+        path.rmdir()
+        path.write_bytes(original)
+        repaired = await api.request(verb, url, json=body)
+        assert repaired.status_code == 200 and repaired.json() == healthy.json()
+    stores.forbidden.assert_not_called()
