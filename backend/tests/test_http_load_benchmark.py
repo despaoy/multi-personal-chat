@@ -330,3 +330,148 @@ async def test_cli_result_reports_actual_invocation_and_preserves_input(monkeypa
     assert [s["success"] for s in payload["steps"]] == [2 if invoked else 0] * 2
     assert bool(payload["gate_failures"]) is (not invoked)
     assert "synthetic-benchmark-token" not in report.read_text()
+
+
+@pytest.mark.asyncio
+async def test_workload_preserves_complete_group_requests_and_observed_models(monkeypatch, tmp_path):
+    from benchmarks import http_load_benchmark as benchmark
+
+    requests = [
+        {
+            "message": "盒中有4枚绿筹码、2枚红筹码。移走1枚绿筹码，只统计剩余绿筹码，不统计红筹码。",
+            "sessionType": "group",
+            "sessionId": "synthetic-group-a",
+            "userId": "synthetic-user-a",
+            "loraName": "synthetic-lora",
+            "history": [
+                {"role": "user", "content": "本题的盒子仅用于筹码计数。"},
+                {"role": "assistant", "content": "我会只按给定筹码计数。"},
+            ],
+        },
+        {
+            "message": "今天下午才改为喝温水，上午仍喝茶；只复述今天下午的选择，不推断长期偏好。",
+            "sessionType": "group",
+            "sessionId": "synthetic-group-b",
+            "userId": "synthetic-user-b",
+            "loraName": "default",
+        },
+    ]
+    source = tmp_path / "complete-workload.json"
+    source.write_text(json.dumps(requests, ensure_ascii=False), encoding="utf-8")
+    report = tmp_path / "report.json"
+    sent, clients = [], []
+    real_client = httpx.AsyncClient
+
+    def handler(request):
+        if request.url.path == "/health":
+            return httpx.Response(200, json={"status": "ok"})
+        assert request.headers["Authorization"] == "Bearer synthetic-workload-token"
+        assert request.url.path == "/api/generate"
+        body = json.loads(request.content)
+        sent.append(body)
+        return httpx.Response(
+            200,
+            json={
+                "reply": "完整合成回复。",
+                "model": "vllm/synthetic-" + body["loraName"],
+                "costTime": 0.125,
+                "modelInvoked": True,
+            },
+        )
+
+    def factory(*args, **kwargs):
+        client = real_client(*args, **kwargs, transport=httpx.MockTransport(handler))
+        clients.append(client)
+        return client
+
+    monkeypatch.setattr(benchmark.httpx, "AsyncClient", factory)
+    for key in ("BENCH_API_KEY", "BENCH_USERNAME", "BENCH_PASSWORD", "BENCH_BEARER_TOKEN"):
+        monkeypatch.delenv(key, raising=False)
+    args = benchmark.build_parser().parse_args(
+        [
+            "--mode",
+            "inference",
+            "--url",
+            "http://localhost",
+            "--bearer-token",
+            "synthetic-workload-token",
+            "--workload",
+            str(source),
+            "--warmup-requests",
+            "0",
+            "--concurrency-steps",
+            "1,2",
+            "--requests-per-step",
+            "4",
+            "--step-delay",
+            "0",
+            "--json-out",
+            str(report),
+        ]
+    )
+    code, results = await benchmark.run_benchmark(args)
+
+    assert code == 0 and [r.success_count for r in results] == [4, 4]
+    assert len(sent) == 8
+    for index, body in enumerate(sent):
+        original = requests[index % len(requests)]
+        assert {k: body[k] for k in original} == original
+    assert len({body["traceId"] for body in sent}) == 8
+    assert len(clients) == 1 and clients[0].is_closed
+    payload = json.loads(report.read_text())
+    assert [s["model_counts"] for s in payload["steps"]] == [
+        {"vllm/synthetic-synthetic-lora": 2, "vllm/synthetic-default": 2}
+    ] * 2
+    assert source.read_text(encoding="utf-8") == json.dumps(requests, ensure_ascii=False)
+    assert "synthetic-workload-token" not in report.read_text()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "content",
+    ["{", "[]", '[{"history": []}]', '[{"message": "   "}]'],
+    ids=["invalid-json", "empty", "missing-message", "blank-message"],
+)
+async def test_invalid_workload_stops_before_network(monkeypatch, tmp_path, capsys, content):
+    from benchmarks import http_load_benchmark as benchmark
+
+    source = tmp_path / "invalid-workload.json"
+    source.write_text(content, encoding="utf-8")
+
+    def no_client(*args, **kwargs):
+        raise AssertionError("invalid input must not allocate a client or send load")
+
+    monkeypatch.setattr(benchmark.httpx, "AsyncClient", no_client)
+    for key in ("BENCH_API_KEY", "BENCH_USERNAME", "BENCH_PASSWORD", "BENCH_BEARER_TOKEN"):
+        monkeypatch.delenv(key, raising=False)
+    assert (
+        await benchmark.async_main(
+            ["--mode", "inference", "--bearer-token", "synthetic-workload-token", "--workload", str(source)]
+        )
+        == 2
+    )
+    assert "workload" in capsys.readouterr().out.lower()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "options",
+    [["--mode", "api"], ["--mode", "inference", "--lora-name", "another-lora"]],
+    ids=["wrong-mode", "conflicting-lora"],
+)
+async def test_workload_configuration_has_one_source_before_network(monkeypatch, tmp_path, options):
+    from benchmarks import http_load_benchmark as benchmark
+
+    source = tmp_path / "valid-workload.json"
+    source.write_text('[{"message": "只回复已收到，不增加其他内容。", "loraName": "synthetic-lora"}]', encoding="utf-8")
+
+    def no_client(*args, **kwargs):
+        raise AssertionError("conflicting configuration must not create a client")
+
+    monkeypatch.setattr(benchmark.httpx, "AsyncClient", no_client)
+    for key in ("BENCH_API_KEY", "BENCH_USERNAME", "BENCH_PASSWORD", "BENCH_BEARER_TOKEN"):
+        monkeypatch.delenv(key, raising=False)
+    assert (
+        await benchmark.async_main([*options, "--bearer-token", "synthetic-workload-token", "--workload", str(source)])
+        == 2
+    )

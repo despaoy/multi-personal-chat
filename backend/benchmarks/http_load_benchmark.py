@@ -38,9 +38,9 @@ from pathlib import Path
 from typing import Any, Sequence
 
 import httpx
+from pydantic import TypeAdapter
 
-from db.schemas import GenerateResponse
-
+from db.schemas import GenerateResponse, MessageRequest
 
 DEFAULT_BASE_URL = "http://localhost"
 DEFAULT_CONCURRENCY_STEPS = {
@@ -97,6 +97,7 @@ class ScenarioConfig:
     api_path: str = "/api/stats"
     message: str = "请用一句话回复这条并发压测消息"
     lora_name: str = ""
+    workload: tuple[MessageRequest, ...] = ()
 
 
 @dataclass
@@ -107,6 +108,7 @@ class RequestOutcome:
     error: str = ""
     retry_after: str = ""
     server_cost_ms: float | None = None
+    model: str = ""
 
     @property
     def category(self) -> str:
@@ -239,6 +241,7 @@ class StepResult:
                 "p95": round(self.p95_ms, 3),
                 "p99": round(self.p99_ms, 3),
             },
+            "model_counts": dict(Counter(o.model for o in self.outcomes if o.success and o.model)),
             "status_counts": self.status_counts,
             "error_counts": self.error_counts,
         }
@@ -409,6 +412,7 @@ async def _request_once(
     success = 200 <= response.status_code < 300
     error = "" if success else _response_error(response)
     server_cost_ms: float | None = None
+    model = ""
 
     if success and require_inference_reply:
         try:
@@ -418,6 +422,7 @@ async def _request_once(
             error = "invalid inference response (expected GenerateResponse)"
         else:
             success = result.modelInvoked
+            model = result.model
             if not success:
                 error = "inference response did not invoke the model; cached or non-model output is not fresh inference"
             server_cost_ms = result.costTime * 1000
@@ -429,6 +434,7 @@ async def _request_once(
         error=error,
         retry_after=response.headers.get("Retry-After", ""),
         server_cost_ms=server_cost_ms,
+        model=model,
     )
 
 
@@ -436,6 +442,8 @@ async def issue_scenario_request(
     client: httpx.AsyncClient,
     scenario: ScenarioConfig,
     request_id: str,
+    *,
+    request_index: int = 0,
 ) -> RequestOutcome:
     if scenario.mode == "health":
         return await _request_once(client, "GET", "/health")
@@ -445,12 +453,15 @@ async def issue_scenario_request(
         raise BenchmarkConfigurationError(f"Unsupported mode: {scenario.mode}")
 
     payload: dict[str, Any] = {
-        "message": scenario.message,
         "sessionType": "private",
         "sessionId": f"http-load:{request_id}",
-        "traceId": request_id.replace(":", "-"),
         "platform": "benchmark",
     }
+    if scenario.workload:
+        payload.update(scenario.workload[request_index % len(scenario.workload)].model_dump(exclude_unset=True))
+    else:
+        payload["message"] = scenario.message
+    payload["traceId"] = request_id.replace(":", "-")
     if scenario.lora_name:
         payload["loraName"] = scenario.lora_name
     return await _request_once(
@@ -478,12 +489,10 @@ async def run_step(
     async def limited_request(index: int) -> RequestOutcome:
         async with semaphore:
             request_id = f"{run_id}:{concurrency}:{index}"
-            return await issue_scenario_request(client, scenario, request_id)
+            return await issue_scenario_request(client, scenario, request_id, request_index=index)
 
     started_at = time.monotonic()
-    outcomes = await asyncio.gather(
-        *(limited_request(index) for index in range(total_requests))
-    )
+    outcomes = await asyncio.gather(*(limited_request(index) for index in range(total_requests)))
     return StepResult(
         mode=scenario.mode,
         concurrency=concurrency,
@@ -503,6 +512,7 @@ async def warm_up(
             client,
             scenario,
             f"{run_id}:warmup:{index}",
+            request_index=index,
         )
         if not outcome.success:
             detail = outcome.error or outcome.category
@@ -519,9 +529,7 @@ def default_request_count(mode: str, concurrency: int) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(
-        description="Authenticated, connection-reusing HTTP load benchmark."
-    )
+    parser = argparse.ArgumentParser(description="Authenticated, connection-reusing HTTP load benchmark.")
     parser.add_argument(
         "--mode",
         choices=("health", "api", "inference"),
@@ -549,7 +557,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--step-delay", type=float, default=1.0)
     parser.add_argument("--timeout", type=float, default=180.0)
     parser.add_argument("--api-path", default="/api/stats")
-    parser.add_argument("--message", default="请用一句话回复这条并发压测消息")
+    inputs = parser.add_mutually_exclusive_group()
+    inputs.add_argument("--message", default=ScenarioConfig.message)
+    inputs.add_argument(
+        "--workload", default="", help="JSON array of MessageRequest objects, sent round-robin without rewriting."
+    )
     parser.add_argument("--lora-name", default="")
 
     parser.add_argument(
@@ -589,6 +601,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _validate_runtime_args(args: argparse.Namespace) -> None:
+    if args.workload and args.mode != "inference":
+        raise BenchmarkConfigurationError("workload requires inference mode.")
+    if args.workload and args.lora_name:
+        raise BenchmarkConfigurationError("Set LoRA inside the workload; do not combine workload with --lora-name.")
     if args.requests_per_step < 0:
         raise BenchmarkConfigurationError("requests-per-step cannot be negative.")
     if args.warmup_requests < 0:
@@ -597,6 +613,18 @@ def _validate_runtime_args(args: argparse.Namespace) -> None:
         raise BenchmarkConfigurationError("step-delay cannot be negative and timeout must be positive.")
     if not args.api_path.startswith("/"):
         raise BenchmarkConfigurationError("api-path must start with '/'.")
+
+
+def load_workload(path: str) -> tuple[MessageRequest, ...]:
+    try:
+        requests = TypeAdapter(list[MessageRequest]).validate_json(Path(path).read_bytes(), strict=True)
+    except (OSError, ValueError) as exc:
+        raise BenchmarkConfigurationError(
+            "Cannot read workload: expected a JSON array of valid MessageRequest objects."
+        ) from exc
+    if not requests:
+        raise BenchmarkConfigurationError("workload must contain at least one request.")
+    return tuple(requests)
 
 
 async def run_benchmark(args: argparse.Namespace) -> tuple[int, list[StepResult]]:
@@ -610,9 +638,7 @@ async def run_benchmark(args: argparse.Namespace) -> tuple[int, list[StepResult]
     )
     auth.validate()
     if args.mode != "health" and not auth.configured:
-        raise BenchmarkConfigurationError(
-            f"{args.mode} mode targets a protected API; provide benchmark credentials."
-        )
+        raise BenchmarkConfigurationError(f"{args.mode} mode targets a protected API; provide benchmark credentials.")
 
     thresholds = Thresholds(
         min_success_rate=args.min_success_rate,
@@ -629,6 +655,7 @@ async def run_benchmark(args: argparse.Namespace) -> tuple[int, list[StepResult]
         api_path=args.api_path,
         message=args.message,
         lora_name=args.lora_name,
+        workload=load_workload(args.workload) if args.workload else (),
     )
     max_connections = max(steps)
     timeout = httpx.Timeout(
@@ -659,8 +686,7 @@ async def run_benchmark(args: argparse.Namespace) -> tuple[int, list[StepResult]
         )
         if not health.success:
             raise BenchmarkPreflightError(
-                f"Health preflight failed with HTTP {health.status_code}: "
-                f"{health.error or health.category}."
+                f"Health preflight failed with HTTP {health.status_code}: {health.error or health.category}."
             )
 
         if args.mode != "health":
@@ -672,9 +698,7 @@ async def run_benchmark(args: argparse.Namespace) -> tuple[int, list[StepResult]
         print(f"Mode: {args.mode}; concurrency steps: {steps}")
         for index, concurrency in enumerate(steps):
             total_requests = (
-                args.requests_per_step
-                if args.requests_per_step > 0
-                else default_request_count(args.mode, concurrency)
+                args.requests_per_step if args.requests_per_step > 0 else default_request_count(args.mode, concurrency)
             )
             result = await run_step(
                 client,
@@ -697,6 +721,7 @@ async def run_benchmark(args: argparse.Namespace) -> tuple[int, list[StepResult]
         report = {
             "target": args.url.rstrip("/"),
             "mode": args.mode,
+            "workload_size": len(scenario.workload),
             "concurrency_steps": steps,
             "thresholds": asdict(thresholds),
             "steps": [result.to_dict() for result in results],

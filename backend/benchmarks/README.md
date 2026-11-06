@@ -1,27 +1,39 @@
 # Backend benchmarks
 
-本目录的工具只在显式运行时产生负载，不参与服务启动。正式报告应保留提交、硬件、配置、命令和原始输出；隔离测试结果不能作为真实模型容量结论。
+工具只在显式运行时产生负载。保留提交、硬件、配置、命令和原始报告；隔离测试不能证明真实模型质量或生产容量。
 
 | 入口 | 职责 |
 | --- | --- |
-| `http_load_benchmark.py` | 统一的认证、连接复用、API／推理负载、分步并发和结果门槛 |
-| `vllm_benchmark.py` | 绕过应用的直接 vLLM 请求；只把正常完成且非空的回复计为成功 |
-| `realistic_benchmark.py` | 既有混合消息工作负载；独立待审查工具，其历史数字不代表当前性能 |
-| `stress_test.py` | 本地模型／LoRA 与 GPU 观测；运行前按独立部署配置核对 |
+| `http_load_benchmark.py` | 统一认证、连接复用、预热、API／推理工作负载、分步并发和结果门槛 |
+| `vllm_benchmark.py` | 直接请求配置的vLLM服务，只统计完整非空回复 |
+| `workloads/*.json` | 纯请求数据，经正式MessageRequest契约读取，无独立认证或执行逻辑 |
 
-从仓库的 `backend` 目录运行：
+从`backend`目录运行：
 
 ```bash
 python -m benchmarks.http_load_benchmark --mode health --url http://127.0.0.1:8000
 python -m benchmarks.http_load_benchmark --mode api --url http://127.0.0.1:8000 --api-path /api/stats --concurrency-steps 1,10,50 --json-out api-report.json
-python -m benchmarks.http_load_benchmark --mode inference --url http://127.0.0.1:8000 --concurrency-steps 1,2,4 --requests-per-step 12 --json-out inference-report.json
+python -m benchmarks.http_load_benchmark --mode inference --url http://127.0.0.1:8000 --workload benchmarks/workloads/mixed_messages.json --concurrency-steps 1,2,4 --requests-per-step 12 --json-out mixed-report.json
+python -m benchmarks.http_load_benchmark --mode inference --url http://127.0.0.1:8000 --workload benchmarks/workloads/group_messages.json --concurrency-steps 1,3,5 --requests-per-step 50 --json-out group-report.json
 python -m benchmarks.vllm_benchmark
 ```
 
-受保护的 API 模式需要预先设置一种认证方式：`BENCH_BEARER_TOKEN`、`BENCH_API_KEY` 或 `BENCH_USERNAME`／`BENCH_PASSWORD`。工具不会尝试其他账号或自动注册。LoRA 通过统一入口的 `--lora-name` 指定，默认使用当前配置的基础模型。直接 vLLM 工具通过 `VLLM_URL` 和 `VLLM_BENCHMARK_MODEL_ID` 选择服务；部分、空白、非法响应及传输错误均计入失败，存在失败时进程返回非零。
+受保护模式预先配置一种认证：`BENCH_BEARER_TOKEN`、`BENCH_API_KEY`或`BENCH_USERNAME`／`BENCH_PASSWORD`。不会注册账号或尝试其他账号。直接vLLM入口使用`VLLM_URL`和`VLLM_BENCHMARK_MODEL_ID`。
 
-旧 `auth_benchmark.py`、`inference_benchmark.py`、`concurrency_benchmark.py` 已删除，旧命令需要改为上述统一入口。原有健康检查、受保护 API、推理负载、并发阶梯及429／503统计继续提供；旧队列开关没有实现，旧缓存速度推断没有记录真实命中，不再作为评测能力或容量证据。
+推理可用`--message`发送单条原文，或用`--workload`读取JSON请求数组，两者互斥。文件只读取和校验一次，各并发阶梯按数组顺序循环；非法、不可读或空文件在联网前报错。请求中的message、history、人物、用户、群会话及LoRA字段原样传递；工具分配每次唯一traceId，未指定的sessionId使用独立会话。工作负载中的LoRA只在各请求的loraName设置；不与全局`--lora-name`混用。单消息模式仍可用`--lora-name`。
 
-统一入口原样发送`--message`，编号仅放入sessionId和traceId。推理模式复用正式GenerateResponse契约进行严格校验，只有非空完整响应且modelInvoked=true才计入成功；缓存或非模型回复明确计为未完成新推理，预热遇到此类结果会终止。它们可能是正常应用行为，但不能证明新的模型吞吐；需要新推理时，应在隔离部署显式准备相应缓存配置或有差异的完整工作负载，工具不会改写消息或修改服务配置。
+混合文件保留旧工具58种不同消息；群文件保留20种群消息，并明确50个群会话和用户。它们是公开的合成负载，部分问题有年代或信息限制，不是回答质量金标，也不声称符合真实QQ消息比例。群会话重复是有意的，不能据其吞吐量推算真实群组容量。
 
-真实负载可能消耗模型配额或 GPU 资源，只对隔离测试部署显式运行。统一 HTTP 入口测量应用请求；直接 vLLM 入口测量配置服务的已完成回复，两者均不证明回答质量或生产容量。
+推理沿用严格GenerateResponse契约，只有modelInvoked=true的完整非空响应计入成功。缓存及非模型回复属于未完成新推理，预热遇到此类结果会终止；这是测量边界，不表示正常应用缓存有错。需要新推理时，在隔离部署显式准备缓存配置和完整工作负载，工具不改消息、不改服务配置。报告model_counts只记录成功响应实际声明的模型，不猜模型名称、适配器加载状态或token数。请求失败和阈值不达标返回非零。
+
+在实际GPU主机的另一终端直接观测驱动：
+
+```bash
+nvidia-smi --query-gpu=index,name,memory.used,memory.total,utilization.gpu,temperature.gpu --format=csv --loop=1
+```
+
+驱动工具故障按其退出状态排查，不写成零指标或跳过后声称成功。该命令观测本机所有GPU；使用DeepSeek云接口时，本机GPU数据不反映云模型容量。显式选择LoRA前应确认隔离服务使用支持适配器的本地提供商，工具不会切换提供商。
+
+旧auth／inference／concurrency、realistic_benchmark及stress_test入口已删除，改用上述统一命令。旧自动注册、多账号尝试、每请求连接、随机比例／分类统计、猜测模型字段、字符估算token、缓存加速常数和群组容量建议不再保留。原健康/API/推理负载、并发阶梯、429／503分类、混合消息、群会话和显式LoRA继续提供，GPU观测使用原生驱动工具；未实现的队列开关不属于保留能力。
+
+真实负载可能消耗模型配额或GPU资源，只对隔离测试部署显式运行。
