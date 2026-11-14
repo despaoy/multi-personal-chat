@@ -128,7 +128,7 @@ async def test_executed_memory_erasure_keeps_receipt_when_following_review_gets_
     worker.schedule_and_wait.side_effect = execute_erasure
     service.prepare_turn.side_effect = failed_following_preparation
     request = MessageRequest(
-        message="请从记忆里删除我的住址。", platform="web", adapter="test",
+        message="请从记忆里删除我的住址，同时计算12+8。", platform="web", adapter="test",
         senderId="u", userId="u", sessionId="c", conversationId="c",
         sourceMessageId="operation-typed401",
     )

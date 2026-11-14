@@ -42,14 +42,16 @@ async def test_operation_receipt_does_not_require_a_model_context_budget(status,
 
 
 @pytest.mark.parametrize('status', ['erased', 'pending', 'failed'])
-async def test_api_operation_receipt_has_no_external_retrieval_dependency(monkeypatch, semantic_plan, status):
+async def test_api_operation_receipt_has_no_external_retrieval_dependency(monkeypatch, status):
     from types import SimpleNamespace
 
     from db.schemas import MessageRequest
 
     query = '请把我的宠物名字从记忆里删除。'
-    planning = semantic_plan(query, dict(control=[0]))
-    monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: 'persona')
+    async def unexpected_planning(*args, **kwargs):
+        pytest.fail("A completed receipt must not need semantic planning")
+
+    monkeypatch.setattr("knowledge.retrieval_query_plan.plan_retrieval", unexpected_planning)
     context = CompiledCharacterContext('', '', '',
         memory_operation_receipt={'status': status, 'persisted': 1 if status == 'erased' else 0})
     prepared = SimpleNamespace(history=(), compiled=context)
@@ -61,7 +63,6 @@ async def test_api_operation_receipt_has_no_external_retrieval_dependency(monkey
         MessageRequest(message='请把我的宠物名字从记忆里删除。'), None,
         prepared_character_turn=prepared, runtime_config={'useKnowledgeBase': True}, model_generate=must_not_call)
     _, used_rag, meta = _chat_result_meta.reply, _chat_result_meta.used_rag, _chat_result_meta.metadata
-    assert len(planning) == 1 and planning[0]["query"] == query
     assert not used_rag and meta['answerMode'] == 'memory_operation'
 
 

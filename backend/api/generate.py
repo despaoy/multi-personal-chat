@@ -558,7 +558,10 @@ async def _generate_reply_body(
     model_invoked = None
     try:
         async with asyncio.timeout(_MODEL_INFERENCE_TIMEOUT) as deadline:
-            if is_vllm:
+            receipt_answer = chat_answer.memory_operation_answer(request.message, prepared_character_turn)
+            if receipt_answer is not None:
+                answer = receipt_answer
+            elif is_vllm:
                 client = await get_vllm_client()
                 if client is None:
                     raise HTTPException(503, "所选 vLLM 服务不可用，请恢复服务后重试")

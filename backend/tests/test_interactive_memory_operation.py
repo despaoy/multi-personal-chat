@@ -35,7 +35,7 @@ async def test_explicit_operation_precedes_snapshot_and_is_not_resubmitted(monke
         return await original_prepare(*args)
 
     service.prepare_turn = snapshot
-    turn = TurnInput('请从记忆里删除我的住址。', 'web', 'test', 'u', 'c', 'private')
+    turn = TurnInput('请从记忆里删除我的住址，同时计算12+8。', 'web', 'test', 'u', 'c', 'private')
     prepared = await service.prepare_interactive_turn(turn, 'role', source_message_id='request-1')
     assert prepared.memory_operation_receipt['status'] == status
     assert '操作执行回执' in prepared.compiled.dynamic_context
@@ -101,7 +101,7 @@ async def test_context_failure_preserves_executed_memory_operation_receipt(monke
     service, worker = setup_service(monkeypatch, receipt)
     failure = RuntimeError("fiction-private-provider-text")
     service.prepare_turn.side_effect = failure
-    request = MessageRequest(message="请从记忆里删除我的住址。", userId="u", sessionId="c", sourceMessageId="operation-1")
+    request = MessageRequest(message="请从记忆里删除我的住址，同时计算12+8。", userId="u", sessionId="c", sourceMessageId="operation-1")
     with pytest.raises(HTTPException) as caught:
         await _prepare_character_turn(request, "role", character_service=service, execute_memory_operations=True)
     error = caught.value
@@ -116,7 +116,7 @@ async def test_context_failure_preserves_executed_memory_operation_receipt(monke
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('fault', ['success', 'provider', 'archive'])
+@pytest.mark.parametrize('fault', ['success', 'provider', 'archive', 'receipt_only'])
 async def test_committed_erasure_receipt_survives_later_generation_failure(installed, publication_database, monkeypatch, fault):
     import json
     from datetime import datetime, timedelta, timezone
@@ -134,7 +134,7 @@ async def test_committed_erasure_receipt_survives_later_generation_failure(insta
     repository = DatabaseCharacterMemoryRepository(database)
     character = 'tsukiyashiro_kisaki'
     scope = build_user_scope('web', 'erasure-fixture', 'synthetic-owner', 'synthetic-owner', 'private')
-    await repository.capture_source(character, scope, source_message_id='old', body='我喜欢测试红茶。', observed_at=datetime.now(timezone.utc) - timedelta(days=1))
+    await repository.capture_source(character, scope, source_message_id='old', body='我的测试地址是青榆路10号。' if fault == 'receipt_only' else '我喜欢测试红茶。', observed_at=datetime.now(timezone.utc) - timedelta(days=1))
 
     class Completion:
         calls = 0
@@ -157,7 +157,22 @@ async def test_committed_erasure_receipt_survives_later_generation_failure(insta
     if fault == 'archive':
         monkeypatch.setattr(database, 'add_message', Mock(side_effect=OSError('synthetic-private-archive-fault')))
     request = MessageRequest(message='请从长期记忆中删除我喜欢测试红茶的记录，同时计算12+8。', characterId=character, loraName='default', platform='web', adapter='erasure-fixture', senderId='synthetic-owner', userId='synthetic-owner', conversationId='synthetic-owner', sessionId='synthetic-owner', sourceMessageId='current-erasure', traceId='synthetic-erasure-trace')
+    if fault == 'receipt_only':
+        service.prepare_turn = AsyncMock(side_effect=RuntimeError('unavailable portion of reply context'))
+        request = request.model_copy(update={'message': '请把你记住的我的地址删掉。'})
+        monkeypatch.setattr(generate, 'get_llm_semaphore', Mock(side_effect=AssertionError('receipt requires no model slot')))
+        async def unexpected_planning(*args, **kwargs):
+            pytest.fail('receipt requires no retrieval planning')
+        monkeypatch.setattr('knowledge.retrieval_query_plan.plan_retrieval', unexpected_planning)
     try:
+        if fault == 'receipt_only':
+            result = await generate._generate_reply_impl(request, message_db=database, character_service=service)
+            assert '已删除' in result.reply and not result.modelInvoked and result.answerMode == 'memory_operation'
+            assert completion.calls == 1 and not installed.calls
+            service.prepare_turn.assert_not_awaited()
+            assert await repository.list_sources(character, scope) == []
+            assert len(database.execute_sql('SELECT id FROM messages')) == 1
+            return
         if fault == 'success':
             result = await generate._generate_reply_impl(request, enable_rag=False, message_db=database, character_service=service)
             assert '已删除' in result.reply and result.reply.endswith('20。')

@@ -124,7 +124,7 @@ class PreparedCharacterTurn:
     relationship: RelationshipState
     memory_candidates: int
     interaction_count: int
-    reply_guard: ReplyGuard
+    reply_guard: ReplyGuard | None
     # Expose the trusted, post-review state and bounded diagnostics so
     # evaluation/observability never has to re-run the analyzer and silently
     # report a different state from the one actually used for generation.
@@ -220,7 +220,7 @@ class CharacterContextService:
         Ordinary fact writes remain asynchronous in complete_turn.
         """
         from character.memory_llm import get_memory_enrichment_scheduler, is_memory_erasure_request
-        from character.memory_operation import operation_receipt_context
+        from character.memory_operation import is_only_memory_erasure, operation_receipt_context
 
         if not is_memory_erasure_request(turn.message):
             return await self.prepare_turn(turn, character_id)
@@ -236,6 +236,14 @@ class CharacterContextService:
             message=turn.message, rule_hints=(), history=history,
             source_message_id=source_message_id or None, observed_at=turn.received_at,
         )
+        public_receipt = {key: receipt[key] for key in ('status', 'persisted', 'source_erased') if key in receipt}
+        if is_only_memory_erasure(turn.message):
+            return PreparedCharacterTurn(
+                character_id=character_id, user_scope=user_scope, received_at=turn.received_at,
+                compiled=CompiledCharacterContext('', '', '', memory_operation_receipt=public_receipt),
+                history=(), relationship=RelationshipState(), memory_candidates=0, interaction_count=0,
+                reply_guard=None, memory_operation_receipt=receipt,
+            )
         # Refresh the stored history under the original reset boundary after revocation.
         if turn.history_after_id is not None:
             turn = replace(turn, history=(), history_loaded=False)
@@ -246,7 +254,7 @@ class CharacterContextService:
             raise ContextAfterMemoryOperationError(receipt) from exc
         return replace(prepared, memory_operation_receipt=receipt,
             compiled=replace(prepared.compiled,
-                memory_operation_receipt={key: receipt[key] for key in ('status', 'persisted', 'source_erased') if key in receipt},
+                memory_operation_receipt=public_receipt,
                 dynamic_context='\n\n'.join(filter(None, (
                 prepared.compiled.dynamic_context, operation_receipt_context(receipt),
             )))))

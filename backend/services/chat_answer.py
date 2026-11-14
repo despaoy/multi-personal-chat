@@ -52,6 +52,17 @@ def _rag_retrieval_timeout() -> float:
     return _RAG_TIMEOUT
 
 
+def memory_operation_answer(message, prepared) -> ChatAnswer | None:
+    from character.memory_operation import render_operation_response
+
+    if prepared is None:
+        return None
+    reply = render_operation_response(message, prepared.compiled.memory_operation_receipt)
+    if reply is None:
+        return None
+    return ChatAnswer(reply, used_rag=False, model_invoked=False, metadata={"answerMode": "memory_operation"})
+
+
 async def generate_chat_answer(
     request: MessageRequest,
     lora_name: str | None,
@@ -65,6 +76,9 @@ async def generate_chat_answer(
     memory_write_enabled: bool | None = None,
 ) -> ChatAnswer:
     """Shared retrieval, abstention and character policy for either transport."""
+    receipt_answer = memory_operation_answer(request.message, prepared_character_turn)
+    if receipt_answer is not None:
+        return receipt_answer
     # 使用请求开始时读取的配置快照，避免同一次生成多次同步访问数据库。
     _cfg = runtime_config
     options = read_generation_options(_cfg)

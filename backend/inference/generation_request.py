@@ -587,8 +587,6 @@ async def generate_character_response(
 ) -> GenerationResult:
     """Build and execute one request with an injected model adapter."""
 
-    request = await _revalidate_context(request)
-    initial_reply_guard = request.reply_guard
     if request.reply_guard_mode not in {"lightweight", "strict"}:
         raise ValueError("unknown reply guard mode")
     from character.memory_operation import operation_receipt_context, render_operation_response, split_operation_request
@@ -610,6 +608,8 @@ async def generate_character_response(
         return GenerationResult(
             reply=operation_response, plan=plan, response_mode="memory_operation", model_invoked=False
         )
+    request = await _revalidate_context(request)
+    initial_reply_guard = request.reply_guard
     receipt = getattr(request.character_context, "memory_operation_receipt", None)
     split_operation = split_operation_request(request.message) if isinstance(receipt, dict) else None
     if split_operation is not None:
