@@ -300,7 +300,8 @@ async def test_guard_retry_rechecks_structured_memory_after_first_answer(tmp_pat
         return "仅依据仍可核验的资料回答。"
 
     result = await generate_character_response(request, model)
-    assert result.guard_retried and len(seen) == 2
+    assert len(seen) == 2 and result.authority_refreshed and not result.guard_retried
+    assert "【输出校验修正】" not in seen[1]
     assert target.content in seen[0] and target.content not in seen[1]
     assert BODY.rstrip("。") not in seen[1] and "我喜欢豆浆" in seen[1] and public in seen[1]
 

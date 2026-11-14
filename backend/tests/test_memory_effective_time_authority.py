@@ -274,7 +274,8 @@ async def test_guard_retry_rechecks_time_after_first_reply(tmp_path, monkeypatch
         return "只依据当前仍有效的记录回答。"
 
     result = await generate_character_response(request, model)
-    assert len(seen) == 2 and result.guard_retried
+    assert len(seen) == 2 and result.authority_refreshed and not result.guard_retried
+    assert "【输出校验修正】" not in seen[1]
     assert selected.content in seen[0] and selected.content not in seen[1]
     assert "我喜欢豆浆" in seen[1] and public in seen[1]
 
