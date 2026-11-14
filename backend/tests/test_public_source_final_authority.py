@@ -227,7 +227,8 @@ async def test_guard_retry_rechecks_public_source_after_first_model(tmp_path):
         ),
         model,
     )
-    assert result.guard_retried and len(calls) == 2
+    assert result.authority_refreshed and not result.guard_retried and len(calls) == 2
+    assert "【输出校验修正】" not in wire(calls[1])
     assert BODY_A in wire(calls[0]) and BODY_A not in wire(calls[1]) and BODY_B in wire(calls[1])
 
 

@@ -764,11 +764,9 @@ async def generate_character_response(
     if not blocking:
         return await finalize_citations(GenerationResult(reply=reply, plan=plan, guard_violations=violations))
 
-    if request.private_context_revalidator is not None or request.public_context_revalidator is not None:
-        refreshed = await _revalidate_context(request)
-        if refreshed != request:
-            request = refreshed
-            plan = build_generation_request(request)
+    refreshed = await _revalidate_context(request)
+    if refreshed != request:
+        return await refresh_answer(refreshed)
     messages = [dict(message) for message in plan.messages]
     corrected_messages = apply_retry_instruction(messages, retry_instruction(blocking))
     # The trusted correction changes fixed input size. Reuse the same complete
