@@ -464,8 +464,9 @@ async def _generate_reply_body(
         mapped_character_id = prepared_character_turn.character_id
         _turn_scope.enter_context(_report_memory_operation(prepared_character_turn))
 
+    receipt_answer = chat_answer.memory_operation_answer(request.message, prepared_character_turn)
     memory_write_enabled = None
-    if prepared_character_turn is not None:
+    if prepared_character_turn is not None and receipt_answer is None:
         from character.memory_llm import get_memory_enrichment_scheduler
 
         memory_write_enabled = bool(
@@ -558,7 +559,6 @@ async def _generate_reply_body(
     model_invoked = None
     try:
         async with asyncio.timeout(_MODEL_INFERENCE_TIMEOUT) as deadline:
-            receipt_answer = chat_answer.memory_operation_answer(request.message, prepared_character_turn)
             if receipt_answer is not None:
                 answer = receipt_answer
             elif is_vllm:

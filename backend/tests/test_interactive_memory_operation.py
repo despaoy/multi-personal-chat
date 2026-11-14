@@ -150,7 +150,8 @@ async def test_committed_erasure_receipt_survives_later_generation_failure(insta
     completion = Completion()
     scheduler = MemoryEnrichmentScheduler(config=MemoryLlmConfig(True, 'unit-only', 'unit-only'), completion=completion)
     service = CharacterContextService(profile_registry=get_default_profile_registry(), memory_repository=repository, message_repository=DatabaseMessageRepository(database), source_recall_enabled=False)
-    monkeypatch.setattr('character.memory_llm.get_memory_enrichment_scheduler', lambda _owner_database=None: scheduler)
+    writer_lookup = Mock(return_value=scheduler)
+    monkeypatch.setattr('character.memory_llm.get_memory_enrichment_scheduler', writer_lookup)
     monkeypatch.setattr(chat_answer, 'generate_chat_answer', actual_generate_chat_answer)
     monkeypatch.setattr(test_compiled_cloud_transport, 'ANSWER', '20。')
     installed.state.status = 503 if fault == 'provider' else 200
@@ -170,6 +171,7 @@ async def test_committed_erasure_receipt_survives_later_generation_failure(insta
             assert '已删除' in result.reply and not result.modelInvoked and result.answerMode == 'memory_operation'
             assert completion.calls == 1 and not installed.calls
             service.prepare_turn.assert_not_awaited()
+            writer_lookup.assert_called_once_with(database)
             assert await repository.list_sources(character, scope) == []
             assert len(database.execute_sql('SELECT id FROM messages')) == 1
             return
