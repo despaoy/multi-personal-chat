@@ -1318,8 +1318,6 @@ class SQLiteDB:
 
     def add_message(self, message: Dict):
         """Add a message record and keep the conversation index in sync."""
-        conn = self._get_connection()
-        cursor = conn.cursor()
         created_at = message.get("createdAt", datetime.now().isoformat())
         conversation_type = message.get("conversationType") or message.get("sessionType", "private")
         sender_name = message.get("senderName") or message.get("userName", "")
@@ -1327,49 +1325,50 @@ class SQLiteDB:
         platform = message.get("platform", "qq")
         display_name = message.get("sessionName") or conversation_id or message.get("sessionId", "")
 
-        self._upsert_conversation_cursor(
-            cursor,
-            platform=platform,
-            conversation_id=conversation_id,
-            conversation_type=conversation_type,
-            display_name=display_name,
-        )
-
-        cursor.execute('''
-            INSERT INTO messages (
-                sessionType, sessionId, sessionName, platform, adapter, conversationId,
-                conversationType, senderId, senderName, sourceMessageId, traceId,
-                userId, userName, message, reply, modelName, loraName, costTime, createdAt,
-                branchId, characterId
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            self._upsert_conversation_cursor(
+                cursor,
+                platform=platform,
+                conversation_id=conversation_id,
+                conversation_type=conversation_type,
+                display_name=display_name,
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (
-            message.get("sessionType", conversation_type),
-            message.get("sessionId", ""),
-            message.get("sessionName", ""),
-            platform,
-            message.get("adapter", "nonebot"),
-            conversation_id,
-            conversation_type,
-            message.get("senderId", message.get("userId", "")),
-            sender_name,
-            message.get("sourceMessageId", ""),
-            message.get("traceId", ""),
-            message.get("userId", ""),
-            message.get("userName", sender_name),
-            message.get("message", ""),
-            message.get("reply", ""),
-            message.get("modelName", ""),
-            message.get("loraName", ""),
-            message.get("costTime", 0.0),
-            created_at,
-            # None → NULL → 正史；非空 → 该条消息属于对应分支。
-            message.get("branchId") or None,
-            message.get("characterId") or None,
-        ))
 
-        message_id = cursor.lastrowid
-        conn.commit()
+            cursor.execute('''
+                INSERT INTO messages (
+                    sessionType, sessionId, sessionName, platform, adapter, conversationId,
+                    conversationType, senderId, senderName, sourceMessageId, traceId,
+                    userId, userName, message, reply, modelName, loraName, costTime, createdAt,
+                    branchId, characterId
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (
+                message.get("sessionType", conversation_type),
+                message.get("sessionId", ""),
+                message.get("sessionName", ""),
+                platform,
+                message.get("adapter", "nonebot"),
+                conversation_id,
+                conversation_type,
+                message.get("senderId", message.get("userId", "")),
+                sender_name,
+                message.get("sourceMessageId", ""),
+                message.get("traceId", ""),
+                message.get("userId", ""),
+                message.get("userName", sender_name),
+                message.get("message", ""),
+                message.get("reply", ""),
+                message.get("modelName", ""),
+                message.get("loraName", ""),
+                message.get("costTime", 0.0),
+                created_at,
+                # None → NULL → 正史；非空 → 该条消息属于对应分支。
+                message.get("branchId") or None,
+                message.get("characterId") or None,
+            ))
+
+            message_id = cursor.lastrowid
         return {
             **message,
             "id": str(message_id),

@@ -218,6 +218,37 @@ class TestMultiPlatformStorage:
         assert len(rows) == 1
         assert rows[0]["platform"] == "telegram"
 
+    def test_failed_message_archive_leaves_no_conversation_and_can_retry(self, tmp_path):
+        import sqlite3
+
+        from db.database import SQLiteDB
+
+        database = SQLiteDB(tmp_path / "archive.sqlite")
+        try:
+            connection = database.get_connection()
+            connection.execute("CREATE TRIGGER reject_archive BEFORE INSERT ON messages "
+                               "BEGIN SELECT RAISE(ABORT, 'synthetic archive failure'); END")
+            message = {
+                "platform": "web", "sessionType": "private", "sessionId": "fiction-session",
+                "conversationId": "fiction-session", "sessionName": "Test conversation",
+                "adapter": "web-character", "senderId": "fiction-user",
+                "userId": "fiction-user", "sourceMessageId": "fiction-turn",
+                "message": "What color is the fictional lantern?", "reply": "Blue.",
+            }
+            with pytest.raises(sqlite3.IntegrityError, match="synthetic archive failure"):
+                database.add_message(message)
+            assert not connection.in_transaction
+            lookup = "SELECT COUNT(*) FROM conversations WHERE conversationId = 'fiction-session'"
+            database.update_config({"maxTokens": 400})
+            assert connection.execute(lookup).fetchone()[0] == 0
+            assert database.get_message_count() == 0
+            connection.execute("DROP TRIGGER reject_archive")
+            receipt = database.add_message(message)
+            assert receipt["id"] and database.get_message_count() == 1
+            assert connection.execute(lookup).fetchone()[0] == 1
+        finally:
+            database.close_connection()
+
     def test_session_toggle_accepts_platform_context(self):
         db = self._make_db()
         sid = "telegram:private:42"
