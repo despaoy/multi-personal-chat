@@ -659,9 +659,10 @@ async def generate_character_response(
             return await refresh_answer(refreshed)
         result = finalize_answer_citations(result)
         result = await recover_missing_citations(result, generate_text, context_window_tokens=request.context_window_tokens)
-        refreshed = await _revalidate_context(request)
-        if refreshed != request:
-            return await refresh_answer(refreshed)
+        if result.citation_repair_attempted:
+            refreshed = await _revalidate_context(request)
+            if refreshed != request:
+                return await refresh_answer(refreshed)
         return result
 
     request = replace(request, retrieval=prepare_answer_citations(request.retrieval))

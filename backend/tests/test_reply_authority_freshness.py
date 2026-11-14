@@ -119,3 +119,39 @@ async def test_private_erasure_during_main_cannot_return_erased_body_and_preserv
     assert len(calls) == 2 and result.reply == PUBLIC and BODY not in result.reply
     assert result.authority_refreshed
     assert not result.plan.character_context.episodic_reference_context
+
+
+
+@pytest.mark.parametrize("annotate", [False, True])
+async def test_reply_rechecks_evidence_once_after_each_model_send(tmp_path, annotate):
+    db, _docs, request = fixture(tmp_path)
+    events = []
+    revalidate = request.public_context_revalidator
+
+    async def read(current):
+        events.append("read")
+        return await revalidate(current)
+
+    async def model(**kwargs):
+        messages = kwargs["messages"]
+        if messages[0]["content"] == ANNOTATION_POLICY:
+            events.append("annotation")
+            assert json.loads(messages[-1]["content"])["answer"] == BODY_A
+            return '{"citations":[]}'
+        events.append("answer")
+        assert all(text in wire(messages) for text in (QUERY, BODY_A, BODY_B))
+        return BODY_A
+
+    if not annotate:
+        request = replace(request, retrieval=replace(request.retrieval, citations=()))
+    try:
+        result = await generate_character_response(
+            replace(request, public_context_revalidator=read), model
+        )
+        assert result.reply == BODY_A
+        assert result.citation_repair_attempted is annotate
+        assert events == ["read", "read", "answer", "read"] + (
+            ["annotation", "read"] if annotate else []
+        )
+    finally:
+        db.close_connection()
