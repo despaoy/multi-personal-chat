@@ -55,9 +55,8 @@ def _rag_retrieval_timeout() -> float:
 def memory_operation_answer(message, prepared) -> ChatAnswer | None:
     from character.memory_operation import render_operation_response
 
-    if prepared is None:
-        return None
-    reply = render_operation_response(message, prepared.compiled.memory_operation_receipt)
+    compiled = getattr(prepared, "compiled", None)
+    reply = render_operation_response(message, getattr(compiled, "memory_operation_receipt", None))
     if reply is None:
         return None
     return ChatAnswer(reply, used_rag=False, model_invoked=False, metadata={"answerMode": "memory_operation"})
