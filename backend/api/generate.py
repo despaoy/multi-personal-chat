@@ -881,6 +881,7 @@ def _character_turn_input(request: MessageRequest):
         history=tuple(request.history or []),
         received_at=request._source_received_at,
         history_loaded=request._history_loaded,
+        history_after_id=request._history_after_id,
     )
 
 

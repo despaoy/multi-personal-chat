@@ -93,7 +93,7 @@ async def test_authority_fields_in_model_output_are_rejected(monkeypatch):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("history_source", ["prepared_database", "request_override"])
+@pytest.mark.parametrize("history_source", ["prepared_database", "stateless_request", "prepared_empty"])
 async def test_actual_generation_route_passes_the_same_effective_history(monkeypatch, history_source):
     from character.models import CompiledCharacterContext
     from db.schemas import MessageRequest
@@ -103,7 +103,11 @@ async def test_actual_generation_route_passes_the_same_effective_history(monkeyp
     request_history = [
         {"role": "user", "content": "现场调用方完整前文：核对我的已有偏好，另计算材料4加7，未授权改写。"}
     ]
-    expected = tuple(request_history) if history_source == "request_override" else database_history
+    expected = {
+        "prepared_database": database_history,
+        "stateless_request": tuple(request_history),
+        "prepared_empty": (),
+    }[history_source]
     observed = []
 
     async def unit_planner(query, **kwargs):
@@ -119,15 +123,19 @@ async def test_actual_generation_route_passes_the_same_effective_history(monkeyp
     async def unit_main(**kwargs):
         contents = [message["content"] for message in kwargs["messages"]]
         assert all(row["content"] in contents for row in expected)
+        if history_source != "stateless_request":
+            assert request_history[0]["content"] not in contents
         observed.append("main")
         return "这是明确标记的单元测试控制回答，不是真实模型成功。"
 
-    prepared = SimpleNamespace(compiled=CompiledCharacterContext("", "", ""), history=database_history)
+    prepared = None
+    if history_source != "stateless_request":
+        prepared = SimpleNamespace(compiled=CompiledCharacterContext("", "", ""), history=expected)
     monkeypatch.setattr(retrieval_query_plan, "plan_retrieval", unit_planner)
     monkeypatch.setattr(chat_answer, 'retrieve_chat_knowledge', forbidden_public)
     monkeypatch.setattr(chat_answer, 'get_lora_system_prompt', lambda _: "单元角色规则")
     _chat_result_meta = await chat_answer.generate_chat_answer(
-        MessageRequest(message=QUERY, history=request_history if history_source == "request_override" else []),
+        MessageRequest(message=QUERY, history=request_history),
         None,
         prepared_character_turn=prepared,
         runtime_config={"useKnowledgeBase": True},

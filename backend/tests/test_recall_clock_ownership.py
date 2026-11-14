@@ -219,8 +219,14 @@ async def baseline_preflight(workdir):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("supplied_clock", [None, RECEIVED], ids=["capture_once", "preserve_receipt"])
-async def test_interactive_operation_keeps_one_clock_and_reloads_revoked_history(clock_rig, monkeypatch, supplied_clock):
+@pytest.mark.parametrize(
+    "supplied_clock, preloaded",
+    [(None, False), (RECEIVED, False), (RECEIVED, True)],
+    ids=["capture_once", "preserve_receipt", "respect_preloaded_reset"],
+)
+async def test_interactive_operation_keeps_one_clock_and_reloads_revoked_history(
+    clock_rig, monkeypatch, supplied_clock, preloaded,
+):
     from dataclasses import replace
 
     from character.memory_llm import is_memory_erasure_request
@@ -243,6 +249,12 @@ async def test_interactive_operation_keeps_one_clock_and_reloads_revoked_history
         memory_key="user_contact_phone", source_message_id=phone_source, evidence=(phone_body,),
         observed_at=RECEIVED.isoformat(), confidence=.99)
     assert phone["persisted"] is True
+    if preloaded:
+        rig.database.add_message(dict(platform=SCOPE.platform, adapter=SCOPE.adapter,
+            senderId=SCOPE.sender_id, characterId=ROLE, conversationType="private",
+            conversationId=SCOPE.conversation_id, message="清空前的合成资料。",
+            reply="这条对话位于清空线之前。", createdAt=RECEIVED.isoformat()))
+        cutoff = rig.database.get_message_high_watermark()
     rig.database.add_message(dict(platform=SCOPE.platform, adapter=SCOPE.adapter,
         senderId=SCOPE.sender_id, characterId=ROLE, conversationType="private", conversationId=SCOPE.conversation_id,
         sourceMessageId=phone_source, message=phone_body, reply="已记录这项合成资料。", createdAt=RECEIVED.isoformat()))
@@ -269,12 +281,31 @@ async def test_interactive_operation_keeps_one_clock_and_reloads_revoked_history
     query = "请从记忆里删除我的电话号码，保留其他资料。" + QUERY
     assert is_memory_erasure_request(query)
     turn = replace(rig.turn, message=query, received_at=supplied_clock)
+    if preloaded:
+        from api.generate import _character_turn_input
+        from db.schemas import MessageRequest
+
+        history = rig.database.list_conversation_history(
+            SCOPE.platform, SCOPE.adapter, SCOPE.sender_id, "private", SCOPE.conversation_id,
+            character_id=ROLE, after_id=cutoff,
+        )
+        request = MessageRequest(
+            message=query, platform=SCOPE.platform, adapter=SCOPE.adapter, senderId=SCOPE.sender_id,
+            conversationId=SCOPE.conversation_id, history=history,
+        )
+        request._history_loaded = True
+        request._history_after_id = cutoff
+        request._source_received_at = supplied_clock
+        turn = _character_turn_input(request)
     prepared = await rig.context.prepare_interactive_turn(turn, ROLE, source_message_id="delete-phone-on-new-year")
     assert prepared.received_at == RECEIVED and observed == [RECEIVED]
     assert turn.received_at is supplied_clock
     worker.schedule_and_wait.assert_awaited_once()
-    assert len(histories) == 2 and histories[0][0]["content"] == phone_body and histories[1] == []
     assert prepared.history == () and prepared.memory_operation_receipt["persisted"] == 1
+    if preloaded:
+        assert histories == [[]]
+    else:
+        assert len(histories) == 2 and histories[0][0]["content"] == phone_body and histories[1] == []
     assert prepared.compiled.used_memory_ids == (rig.ids[2024],)
     assert_received_selection(rig, prepared.compiled.memory_packets, prepared.compiled.reference_context)
     remaining = await rig.repo.list_memory_records(ROLE, SCOPE, limit=None, include_inactive=True)

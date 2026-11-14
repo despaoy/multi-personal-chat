@@ -78,10 +78,8 @@ async def generate_chat_answer(
     independent_tasks_enabled = read_bool(os.environ, "CHARACTER_INDEPENDENT_TASKS_ENABLED", False)
     retrieval = RetrievalResult()
     filters = None
-    # Nonempty caller history takes precedence over the prepared server history.
-    effective_history = tuple(request.history or []) or (
-        prepared_character_turn.history if prepared_character_turn else ()
-    )
+    # Prepared history is authoritative, including an empty result after revocation.
+    effective_history = prepared_character_turn.history if prepared_character_turn else tuple(request.history)
     if _use_kb:
         try:
             from knowledge.retrieval_query_plan import plan_retrieval

@@ -104,6 +104,7 @@ class TurnInput:
     history: tuple[dict[str, str], ...] = ()
     received_at: datetime | None = None
     history_loaded: bool = False
+    history_after_id: int | None = None
 
 
 @dataclass(frozen=True)
@@ -235,6 +236,9 @@ class CharacterContextService:
             message=turn.message, rule_hints=(), history=history,
             source_message_id=source_message_id or None, observed_at=turn.received_at,
         )
+        # Refresh the stored history under the original reset boundary after revocation.
+        if turn.history_after_id is not None:
+            turn = replace(turn, history=(), history_loaded=False)
         # The operation may already be committed; preserve its receipt on failure.
         try:
             prepared = await self.prepare_turn(turn, character_id)
@@ -562,7 +566,8 @@ class CharacterContextService:
             history = list(turn.history)
         else:
             history = await self._message_repo.list_recent_conversation_history(
-                user_scope, limit=self._history_limit, max_chars=self._history_max_chars, character_id=character_id
+                user_scope, limit=self._history_limit, max_chars=self._history_max_chars, character_id=character_id,
+                **({"after_id": turn.history_after_id} if turn.history_after_id is not None else {}),
             )
         validate_history(history)
         return history
