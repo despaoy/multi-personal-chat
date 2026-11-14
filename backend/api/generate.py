@@ -43,7 +43,7 @@ from infra.concurrency_control import InferenceQueueFull, RateLimitExceeded, inf
 from infra.environment import read_bool, read_positive_float
 from infra.observability import increment, log_event, set_consecutive
 from services import chat_answer
-from services.chat_generation import ChatGenerationService
+from services.chat_generation import ChatGenerationService, chat_user_identity
 from services.model_usage import write_invocation
 
 logger = logging.getLogger(__name__)
@@ -1096,12 +1096,7 @@ async def _validate_web_source_identity(request, current_user, *, database):
         return
     from character.models import build_user_scope
 
-    identity = str(
-        (current_user or {}).get("id")
-        or (current_user or {}).get("user_id")
-        or (current_user or {}).get("username")
-        or ""
-    )
+    identity = chat_user_identity(current_user or {})
     if not identity:
         raise HTTPException(401, "无法确认当前登录用户")
     try:
@@ -1257,7 +1252,7 @@ async def generate_reply(
     """Queue-protected management/test generation endpoint."""
     if not request.branchId and (request.characterId or request.adapter == "web-character"):
         # The new web character entry owns its user scope; never trust a UI senderId.
-        identity = str(current_user.get("id") or current_user.get("user_id") or current_user.get("username") or "")
+        identity = chat_user_identity(current_user)
         if not identity:
             raise HTTPException(401, "无法确认当前登录用户")
         request.platform = "web"

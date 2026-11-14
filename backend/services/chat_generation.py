@@ -15,6 +15,15 @@ GenerateHandler = Callable[
 ]
 
 
+def chat_user_identity(user: dict[str, Any]) -> str:
+    """Resolve the authenticated owner consistently for chat and its source records."""
+    for key in ("id", "user_id", "username"):
+        value = user.get(key)
+        if value is not None and value != "":
+            return str(value)
+    return ""
+
+
 class InferenceRuntime(Protocol):
     """Minimal runtime contract required by the chat use case."""
 
@@ -79,8 +88,7 @@ class ChatGenerationService:
     ) -> GenerateResponse:
         """Apply admission control and execute one queued generation."""
 
-        user_id = current_user.get("user_id")
-        identity = str(user_id if user_id is not None else current_user["username"])
+        identity = chat_user_identity(current_user)
         session_key = ("manual", identity, request.sessionId)
         if request.branchId:
             session_key = ("narrative", identity, request.branchId)

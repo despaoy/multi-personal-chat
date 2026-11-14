@@ -192,3 +192,43 @@ async def test_management_tab_names_cannot_alias_narrative_or_character_queue_na
     assert runtime.submit_calls[-1][0] != character_key
     assert json.loads(branch_key) == ["narrative", "42", "synthetic-branch"]
     assert json.loads(character_key) == ["character", "synthetic-character", "web", "web-character", "private", "42"]
+
+
+
+@pytest.mark.parametrize("owner", [{"user_id": 0, "username": "renamed"}, {"id": 0}])
+async def test_web_chat_uses_the_same_account_for_queue_source_and_context(monkeypatch, owner):
+    from types import SimpleNamespace
+
+    from api import generate
+
+    runtime = _FakeInferenceRuntime()
+    seen = []
+
+    def admission(character_id, platform, adapter, sender, kind, conversation, **source):
+        seen.append((character_id, platform, adapter, sender, kind, conversation, source))
+        return "recorded"
+
+    async def handler(request, _user, **_kwargs):
+        assert generate._character_turn_input(request).sender_id == "0"
+        return GenerateResponse(reply="blue", model="test", costTime=0)
+
+    monkeypatch.setattr(generate, "_generate_reply_impl", handler)
+    service = generate._build_chat_generation_service(
+        runtime, message_db=SimpleNamespace(memory_source_admission=admission)
+    )
+    request = MessageRequest(
+        message="What color is the fictional lantern?",
+        characterId="fixture-character",
+        sessionId="fixture-session",
+        sourceMessageId="fixture-turn",
+        senderId="untrusted",
+    )
+    response = await generate.generate_reply(request, owner, service)
+    assert response.reply == "blue"
+    assert seen == [(
+        "fixture-character", "web", "web-character", "0", "private", "0",
+        {"source_message_id": "fixture-turn", "body": request.message},
+    )]
+    _, queue_key, identity = runtime.rate_limit_calls[0]
+    assert identity == "0"
+    assert json.loads(queue_key) == ["character", "fixture-character", "web", "web-character", "private", "0"]
