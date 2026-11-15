@@ -36,6 +36,7 @@ from inference.generation_request import (
 from inference.history import HistoryFormatError, validate_history
 from inference.lora_registry import get_lora_character_id
 from inference.lora_utils import resolve_lora_served_name
+from inference.local_model_access import get_local_model_lock as _get_local_model_lock
 from inference.openai_protocol import ProviderResponseError, validate_completion_options, with_provider_error
 from inference.usage import collect_usage, has_pending_usage, usage_record_started
 from infra.circuit_breaker import CircuitOpenError
@@ -62,20 +63,6 @@ _DETERMINISTIC_MODEL_LABELS = {
     "source_unavailable": "rag/abstained",
     "abstention": "rag/abstained",
 }
-_local_model_lock: asyncio.Lock | None = None
-_local_model_lock_loop: asyncio.AbstractEventLoop | None = None
-
-
-def _get_local_model_lock() -> asyncio.Lock:
-    """Serialize stateful local model access within the active event loop."""
-    global _local_model_lock, _local_model_lock_loop
-    loop = asyncio.get_running_loop()
-    if _local_model_lock is None or _local_model_lock_loop is not loop:
-        _local_model_lock = asyncio.Lock()
-        _local_model_lock_loop = loop
-    return _local_model_lock
-
-
 router = APIRouter()
 
 

@@ -9,7 +9,10 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
-from typing import Any, Callable, Mapping
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Mapping
 
 
 @dataclass(slots=True)
@@ -25,18 +28,23 @@ class RuntimeContainer:
     http_client_pool: Any | None = None
     backup_mgr: Any | None = None
     access_control_mgr: Any | None = None
+    character_chat_tasks: Any | None = None
 
     def __post_init__(self) -> None:
         # Keep startup validation deterministic even if tests or callers mutate
         # os.environ after constructing the application.
         self.startup_env = dict(self.startup_env)
+        if self.character_chat_tasks is None:
+            from services.character_chat_tasks import CharacterChatTasks
+
+            self.character_chat_tasks = CharacterChatTasks()
 
     @classmethod
     def default(
         cls,
         *,
         startup_env: Mapping[str, str] | None = None,
-    ) -> "RuntimeContainer":
+    ) -> RuntimeContainer:
         """Build the production-compatible dependency set lazily."""
 
         from db.adapter import db, is_pg_mode

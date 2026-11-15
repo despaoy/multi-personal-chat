@@ -402,9 +402,9 @@ function SettingsContent() {
                           <Label>{t('settings.model.apiModel')}</Label>
                           <p className="text-sm text-muted-foreground">{t('settings.model.apiModelDesc')}</p>
                           <Input
-                            value={getStr('openaiCompatModel', 'deepseek-chat')}
+                            value={getStr('openaiCompatModel', 'deepseek-flash')}
                             onChange={(e) => updateField('openaiCompatModel', e.target.value)}
-                            placeholder="deepseek-chat"
+                            placeholder="deepseek-flash"
                           />
                         </div>
                       </div>

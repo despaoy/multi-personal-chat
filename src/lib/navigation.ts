@@ -17,6 +17,8 @@ export const navigationGroups: { id: NavigationGroupId; label: string; translati
 ];
 
 export const navigationItems: NavigationItem[] = [
+  { href: '/chat', label: '角色聊天', translationKey: 'navigation.characterChat', group: 'workspace', adminOnly: false, keywords: '聊天 会话 初识 分支 chat' },
+  { href: '/character-library', label: '我的角色', translationKey: 'navigation.characterLibrary', group: 'workspace', adminOnly: false, keywords: '创建 人设 导入 分享 character' },
   { href: '/', label: '工作台', translationKey: 'navigation.home', group: 'workspace', adminOnly: true, keywords: '首页 仪表盘 dashboard home' },
   { href: '/characters', label: '角色与记忆', translationKey: 'navigation.characters', group: 'workspace', adminOnly: true, keywords: '人物 关系 长期记忆 memory persona' },
   { href: '/history', label: '对话记录', translationKey: 'nav.history', group: 'workspace', adminOnly: true, keywords: '聊天 消息 会话 chat history' },

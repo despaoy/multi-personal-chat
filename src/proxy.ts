@@ -35,7 +35,7 @@ export function proxy(request: NextRequest) {
   if (!token && !isLoginPage) {
     const loginUrl = new URL('/login', request.url);
     // 记录来源路径，登录后可回跳
-    loginUrl.searchParams.set('redirect', path);
+    loginUrl.searchParams.set('redirect', path + request.nextUrl.search);
     return NextResponse.redirect(loginUrl);
   }
 

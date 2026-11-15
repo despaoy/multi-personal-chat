@@ -18,6 +18,7 @@ class InferenceRequestContext:
     provider: Any = field(repr=False)
     count_tokens: Callable[[str], int] = field(repr=False)
     http_client_pool: Any | None = field(default=None, repr=False, compare=False)
+    local_only: bool = False
 
     @property
     def connection_id(self) -> str:

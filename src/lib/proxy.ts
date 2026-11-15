@@ -38,6 +38,8 @@ const PROXY_ROUTE_POLICIES: readonly ProxyRoutePolicy[] = [
   { prefix: '/api/vllm/' },
   { prefix: '/api/loras' },
   { prefix: '/api/characters' },
+  { prefix: '/api/character-library' },
+  { prefix: '/api/character-chats', timeout: 'long' },
   { prefix: '/api/training' },
   { prefix: '/api/knowledge' },
   { prefix: '/api/vector/' },

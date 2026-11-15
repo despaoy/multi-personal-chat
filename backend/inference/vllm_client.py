@@ -277,6 +277,7 @@ class VLLMClient:
 
         # httpx 异步客户端（懒初始化）
         self._client: Optional[httpx.AsyncClient] = None
+        self._local_client: httpx.AsyncClient | None = None
         self._client_lock = asyncio.Lock()
 
         # 实例操作锁（异步安全）
@@ -302,6 +303,18 @@ class VLLMClient:
 
     async def _ensure_client(self) -> httpx.AsyncClient:
         """确保 httpx.AsyncClient 已创建"""
+        from inference.request_context import get_request_context
+
+        context = get_request_context()
+        if context is not None and context.local_only:
+            async with self._client_lock:
+                if self._local_client is None or self._local_client.is_closed:
+                    self._local_client = httpx.AsyncClient(
+                        timeout=httpx.Timeout(self._timeout, connect=10.0),
+                        limits=httpx.Limits(max_connections=50, max_keepalive_connections=20),
+                        trust_env=False, follow_redirects=False,
+                    )
+            return self._local_client
         if self._client is None or self._client.is_closed:
             async with self._client_lock:
                 if self._client is None or self._client.is_closed:
@@ -316,10 +329,18 @@ class VLLMClient:
 
     async def close(self) -> None:
         """关闭连接池，释放资源"""
-        if self._client and not self._client.is_closed:
-            await self._client.aclose()
-            self._client = None
-            logger.info("VLLMClient 连接池已关闭")
+        clients = [self._client, self._local_client]
+        self._client = self._local_client = None
+        failures = []
+        for client in clients:
+            if client is not None and not client.is_closed:
+                try:
+                    await client.aclose()
+                except Exception as exc:
+                    failures.append(exc)
+        if failures:
+            raise failures[0]
+        logger.info("VLLMClient 连接池已关闭")
 
     # ------------------------------------------------------------------
     # 实例选择与健康检查

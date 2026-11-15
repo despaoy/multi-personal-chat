@@ -56,6 +56,14 @@ async def applications(tmp_path, monkeypatch):
 
         def respond(request):
             wire.append((index, request.url.host, json.loads(request.content)))
+            if json.loads(request.content).get("stream"):
+                events = [
+                    {"choices": [{"index": 0, "delta": {"content": ANSWER[:8]}, "finish_reason": None}]},
+                    {"choices": [{"index": 0, "delta": {"content": ANSWER[8:]}, "finish_reason": "stop"}],
+                     "usage": {"prompt_tokens": 40, "completion_tokens": 20, "total_tokens": 60}},
+                ]
+                content = "".join("data: " + json.dumps(event) + "\n\n" for event in events) + "data: [DONE]\n\n"
+                return httpx.Response(200, text=content, headers={"Content-Type": "text/event-stream"})
             return httpx.Response(
                 200,
                 json={
@@ -182,6 +190,51 @@ async def test_two_lifespans_keep_resources_and_close_their_own_tasks(applicatio
         container.http_client_pool is container.backup_mgr is container.access_control_mgr is None
         for container in state.containers
     )
+
+
+async def test_character_library_and_chat_routes_use_application_database(applications):
+    from app.dependencies import get_current_user
+
+    state = applications
+    async with state.running(0), state.running(1):
+        async with state.client(0) as first, state.client(1) as second:
+            # Managed API keys cannot enter the personal account library.
+            assert (await first.get("/api/character-library")).status_code == 403
+            for app in state.apps:
+                app.dependency_overrides[get_current_user] = lambda: {"user_id": "17"}
+            created = await first.post("/api/character-library", json={
+                "name": "测试旅人", "persona": "谨慎", "greeting": "你好",
+            })
+            assert created.status_code == 201, created.text
+            character_id = created.json()["id"]
+            assert (await second.get(f"/api/character-library/{character_id}")).status_code == 404
+            created_session = await first.post("/api/character-chats", json={
+                "character_id": character_id, "title": "初识",
+            })
+            assert created_session.status_code == 201, created_session.text
+            session_id = created_session.json()["id"]
+            added = await first.post(f"/api/character-chats/{session_id}/memories", json={
+                "revision": 1, "content": "喜欢旅行",
+            })
+            assert added.status_code == 201, added.text
+            snapshot = await first.get(f"/api/character-chats/{session_id}")
+            assert snapshot.json()["session"]["state"]["memories"][0]["content"] == "喜欢旅行"
+            assert (await second.get(f"/api/character-chats/{session_id}")).status_code == 404
+            body = {"revision": 2, "request_id": "streamed-request", "message": QUESTION}
+            sent = await first.post(f"/api/character-chats/{session_id}/messages", json=body)
+            assert sent.status_code == 200, sent.text
+            assert sent.json()["reply"] == ANSWER
+            replay = await first.post(f"/api/character-chats/{session_id}/messages", json=body)
+            assert replay.status_code == 200 and replay.json()["id"] == sent.json()["id"]
+            assert len(state.wire) == 1
+            assert state.wire[0][0] == 0 and state.wire[0][2]["stream"] is True
+            events_url = f"/api/character-chats/{session_id}/generations/streamed-request/events"
+            events = await first.get(events_url)
+            assert events.status_code == 200 and "text/event-stream" in events.headers["content-type"]
+            event = json.loads(events.text.split("data: ")[1])
+            assert event["status"] == "completed" and event["turn_id"] == sent.json()["id"]
+            assert "draft_text" not in event
+            assert (await second.get(events_url)).status_code == 404
 
 
 async def test_real_managed_keys_and_same_key_ids_never_cross_application_databases(applications):

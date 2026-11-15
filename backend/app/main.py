@@ -109,6 +109,8 @@ from api.loras import router as loras_router
 from api.messages import router as messages_router
 from api.models import router as models_router
 from api.narrative import router as narrative_router
+from api.character_library import router as character_library_router
+from api.character_chat import router as character_chat_router
 from api.preferences import router as preferences_router
 from api.retrieval_eval import router as retrieval_eval_router
 from api.router import router as lora_router_router
@@ -120,6 +122,7 @@ from api.user_data import router as user_data_router
 # 应用生命周期
 # ═══════════════════════════════════════════
 _LIFESPAN_RESOURCE_NAMES = (
+    "character_chat_tasks",
     "http_client_pool",
     "backup_mgr",
     "access_control_mgr",
@@ -135,6 +138,9 @@ def _clear_lifespan_resource_references(container) -> None:
 async def lifespan(app: FastAPI):
     container = get_runtime_container(app)
     _clear_lifespan_resource_references(container)
+    from services.character_chat_tasks import CharacterChatTasks
+
+    container.character_chat_tasks = CharacterChatTasks()
     database = container.db
     postgres_mode = bool(container.is_pg_mode())
 
@@ -190,6 +196,7 @@ async def lifespan(app: FastAPI):
             ("评估任务", "evaluation.runtime_runner", "shutdown_generation_evaluations"),
             ("LoRA 训练任务", "training.task_manager", "shutdown_simple_lora_trainer", database),
             ("RAG 意图任务", "api.knowledge", "shutdown_intent_tasks"),
+            ("角色聊天生成任务", container.character_chat_tasks, "shutdown"),
             ("推理调度器", container.inference_runtime, "shutdown"),
             ("交付记忆任务", "services.delivery_memory", "shutdown_delivery_memory", database),
             ("角色回写任务", "services.turn_completion", "shutdown_turn_completions", database),
@@ -269,6 +276,8 @@ _ROUTERS = (
     stats_router,
     messages_router,
     narrative_router,
+    character_library_router,
+    character_chat_router,
     generate_router,
     loras_router,
     training_router,

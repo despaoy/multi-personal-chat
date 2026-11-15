@@ -833,6 +833,22 @@ class SQLiteDB:
             cursor.execute(statement)
 
         # 初始化LoRA数据（如果表为空）
+        # Compile the shared schema so both development SQLite and PostgreSQL
+        # use the same character version constraints.
+        from sqlalchemy.dialects.sqlite import dialect
+        from sqlalchemy.schema import CreateIndex, CreateTable
+        from db.models import CharacterLibraryEntry, CharacterLibraryVersion, CharacterChatSession, CharacterChatTurn, CharacterSharedMemory, CharacterChatEvidence, CharacterChatGeneration, CharacterChatEnrichmentJob, CharacterChatMemoryVector, CharacterSourceCorpus
+
+        for model in (CharacterLibraryEntry, CharacterLibraryVersion, CharacterChatSession, CharacterChatTurn, CharacterSharedMemory, CharacterChatEvidence, CharacterChatGeneration, CharacterChatEnrichmentJob, CharacterChatMemoryVector, CharacterSourceCorpus):
+            table = model.__table__
+            cursor.execute(str(CreateTable(table, if_not_exists=True).compile(dialect=dialect())))
+            for index in table.indexes:
+                cursor.execute(str(CreateIndex(index, if_not_exists=True).compile(dialect=dialect())))
+
+        self._ensure_column(cursor, 'character_source_corpora', 'index_receipt_json', 'TEXT')
+        self._ensure_column(cursor, 'character_source_corpora', 'index_status', "TEXT NOT NULL DEFAULT 'pending'")
+        self._ensure_column(cursor, 'character_source_corpora', 'index_attempt', 'INTEGER NOT NULL DEFAULT 1')
+        cursor.execute("UPDATE character_source_corpora SET index_status='completed' WHERE index_receipt_json IS NOT NULL AND index_status='pending'")
         cursor.execute('SELECT COUNT(*) FROM loras')
         if cursor.fetchone()[0] == 0:
             self._init_default_loras(cursor)
@@ -1141,12 +1157,13 @@ class SQLiteDB:
             "replyDelay": "1",
             # C11 fix: 不再默认 mock。mock provider 会静默返回罐头回复，
             # 生产部署时若用户未手动配置会误以为服务正常。
-            # 默认改为 vllm（需通过环境变量配置 vLLM 服务），
-            # 若 vLLM 未启动，调用会显式失败而非返回假数据。
-            "modelProvider": "vllm",
+            # 新开发数据库使用已确认的 Flash；无密钥时显式失败。
+            # 既有数据库设置不在此处覆盖，本地提供商仍可显式选择。
+            "modelProvider": "openai_compat",
             "baseModel": "qwen3-8b",
             "temperature": "0.7",
             "maxTokens": "2048",
+            "topP": "1.0",
             "contextWindow": "24k",
             "useKnowledgeBase": "true",
             "language": "zh-CN",
@@ -1169,7 +1186,7 @@ class SQLiteDB:
             "astrbotWechatPersonalNotes": "",
             "openaiCompatBaseUrl": "https://api.deepseek.com",
             "openaiCompatApiKey": "",
-            "openaiCompatModel": "deepseek-chat"
+            "openaiCompatModel": "deepseek-flash"
         }
 
         for key, value in default_config.items():
@@ -2277,13 +2294,23 @@ class SQLiteDB:
     def narrative_transaction(self, statements):
         """Commit narrative revision, message and state changes together."""
         from repositories.narrative import NarrativeConflict
+        from db.errors import RevisionConflictError
+
+        try:
+            self.revision_transaction(statements)
+        except RevisionConflictError as exc:
+            raise NarrativeConflict() from exc
+
+    def revision_transaction(self, statements):
+        """Commit statements atomically with optional affected-row assertions."""
+        from db.errors import RevisionConflictError
 
         conn = self._get_connection()
         try:
             for sql, params, expected in statements:
                 cursor = conn.execute(sql, params)
                 if expected is not None and cursor.rowcount != expected:
-                    raise NarrativeConflict()
+                    raise RevisionConflictError()
             conn.commit()
         except BaseException:
             conn.rollback()

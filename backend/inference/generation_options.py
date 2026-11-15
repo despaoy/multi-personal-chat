@@ -21,8 +21,8 @@ class GenerationOptions(BaseModel):
         return value
 
 
-def read_generation_options(config: dict[str, Any]) -> dict[str, float | int]:
-    values = {}
+def read_generation_options(config: dict[str, Any], *, default_top_p: float = 0.9) -> dict[str, float | int]:
+    values = {"topP": default_top_p}
     for name, env_name in {
         "temperature": "VLLM_TEMPERATURE",
         "maxTokens": "VLLM_MAX_TOKENS",

@@ -8,6 +8,161 @@
 
 export type JsonRecord = Record<string, unknown>;
 
+export interface CharacterSettings {
+  name: string;
+  persona: string;
+  greeting: string;
+  scenario: string;
+  relationships: string;
+  examples: Array<{ role: 'user' | 'assistant'; content: string }>;
+  reference_text: string;
+}
+
+export interface CharacterLibraryRecord {
+  id: string;
+  revision: number;
+  settings_revision: number;
+  settings: CharacterSettings;
+  share_token: string | null;
+  shared_revision: number | null;
+  source_character_id: string | null;
+  source_revision: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CharacterPackage {
+  format: 'multipersonal-character-v1';
+  settings: CharacterSettings;
+}
+
+export interface CharacterSourceUpdate {
+  available: boolean;
+  revision: number;
+  source_revision: number | null;
+  changes: Record<string, { current: unknown; incoming: unknown }>;
+}
+
+export interface CharacterChatSummary {
+  id: string;
+  character_id: string;
+  character_revision: number;
+  title: string;
+  revision: number;
+  mode: 'initial' | 'continuation' | 'branch';
+  source_session_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CharacterChatEvidence {
+  sources?: Array<{ id: string; title: string; excerpt: string; truncated: boolean; line_start?: number | null; line_end?: number | null }>;
+  retrieval_status?: string;
+  response_mode?: string;
+  reason?: string;
+}
+
+export interface CharacterChatTurn {
+  id: string;
+  session_id: string;
+  position: number;
+  request_id: string;
+  message: string;
+  reply: string;
+  model: string;
+  active: number;
+  evidence?: CharacterChatEvidence;
+}
+
+export interface CharacterChatMemory {
+  id: string;
+  content: string;
+  status: 'confirmed' | 'pending';
+  origin: string;
+  source_session_id: string;
+  source_turn_id: string | null;
+  evidence?: string;
+}
+
+export interface CharacterChatSession extends CharacterChatSummary {
+  source_corpus_id: string | null;
+  network_policy: 'cloud_allowed' | 'local_only';
+  // Derived summaries remain inspectable alongside their quoted source turns.
+  character: CharacterLibraryRecord;
+  hypothesis: string;
+  baseline: { history: Array<{ id: string; session_id: string; message: string; reply: string; character_revision?: number; evidence?: CharacterChatEvidence }> };
+  state: { relationship: { stage: 'stranger' | 'acquaintance' | 'familiar' | 'close'; summary?: string; origin?: string; evidence?: { role: 'user' | 'assistant'; quote: string }[] }; relationship_proposal?: { id: string; stage: 'stranger' | 'acquaintance' | 'familiar' | 'close'; summary: string; evidence: { role: 'user' | 'assistant'; quote: string }[] }; memories: CharacterChatMemory[]; memory_processing?: 'pending' | 'disabled' | 'skipped' | 'completed' | 'failed'; relationship_processing?: 'pending' | 'disabled' | 'skipped' | 'completed' | 'failed'; summary_processing?: 'pending' | 'disabled' | 'skipped' | 'completed' | 'failed'; summaries?: Array<{ summary: string; source_request_id: string; evidence: Array<{ turn_id: string; role: 'user' | 'assistant'; quote: string }> }> };
+}
+
+export interface CharacterChatGeneration {
+  request_id: string;
+  status: 'running' | 'failed' | 'interrupted' | 'completed' | 'superseded';
+  attempt: number;
+  lease_until: number;
+  turn_id: string | null;
+  error_code: string | null;
+  body?: SendCharacterChatMessage;
+}
+
+export interface CreateCharacterChat {
+  source_corpus_id?: string;
+  network_policy?: 'cloud_allowed' | 'local_only';
+  character_id: string;
+  title: string;
+  source_session_id?: string;
+  source_revision?: number;
+  source_turn_id?: string;
+  hypothesis?: string;
+  accept_settings_change?: boolean;
+  expected_character_revision?: number;
+  excluded_memory_ids?: string[];
+  reset_relationship?: boolean;
+  inherit_history?: boolean;
+  shared_memory_ids?: string[];
+}
+
+export interface CharacterSharedMemory {
+  id: string;
+  source_session_id: string;
+  memory: CharacterChatMemory;
+}
+
+export interface CharacterOriginalSource {
+  id: string;
+  title: string;
+  content: string;
+}
+
+export interface CharacterSourceEditionSummary {
+  index_status: 'pending' | 'submitted' | 'completed' | 'failed';
+  index_attempt: number;
+  id: string;
+  character_id: string;
+  character_revision: number;
+  content_digest: string;
+  created_at: string;
+}
+
+export interface CharacterSourceEdition extends CharacterSourceEditionSummary {
+  sources: CharacterOriginalSource[];
+}
+
+export interface ContinuationPreview {
+  source_revision: number;
+  character_revision: number;
+  previous_character_revision: number;
+  changes: Record<string, { previous: unknown; next: unknown }>;
+  relationship: CharacterChatSession['state']['relationship'];
+  memories: CharacterChatMemory[];
+}
+
+export interface SendCharacterChatMessage {
+  revision: number;
+  request_id: string;
+  message: string;
+  replace_turn_id?: string;
+}
+
 export interface GoldRubricCriterion {
   name: string;
   weight: number;

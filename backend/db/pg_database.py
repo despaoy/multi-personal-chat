@@ -113,6 +113,7 @@ class PgDatabase:
         if self._initialized:
             return
         async with self.engine.begin() as conn:
+            await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
             await conn.run_sync(metadata.create_all)
             await self._ensure_column(conn, "memory_sources", "body_digest", "TEXT")
             await self._ensure_column(conn, "messages", "platform", "TEXT NOT NULL DEFAULT 'qq'")
@@ -2601,13 +2602,22 @@ class PgDatabase:
     # ============================================
     async def narrative_transaction(self, statements):
         from repositories.narrative import NarrativeConflict
+        from db.errors import RevisionConflictError
+
+        try:
+            await self.revision_transaction(statements)
+        except RevisionConflictError as exc:
+            raise NarrativeConflict() from exc
+
+    async def revision_transaction(self, statements):
+        from db.errors import RevisionConflictError
 
         async with self.async_session() as session:
             async with session.begin():
                 for sql, params, expected in statements:
                     result = await session.execute(text(sql), params)
                     if expected is not None and result.rowcount != expected:
-                        raise NarrativeConflict()
+                        raise RevisionConflictError()
 
     async def execute_sql(self, query: str, params: Optional[dict] = None) -> Any:
         """执行原始 SQL 语句，返回结果。
@@ -3403,6 +3413,9 @@ class SyncPgAdapter:
 
     def narrative_transaction(self, statements):
         return self._run(self._pg.narrative_transaction(statements))
+
+    def revision_transaction(self, statements):
+        return self._run(self._pg.revision_transaction(statements))
 
     def execute_sql(self, query, params=None):
         """兼容 SQLite 的直接 SQL 执行"""

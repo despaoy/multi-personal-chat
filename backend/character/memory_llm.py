@@ -245,7 +245,9 @@ class MemoryLlmConfig:
 class OpenAICompatibleMemoryCompletion:
     """仅用于记忆判断的 OpenAI 兼容客户端。"""
 
-    def __init__(self, config: MemoryLlmConfig) -> None:
+    def __init__(self, config: MemoryLlmConfig, *, max_tokens: int = 768, local_only: bool = False) -> None:
+        self._local_only = local_only
+        self._max_tokens = max_tokens
         self._endpoint = chat_completions_endpoint(config.base_url)
         self._model = config.model
         self._nonthinking_parameters = nonthinking_parameters(config.base_url)
@@ -255,7 +257,8 @@ class OpenAICompatibleMemoryCompletion:
 
     async def complete(self, messages: list[dict[str, str]]) -> str:
         if self._client is None:
-            self._client = httpx.AsyncClient(timeout=self._timeout)
+            self._client = httpx.AsyncClient(timeout=self._timeout,
+                                           **({"trust_env": False, "follow_redirects": False} if self._local_only else {}))
         headers = {"Content-Type": "application/json"}
         if self._api_key:
             headers["Authorization"] = f"Bearer {self._api_key}"
@@ -267,7 +270,7 @@ class OpenAICompatibleMemoryCompletion:
                 "model": self._model,
                 "messages": messages,
                 "temperature": 0.0,
-                "max_tokens": 768,
+                "max_tokens": self._max_tokens,
                 "stream": False,
                 **self._nonthinking_parameters,
             },

@@ -156,6 +156,13 @@ class BaseProvider(ABC):
         from inference.request_context import get_request_context
 
         context = get_request_context()
+        if context is not None and context.local_only:
+            # Do not borrow a client that may have inherited an environment proxy.
+            import httpx
+
+            async with httpx.AsyncClient(timeout=httpx.Timeout(timeout), trust_env=False, follow_redirects=False) as client:
+                yield client
+            return
         if pool is None and context is not None:
             pool = context.http_client_pool
         if pool is not None:
@@ -210,7 +217,7 @@ class OpenAICompatProvider(_AsyncProvider):
         config = self._snapshot_config if self._snapshot_config is not None else _get_db_config(self._database)
         self.base_url = config.get("openaiCompatBaseUrl") or os.getenv("OPENAI_COMPAT_BASE_URL", "https://api.deepseek.com")
         self.api_key = config.get("openaiCompatApiKey") or os.getenv("OPENAI_COMPAT_API_KEY", "")
-        self.model = config.get("openaiCompatModel") or os.getenv("OPENAI_COMPAT_MODEL", "deepseek-chat")
+        self.model = config.get("openaiCompatModel") or os.getenv("OPENAI_COMPAT_MODEL", "deepseek-flash")
         self._model_name = self.model
         return config
 
@@ -249,6 +256,39 @@ class OpenAICompatProvider(_AsyncProvider):
             frequency_penalty=frequency_penalty, repetition_penalty=repetition_penalty,
             enable_thinking=enable_thinking, lora_name=lora_name,
         )
+
+    async def async_stream(
+        self, messages, *, temperature, max_tokens, top_p=None,
+        frequency_penalty=0.0, repetition_penalty=1.0, enable_thinking=False, lora_name=None,
+    ):
+        from inference.chat_stream import chat_deltas
+        from inference.usage import begin_completion
+
+        if self._snapshot_config is None:
+            self._refresh_db_config()
+        base_url, api_key, model = self.base_url, self.api_key, self.model
+        validate_completion_options(
+            base_url, top_p=top_p, frequency_penalty=frequency_penalty,
+            repetition_penalty=repetition_penalty, enable_thinking=enable_thinking, lora_name=lora_name,
+        )
+        if not api_key:
+            raise RuntimeError("未配置 API Key")
+        attempt = begin_completion()
+        async with self._acquire_http_client(timeout=120.0) as client:
+            async with client.stream(
+                "POST", chat_completions_endpoint(base_url),
+                headers={"Authorization": f"Bearer {api_key}"},
+                json={"model": model, "messages": messages, "temperature": temperature,
+                      "max_tokens": max_tokens, "stream": True, "stream_options": {"include_usage": True},
+                      **({"top_p": top_p} if top_p is not None else {}),
+                      **({"frequency_penalty": frequency_penalty} if frequency_penalty else {}),
+                      **nonthinking_parameters(base_url, local_template=False)},
+                timeout=120.0,
+            ) as response:
+                if response.status_code != 200:
+                    raise ProviderResponseError(response.status_code)
+                async for delta in chat_deltas(response.aiter_lines(), attempt):
+                    yield delta
 
     async def _complete_messages(
         self, messages, *, temperature, max_tokens, top_p=None,

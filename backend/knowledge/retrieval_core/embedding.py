@@ -11,6 +11,7 @@ import hashlib
 import logging
 import math
 import os
+import re
 import threading
 import time
 from pathlib import Path
@@ -82,14 +83,24 @@ def resolve_local_model_path(model_id: str = DEFAULT_EMBEDDING_MODEL_ID) -> str:
 
 
 def compute_model_fingerprint(model_path: str) -> str:
-    """Fingerprint the encoding contract and model configuration for cache invalidation."""
+    """Fingerprint weights, tokenizer and configuration for cache invalidation."""
     digest = hashlib.sha256(ENCODING_CONTRACT.encode())
-    for name in ("config.json", "modules.json", "sentence_bert_config.json"):
-        p = Path(model_path) / name
-        if p.exists():
-            digest.update(name.encode())
-            digest.update(p.read_bytes())
-    return digest.hexdigest()[:16]
+    root = Path(model_path)
+    suffixes = {".json", ".safetensors", ".bin", ".model", ".txt", ".vocab"}
+    files = sorted(p for p in root.rglob("*") if p.is_file() and p.suffix in suffixes
+                   and not any(part.startswith(".") for part in p.relative_to(root).parts))
+    if not files:
+        raise EmbeddingModelError("Embedding fingerprint requires local model files")
+    for path in files:
+        name = path.relative_to(root).as_posix().encode()
+        digest.update(len(name).to_bytes(8, "big"))
+        digest.update(name)
+        file_digest = hashlib.sha256()
+        with path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                file_digest.update(chunk)
+        digest.update(file_digest.digest())
+    return digest.hexdigest()
 
 
 @runtime_checkable
@@ -164,6 +175,11 @@ class SentenceTransformerEmbeddingProvider:
             raise EmbeddingModelError(f"sentence-transformers 不可用: {e}") from e
 
         device = self._device
+        if device is None:
+            configured = os.getenv("EMBEDDING_DEVICE", "auto").strip().lower()
+            if not re.fullmatch(r"auto|cpu|mps|cuda(?::\d+)?", configured):
+                raise EmbeddingModelError("EMBEDDING_DEVICE must be auto, cpu, mps or cuda[:index]")
+            device = None if configured == "auto" else configured
         if device is None:
             device = "cuda" if _cuda_available() else "cpu"
         self._model = SentenceTransformer(self.model_path, device=device)

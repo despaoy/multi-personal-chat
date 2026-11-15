@@ -23,6 +23,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from sqlalchemy.types import UserDefinedType
 
 
 class Base(DeclarativeBase):
@@ -32,6 +33,160 @@ class Base(DeclarativeBase):
 
 # 便于 alembic 引用：target_metadata = models.metadata
 metadata = Base.metadata
+
+
+class CharacterLibraryEntry(Base):
+    """An account-owned character with immutable published settings versions."""
+    __tablename__ = "character_library"
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    owner_user_id: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    source_character_id: Mapped[Optional[str]] = mapped_column(Text)
+    source_revision: Mapped[Optional[int]] = mapped_column(Integer)
+    share_token: Mapped[Optional[str]] = mapped_column(Text, unique=True)
+    shared_revision: Mapped[Optional[int]] = mapped_column(Integer)
+    created_at: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_at: Mapped[str] = mapped_column(Text, nullable=False)
+    __table_args__ = (CheckConstraint("revision >= 1", name="ck_character_library_revision"),)
+
+
+class CharacterLibraryVersion(Base):
+    """A stable settings snapshot that existing conversations can reference."""
+    __tablename__ = "character_library_versions"
+    character_id: Mapped[str] = mapped_column(
+        Text, ForeignKey("character_library.id", ondelete="CASCADE"), primary_key=True
+    )
+    revision: Mapped[int] = mapped_column(Integer, primary_key=True)
+    settings_json: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class CharacterSourceCorpus(Base):
+    """Immutable original-source edition; revocation removes its authority."""
+    __tablename__ = "character_source_corpora"
+    index_receipt_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    index_status: Mapped[str] = mapped_column(Text, nullable=False, server_default='pending')
+    index_attempt: Mapped[int] = mapped_column(Integer, nullable=False, server_default='1')
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    owner_user_id: Mapped[str] = mapped_column(Text, nullable=False)
+    character_id: Mapped[str] = mapped_column(Text, ForeignKey("character_library.id", ondelete="CASCADE"), nullable=False)
+    character_revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    content_digest: Mapped[str] = mapped_column(Text, nullable=False)
+    sources_json: Mapped[str] = mapped_column(Text, nullable=False)
+    revoked: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[str] = mapped_column(Text, nullable=False)
+    __table_args__ = (Index("ix_character_source_scope", "owner_user_id", "character_id", "character_revision"),)
+
+
+class CharacterChatSession(Base):
+    """A user-owned conversation bound to an immutable character version."""
+    __tablename__ = "character_chat_sessions"
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    owner_user_id: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    character_id: Mapped[str] = mapped_column(Text, nullable=False)
+    character_revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    mode: Mapped[str] = mapped_column(Text, nullable=False)
+    source_session_id: Mapped[Optional[str]] = mapped_column(Text)
+    source_turn_id: Mapped[Optional[str]] = mapped_column(Text)
+    hypothesis: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    baseline_json: Mapped[str] = mapped_column(Text, nullable=False)
+    state_json: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_at: Mapped[str] = mapped_column(Text, nullable=False)
+    __table_args__ = (
+        CheckConstraint("revision >= 1", name="ck_character_chat_revision"),
+        CheckConstraint("mode IN ('initial','continuation','branch')", name="ck_character_chat_mode"),
+    )
+
+
+class CharacterSharedMemory(Base):
+    """Explicit account-private snapshots offered to future conversations."""
+    __tablename__ = "character_shared_memories"
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    owner_user_id: Mapped[str] = mapped_column(Text, nullable=False, index=True)
+    source_session_id: Mapped[str] = mapped_column(Text, nullable=False)
+    source_memory_id: Mapped[str] = mapped_column(Text, nullable=False)
+    memory_json: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[str] = mapped_column(Text, nullable=False)
+    __table_args__ = (UniqueConstraint("source_session_id", "source_memory_id", name="uq_character_shared_source"),)
+
+
+class CharacterChatGeneration(Base):
+    """Durable request identity and a fenced generation attempt."""
+    __tablename__ = "character_chat_generations"
+    session_id: Mapped[str] = mapped_column(Text, ForeignKey("character_chat_sessions.id"), primary_key=True)
+    request_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    payload_json: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    lease_token: Mapped[str] = mapped_column(Text, nullable=False)
+    lease_until: Mapped[float] = mapped_column(Float, nullable=False)
+    attempt: Mapped[int] = mapped_column(Integer, nullable=False)
+    turn_id: Mapped[Optional[str]] = mapped_column(Text)
+    error_code: Mapped[Optional[str]] = mapped_column(Text)
+    draft_text: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    draft_revision: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    __table_args__ = (CheckConstraint("status IN ('running','completed','failed')", name="ck_chat_generation_status"),)
+
+
+class MemoryVectorType(UserDefinedType):
+    cache_ok = True
+
+    def get_col_spec(self, **kw):
+        return "vector"
+
+
+class CharacterChatMemoryVector(Base):
+    """Derived vectors; session revision and memory content remain the authority."""
+    __tablename__ = "character_chat_memory_vectors"
+    session_id: Mapped[str] = mapped_column(Text, ForeignKey("character_chat_sessions.id", ondelete="CASCADE"), primary_key=True)
+    memory_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    model_id: Mapped[str] = mapped_column(Text, nullable=False)
+    dimensions: Mapped[int] = mapped_column(Integer, nullable=False)
+    session_revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    content_digest: Mapped[str] = mapped_column(Text, nullable=False)
+    embedding: Mapped[str] = mapped_column(MemoryVectorType().with_variant(Text(), "sqlite"), nullable=False)
+
+
+class CharacterChatEnrichmentJob(Base):
+    """Outbox references only; workflow history need not contain private dialogue."""
+    __tablename__ = "character_chat_enrichment_jobs"
+    turn_id: Mapped[str] = mapped_column(Text, ForeignKey("character_chat_turns.id"), primary_key=True)
+    session_id: Mapped[str] = mapped_column(Text, nullable=False)
+    expected_revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default="pending")
+    created_at: Mapped[str] = mapped_column(Text, nullable=False)
+    __table_args__ = (CheckConstraint("status IN ('pending','submitted','completed','superseded','failed')", name="ck_chat_enrichment_status"),)
+
+
+class CharacterChatEvidence(Base):
+    """Answer-used evidence captured with the turn, not regenerated on display."""
+    __tablename__ = "character_chat_evidence"
+    turn_id: Mapped[str] = mapped_column(Text, ForeignKey("character_chat_turns.id"), primary_key=True)
+    payload_json: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class CharacterChatTurn(Base):
+    """One complete generated turn, including the state needed to rewind it."""
+    __tablename__ = "character_chat_turns"
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    session_id: Mapped[str] = mapped_column(Text, ForeignKey("character_chat_sessions.id"), nullable=False)
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+    request_id: Mapped[str] = mapped_column(Text, nullable=False)
+    request_revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    replaces_turn_id: Mapped[Optional[str]] = mapped_column(Text)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    reply: Mapped[str] = mapped_column(Text, nullable=False)
+    model: Mapped[str] = mapped_column(Text, nullable=False)
+    active: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
+    state_after_json: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[str] = mapped_column(Text, nullable=False)
+    __table_args__ = (
+        UniqueConstraint("session_id", "request_id", name="uq_character_chat_request"),
+        UniqueConstraint("session_id", "position", name="uq_character_chat_position"),
+        Index("ix_character_chat_turns_history", "session_id", "active", "position"),
+    )
 
 
 # ============================================

@@ -9,6 +9,13 @@ $Root = Resolve-Path (Join-Path $PSScriptRoot "..")
 $Backend = Join-Path $Root "backend"
 
 function Find-Python {
+    $ProjectPython = Join-Path $Root ".venv\Scripts\python.exe"
+    if (Test-Path -LiteralPath $ProjectPython -PathType Leaf) {
+        & $ProjectPython -V *> $null
+        if ($LASTEXITCODE -ne 0) { throw "Project .venv Python is unusable; repair the environment before continuing." }
+        return @{ Command = $ProjectPython; Args = @() }
+    }
+
     try {
         & py -3.12 -V *> $null
         if ($LASTEXITCODE -eq 0) { return @{ Command = "py"; Args = @("-3.12") } }

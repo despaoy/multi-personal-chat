@@ -651,9 +651,10 @@ async def test_vllm_initialization_retries_after_transient_failure(monkeypatch):
 
 def test_local_model_lock_restarts_on_a_fresh_event_loop(monkeypatch):
     from api import generate
+    from inference import local_model_access
 
-    monkeypatch.setattr(generate, "_local_model_lock", None)
-    monkeypatch.setattr(generate, "_local_model_lock_loop", None)
+    monkeypatch.setattr(local_model_access, "_lock", None)
+    monkeypatch.setattr(local_model_access, "_loop", None)
 
     async def use_lock():
         lock = generate._get_local_model_lock()

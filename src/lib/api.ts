@@ -47,6 +47,8 @@ export type * from './api-contracts';
 
 const API_BASE_URL = '/api';
 
+import type { CharacterChatSession, CharacterChatSummary, CharacterChatTurn, CreateCharacterChat, SendCharacterChatMessage, CharacterLibraryRecord, CharacterPackage, CharacterSettings } from './api-contracts';
+
 export class ApiRequestError extends Error {
   constructor(public readonly status: number, public readonly detail: unknown) {
     const message = detail && typeof detail === 'object' && 'message' in detail
@@ -669,6 +671,155 @@ function buildScopeQuery(scope: CharacterMemoryScope): string {
  * 导出为单例实例 `api`，全局共享使用。
  */
 class ApiClient {
+  listCharacterSources(id: string, revision: number, offset = 0) {
+    return this.request<{ corpora: import('./api-contracts').CharacterSourceEditionSummary[] }>(`/character-library/${encodeURIComponent(id)}/sources?revision=${revision}&limit=50&offset=${offset}`);
+  }
+
+  getCharacterSources(id: string, corpusId: string) {
+    return this.request<import('./api-contracts').CharacterSourceEdition>(`/character-library/${encodeURIComponent(id)}/sources/${encodeURIComponent(corpusId)}`);
+  }
+
+  publishCharacterSources(id: string, revision: number, sources: import('./api-contracts').CharacterOriginalSource[]) {
+    return this.request<import('./api-contracts').CharacterSourceEdition>(`/character-library/${encodeURIComponent(id)}/sources`, {
+      method: 'POST', body: JSON.stringify({ character_revision: revision, sources }),
+    });
+  }
+
+  revokeCharacterSources(id: string, corpusId: string) {
+    return this.request<{ revoked: string }>(`/character-library/${encodeURIComponent(id)}/sources/${encodeURIComponent(corpusId)}`, { method: 'DELETE' });
+  }
+
+  retryCharacterSources(id: string, corpusId: string, attempt: number) {
+    return this.request<import('./api-contracts').CharacterSourceEdition>(`/character-library/${encodeURIComponent(id)}/sources/${encodeURIComponent(corpusId)}/retry`, {
+      method: 'POST', body: JSON.stringify({ attempt }),
+    });
+  }
+
+  listCharacterChats(characterId?: string, offset = 0) {
+    const query = characterId ? `&character_id=${encodeURIComponent(characterId)}` : '';
+    return this.request<{ sessions: CharacterChatSummary[] }>(`/character-chats?limit=100&offset=${offset}${query}`);
+  }
+
+  getLibraryCharacter(id: string) {
+    return this.request<CharacterLibraryRecord>(`/character-library/${encodeURIComponent(id)}`);
+  }
+
+  deleteCharacterChats(sessions: { id: string; revision: number }[]) {
+    return this.request<{ deleted_session_ids: string[] }>('/character-chats/delete-selected', {
+      method: 'POST', body: JSON.stringify({ sessions }),
+    });
+  }
+
+  createCharacterChat(body: CreateCharacterChat) {
+    return this.request<CharacterChatSession>('/character-chats', { method: 'POST', body: JSON.stringify(body) });
+  }
+
+  getCharacterChat(id: string) {
+    return this.request<{ session: CharacterChatSession; turns: CharacterChatTurn[]; enrichment_pending: boolean; enrichment_retryable: boolean; generation: import('./api-contracts').CharacterChatGeneration | null }>(`/character-chats/${encodeURIComponent(id)}`);
+  }
+
+  retryChatEnrichment(id: string, revision: number) {
+    return this.request<{ queued: boolean }>(`/character-chats/${encodeURIComponent(id)}/enrichment/retry`, {
+      method: 'POST', body: JSON.stringify({ revision }),
+    });
+  }
+
+  getContinuationPreview(id: string) {
+    return this.request<import('./api-contracts').ContinuationPreview>(`/character-chats/${encodeURIComponent(id)}/continuation-preview`);
+  }
+
+  updateChatRelationship(id: string, revision: number, stage: CharacterChatSession['state']['relationship']['stage'], summary: string) {
+    return this.request<CharacterChatSession>(`/character-chats/${encodeURIComponent(id)}/relationship`, {
+      method: 'PUT', body: JSON.stringify({ revision, stage, summary }),
+    });
+  }
+
+  resolveChatRelationshipProposal(id: string, revision: number, proposalId: string, accept: boolean) {
+    return this.request<CharacterChatSession>(`/character-chats/${encodeURIComponent(id)}/relationship-proposal`, {
+      method: 'POST', body: JSON.stringify({ revision, proposal_id: proposalId, accept }),
+    });
+  }
+
+  listSharedChatMemories(offset = 0) {
+    return this.request<{ memories: import('./api-contracts').CharacterSharedMemory[] }>(`/character-chats/shared-memories?limit=100&offset=${offset}`);
+  }
+
+  shareChatMemory(sessionId: string, memoryId: string, revision: number) {
+    return this.request<CharacterChatSession>(`/character-chats/${encodeURIComponent(sessionId)}/memories/${encodeURIComponent(memoryId)}/share`, {
+      method: 'POST', body: JSON.stringify({ revision }),
+    });
+  }
+
+  unshareChatMemory(id: string) {
+    return this.request<{ removed: boolean }>(`/character-chats/shared-memories/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  }
+
+  sendCharacterChat(id: string, body: SendCharacterChatMessage) {
+    return this.request<CharacterChatTurn>(`/character-chats/${encodeURIComponent(id)}/messages`, { method: 'POST', body: JSON.stringify(body) });
+  }
+
+  retractCharacterChat(id: string, turnId: string, revision: number) {
+    return this.request<CharacterChatSession>(`/character-chats/${encodeURIComponent(id)}/messages/${encodeURIComponent(turnId)}/retract`, {
+      method: 'POST', body: JSON.stringify({ revision }),
+    });
+  }
+
+  saveCharacterChatMemory(id: string, revision: number, content: string, memoryId?: string) {
+    const suffix = memoryId ? `/${encodeURIComponent(memoryId)}` : '';
+    return this.request<CharacterChatSession>(`/character-chats/${encodeURIComponent(id)}/memories${suffix}`, {
+      method: memoryId ? 'PUT' : 'POST', body: JSON.stringify({ revision, content }),
+    });
+  }
+
+  deleteCharacterChatMemory(id: string, revision: number, memoryId: string) {
+    return this.request<CharacterChatSession>(`/character-chats/${encodeURIComponent(id)}/memories/${encodeURIComponent(memoryId)}`, {
+      method: 'DELETE', body: JSON.stringify({ revision }),
+    });
+  }
+
+  getCharacterSourceUpdate(id: string) {
+    return this.request<import('./api-contracts').CharacterSourceUpdate>(`/character-library/${encodeURIComponent(id)}/source-update`);
+  }
+
+  importCharacterSourceUpdate(id: string, revision: number, sourceRevision: number) {
+    return this.request<CharacterLibraryRecord>(`/character-library/${encodeURIComponent(id)}/source-update`, {
+      method: 'POST', body: JSON.stringify({ revision, source_revision: sourceRevision }),
+    });
+  }
+
+  listCharacterLibrary(offset = 0) {
+    return this.request<{ characters: CharacterLibraryRecord[] }>(`/character-library?limit=100&offset=${offset}`);
+  }
+
+  saveLibraryCharacter(settings: CharacterSettings, current?: CharacterLibraryRecord) {
+    return this.request<CharacterLibraryRecord>(current ? `/character-library/${current.id}` : '/character-library', {
+      method: current ? 'PUT' : 'POST',
+      body: JSON.stringify(current ? { revision: current.revision, settings } : settings),
+    });
+  }
+
+  importLibraryCharacter(value: unknown) {
+    return this.request<CharacterLibraryRecord>('/character-library/import', { method: 'POST', body: JSON.stringify(value) });
+  }
+
+  previewLibraryCharacterImport(value: unknown) {
+    return this.request<CharacterPackage>('/character-library/import-preview', { method: 'POST', body: JSON.stringify(value) });
+  }
+
+  exportLibraryCharacter(id: string) {
+    return this.request<CharacterPackage>(`/character-library/${id}/export`);
+  }
+
+  publishLibraryCharacter(current: CharacterLibraryRecord, enabled: boolean) {
+    return this.request<{ share_token: string | null; shared_revision: number | null }>(`/character-library/${current.id}/sharing`, {
+      method: 'PUT', body: JSON.stringify({ revision: current.revision, enabled }),
+    });
+  }
+
+  copySharedCharacter(token: string) {
+    return this.request<CharacterLibraryRecord>(`/character-library/shared/${encodeURIComponent(token)}/copy`, { method: 'POST' });
+  }
+
   /**
    * 通用请求方法 - 封装 fetch 调用，统一处理认证、请求头和错误
    *

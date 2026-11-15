@@ -3,3 +3,7 @@
 
 class RegistrationClosedError(RuntimeError):
     """Raised when bootstrap-only registration races with an existing user."""
+
+
+class RevisionConflictError(RuntimeError):
+    """An atomic write no longer matches its expected persisted revision."""

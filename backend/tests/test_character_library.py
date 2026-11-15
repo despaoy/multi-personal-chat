@@ -1,0 +1,235 @@
+"""Character versions and account isolation without model calls."""
+
+import importlib.util
+import sqlite3
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+from api.character_library import repository, router
+from app.dependencies import get_current_user
+from character.library import CharacterSettings
+from db.database import SQLiteDB
+from db.errors import RevisionConflictError
+from repositories.character_library import CharacterLibraryRepository, CharacterNotFoundError
+
+
+@pytest.fixture
+def repo(tmp_path):
+    db = SQLiteDB(tmp_path / "characters.db")
+    yield CharacterLibraryRepository(db)
+    db.close_connection()
+
+
+def settings(name="角色"):
+    return CharacterSettings(name=name, persona="谨慎，有自己的立场", greeting="你好")
+
+
+def test_import_preview_validates_without_persisting_and_rejects_private_fields(repo):
+    app = FastAPI()
+    app.include_router(router)
+    app.dependency_overrides[get_current_user] = lambda: {'user_id': 'import-owner'}
+    app.dependency_overrides[repository] = lambda: repo
+    package = {'format': 'multipersonal-character-v1', 'settings': settings().model_dump()}
+    with TestClient(app) as client:
+        preview = client.post('/api/character-library/import-preview', json=package)
+        assert preview.status_code == 200
+        assert repo.list('import-owner') == []
+        assert client.post('/api/character-library/import-preview', json={**package, 'private_memories': ['secret']}).status_code == 422
+        assert client.post('/api/character-library/import-preview', json={**package, 'format': 'unknown-card'}).status_code == 422
+        imported = client.post('/api/character-library/import', json=preview.json())
+        assert imported.status_code == 201
+        assert len(repo.list('import-owner')) == 1
+        assert repo.list('other-owner') == []
+        exported = client.get(f"/api/character-library/{imported.json()['id']}/export")
+        assert exported.json() == preview.json()
+
+
+def test_versions_and_stale_updates(repo):
+    created = repo.create("1", settings())
+    updated = repo.update("1", created["id"], 1, settings("新名字"))
+    assert updated["revision"] == 2
+    assert repo.get("1", created["id"], 1)["settings"]["name"] == "角色"
+    with pytest.raises(RevisionConflictError):
+        repo.update("1", created["id"], 1, settings("覆盖"))
+    assert repo.get("1", created["id"])["settings"]["name"] == "新名字"
+    with pytest.raises(CharacterNotFoundError):
+        repo.update("2", created["id"], 2, settings())
+    assert repo.list("2") == []
+
+
+def test_author_update_requires_explicit_import_and_exact_preview(repo):
+    from repositories.character_chat import CharacterChatRepository
+
+    original = repo.create("1", settings())
+    token = repo.publish("1", original["id"], 1, True)["share_token"]
+    copied = repo.copy_shared("2", token)
+    chats = CharacterChatRepository(repo.database)
+    session = chats.create("2", copied["id"], "保持原设定")
+    repo.update("1", original["id"], 1, settings("私有草稿"))
+    preview = repo.source_update("2", copied["id"])
+    assert not preview["available"] and preview["changes"] == {}
+    repo.publish("1", original["id"], 2, True)
+    preview = repo.source_update("2", copied["id"])
+    assert preview["available"] and preview["source_revision"] == 2
+    assert preview["changes"]["name"] == {"current": "角色", "incoming": "私有草稿"}
+    assert repo.get("2", copied["id"])["revision"] == 1
+    repo.update("2", copied["id"], 1, settings("本地修改"))
+    with pytest.raises(RevisionConflictError):
+        repo.import_source_update("2", copied["id"], 1, 2)
+    repo.publish("1", original["id"], 2, False)
+    assert not repo.source_update("2", copied["id"])["available"]
+    with pytest.raises(RevisionConflictError):
+        repo.import_source_update("2", copied["id"], 2, 2)
+    repo.publish("1", original["id"], 2, True)
+    imported = repo.import_source_update("2", copied["id"], 2, 2)
+    assert imported["revision"] == 3 and imported["source_revision"] == 2
+    assert imported["settings"]["name"] == "私有草稿"
+    assert chats.get("2", session["id"])["character"]["settings"]["name"] == "角色"
+    assert not repo.source_update("2", copied["id"])["available"]
+    with pytest.raises(CharacterNotFoundError):
+        repo.source_update("3", copied["id"])
+
+
+def test_source_update_http_contract(repo):
+    original = repo.create("1", settings())
+    token = repo.publish("1", original["id"], 1, True)["share_token"]
+    copied = repo.copy_shared("2", token)
+    repo.update("1", original["id"], 1, settings("发布更新"))
+    repo.publish("1", original["id"], 2, True)
+    app = FastAPI()
+    app.include_router(router)
+    app.dependency_overrides[get_current_user] = lambda: {"user_id": "2"}
+    app.dependency_overrides[repository] = lambda: repo
+    url = f"/api/character-library/{copied['id']}/source-update"
+    with TestClient(app) as client:
+        assert client.get(url).json()["available"]
+        assert client.post(url, json={"revision": 1, "source_revision": 3}).status_code == 409
+        imported = client.post(url, json={"revision": 1, "source_revision": 2})
+        assert imported.status_code == 200 and imported.json()["revision"] == 2
+        assert client.post(url, json={"revision": 1, "source_revision": 2}).status_code == 409
+        app.dependency_overrides[get_current_user] = lambda: {"user_id": "3"}
+        assert client.get(url).status_code == 404
+
+
+def test_sharing_is_explicit_snapshot_and_copy_is_independent(repo):
+    created = repo.create("1", settings())
+    share = repo.publish("1", created["id"], 1, True)
+    token = share["share_token"]
+    repo.update("1", created["id"], 1, settings("私有草稿"))
+    shared = repo.shared(token)
+    assert shared["settings"]["name"] == "角色"
+    assert "owner_user_id" not in shared
+    copied = repo.copy_shared("2", token)
+    assert copied["source_revision"] == 1
+    repo.publish("1", created["id"], 2, True)
+    assert repo.shared(token)["settings"]["name"] == "私有草稿"
+    assert repo.get("2", copied["id"])["settings"]["name"] == "角色"
+    repo.publish("1", created["id"], 2, False)
+    with pytest.raises(CharacterNotFoundError):
+        repo.shared(token)
+    assert repo.get("2", copied["id"])["revision"] == 1
+
+
+def test_transaction_failure_rolls_back_character_head(repo):
+    created = repo.create("1", settings())
+    with pytest.raises(sqlite3.OperationalError):
+        repo.database.revision_transaction(
+            [
+                ("UPDATE character_library SET revision=2 WHERE id=:id", {"id": created["id"]}, 1),
+                ("INSERT INTO missing_table VALUES (1)", {}, 1),
+            ]
+        )
+    assert repo.get("1", created["id"])["revision"] == 1
+
+
+def test_concurrent_edits_only_commit_one_version(repo):
+    created = repo.create("1", settings())
+
+    def edit(name):
+        try:
+            return repo.update("1", created["id"], 1, settings(name))
+        except RevisionConflictError:
+            return None
+        finally:
+            repo.database.close_connection()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(edit, ["甲", "乙"]))
+    assert sum(result is not None for result in results) == 1
+    assert repo.get("1", created["id"])["revision"] == 2
+
+
+def test_existing_narrative_transaction_keeps_conflict_contract(repo):
+    from repositories.narrative import NarrativeConflict
+
+    with pytest.raises(NarrativeConflict):
+        repo.database.narrative_transaction(
+            [
+                ("UPDATE character_library SET revision=2 WHERE id='missing'", {}, 1),
+            ]
+        )
+
+
+@pytest.mark.parametrize(
+    "migration_name, expected_tables",
+    [
+        ("017_character_library", {"character_library", "character_library_versions"}),
+        ("018_character_chat", {"character_chat_sessions", "character_chat_turns"}),
+        ("019_character_shared_memory", {"character_shared_memories"}),
+        ("020_character_chat_evidence", {"character_chat_evidence"}),
+        ("021_character_chat_generation", {"character_chat_generations"}),
+        ("023_character_chat_enrichment", {"character_chat_enrichment_jobs"}),
+    ],
+)
+def test_migration_creates_and_removes_version_tables(tmp_path, migration_name, expected_tables):
+    import sqlalchemy as sa
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    path = Path(__file__).parents[1] / f"alembic/versions/{migration_name}.py"
+    spec = importlib.util.spec_from_file_location("character_library_migration", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    engine = sa.create_engine("sqlite:///" + str(tmp_path / "migration.db"))
+    try:
+        with engine.begin() as connection:
+            module.op = Operations(MigrationContext.configure(connection))
+            module.upgrade()
+            module.upgrade()
+            tables = sa.inspect(connection).get_table_names()
+            assert set(tables) == expected_tables
+            module.downgrade()
+            assert sa.inspect(connection).get_table_names() == []
+    finally:
+        engine.dispose()
+
+
+def test_api_ownership_validation_export_and_conflict(repo):
+    app = FastAPI()
+    app.include_router(router)
+    app.dependency_overrides[repository] = lambda: repo
+    app.dependency_overrides[get_current_user] = lambda: {"user_id": "1", "role": "user"}
+    with TestClient(app) as client:
+        assert (
+            client.post("/api/character-library", json={"name": " ", "persona": "x", "greeting": "x"}).status_code
+            == 422
+        )
+        response = client.post("/api/character-library", json=settings().model_dump())
+        assert response.status_code == 201
+        entry = response.json()
+        url = "/api/character-library/" + entry["id"]
+        package = client.get(url + "/export").json()
+        assert set(package) == {"format", "settings"}
+        assert client.post("/api/character-library/import", json=package).status_code == 201
+        body = {"revision": 1, "settings": settings("二版").model_dump()}
+        assert client.put(url, json=body).status_code == 200
+        assert client.put(url, json=body).status_code == 409
+        app.dependency_overrides[get_current_user] = lambda: {"user_id": "2", "role": "user"}
+        assert client.get(url).status_code == 404
+        assert client.put(url, json=body).status_code == 404
+        app.dependency_overrides[get_current_user] = lambda: {"user_id": None, "auth_type": "api_key"}
+        assert client.get("/api/character-library").status_code == 403

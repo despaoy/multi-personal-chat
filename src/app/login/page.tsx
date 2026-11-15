@@ -10,6 +10,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { LogIn, UserPlus } from 'lucide-react';
+import { loginReturnPath } from '@/lib/login-return';
 
 export default function LoginPage() {
   const { login, register } = useAuth();
@@ -30,7 +31,7 @@ export default function LoginPage() {
       setSubmitting(true);
       await login(loginUsername, loginPassword);
       toast.success('登录成功');
-      router.push('/');
+      router.replace(loginReturnPath(new URLSearchParams(window.location.search).get('redirect')));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '登录失败');
     } finally {
@@ -59,7 +60,7 @@ export default function LoginPage() {
       setSubmitting(true);
       await register(regUsername, regPassword);
       toast.success('注册成功');
-      router.push('/');
+      router.replace(loginReturnPath(new URLSearchParams(window.location.search).get('redirect')));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : '注册失败，用户名可能已存在');
     } finally {

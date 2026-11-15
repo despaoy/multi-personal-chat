@@ -27,6 +27,7 @@ backend/.pytest-tmp-*/
 .env.test.local
 .env.production.local
 !.env.example
+!.env.character-chat.example
 
 # === Logs ===
 logs/
@@ -251,6 +252,7 @@ scripts/qwen3_tokenizer/
 
 # Local test runtimes, lint cache and personal comparison notes.
 /.codex-test-runtime-*/
+/.pytest-tmp-*/
 .ruff_cache/
 /legacy_vs_multiscale_review.md
 
