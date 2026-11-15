@@ -401,20 +401,8 @@ class SimpleLoRATrainer:
             "early_stopping_patience": int(config.get("early_stopping_patience", 3)),
         }
 
-        # 透传前端可能发送的额外字段（LoRATrainingConfig 可能支持）
-        extra_keys = {
-            "target_modules", "lr_scheduler_type", "truncation_direction",
-            "chat_template", "use_8bit_adam",
-            "lora_target_modules", "load_in_4bit", "load_in_8bit",
-            "use_cache", "preprocessing_num_workers", "dataloader_num_workers",
-            "logging_steps", "save_steps", "eval_steps", "save_total_limit",
-            "packing", "neftune_noise_alpha", "use_dora", "use_rslora", "report_to", "logging_dir",
-        }
-        for key in extra_keys:
-            if key in config:
-                kwargs[key] = config[key]
-
-        # 透传 config 中任何未被显式提取的字段（未来扩展兼容）
+        # 其余字段只透传一次，由 LoRATrainingConfig 校验支持范围。
+        # 已转换的字段和前端别名不能覆盖上面的规范化结果。
         known = {
             "model_name_or_path", "lora_rank", "lora_alpha", "lora_dropout",
             "learning_rate", "num_train_epochs", "per_device_train_batch_size",
@@ -423,7 +411,7 @@ class SimpleLoRATrainer:
             "max_grad_norm", "early_stopping_patience",
             # 前端冗余字段，后端已由 fp16/bf16 表达，无需透传
             "mixed_precision",
-        } | extra_keys
+        }
         for key, value in config.items():
             if key not in known and key not in kwargs:
                 kwargs[key] = value
@@ -446,9 +434,7 @@ class SimpleLoRATrainer:
         if kwargs.get("use_8bit_adam"):
             kwargs["optim"] = "adamw_8bit"
 
-        train_config = LoRATrainingConfig(**kwargs)
-
-        return train_config
+        return LoRATrainingConfig(**kwargs)
 
     def _find_dataset_file(self, dataset_path: Path, *, file_name: Optional[str] = None) -> Path:
         if dataset_path.is_file():

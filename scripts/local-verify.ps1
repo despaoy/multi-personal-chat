@@ -5,6 +5,8 @@ param(
 $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
 $OutputEncoding = [Console]::OutputEncoding
+# Python subprocesses must also use UTF-8 on Windows, independent of the console.
+$env:PYTHONUTF8 = "1"
 $Root = Resolve-Path (Join-Path $PSScriptRoot "..")
 $Backend = Join-Path $Root "backend"
 
@@ -88,7 +90,7 @@ Invoke-Step "Alembic migration graph check" $Backend $Python.Command ($PyArgs + 
 Invoke-Step "Backend core tests" $Backend $Python.Command ($PyArgs + @(
     "-m", "pytest", "tests", "-q", "--basetemp", $PytestTmp
 ))
-Invoke-Step "API smoke test and mock AstrBot event" $Backend $Python.Command ($PyArgs + @("-m", "scripts.local_smoke"))
+Invoke-Step "API startup and unavailable-provider smoke test" $Backend $Python.Command ($PyArgs + @("-m", "scripts.local_smoke"))
 Invoke-Step "Repository integrity" $Root $Python.Command ($PyArgs + @("scripts/check_repository_integrity.py"))
 Invoke-Step "Release file hygiene" $Root $Python.Command ($PyArgs + @("scripts/check_release_hygiene.py"))
 Invoke-Step "Git whitespace check" $Root "git" @("diff", "--check")

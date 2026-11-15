@@ -251,6 +251,35 @@ def test_mutating_routes_default_to_admin_authorization():
     from fastapi.routing import APIRoute
 
     from app.main import _ROUTERS
+    from api.character_library import account
+    from app.dependencies import get_current_user
+
+    # Account-owned writes are intentionally available to ordinary users.
+    # Enumerate routes so a new write cannot silently inherit this exception.
+    account_writes = {
+        ("POST", "/api/character-library/{character_id}/sources"),
+        ("DELETE", "/api/character-library/{character_id}/sources/{corpus_id}"),
+        ("POST", "/api/character-library/{character_id}/sources/{corpus_id}/retry"),
+        ("POST", "/api/character-library"),
+        ("POST", "/api/character-library/import"),
+        ("POST", "/api/character-library/import-preview"),
+        ("POST", "/api/character-library/shared/{token}/copy"),
+        ("PUT", "/api/character-library/{character_id}"),
+        ("PUT", "/api/character-library/{character_id}/sharing"),
+        ("POST", "/api/character-library/{character_id}/source-update"),
+        ("POST", "/api/character-chats"),
+        ("DELETE", "/api/character-chats/shared-memories/{shared_id}"),
+        ("POST", "/api/character-chats/{session_id}/memories/{memory_id}/share"),
+        ("POST", "/api/character-chats/{session_id}/enrichment/retry"),
+        ("POST", "/api/character-chats/delete-selected"),
+        ("POST", "/api/character-chats/{session_id}/messages"),
+        ("POST", "/api/character-chats/{session_id}/messages/{turn_id}/retract"),
+        ("PUT", "/api/character-chats/{session_id}/relationship"),
+        ("POST", "/api/character-chats/{session_id}/relationship-proposal"),
+        ("POST", "/api/character-chats/{session_id}/memories"),
+        ("PUT", "/api/character-chats/{session_id}/memories/{memory_id}"),
+        ("DELETE", "/api/character-chats/{session_id}/memories/{memory_id}"),
+    }
 
     explicit_exceptions = {
         ("POST", "/api/ask"): "get_current_user",
@@ -284,6 +313,11 @@ def test_mutating_routes_default_to_admin_authorization():
             }
             for method in route.methods & unsafe_methods:
                 key = (method, route.path)
+                if key in account_writes:
+                    guards = [dep for dep in route.dependant.dependencies if dep.call is account]
+                    assert len(guards) == 1, key
+                    assert any(dep.call is get_current_user for dep in guards[0].dependencies), key
+                    continue
                 if key in explicit_exceptions:
                     expected_dependency = explicit_exceptions[key]
                     if expected_dependency is not None:

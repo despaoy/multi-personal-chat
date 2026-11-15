@@ -6,7 +6,7 @@
 
 先阅读 [当前实现与阅读入口](CURRENT_STATE.md)。`research/review_packets/` 内的 Markdown、JSON 和 HTML 是当时的样本、批准决定与实验记录；不因文档更新重新批准、改写分数或修改哈希。`KISAKI_GAME_RAG_*` 保留各阶段设计与验收记录，部署检索请使用现行架构文档。
 
-早期文档审查的范围和未执行验证见 [2026-09-11 维护记录](maintainer/DOCUMENTATION_REVIEW_2026-09-11.md)，该记录按原日期保留。
+早期文档审查的范围和未执行验证见 [2026-09-11 维护记录](https://github.com/despaoy/multi-personal-chat/blob/edf48c54aa71db64e2be3307cf54fd86c8d40379/docs/maintainer/DOCUMENTATION_REVIEW_2026-09-11.md)，该记录按原日期保留。
 
 ## 阅读顺序
 

@@ -20,7 +20,7 @@ def test_private_artifacts_are_rejected(path):
 
 
 @pytest.mark.parametrize(
-    "path", [".env.example", "docs/README.md", "backend/db/database.py", "archive/p6_rag_pipeline/README.md"]
+    "path", [".env.example", ".env.character-chat.example", "docs/README.md", "backend/db/database.py"]
 )
 def test_source_and_history_are_allowed(path):
     assert not forbidden_artifact(path)

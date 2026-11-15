@@ -12,11 +12,8 @@ import type {
   EvaluationRunRecord,
   EvaluationRunRequest,
   FeedbackRecord,
-  GoldPromptRecord,
   GoldSetResponse,
 } from '@/lib/api-contracts';
-
-export type GoldPrompt = GoldPromptRecord;
 
 export type EvalRun = EvaluationRunRecord;
 

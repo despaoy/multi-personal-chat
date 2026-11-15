@@ -40,7 +40,7 @@ BODY = (
 @pytest.fixture
 def corpus(tmp_path, monkeypatch):
     path = tmp_path / "fictional-original.txt"
-    path.write_text(BODY, encoding="utf8")
+    path.write_text(BODY, encoding="utf8", newline="\n")
     extractor = OriginalTextExtractor(tmp_path)
     monkeypatch.setattr(curated_sources, "_extractor", lambda: extractor)
     aliases = {"林澄澈": "澄澈", "白露川": "露川"}
@@ -589,7 +589,7 @@ def test_catalogue_snapshot_keeps_excerpt_and_file_hash_on_same_original(corpus,
         try:
             return original(source, **kwargs)
         finally:
-            corpus.path.write_text(BODY, encoding="utf-8")
+            corpus.path.write_text(BODY, encoding="utf-8", newline="\n")
 
     monkeypatch.setattr(corpus.extractor, "extract", transient_change)
     catalog = collect_curated_sources(

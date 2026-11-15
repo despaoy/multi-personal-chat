@@ -2,14 +2,21 @@
 
 import importlib.util
 import json
+import os
 from pathlib import Path
 
 import paramiko
 
 
 def connect():
-    directory = Path.home() / "Desktop" / "solve" / "automation"
-    config = json.loads((directory / "server_config_x99_server2.json").read_text(encoding="utf-8"))
+    config_path = os.getenv('LHM_SSH_CONFIG', '').strip()
+    if not config_path:
+        from remote_config import connect_ssh
+
+        return connect_ssh()
+    config_file = Path(config_path).expanduser().resolve()
+    directory = config_file.parent
+    config = json.loads(config_file.read_text(encoding="utf-8"))
     spec = importlib.util.spec_from_file_location("windows_secret", directory / "windows_secret.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

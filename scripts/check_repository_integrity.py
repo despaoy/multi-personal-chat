@@ -11,21 +11,12 @@ from pathlib import Path
 from urllib.parse import unquote
 
 ROOT = Path(__file__).resolve().parents[1]
-ARCHIVE_TEXT_SUFFIXES = frozenset(
-    {".json", ".md", ".ps1", ".py", ".sh", ".toml", ".txt", ".yaml", ".yml"}
-)
 
 
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def _canonical_archive_bytes(path: Path) -> bytes:
-    """Return the repository-canonical payload for cross-platform archive checks."""
-    payload = path.read_bytes()
-    if path.suffix.lower() in ARCHIVE_TEXT_SUFFIXES:
-        return payload.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
-    return payload
 
 
 def _jsonl_count(path: Path) -> int:
@@ -84,6 +75,9 @@ def _check_frontend_navigation(errors: list[str]) -> None:
 
 
 def _check_script_indexes(errors: list[str]) -> None:
+    published = set(filter(None, subprocess.check_output(
+        ['git', 'ls-files', '--cached', '--others', '--exclude-standard', '-z'], cwd=ROOT,
+    ).decode('utf-8').split('\0')))
     indexes = (
         (
             ROOT / "scripts",
@@ -103,6 +97,7 @@ def _check_script_indexes(errors: list[str]) -> None:
             path.name
             for path in directory.iterdir()
             if path.is_file()
+            and path.relative_to(ROOT).as_posix() in published
             and path.suffix in {".py", ".ps1", ".sh"}
             and path.name not in excluded
         }
@@ -114,6 +109,9 @@ def _check_script_indexes(errors: list[str]) -> None:
 
 def _check_readme_links(errors: list[str]) -> None:
     pattern = re.compile(r"!?(?:\[[^\]]*\])\(([^)]+)\)")
+    tracked = set(filter(None, subprocess.check_output(
+        ['git', 'ls-files', '--cached', '--others', '--exclude-standard', '-z'], cwd=ROOT,
+    ).decode('utf-8').split('\0')))
     paths = subprocess.check_output(
         ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", "README.md", "**/README.md"],
         cwd=ROOT,
@@ -134,57 +132,14 @@ def _check_readme_links(errors: list[str]) -> None:
                     f"{readme.relative_to(ROOT)} link escapes repository: {raw_target}"
                 )
                 continue
-            if not resolved.exists():
+            relative = resolved.relative_to(ROOT).as_posix()
+            available = relative in tracked or any(name.startswith(relative.rstrip('/') + '/') for name in tracked)
+            if not resolved.exists() or not available:
                 errors.append(f"{readme.relative_to(ROOT)} broken link: {raw_target}")
 
 
-def _check_archive_index(errors: list[str]) -> None:
-    index_path = ROOT / "scripts/archive/INDEX.json"
-    index = json.loads(index_path.read_text(encoding="utf-8"))
-    entries = index.get("entries", [])
-    if index.get("entry_count") != len(entries):
-        errors.append("scripts/archive/INDEX.json entry_count mismatch")
-    indexed_paths = {entry["archived_path"] for entry in entries}
-    actual_paths = {
-        path.relative_to(ROOT).as_posix()
-        for path in (ROOT / "scripts/archive").rglob("*")
-        if path.is_file()
-        and path != index_path
-        and "__pycache__" not in path.parts
-        and path.suffix != ".pyc"
-    }
-    if missing := sorted(indexed_paths - actual_paths):
-        errors.append(f"archive entries missing on disk: {', '.join(missing)}")
-    if unindexed := sorted(actual_paths - indexed_paths):
-        errors.append(f"archive files not indexed: {', '.join(unindexed)}")
-    for entry in entries:
-        path = ROOT / entry["archived_path"]
-        if not path.exists():
-            continue
-        payload = _canonical_archive_bytes(path)
-        if entry.get("bytes") != len(payload):
-            errors.append(f"archive size mismatch: {entry['archived_path']}")
-        if entry.get("sha256") != hashlib.sha256(payload).hexdigest():
-            errors.append(f"archive hash mismatch: {entry['archived_path']}")
 
 
-def _check_p6_archive_manifest(errors: list[str]) -> None:
-    manifest_path = ROOT / "archive/p6_rag_pipeline/MANIFEST.json"
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    entries = manifest.get("files", [])
-    if not entries:
-        errors.append("P6 archive manifest contains no files")
-        return
-    for entry in entries:
-        path = ROOT / entry["archived_path"]
-        if not path.is_file():
-            errors.append(f"P6 archive file missing: {entry['archived_path']}")
-            continue
-        payload = _canonical_archive_bytes(path)
-        if entry.get("bytes") != len(payload):
-            errors.append(f"P6 archive size mismatch: {entry['archived_path']}")
-        if entry.get("sha256") != hashlib.sha256(payload).hexdigest():
-            errors.append(f"P6 archive hash mismatch: {entry['archived_path']}")
 
 
 def _check_tracked_artifacts(errors: list[str]) -> None:
@@ -221,8 +176,6 @@ def main() -> int:
     _check_frontend_navigation(errors)
     _check_script_indexes(errors)
     _check_readme_links(errors)
-    _check_archive_index(errors)
-    _check_p6_archive_manifest(errors)
     _check_tracked_artifacts(errors)
     if errors:
         print("Repository integrity check failed:", file=sys.stderr)

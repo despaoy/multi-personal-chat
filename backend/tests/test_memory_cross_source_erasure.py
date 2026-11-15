@@ -2,7 +2,7 @@ import copy
 import json
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -108,9 +108,9 @@ def new_fields():
     return ("tsukiyashiro_kisaki", "qq", "unit-fragment", owner, "private", owner)
 
 
-def speech(db, fields, body=BODY):
+def speech(db, fields, body=BODY, *, observed_at=None):
     sid = uuid.uuid4().hex
-    stamp = datetime.now(timezone.utc)
+    stamp = observed_at or datetime.now(timezone.utc)
     assert db.capture_memory_source(*fields, source_message_id=sid, body=body, observed_at=stamp) == "recorded"
     return sid, stamp
 
@@ -221,7 +221,8 @@ def test_sql_previously_fenced_unlinked_source_never_becomes_a_new_observation(d
     assert database.erase_character_memories(*fields, memory_key="user_name") == 1
     # New receipt and genuine new source are captured after the first fence;
     # the older unrelated raw source must remain excluded, despite its body.
-    sid, stamp = speech(database, fields, OLD)
+    # Make this ordering explicit on platforms with coarse wall-clock ticks.
+    sid, stamp = speech(database, fields, OLD, observed_at=datetime.now(timezone.utc) + timedelta(seconds=1))
     database.append_character_memory_claim(
         *fields,
         "user_fact",

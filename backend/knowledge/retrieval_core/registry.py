@@ -79,11 +79,6 @@ class KnowledgeDomainConfig:
     # 索引产物目录；缺省为 source_root 同级的 rag_index/
     index_root: Path | None = None
 
-    def resolve_index_root(self) -> Path:
-        if self.index_root is not None:
-            return Path(self.index_root)
-        return self.source_root.parent / "rag_index"
-
     def canonical_entity(self, token: str) -> str | None:
         """把查询中的别名/规范名映射到规范实体名。"""
         return self.aliases.get(token)
@@ -110,12 +105,6 @@ class DomainRegistry:
         if config is None:
             raise KeyError(f"未注册的知识域: {domain_id}")
         return config
-
-    def list_domains(self, enabled_only: bool = True) -> list[KnowledgeDomainConfig]:
-        return [cfg for cfg in self._domains.values() if (cfg.enabled or not enabled_only)]
-
-    def domain_ids(self, enabled_only: bool = True) -> list[str]:
-        return [cfg.domain_id for cfg in self.list_domains(enabled_only)]
 
     def __len__(self) -> int:
         return len(self._domains)

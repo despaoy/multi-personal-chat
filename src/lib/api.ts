@@ -23,9 +23,6 @@ import type {
   PreferenceSampleRequest,
   PreferenceUpdateRequest,
   RouterAdaptersResponse,
-  RouterConfigRecord,
-  RouterConfigResponse,
-  RouterLogsResponse,
   StatsMetricsResponse,
   UserDataResponse,
 } from './api-contracts';
@@ -229,34 +226,6 @@ export interface DatasetsResponse {
   datasets: Dataset[];
 }
 
-/** 模型训练配置 - 针对不同 GPU 的优化参数 */
-export interface ModelConfig {
-  name: string;
-  model_name: string;
-  gpu_type: string;
-  batch_size: number;
-  gradient_accumulation_steps: number;
-  cutoff_len: number;
-  lora_rank: number;
-  lora_alpha: number;
-  lora_dropout: number;
-  learning_rate: number;
-  num_train_epochs: number;
-  warmup_ratio: number;
-  weight_decay: number;
-  bf16: boolean;
-  fp16: boolean;
-  load_in_4bit: boolean;
-  use_gradient_checkpointing: boolean;
-  description: string;
-}
-
-/** 模型配置列表响应 */
-export interface ModelConfigsResponse {
-  success: boolean;
-  configs: ModelConfig[];
-}
-
 /** 训练任务 - 包含任务 ID、状态、进度等信息 */
 export interface TrainingTask {
   task_id: string;
@@ -273,25 +242,6 @@ export interface TrainingTask {
 export interface TrainingTasksResponse {
   success: boolean;
   tasks: TrainingTask[];
-}
-
-/** 单个训练任务响应 */
-export interface TrainingTaskResponse {
-  success: boolean;
-  task: TrainingTask;
-}
-
-/** 人物风格预设 */
-export interface CharacterStyle {
-  name: string;
-  display_name: string;
-  description: string;
-}
-
-/** 风格列表响应 */
-export interface StylesResponse {
-  success: boolean;
-  styles: CharacterStyle[];
 }
 
 /** 创建数据集请求参数 */
@@ -375,16 +325,6 @@ export interface KnowledgeDocument {
   updatedAt: string;
 }
 
-/** 知识库文档分块 */
-export interface KnowledgeChunk {
-  id: number;
-  documentId: number;
-  chunkIndex: number;
-  content: string;
-  embedding?: number[];
-  createdAt: string;
-}
-
 /** 知识库（顶层容器） */
 export interface KnowledgeBase {
   id: number;
@@ -459,13 +399,6 @@ export interface KnowledgeDocumentsResponse {
   success: boolean;
   documents: KnowledgeDocument[];
   stats: KnowledgeStats;
-}
-
-/** 单个知识库文档响应 */
-export interface KnowledgeDocumentResponse {
-  success: boolean;
-  document: KnowledgeDocument;
-  chunks: KnowledgeChunk[];
 }
 
 /** 创建知识库文档请求参数 */
@@ -821,18 +754,18 @@ class ApiClient {
   }
 
   /**
-   * 通用请求方法 - 封装 fetch 调用，统一处理认证、请求头和错误
+   * 通用传输方法 - 统一请求头和认证，保留响应体供调用方处理
    *
    * 统一特性：
    * - credentials: 'include' 确保 httpOnly Cookie 随请求发送（Edge浏览器兼容）
    * - 自动注入 Content-Type: application/json（有body时）
-   * - 统一错误处理：尝试提取后端错误信息
+   * - 非登录请求的 401 统一触发会话过期处理
    *
    * @param {string} path - API 路径（相对于 /api）
    * @param {RequestInit} [options] - fetch 选项
-   * @returns {Promise<T>} 解析后的 JSON 响应
+   * @returns {Promise<Response>} 尚未读取响应体的原始响应
    */
-  private async request<T>(path: string, options?: RequestInit): Promise<T> {
+  private async requestResponse(path: string, options?: RequestInit): Promise<Response> {
     const headers = new Headers(options?.headers);
     // Let the browser choose the multipart boundary for FormData.
     if (options?.body !== undefined && !(options.body instanceof FormData) && !headers.has('Content-Type')) {
@@ -845,11 +778,15 @@ class ApiClient {
       headers,
     });
 
+    if (response.status === 401 && !path.startsWith('/auth/')) {
+      this._handle401Redirect();
+    }
+    return response;
+  }
+
+  private async request<T>(path: string, options?: RequestInit): Promise<T> {
+    const response = await this.requestResponse(path, options);
     if (!response.ok) {
-      // 401 时自动清理用户状态并跳转登录页
-      if (response.status === 401 && !path.startsWith('/auth/')) {
-        this._handle401Redirect();
-      }
       // 尝试提取后端错误详情
       let detail: unknown;
       try {
@@ -871,15 +808,14 @@ class ApiClient {
 
   /**
    * 统一的 401 重定向处理：清除本地用户状态、调用后端清 Cookie、跳转登录页。
-   * 从 request() 提取出来，供 health()/exportDataset() 等返回特殊类型的方法复用，
-   * 避免绕过统一 401 处理导致 token 过期时用户卡在错误状态。
+   * 由 requestResponse() 统一调用，覆盖 JSON、健康检查和文件下载请求。
    */
   private _handle401Redirect(): void {
     if (typeof window === 'undefined') return;
     if (window.location.pathname.includes('/login')) return;
     // C6 fix: httpOnly Cookie 无法被 JS 清除，必须调用后端 /api/auth/logout。
     // 否则 middleware 仍会看到 Cookie 存在，把 /login 重定向回 /，形成死锁。
-    // 使用同步 fetch（带 keepalive 以支持 unload 期间完成）触发后端清 Cookie，
+    // 使用 keepalive fetch 支持 unload 期间完成后端清 Cookie，
     // 然后带 ?expired=1 跳转，middleware 识别此参数放行到 /login。
     try {
       fetch('/api/auth/logout', {
@@ -915,10 +851,8 @@ class ApiClient {
     // 原先直连 /health 在纯 Next.js dev 模式（无 nginx）下会 404，
     // 因为 Next.js 根路径无对应的 page.tsx/route.ts。
     // src/app/api/health/route.ts 已存在并正确代理到后端 /health。
-    const response = await fetch(`${API_BASE_URL}/health`, { credentials: 'include' });
+    const response = await this.requestResponse('/health');
     if (!response.ok) {
-      // 复用统一 401 处理（虽然 /health 通常公开，但部署中可能被中间件拦截）
-      if (response.status === 401) this._handle401Redirect();
       throw new Error('Health check failed');
     }
     return response.json();
@@ -1098,27 +1032,12 @@ class ApiClient {
   }
 
   /**
-   * 列出可用的模型训练配置（支持 RTX 4060 / RTX 3090 等多种 GPU）
-   * @returns {Promise<ModelConfigsResponse>} GPU 优化训练配置列表
-   */
-  async listModelConfigs(): Promise<ModelConfigsResponse> {
-    return this.request<ModelConfigsResponse>('/training/models');
-  }
-
-  /**
    * 导出数据集为 ZIP 文件（用于上传到服务器训练）
    * @param {string} datasetName - 数据集名称
    * @returns {Promise<Response>} ZIP 文件的 Response 对象
    */
   async exportDataset(datasetName: string): Promise<Response> {
-    const response = await fetch(`${API_BASE_URL}/training/datasets/${encodeURIComponent(datasetName)}/export`, {
-      credentials: 'include',
-    });
-    if (!response.ok && response.status === 401) {
-      // 复用统一 401 处理：导出数据集需要登录，token 过期时引导用户重新登录
-      this._handle401Redirect();
-    }
-    return response;
+    return this.requestResponse(`/training/datasets/${encodeURIComponent(datasetName)}/export`);
   }
 
   /**
@@ -1161,15 +1080,6 @@ class ApiClient {
   }
 
   /**
-   * 获取单个训练任务的详细信息
-   * @param {string} taskId - 训练任务 ID
-   * @returns {Promise<TrainingTaskResponse>} 任务详情（状态、进度等）
-   */
-  async getTrainingTask(taskId: string): Promise<TrainingTaskResponse> {
-    return this.request<TrainingTaskResponse>(`/training/tasks/${taskId}`);
-  }
-
-  /**
    * 取消正在运行的训练任务
    * @param {string} taskId - 训练任务 ID
    * @returns {Promise<{success: boolean; message: string}>} 取消结果
@@ -1178,14 +1088,6 @@ class ApiClient {
     return this.request<{ success: boolean; message: string }>(`/training/tasks/${taskId}/cancel`, {
       method: 'POST',
     });
-  }
-
-  /**
-   * 列出可用的预定义人物风格
-   * @returns {Promise<StylesResponse>} 风格列表
-   */
-  async listStyles(): Promise<StylesResponse> {
-    return this.request<StylesResponse>('/training/styles');
   }
 
   /**
@@ -1203,15 +1105,6 @@ class ApiClient {
     if (folderId) params.append('folder_id', folderId.toString());
     const qs = params.toString();
     return this.request<KnowledgeDocumentsResponse>(`/knowledge/documents${qs ? '?' + qs : ''}`);
-  }
-
-  /**
-   * 获取单个知识库文档及其分块
-   * @param {number} docId - 文档 ID
-   * @returns {Promise<KnowledgeDocumentResponse>} 文档详情及内容分块
-   */
-  async getKnowledgeDocument(docId: number): Promise<KnowledgeDocumentResponse> {
-    return this.request<KnowledgeDocumentResponse>(`/knowledge/documents/${docId}`);
   }
 
   /**
@@ -1284,14 +1177,6 @@ class ApiClient {
     return this.request<{ success: boolean; base: KnowledgeBase }>('/knowledge/bases', {
       method: 'POST',
       body: JSON.stringify({ name, description }),
-    });
-  }
-
-  /** 更新知识库 */
-  async updateKnowledgeBase(kbId: number, data: { name?: string; description?: string }): Promise<{ success: boolean; base: KnowledgeBase }> {
-    return this.request<{ success: boolean; base: KnowledgeBase }>(`/knowledge/bases/${kbId}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
     });
   }
 
@@ -1655,23 +1540,8 @@ class ApiClient {
     return this.request<{ success: boolean; report: string }>(`/experiments/${expId}/report`);
   }
 
-  async getRouterConfig(): Promise<RouterConfigResponse> {
-    return this.request<RouterConfigResponse>('/router/config');
-  }
-
-  async updateRouterConfig(req: Partial<RouterConfigRecord>): Promise<RouterConfigResponse> {
-    return this.request<RouterConfigResponse>('/router/config', {
-      method: 'PUT',
-      body: JSON.stringify(req),
-    });
-  }
-
   async getRouterAdapters(): Promise<RouterAdaptersResponse> {
     return this.request<RouterAdaptersResponse>('/router/adapters');
-  }
-
-  async getRouterLogs(): Promise<RouterLogsResponse> {
-    return this.request<RouterLogsResponse>('/router/logs');
   }
 
   async checkAdapter(adapterName: string): Promise<AdapterCheckResponse> {

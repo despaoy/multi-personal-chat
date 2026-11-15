@@ -1,55 +1,55 @@
 # 发布前检查清单
 
 > 本文定义仓库进入“可发布”状态时需要满足的最低事实和命令验证结果。
-> 历史完整验证按各节日期保留；不能视为当前工作区再次通过。2026-09-11 文档核对范围见 [维护记录](maintainer/DOCUMENTATION_REVIEW_2026-09-11.md)。
+> 历史完整验证按各节日期保留；不能视为当前工作区再次通过。2026-09-11 文档核对范围见 [维护记录](https://github.com/despaoy/multi-personal-chat/blob/edf48c54aa71db64e2be3307cf54fd86c8d40379/docs/maintainer/DOCUMENTATION_REVIEW_2026-09-11.md)。
 
 ## 2026-10-25：记忆重构后整体验证
 
-完整后端只运行一次，首次27项失败定位后仅复测145项。最新案例汇总10735通过、1合理跳过、0未解决失败，共10736项，含实际PostgreSQL及3项CPU训练。付费模型和GPU关闭，见[里程碑报告](reports/backend-memory-milestone-20261025.md)。
+完整后端只运行一次，首次27项失败定位后仅复测145项。最新案例汇总10735通过、1合理跳过、0未解决失败，共10736项，含实际PostgreSQL及3项CPU训练。付费模型和GPU关闭，见[里程碑报告](https://github.com/despaoy/multi-personal-chat/blob/edf48c54aa71db64e2be3307cf54fd86c8d40379/docs/reports/backend-memory-milestone-20261025.md)。
 
 ## 2026-10-25：别名与位置类别
 
-282项相关检查通过，生产代码净减少88行；十组完整合成场景使用12次实际DeepSeek请求、29,742tokens，包含一次补齐读回格式的局部复测。未重复全量后端，见[阶段报告](reports/backend-memory-predicate-owner-20261025.md)。
+282项相关检查通过，生产代码净减少88行；十组完整合成场景使用12次实际DeepSeek请求、29,742tokens，包含一次补齐读回格式的局部复测。未重复全量后端，见[阶段报告](https://github.com/despaoy/multi-personal-chat/blob/edf48c54aa71db64e2be3307cf54fd86c8d40379/docs/reports/backend-memory-predicate-owner-20261025.md)。
 
 ## 2026-10-25：通用事实类别
 
-234项相关检查通过，生产代码净减少5行；两次新DeepSeek请求共3643tokens完成姓名、专业和惯用手三项写入及读回。未重复全量后端，见[阶段报告](reports/backend-memory-kind-owner-20261025.md)。
+234项相关检查通过，生产代码净减少5行；两次新DeepSeek请求共3643tokens完成姓名、专业和惯用手三项写入及读回。未重复全量后端，见[阶段报告](https://github.com/despaoy/multi-personal-chat/blob/edf48c54aa71db64e2be3307cf54fd86c8d40379/docs/reports/backend-memory-kind-owner-20261025.md)。
 
 ## 2026-10-25：记忆目标冲突
 
-168项相关检查通过；三类非法目标提议明确失败且不部分写入，实际SQLite合法更新及PostgreSQL来源继承保持。未新增模型调用，未重复全量后端，见[阶段报告](reports/backend-memory-target-contract-20261025.md)。
+168项相关检查通过；三类非法目标提议明确失败且不部分写入，实际SQLite合法更新及PostgreSQL来源继承保持。未新增模型调用，未重复全量后端，见[阶段报告](https://github.com/despaoy/multi-personal-chat/blob/edf48c54aa71db64e2be3307cf54fd86c8d40379/docs/reports/backend-memory-target-contract-20261025.md)。
 
 ## 2026-10-25：原文证据归属
 
-510项相关检查通过；两次新DeepSeek请求共3086tokens，完成混合陈述/问题的准确写入和姓名、专业两项读回。未重复全量后端，见[阶段报告](reports/backend-memory-evidence-owner-20261025.md)。
+510项相关检查通过；两次新DeepSeek请求共3086tokens，完成混合陈述/问题的准确写入和姓名、专业两项读回。未重复全量后端，见[阶段报告](https://github.com/despaoy/multi-personal-chat/blob/edf48c54aa71db64e2be3307cf54fd86c8d40379/docs/reports/backend-memory-evidence-owner-20261025.md)。
 
 ## 2026-10-25：偏好对象与限定来源
 
-379项相关检查全部通过；四次新DeepSeek共7910tokens，保留两次来源失败，最后两次完成真实写入、检索、参考编译与模型读回。未重复全量后端，见[阶段报告](reports/backend-memory-preference-owner-20261025.md)。
+379项相关检查全部通过；四次新DeepSeek共7910tokens，保留两次来源失败，最后两次完成真实写入、检索、参考编译与模型读回。未重复全量后端，见[阶段报告](https://github.com/despaoy/multi-personal-chat/blob/edf48c54aa71db64e2be3307cf54fd86c8d40379/docs/reports/backend-memory-preference-owner-20261025.md)。
 
 ## 2026-10-25：完成回执与失败归属
 
-245项相关案例中244通过、1合理跳过，对应真实PostgreSQL行锁实例通过。实际SQLite/PostgreSQL保留已存档回复，回写异常明确503且计量只执行一次。无新模型请求，未重复全量后端，见[阶段报告](reports/backend-completion-result-owner-20261025.md)。
+245项相关案例中244通过、1合理跳过，对应真实PostgreSQL行锁实例通过。实际SQLite/PostgreSQL保留已存档回复，回写异常明确503且计量只执行一次。无新模型请求，未重复全量后端，见[阶段报告](https://github.com/despaoy/multi-personal-chat/blob/edf48c54aa71db64e2be3307cf54fd86c8d40379/docs/reports/backend-completion-result-owner-20261025.md)。
 
 ## 2026-10-25：记忆目标身份
 
-318项相关检查通过；一次新DeepSeek请求在同key的两条记录中明确选择正确ID并写入新增事实，2501tokens计量一致。未重复全量后端，范围见[阶段报告](reports/backend-memory-target-owner-20261025.md)。
+318项相关检查通过；一次新DeepSeek请求在同key的两条记录中明确选择正确ID并写入新增事实，2501tokens计量一致。未重复全量后端，范围见[阶段报告](https://github.com/despaoy/multi-personal-chat/blob/edf48c54aa71db64e2be3307cf54fd86c8d40379/docs/reports/backend-memory-target-owner-20261025.md)。
 
 ## 2026-10-25：记忆操作与片段
 
-442项相关检查通过；最终两次新DeepSeek请求完整保存三条，目标旧响应按当前代码回放验证，保留早期失败与费用记录。未重复全量后端，范围见[阶段报告](reports/backend-memory-relation-owner-20261025.md)。
+442项相关检查通过；最终两次新DeepSeek请求完整保存三条，目标旧响应按当前代码回放验证，保留早期失败与费用记录。未重复全量后端，范围见[阶段报告](https://github.com/despaoy/multi-personal-chat/blob/edf48c54aa71db64e2be3307cf54fd86c8d40379/docs/reports/backend-memory-relation-owner-20261025.md)。
 
 ## 2026-10-25：记忆值归属
 
-模型偏好和值的后处理精简，242项相关检查通过；三次新DeepSeek合成请求保存四条记忆且计量一致。未重复全量后端，范围见[阶段报告](reports/backend-memory-value-owner-20261025.md)。
+模型偏好和值的后处理精简，242项相关检查通过；三次新DeepSeek合成请求保存四条记忆且计量一致。未重复全量后端，范围见[阶段报告](https://github.com/despaoy/multi-personal-chat/blob/edf48c54aa71db64e2be3307cf54fd86c8d40379/docs/reports/backend-memory-value-owner-20261025.md)。
 
 ## 2026-10-25：工具执行语义
 
-旧NoneBot工具失败、严格JSON及异步进程管理125项相关检查通过；真实DeepSeek使用完整合成样本，末轮两次请求完成链路。未重复整套后端，范围见[阶段报告](reports/backend-nonebot-tools-owner-20261025.md)。
+旧NoneBot工具失败、严格JSON及异步进程管理125项相关检查通过；真实DeepSeek使用完整合成样本，末轮两次请求完成链路。未重复整套后端，范围见[阶段报告](https://github.com/despaoy/multi-personal-chat/blob/edf48c54aa71db64e2be3307cf54fd86c8d40379/docs/reports/backend-nonebot-tools-owner-20261025.md)。
 
 ## 2026-10-25：机器人生成归属
 
-NoneBot模型选择及工具计量改动在完整后端基线之后，255项直接相关检查全部通过；未重跑整套后端。范围见[阶段报告](reports/backend-nonebot-provider-owner-20261025.md)。
+NoneBot模型选择及工具计量改动在完整后端基线之后，255项直接相关检查全部通过；未重跑整套后端。范围见[阶段报告](https://github.com/despaoy/multi-personal-chat/blob/edf48c54aa71db64e2be3307cf54fd86c8d40379/docs/reports/backend-nonebot-provider-owner-20261025.md)。
 
 ## 发布边界
 
@@ -106,7 +106,7 @@ powershell -ExecutionPolicy Bypass -File scripts/local-verify.ps1 -Frontend
 
 1362个已跟踪Python文件语法及近期134个Python改动文件基础静态检查、仓库完整性和代码迁移head核对通过。服务器就绪及登录页200，未登录受保护接口401；配置和业务进程不变，无需重启。
 
-当前范围、首次失败及复测见[当前后端里程碑](reports/backend-current-milestone-20261025.md)。此前 `ea09dd5` 的10551项通过及其一次定向修正保留在[早期里程碑](reports/backend-milestone-20261025.md)。历史发布审查仍见[2026-09-11记录](maintainer/RELEASE_AUDIT_2026-09-11.md)，不能把本轮后端检查等同于全部发布条件完成。
+当前范围、首次失败及复测见[当前后端里程碑](https://github.com/despaoy/multi-personal-chat/blob/edf48c54aa71db64e2be3307cf54fd86c8d40379/docs/reports/backend-current-milestone-20261025.md)。此前 `ea09dd5` 的10551项通过及其一次定向修正保留在[早期里程碑](https://github.com/despaoy/multi-personal-chat/blob/edf48c54aa71db64e2be3307cf54fd86c8d40379/docs/reports/backend-milestone-20261025.md)。历史发布审查仍见[2026-09-11记录](https://github.com/despaoy/multi-personal-chat/blob/edf48c54aa71db64e2be3307cf54fd86c8d40379/docs/maintainer/RELEASE_AUDIT_2026-09-11.md)，不能把本轮后端检查等同于全部发布条件完成。
 
 ### 本地源码验证（2026-09-11）
 

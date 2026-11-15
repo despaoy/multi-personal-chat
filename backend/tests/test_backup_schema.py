@@ -3,6 +3,7 @@
 from app.runtime import RuntimeContainer
 from infra.concurrency_control import inference_runtime
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -15,7 +16,7 @@ from scripts.restore_sqlite_backup import restore_sqlite_backup
 @pytest.mark.parametrize("kind", [BackupType.FULL, BackupType.INCREMENTAL])
 async def test_backup_and_offline_restore_preserve_complete_schema_and_triggers(tmp_path, kind):
     source, target = tmp_path / "source.sqlite", tmp_path / "target.sqlite"
-    with sqlite3.connect(source) as connection:
+    with closing(sqlite3.connect(source)) as connection, connection:
         connection.executescript("""
             CREATE TABLE events(id INTEGER PRIMARY KEY,payload TEXT NOT NULL);
             CREATE TABLE audit(event_id INTEGER NOT NULL);
@@ -26,7 +27,7 @@ async def test_backup_and_offline_restore_preserve_complete_schema_and_triggers(
             INSERT INTO events VALUES(1,'first complete fact'),(2,'second complete fact');
         """)
         expected_schema = connection.execute("SELECT type,name,tbl_name,sql FROM sqlite_master ORDER BY type,name").fetchall()
-    with sqlite3.connect(target) as connection:
+    with closing(sqlite3.connect(target)) as connection, connection:
         connection.execute("CREATE TABLE previous(value TEXT)")
         connection.execute("INSERT INTO previous VALUES('original target')")
 
@@ -35,9 +36,9 @@ async def test_backup_and_offline_restore_preserve_complete_schema_and_triggers(
     assert artifact is not None and artifact.backup_type is kind
     safety = restore_sqlite_backup(Path(artifact.path), target)
     assert safety is not None
-    with sqlite3.connect(safety) as connection:
+    with closing(sqlite3.connect(safety)) as connection, connection:
         assert connection.execute("SELECT value FROM previous").fetchall() == [("original target",)]
-    with sqlite3.connect(target) as connection:
+    with closing(sqlite3.connect(target)) as connection, connection:
         assert connection.execute("PRAGMA integrity_check").fetchone() == ("ok",)
         assert connection.execute("SELECT type,name,tbl_name,sql FROM sqlite_master ORDER BY type,name").fetchall() == expected_schema
         assert connection.execute("SELECT * FROM event_summary ORDER BY id").fetchall() == [(1, "first complete fact"), (2, "second complete fact")]
@@ -54,7 +55,7 @@ async def test_backup_failure_preserves_cause_and_releases_owned_files(tmp_path,
     from infra import backup_manager as module
     source = tmp_path / 'source.sqlite'
     if stage != 'missing':
-        with sqlite3.connect(source) as connection:
+        with closing(sqlite3.connect(source)) as connection, connection:
             connection.execute('CREATE TABLE evidence(value TEXT NOT NULL)')
             connection.execute("INSERT INTO evidence VALUES('complete synthetic source')")
     manager = BackupManager(str(source), backup_dir=str(tmp_path / 'archives'))
@@ -110,12 +111,12 @@ async def test_two_same_second_backups_preserve_both_versions_and_existing_names
 
     monkeypatch.setattr(module, "datetime", Clock)
     source = tmp_path / "source.sqlite"
-    with sqlite3.connect(source) as connection:
+    with closing(sqlite3.connect(source)) as connection, connection:
         connection.execute("CREATE TABLE evidence(value TEXT)")
         connection.execute("INSERT INTO evidence VALUES('first complete state')")
     manager = BackupManager(str(source), backup_dir=str(tmp_path / "archives"))
     first = await manager.backup()
-    with sqlite3.connect(source) as connection:
+    with closing(sqlite3.connect(source)) as connection, connection:
         connection.execute("UPDATE evidence SET value='second complete state'")
     second = await manager.backup()
     assert first.path != second.path
@@ -123,7 +124,7 @@ async def test_two_same_second_backups_preserve_both_versions_and_existing_names
         target = tmp_path / f"readback{index}.sqlite"
         with gzip.open(artifact.path, "rb") as compressed:
             target.write_bytes(compressed.read())
-        with sqlite3.connect(target) as connection:
+        with closing(sqlite3.connect(target)) as connection, connection:
             assert connection.execute("SELECT value FROM evidence").fetchall() == [(expected,)]
     legacy = tmp_path / "archives/source_20200101_010203_full.bak.gz"
     shutil.copyfile(first.path, legacy)
@@ -139,7 +140,7 @@ async def test_incomplete_backup_is_not_published(tmp_path, monkeypatch):
     from infra import backup_manager as module
 
     source = tmp_path / "source.sqlite"
-    with sqlite3.connect(source) as connection:
+    with closing(sqlite3.connect(source)) as connection, connection:
         connection.execute("CREATE TABLE evidence(value TEXT)")
         connection.execute("INSERT INTO evidence VALUES('complete synthetic state')")
     manager = BackupManager(str(source), backup_dir=str(tmp_path / "archives"))
@@ -173,7 +174,7 @@ async def test_unknown_backup_type_fails_before_creating_files(tmp_path):
 async def test_backup_list_io_failure_cannot_become_partial_success(tmp_path, monkeypatch):
     from api import enhanced
     source = tmp_path / 'source.sqlite'
-    with sqlite3.connect(source) as connection:
+    with closing(sqlite3.connect(source)) as connection, connection:
         connection.execute('CREATE TABLE evidence(value TEXT)')
         connection.execute("INSERT INTO evidence VALUES('complete synthetic source')")
     manager = BackupManager(str(source), backup_dir=str(tmp_path / 'archives'))

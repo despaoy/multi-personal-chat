@@ -260,15 +260,6 @@ export interface ExperimentStartResponse {
   error?: string;
 }
 
-export interface RouterConfigRecord {
-  enabled: boolean;
-  default_adapter: string;
-  mode: 'manual' | 'rule' | 'intent';
-  persona_adapters: Record<string, string>;
-  rag_confidence_threshold: number;
-  persona_keywords: Record<string, string[]>;
-}
-
 export interface RouterCompatibilityRecord {
   compatible: boolean;
   checked_at: string;
@@ -283,33 +274,10 @@ export interface RouterAdapterRecord {
   compatibility: RouterCompatibilityRecord | null;
 }
 
-export interface RoutingLogRecord {
-  timestamp: string;
-  trace_id: string;
-  target: string;
-  adapter_name: string;
-  confidence: number;
-  reason: string;
-  fallback: boolean;
-  requires_rag: boolean;
-}
-
-export interface RouterConfigResponse {
-  success: boolean;
-  config: RouterConfigRecord;
-}
-
 export interface RouterAdaptersResponse {
   success: boolean;
   adapters: RouterAdapterRecord[];
   total: number;
-}
-
-export interface RouterLogsResponse {
-  success: boolean;
-  logs: RoutingLogRecord[];
-  total: number;
-  note?: string;
 }
 
 export type PreferenceReviewStatus = 'pending' | 'approved' | 'rejected';

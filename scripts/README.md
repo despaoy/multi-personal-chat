@@ -1,6 +1,6 @@
 # Scripts index
 
-本目录只保存当前可执行的研究、训练、评测、远程运行与仓库验证入口。FastAPI 服务维护工具见 [`../backend/scripts/README.md`](../backend/scripts/README.md)，历史工具见 [`archive/README.md`](archive/README.md)。正式实验不得调用归档脚本。
+本目录只保存当前可执行的研究、训练、评测、远程运行与仓库验证入口。FastAPI 服务维护工具见 [`../backend/scripts/README.md`](../backend/scripts/README.md)，历史工具见 [`archive/README.md`](https://github.com/despaoy/multi-personal-chat/blob/edf48c54aa71db64e2be3307cf54fd86c8d40379/scripts/archive/README.md)。正式实验不得调用归档脚本。
 
 ## 仓库与本地验证
 
@@ -17,7 +17,7 @@
 - 提取与来源：`extract_character_dialogues.py`、`audit_kisaki_source_alignment.py`。
 - 构建与冻结：`build_kisaki_v4_canonical_draft.py`、`freeze_kisaki_v4_dataset.py`、`finalize_kisaki_v4_dataset.py`。
 - 清理与契约：`build_kisaki_v4_cleanup_candidate.py`、`promote_kisaki_v4_cleanup_candidate.py`、`align_kisaki_v4_prompt_policy.py`、`apply_kisaki_v4_speaker_contract.py`、`apply_kisaki_v4_text_normalizations.py`。
-- 审核材料：`build_kisaki_train_review.py`、`apply_kisaki_llm_persona_review.py`、`apply_kisaki_llm_full_dialogue_review.py`。
+- 审核材料：`apply_kisaki_llm_persona_review.py`、`apply_kisaki_llm_full_dialogue_review.py`。
 - Gold：`build_kisaki_gold_v21.py`、`build_kisaki_gold_v3.py`、`reaudit_kisaki_gold_v3.py`。
 - 训练门禁与配置：`validate_kisaki_v4_training_gate.py`、`build_kisaki_r1v4_configs.py`。
 
@@ -35,7 +35,7 @@
 - 基线与复核后采样：`sample_kisaki_general_baseline.py`、`sample_kisaki_reviewed_initial.py`。
 - 扩展候选复核：`review_kisaki_expansion_candidates.py`、`review_kisaki_expansion_candidates_tail.py`、`review_kisaki_expansion_last.py`、`review_kisaki_expansion_sources_tail.py`。
 - 基线与重采样复核：`review_kisaki_general_baseline.py`、`review_kisaki_hard_resamples.py`、`review_kisaki_initial_resamples.py`。
-- 审核材料构建与展示：`build_kisaki_interactive_review.py`、`build_source_dpo_full_review.py`、`render_kisaki_dpo100_review.py`、`render_kisaki_interactive_dpo.py`、`render_source_dpo_review.py`。
+- 审核材料构建与展示：`build_kisaki_interactive_review.py`、`build_source_dpo_full_review.py`、`render_source_dpo_review.py`。
 - 审核裁决与数据晋升：`export_source_dpo_adjudication.py`、`promote_kisaki_dpo_expansion.py`、`promote_kisaki_interactive_training.py`。
 - DPO100 预检、训练、排队与评测：`kisaki_dpo100_preflight.py`、`kisaki_dpo100_train_stage.py`、`kisaki_dpo100_queue.py`、`kisaki_dpo100_evaluate.py`。
 - DPO100 远程入口：`remote_kisaki_dpo100.py`。
@@ -51,8 +51,8 @@
 ## V4.1 与 V5 候选工作区
 
 - V4.1：`generate_kisaki_v41_augmentation.py`、`run_kisaki_v41_user_simulation.py`、`promote_kisaki_v41_round06.py`。
-- V5 盘点与模拟审核：`build_kisaki_v5_asset_inventory.py`、`build_kisaki_v5_candidate.py`、`collect_kisaki_v5_simulation_decisions.py`。
-- V5 构造数据审核：`build_kisaki_v5_constructed_review.py`、`build_kisaki_v5_constructed_rewrites.py`。
+- V5 盘点与模拟审核：`collect_kisaki_v5_simulation_decisions.py`。
+- V5 构造数据审核：`build_kisaki_v5_constructed_rewrites.py`。
 
 V5 仍是候选工作区，不覆盖已冻结的 V4，也不是生产训练入口。
 
@@ -60,9 +60,9 @@ V5 仍是候选工作区，不覆盖已冻结的 V4，也不是生产训练入�
 
 以下脚本仍由契约测试覆盖，用于复现 V3/V4 生成阶段，不得据此覆盖 canonical 数据：
 
-- `build_few_shot_pool.py`、`build_v3_negative_pool.py`、`build_kisaki_v4_quota_plan.py`。
-- `generate_kisaki_llm_dialogues_v3.py`、`generate_kisaki_llm_v4.py`、`judge_kisaki_llm_v4.py`、`hard_gate_kisaki_v4.py`。
-- `regen_kisaki_llm_pipeline.py`、`kisaki_v4_llm_client.py`、`review_preference_candidates.py`。
+- `build_kisaki_v4_quota_plan.py`。
+- `generate_kisaki_llm_dialogues_v3.py`、`judge_kisaki_llm_v4.py`、`hard_gate_kisaki_v4.py`。
+- `kisaki_v4_llm_client.py`、`review_preference_candidates.py`。
 
 ## 实验室与远程运行
 
@@ -87,3 +87,16 @@ V5 仍是候选工作区，不覆盖已冻结的 V4，也不是生产训练入�
 2. 一次性、旧数据或个人机器专用工具移入 `archive/`，同时登记来源和哈希。
 3. 任何修改 canonical、Gold 或审核决定的脚本必须默认 fail closed，并保留 provenance。
 4. mock、候选和历史输出不得表述为正式实验结论。
+
+## 角色聊天隔离验收工具
+
+- PostgreSQL/pgvector：`prepare_lhm_pgvector.py`、`stage_lhm_pgvector.py`、`build_lhm_pgvector.py`、`run_lhm_postgres_tests.py`。
+  `run_lhm_postgres_tests.py --memory-boundaries` 额外创建7个独立测试数据库，验证记忆删除、回执和租约；本地端口25433必须空闲，脚本结束时停止本次临时集群。
+- OpenSearch：`download_opensearch_archive.py`、`prepare_lhm_opensearch.py`、`transfer_lhm_opensearch.py`、`start_lhm_opensearch.py`、`run_lhm_opensearch_tests.py`。
+- 环境及模型验收：`probe_lhm_runtime.py`、`verify_deepseek_chat.py`、`verify_lhm_embeddings.py`。
+
+这些工具中绑定个人环境的部分属于后续精简候选，目前仍保留以维持现有验收入口。
+
+SSH连接现在通过显式配置选择：设置 `LHM_SSH_CONFIG` 为本机JSON配置的绝对路径，兼容原有配置目录中的DPAPI凭据读取；或不设置该变量，使用 `LAB_HOST`、`LAB_USER`、`LAB_PORT`（默认22）以及 `LAB_SSH_KEY` / `LAB_PASS`。凭据与个人配置留在仓库外，不写入版本控制。未配置时给出错误，不再猜测桌面文件位置。工具仍遵循服务器项目目录边界。
+
+旧V2/V3候选生成入口 build_few_shot_pool、build_v3_negative_pool、build_kisaki_v4_quota_plan、generate_kisaki_llm_v4、regen_kisaki_llm_pipeline 已退役；历史用法仅用于查看旧提交，不适用于当前检出。原软件训练接口与当前批准数据继续保留。

@@ -12,7 +12,6 @@ from scope_fixtures import open_scope_response
 from db.schemas import MessageRequest
 from inference.context_budget import ReviewContextBudget
 from knowledge.public_question_binding import validate_question_binding
-from knowledge.retrieval_core.registry import KnowledgeDomainConfig
 from knowledge.turn_dependencies import KINDS, query_segments
 
 NAME = "虚构松檐馆"
@@ -27,11 +26,8 @@ pytestmark = pytest.mark.usefixtures("no_live_context_review")
 def install(monkeypatch, tmp_path, query, history, *, resolved=True, corrupt=None):
     from api import generate
     from knowledge import public_question_binding, retrieval_query_plan
-    from knowledge.retrieval_core import registry
 
     budget = ReviewContextBudget(65536)
-    config = KnowledgeDomainConfig("synthetic", tmp_path, lambda _: [], aliases={NAME: NAME})
-    monkeypatch.setattr(registry, "get_default_registry", lambda: SimpleNamespace(list_domains=lambda: [config]))
     actual_plan = retrieval_query_plan.plan_retrieval
     actual_binding = public_question_binding.resolve_question_binding
     observed = []

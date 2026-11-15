@@ -157,6 +157,7 @@ async def test_provider_change_during_dispatch_does_not_relabel_the_completed_re
 async def test_local_adapter_lock_wait_obeys_generation_deadline(installed, monkeypatch):
     state, manager, _, semaphore = installed
     manager._current_provider.value = "transformers_peft"
+    normal_timeout = generate._MODEL_INFERENCE_TIMEOUT
     monkeypatch.setattr(generate, "_MODEL_INFERENCE_TIMEOUT", .03)
     lock = generate._get_local_model_lock()
     async with lock:
@@ -164,6 +165,8 @@ async def test_local_adapter_lock_wait_obeys_generation_deadline(installed, monk
             await asyncio.wait_for(receive(installed[2]), 1)
         assert caught.value.status_code == 503 and caught.value.detail["reason"] == "deadline_exceeded"
         assert lock.locked() and semaphore._value == 2 and state.calls == []
+    # Verify recovery with the normal request budget, not a 30ms wall-clock race.
+    monkeypatch.setattr(generate, "_MODEL_INFERENCE_TIMEOUT", normal_timeout)
     result = await receive(installed[2])
     assert FACTS in result.reply and not lock.locked() and semaphore._value == 2
     assert len(state.calls) == 1 and state.active == 0

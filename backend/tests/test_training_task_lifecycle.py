@@ -77,6 +77,12 @@ def test_training_config_preserves_canonical_names_and_fractional_epochs(monkeyp
         "num_train_epochs": 0.5,
         "gradient_checkpointing": False,
         "lora_target_modules": "q_proj,v_proj",
+        "load_in_4bit": True,
+        "packing": False,
+        "use_8bit_adam": True,
+        "optim": "adamw_torch",
+        "resume_from_checkpoint": "saved-checkpoint",
+        "mixed_precision": "fp16",
     })
     assert config.base_model_path == "chosen-model"
     assert config.lora_r == 64
@@ -84,6 +90,11 @@ def test_training_config_preserves_canonical_names_and_fractional_epochs(monkeyp
     assert config.gradient_checkpointing is False
     assert config.target_modules == ["q_proj", "v_proj"]
     assert not hasattr(config, "lora_target_modules")
+    assert config.load_in_4bit is True
+    assert config.packing is False
+    assert config.optim == "adamw_8bit"
+    assert config.resume_from_checkpoint == "saved-checkpoint"
+    assert not hasattr(config, "mixed_precision")
 
 
 def test_frontend_training_aliases_take_precedence(monkeypatch, tmp_path):

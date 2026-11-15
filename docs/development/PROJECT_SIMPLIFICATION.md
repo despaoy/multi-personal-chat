@@ -87,7 +87,7 @@ CLI, dataset or offline experiment is disposable.
 
 Removed 90 unreferenced historical micro-change reports, verified byte-identical
 to the baseline before deletion. Exact paths, rationale and recovery commit are
-in [the deletion manifest](../reports/cleanup-20261025.json). Preserved linked
+in [the deletion manifest](https://github.com/despaoy/multi-personal-chat/blob/edf48c54aa71db64e2be3307cf54fd86c8d40379/docs/reports/cleanup-20261025.json). Preserved linked
 reports, unique limitations, benchmark/model-run evidence, licenses, provenance
 and both archives with their checksum manifests.
 

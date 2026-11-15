@@ -96,3 +96,42 @@ test('request headers honor case-insensitive overrides and FormData boundaries',
   assert.equal(seen[0].get('Content-Type'), 'application/custom');
   assert.equal(seen[1].has('Content-Type'), false);
 });
+
+test('downloads preserve the raw response and encode dataset names', async (t) => {
+  for (const status of [200, 403]) {
+    const response = new Response('download body', { status });
+    t.mock.method(globalThis, 'fetch', async (url, options) => {
+      assert.equal(url, '/api/training/datasets/a%2Fb%20c/export');
+      assert.equal(options.credentials, 'include');
+      return response;
+    });
+    const result = await api.exportDataset('a/b c');
+    assert.equal(result, response);
+    assert.equal(result.bodyUsed, false);
+    assert.equal(await result.text(), 'download body');
+    t.mock.restoreAll();
+  }
+});
+
+test('health and downloads retain their error contracts while sharing expiry handling', async (t) => {
+  const calls = [];
+  const redirects = [];
+  globalThis.window = { location: { pathname: '/', href: '/' } };
+  t.after(() => { delete globalThis.window; });
+  t.mock.method(globalThis, 'setTimeout', callback => { redirects.push(callback); return 0; });
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    calls.push({ url, options });
+    return new Response(null, { status: url === '/api/auth/logout' ? 204 : 401 });
+  });
+  await assert.rejects(api.health(), /Health check failed/);
+  const result = await api.exportDataset('sample');
+  assert.equal(result.status, 401);
+  assert.equal(result.bodyUsed, false);
+  assert.deepEqual(calls.map(call => call.url), [
+    '/api/health', '/api/auth/logout', '/api/training/datasets/sample/export', '/api/auth/logout',
+  ]);
+  assert.ok(calls.every(call => call.options.credentials === 'include'));
+  assert.equal(redirects.length, 2);
+  redirects.forEach(callback => callback());
+  assert.equal(window.location.href, '/login?expired=1');
+});

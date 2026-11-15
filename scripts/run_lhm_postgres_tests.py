@@ -12,6 +12,16 @@ from pathlib import Path
 
 from probe_lhm_runtime import connect
 
+MEMORY_DATABASES = {
+    "STAGE31_FEEDBACK_PG_URL": ("stage3_stage31_feedback_guards", "test_message_completion_feedback.py"),
+    "STAGE34_DELIVERY_PG_URL": ("stage3_stage34_delivery_guards", "test_delivery_memory.py"),
+    "STAGE35_ADDRESS_PG_URL": ("stage3_stage35_address_guards", "test_turn_address_authority.py"),
+    "STAGE38_RETENTION_PG_URL": ("stage3_stage38_retention_guards", "test_memory_selective_erasure.py"),
+    "STAGE39_EVIDENCE_PG_URL": ("stage3_stage39_evidence_guards", "test_memory_retained_evidence.py"),
+    "STAGE40_CLAUSE_PG_URL": ("stage3_stage40_clause_guards", "test_memory_coupled_erasure.py"),
+    "STAGE42_FRAGMENTS_PG_URL": ("stage3_stage42_fragment_guards", "test_memory_cross_source_erasure.py"),
+}
+
 START = r'''
 import json, os, pathlib, socket, subprocess, tempfile
 base = pathlib.Path('/home/boot/lhm/multipersonal-deploy')
@@ -20,11 +30,9 @@ root = pathlib.Path(tempfile.mkdtemp(prefix='pg-foundation-', dir=base)).resolve
 assert root.is_relative_to(pathlib.Path('/home/boot/lhm'))
 tools = pathlib.Path('/home/boot/lhm/multipersonal-deploy/tools/postgres-vector-14/usr/lib/postgresql/14/bin').resolve()
 assert tools.is_relative_to(pathlib.Path('/home/boot/lhm'))
-env = dict(os.environ, TMPDIR=str(root), HOME=str(root))
-pid = pathlib.Path('/home/boot/lhm/multipersonal-runtime/data/postgres/postmaster.pid').read_text().splitlines()[0]
-for item in pathlib.Path('/proc/' + pid + '/environ').read_bytes().split(b'\0'):
-    if item.startswith(b'LD_LIBRARY_PATH='):
-        env['LD_LIBRARY_PATH'] = item.split(b'=', 1)[1].decode()
+libraries = pathlib.Path('/home/boot/lhm/multipersonal-runtime/tools/pgsql/usr/lib/x86_64-linux-gnu').resolve()
+assert libraries.is_relative_to(pathlib.Path('/home/boot/lhm'))
+env = dict(os.environ, TMPDIR=str(root), HOME=str(root), LD_LIBRARY_PATH=str(libraries))
 with socket.socket() as sock:
     sock.bind(('127.0.0.1', 0))
     port = sock.getsockname()[1]
@@ -55,6 +63,7 @@ def main():
     parser.add_argument("--pgvector", action="store_true", help="also test vector retrieval in the isolated PostgreSQL tools copy")
     parser.add_argument('--opensearch', action='store_true', help='test source stack using an already established OpenSearch tunnel')
     parser.add_argument("--real-embedding", action="store_true", help="generate real CPU vectors and replay them through pgvector/chat")
+    parser.add_argument("--memory-boundaries", action="store_true", help="provision dedicated memory test databases; requires local port 25433")
     args = parser.parse_args()
     workspace = Path(__file__).resolve().parents[1]
     if args.real_embedding:
@@ -82,7 +91,7 @@ def main():
             daemon_threads = True
 
         try:
-            with Tunnel(("127.0.0.1", 0), Handler) as tunnel:
+            with Tunnel(("127.0.0.1", 25433 if args.memory_boundaries else 0), Handler) as tunnel:
                 thread = threading.Thread(target=tunnel.serve_forever, daemon=True)
                 thread.start()
                 env = dict(os.environ, DATABASE_URL=f"postgresql+asyncpg://boot@127.0.0.1:{tunnel.server_address[1]}/postgres",
@@ -103,6 +112,17 @@ def main():
                     env["RUN_TEMPORAL_INTEGRATION"] = "1"
                     tests.append("tests/test_temporal_chat_integration.py")
                 try:
+                    if args.memory_boundaries:
+                        # Only the cluster created above is eligible for provisioning.
+                        source = "import os,subprocess\ninfo=" + repr(instance) + "\n"
+                        source += "names=" + repr([name for name, _ in MEMORY_DATABASES.values()]) + "\n"
+                        source += "for name in names:\n subprocess.run([info['tools']+'/createdb','-h','127.0.0.1','-p',str(info['port']),'-U','boot',name],env=dict(os.environ,LD_LIBRARY_PATH=info['library']),check=True)\n"
+                        remote_python(ssh, source)
+                        for variable, (name, test) in MEMORY_DATABASES.items():
+                            env[variable] = f"postgresql+asyncpg://boot@127.0.0.1/{name}?port=25433"
+                            tests.append("tests/" + test)
+                        env["SOURCE_INHERIT_PG_URL"] = env["STAGE35_ADDRESS_PG_URL"]
+                        tests.append("tests/test_memory_source_inheritance.py")
                     subprocess.run([sys.executable, "-m", "alembic", "upgrade", "head"], cwd=workspace / "backend", env=env, check=True)
                     result = subprocess.run([sys.executable, "-m", "pytest", *tests,
                                              "-q", "--basetemp", "../.pytest-tmp-character-pg"],

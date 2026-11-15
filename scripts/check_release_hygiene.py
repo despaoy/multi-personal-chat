@@ -30,7 +30,7 @@ def forbidden_artifact(path: str) -> bool:
         )
         or any(p.startswith((".codex-test-runtime-", ".test_tmp")) for p in parts)
         or name == ".env"
-        or (name.startswith(".env.") and name != ".env.example")
+        or (name.startswith(".env.") and name not in {'.env.example', '.env.character-chat.example'})
         or name.endswith(
             (".db", ".db-wal", ".db-shm", ".db-journal", ".sqlite", ".sqlite3", ".pyc")
         )

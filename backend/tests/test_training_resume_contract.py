@@ -203,7 +203,9 @@ def test_experiment_resume_requires_checkpoint_and_keeps_frozen_inputs(monkeypat
                 )
                 + "\n"
                 for index in range(count)
-            )
+            ),
+            encoding="utf-8",
+            newline="\n",
         )
         digest = hashlib.sha256(path.read_bytes()).hexdigest()
         config.update({field: str(path), key: digest})

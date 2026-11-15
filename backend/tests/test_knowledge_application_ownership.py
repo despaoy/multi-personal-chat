@@ -1,6 +1,7 @@
 """Authenticated applications keep knowledge, index and cache authority together."""
 
 import asyncio
+import os
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -249,7 +250,8 @@ async def test_intent_metadata_file_failure_uses_shared_error_protocol_then_reco
         failed = await api.request(verb, url, json=body)
         assert failed.status_code == 500 and failed.json()['success'] is False
         assert failed.json()['error'] == 'Internal Server Error'
-        assert isinstance(handled[-1], IsADirectoryError) and handled[-1].filename == str(path)
+        directory_error = PermissionError if os.name == "nt" else IsADirectoryError
+        assert isinstance(handled[-1], directory_error) and handled[-1].filename == str(path)
         assert marker not in failed.text and marker not in caplog.text
         path.rmdir()
         path.write_bytes(original)

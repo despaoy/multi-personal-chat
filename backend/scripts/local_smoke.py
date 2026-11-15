@@ -1,18 +1,28 @@
-"""Local API smoke checks for mock-mode verification."""
+"""Isolated startup and explicit unavailable-provider smoke checks.
+
+This verifies no fabricated successful reply or history is produced in mock mode.
+It does not validate real model inference.
+"""
 
 from __future__ import annotations
 
 import os
+import base64
+import secrets
 import sys
 import time
+from tempfile import mkdtemp
 from pathlib import Path
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
 if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
-TEMP_DIR = BACKEND_ROOT / ".test_tmp"
-TEMP_DIR.mkdir(parents=True, exist_ok=True)
+TEMP_ROOT = BACKEND_ROOT / ".test_tmp"
+TEMP_ROOT.mkdir(parents=True, exist_ok=True)
+# Retain diagnostic artifacts locally; worker-thread SQLite handles may remain
+# open until process exit on Windows, so do not delete from an exit finalizer.
+TEMP_DIR = Path(mkdtemp(prefix="api-smoke-", dir=TEMP_ROOT))
 
 os.environ["ENVIRONMENT"] = "development"
 os.environ["MODEL_PROVIDER"] = "mock"
@@ -24,6 +34,11 @@ os.environ["ASTRBOT_ENABLED"] = "true"
 os.environ["ASTRBOT_INTEGRATION_TOKEN"] = "local-verify-token"
 os.environ["INTEGRATION_SIGNATURE_REQUIRED"] = "false"
 os.environ["DATABASE_PATH"] = str(TEMP_DIR / "local_verify.db")
+os.environ["DATABASE_URL"] = ""
+os.environ["USE_POSTGRESQL"] = "false"
+os.environ["BACKUP_DIR"] = str(TEMP_DIR / "backups")
+# Explicit synthetic fixture key, paired with this disposable database only.
+os.environ["ENCRYPTION_KEY"] = base64.b64encode(secrets.token_bytes(32)).decode("ascii")
 os.environ["MULTIPERSONAL_BACKEND_URL"] = "http://127.0.0.1:8000"
 os.environ["QQCHAT_BACKEND_URL"] = "http://127.0.0.1:8000"  # legacy alias
 os.environ["JWT_SECRET"] = "local-smoke-jwt-secret-value-32-chars"
@@ -72,28 +87,18 @@ def main() -> None:
             headers={"X-Integration-Token": "local-verify-token"},
             json=payload,
         )
-        _assert_status(event, 200, "mock AstrBot event")
-        event_payload = event.json()
-        for key in ("shouldReply", "replyText", "model", "costTime", "traceId"):
-            if key not in event_payload:
-                raise AssertionError(f"mock AstrBot event missing response field: {key}")
-        if not event_payload["shouldReply"]:
-            raise AssertionError(f"mock AstrBot event did not produce a reply: {event_payload}")
+        _assert_status(event, 503, "unavailable mock provider")
+        if "mock" not in str(event.json().get("detail", "")):
+            raise AssertionError("Unavailable mock provider must return an explicit explanation")
 
         history = client.get("/api/messages", params={"platform": "telegram", "limit": 5})
         _assert_status(history, 200, "history query")
         messages = history.json().get("messages", [])
-        if not any(item.get("sourceMessageId") == message_id for item in messages):
-            # The AstrBot mock path may return a degraded 503 reply when no
-            # inference backend is configured; persistence is verified by the
-            # history endpoint contract above rather than by message presence.
-            print(
-                "History query is authenticated but did not include the mock event; "
-                "expected when the degraded generation path skips persistence."
-            )
+        if any(item.get("sourceMessageId") == message_id for item in messages):
+            raise AssertionError("Rejected mock generation must not create a completed conversation")
 
     app.dependency_overrides.clear()
-    print("Local API smoke checks passed.")
+    print("Local startup and unavailable-provider smoke checks passed; real inference was not exercised.")
 
 
 if __name__ == "__main__":
