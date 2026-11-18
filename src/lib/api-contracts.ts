@@ -25,6 +25,8 @@ export interface CharacterLibraryRecord {
   settings: CharacterSettings;
   share_token: string | null;
   shared_revision: number | null;
+  publication_id: string | null;
+  source_publication_id: string | null;
   source_character_id: string | null;
   source_revision: number | null;
   created_at: string;
@@ -41,6 +43,28 @@ export interface CharacterSourceUpdate {
   revision: number;
   source_revision: number | null;
   changes: Record<string, { current: unknown; incoming: unknown }>;
+  publication_id: string | null;
+  local_corpus_id: string | null;
+  sources: CharacterOriginalSource[];
+  current_sources: CharacterOriginalSource[];
+}
+
+export interface CharacterPublicationPreview {
+  character_id: string;
+  revision: number;
+  corpus_id: string | null;
+  settings: CharacterSettings;
+  sources: CharacterOriginalSource[];
+  preview_id: string;
+  previous_publication_id: string | null;
+}
+
+export interface SharedCharacterPublication {
+  id: string;
+  settings_revision: number;
+  publication_id: string;
+  settings: CharacterSettings;
+  sources: CharacterOriginalSource[];
 }
 
 export interface CharacterChatSummary {

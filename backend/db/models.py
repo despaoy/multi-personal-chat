@@ -45,9 +45,32 @@ class CharacterLibraryEntry(Base):
     source_revision: Mapped[Optional[int]] = mapped_column(Integer)
     share_token: Mapped[Optional[str]] = mapped_column(Text, unique=True)
     shared_revision: Mapped[Optional[int]] = mapped_column(Integer)
+    publication_id: Mapped[str | None] = mapped_column(Text)
+    source_publication_id: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[str] = mapped_column(Text, nullable=False)
     updated_at: Mapped[str] = mapped_column(Text, nullable=False)
     __table_args__ = (CheckConstraint("revision >= 1", name="ck_character_library_revision"),)
+
+
+class CharacterPublication(Base):
+    """Frozen public settings and an explicitly selected source subset."""
+    __tablename__ = "character_publications"
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    character_id: Mapped[str] = mapped_column(Text, nullable=False)
+    character_revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    corpus_id: Mapped[str | None] = mapped_column(Text)
+    settings_json: Mapped[str] = mapped_column(Text, nullable=False)
+    sources_json: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class CharacterPublicationCopy(Base):
+    """A client retry returns its existing independent copy."""
+    __tablename__ = "character_publication_copies"
+    owner_user_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    request_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    publication_id: Mapped[str] = mapped_column(Text, nullable=False)
+    character_id: Mapped[str] = mapped_column(Text, nullable=False)
 
 
 class CharacterLibraryVersion(Base):

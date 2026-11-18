@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api';
+import { CharacterSharing, SharedCharacterPreview, SourceChanges } from '@/components/chat/CharacterSharing';
 import { CharacterSourceManager } from '@/components/chat/CharacterSourceManager';
 import type { CharacterLibraryRecord, CharacterPackage, CharacterSettings, CharacterSourceUpdate } from '@/lib/api-contracts';
 
@@ -145,16 +146,11 @@ function CharacterLibrary() {
     </section>}
     {error && <p role="alert" className="rounded-lg border border-destructive p-3 text-destructive">{error}</p>}
     {notice && <p role="status" className="text-sm text-muted-foreground">{notice}</p>}
-    {shareToken && <div className="flex flex-wrap items-center gap-3 rounded-lg border p-4">
-      <p>收到角色分享，可以复制到自己的角色库。</p>
-      <Button disabled={busy} onClick={() => void run(async () => {
-        select(await api.copySharedCharacter(shareToken));
-        setShareToken('');
-        window.history.replaceState(null, '', '/character-library');
-        setNotice('已复制为独立角色');
-        await refresh();
-      })}>复制角色</Button>
-    </div>}
+    {shareToken && <SharedCharacterPreview key={shareToken} token={shareToken} onCopied={async character => {
+      select(character); setShareToken('');
+      window.history.replaceState(null, '', '/character-library');
+      setNotice('已复制为独立角色，资料处理状态见下方。'); await refresh();
+    }} />}
     <div className="grid gap-6 md:grid-cols-[220px_1fr]">
       <nav aria-label="角色列表" className="space-y-2">
         {characters.map(character => <button key={character.id} disabled={busy}
@@ -174,10 +170,10 @@ function CharacterLibrary() {
       <form className="space-y-4 rounded-xl border p-5" onSubmit={event => { event.preventDefault(); void run(save); }}>
         <fieldset disabled={busy} className="space-y-4">
           {current?.source_character_id && <div className="space-y-3 rounded-lg border p-3">
-            <p>{sourceUpdate?.available ? `原作者已发布版本 ${sourceUpdate.source_revision}` : '暂无可导入的作者更新'}</p>
+            <p>{sourceUpdate?.available ? `原作者已发布更新（设定版本 ${sourceUpdate.source_revision}）` : '暂无可导入的作者更新'}</p>
             <Button type="button" variant="outline" onClick={() => void run(async () => { setSourceUpdate(await api.getCharacterSourceUpdate(current.id)); })}>检查作者更新</Button>
             {sourceUpdate?.available && <>
-              <p className="text-sm text-muted-foreground">导入将使用作者发布的完整设定，替换你的本地修改和未保存内容。已有会话仍使用原设定版本。</p>
+              <p className="text-sm text-muted-foreground">导入将使用作者发布的完整设定及资料，替换本地修改和未保存设定。旧设定与资料仍保留，已有会话不会切换。</p>
               <details><summary className="cursor-pointer">查看与已保存设定的差异</summary>
                 {Object.entries(sourceUpdate.changes).map(([field, change]) => <div key={field} className="my-2 space-y-1">
                   <p className="font-medium">{({ name: '名字', persona: '人物设定', greeting: '开场白', scenario: '初始场景', relationships: '人物关系', examples: '示范对话', reference_text: '参考资料' } as Record<string, string>)[field] || field}</p>
@@ -185,11 +181,12 @@ function CharacterLibrary() {
                   <pre className="whitespace-pre-wrap break-words text-sm">更新：{typeof change.incoming === 'string' ? change.incoming : JSON.stringify(change.incoming, null, 2)}</pre>
                 </div>)}
               </details>
+              <SourceChanges current={sourceUpdate.current_sources} incoming={sourceUpdate.sources} />
               <Button type="button" onClick={() => {
-                if (!window.confirm('确认导入作者的完整设定并替换当前编辑内容？')) return;
+                if (!window.confirm('确认按已预览的差异导入完整设定和资料，并替换当前编辑内容？旧会话保持不变。')) return;
                 void run(async () => {
-                  if (sourceUpdate.source_revision === null) return;
-                  select(await api.importCharacterSourceUpdate(current.id, sourceUpdate.revision, sourceUpdate.source_revision));
+                  if (sourceUpdate.source_revision === null || sourceUpdate.publication_id === null) return;
+                  select(await api.importCharacterSourceUpdate(current.id, sourceUpdate.revision, sourceUpdate.source_revision, sourceUpdate.publication_id, sourceUpdate.local_corpus_id));
                   setNotice('已导入作者更新，已有会话保持原版本'); await refresh();
                 });
               }}>导入此版本</Button>
@@ -217,7 +214,6 @@ function CharacterLibrary() {
             {current && <>
               <Button type="button" variant="outline" asChild><Link href={`/chat?character=${encodeURIComponent(current.id)}`}>开始聊天</Link></Button>
               <Button type="button" variant="outline" onClick={() => void run(exportCharacter)}>导出角色</Button>
-              <Button type="button" variant="outline" onClick={() => void run(() => publish(true))}>分享已保存版本</Button>
               {current.share_token && <Button type="button" variant="outline" onClick={() => void run(() => publish(false))}>关闭分享</Button>}
             </>}
           </div>
@@ -226,6 +222,9 @@ function CharacterLibrary() {
         </fieldset>
       </form>
     </div>
+    {current && <CharacterSharing key={`sharing:${current.id}:${current.revision}`} character={current} onPublished={async () => {
+      setCurrent(await api.getLibraryCharacter(current.id)); await refresh();
+    }} />}
     {current && <CharacterSourceManager key={`${current.id}:${current.revision}`} character={current} />}
   </div>;
 }

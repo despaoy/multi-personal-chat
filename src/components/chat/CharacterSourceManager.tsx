@@ -89,7 +89,7 @@ export function CharacterSourceManager({ character }: { character: CharacterLibr
           setSources(result.sources); setNotice('已载入原文，可查看或编辑后另发新版。');
         })}>查看或作为新版起点</Button>
         <Button type="button" variant="outline" disabled={busy} onClick={() => {
-          if (!window.confirm('撤销此资料版本后，绑定它的会话将无法再检索该版原文。已有聊天和出处快照不会因此删除。是否继续？')) return;
+          if (!window.confirm('撤销此资料版本后，绑定它的会话将无法再检索该版原文。包含它的分享也将停止新预览和复制；已有独立副本、聊天和出处快照不会因此删除。是否继续？')) return;
           void run(async () => { await api.revokeCharacterSources(character.id, edition.id); setEditions(previous => previous.filter(item => item.id !== edition.id)); setNotice('资料版本已撤销。'); });
         }}>撤销</Button>
       </li>)}</ul>

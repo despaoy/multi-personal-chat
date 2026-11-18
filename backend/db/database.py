@@ -837,14 +837,22 @@ class SQLiteDB:
         # use the same character version constraints.
         from sqlalchemy.dialects.sqlite import dialect
         from sqlalchemy.schema import CreateIndex, CreateTable
-        from db.models import CharacterLibraryEntry, CharacterLibraryVersion, CharacterChatSession, CharacterChatTurn, CharacterSharedMemory, CharacterChatEvidence, CharacterChatGeneration, CharacterChatEnrichmentJob, CharacterChatMemoryVector, CharacterSourceCorpus
+        from db.models import CharacterLibraryEntry, CharacterLibraryVersion, CharacterChatSession, CharacterChatTurn, CharacterSharedMemory, CharacterChatEvidence, CharacterChatGeneration, CharacterChatEnrichmentJob, CharacterChatMemoryVector, CharacterSourceCorpus, CharacterPublication, CharacterPublicationCopy
 
-        for model in (CharacterLibraryEntry, CharacterLibraryVersion, CharacterChatSession, CharacterChatTurn, CharacterSharedMemory, CharacterChatEvidence, CharacterChatGeneration, CharacterChatEnrichmentJob, CharacterChatMemoryVector, CharacterSourceCorpus):
+        for model in (CharacterLibraryEntry, CharacterLibraryVersion, CharacterChatSession, CharacterChatTurn, CharacterSharedMemory, CharacterChatEvidence, CharacterChatGeneration, CharacterChatEnrichmentJob, CharacterChatMemoryVector, CharacterSourceCorpus, CharacterPublication, CharacterPublicationCopy):
             table = model.__table__
             cursor.execute(str(CreateTable(table, if_not_exists=True).compile(dialect=dialect())))
             for index in table.indexes:
                 cursor.execute(str(CreateIndex(index, if_not_exists=True).compile(dialect=dialect())))
 
+        self._ensure_column(cursor, 'character_library', 'publication_id', 'TEXT')
+        self._ensure_column(cursor, 'character_library', 'source_publication_id', 'TEXT')
+        cursor.execute("INSERT OR IGNORE INTO character_publications (id,character_id,character_revision,settings_json,sources_json,created_at) "
+                       "SELECT 'legacy-' || c.id || '-' || CAST(c.shared_revision AS TEXT),c.id,c.shared_revision,v.settings_json,'[]',c.updated_at "
+                       "FROM character_library c JOIN character_library_versions v ON v.character_id=c.id AND v.revision=c.shared_revision "
+                       "WHERE c.share_token IS NOT NULL AND c.publication_id IS NULL")
+        cursor.execute("UPDATE character_library SET publication_id='legacy-' || id || '-' || CAST(shared_revision AS TEXT) "
+                       "WHERE share_token IS NOT NULL AND publication_id IS NULL")
         self._ensure_column(cursor, 'character_source_corpora', 'index_receipt_json', 'TEXT')
         self._ensure_column(cursor, 'character_source_corpora', 'index_status', "TEXT NOT NULL DEFAULT 'pending'")
         self._ensure_column(cursor, 'character_source_corpora', 'index_attempt', 'INTEGER NOT NULL DEFAULT 1')

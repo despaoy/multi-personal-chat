@@ -714,9 +714,9 @@ class ApiClient {
     return this.request<import('./api-contracts').CharacterSourceUpdate>(`/character-library/${encodeURIComponent(id)}/source-update`);
   }
 
-  importCharacterSourceUpdate(id: string, revision: number, sourceRevision: number) {
+  importCharacterSourceUpdate(id: string, revision: number, sourceRevision: number, publicationId: string, localCorpusId: string | null) {
     return this.request<CharacterLibraryRecord>(`/character-library/${encodeURIComponent(id)}/source-update`, {
-      method: 'POST', body: JSON.stringify({ revision, source_revision: sourceRevision }),
+      method: 'POST', body: JSON.stringify({ revision, source_revision: sourceRevision, publication_id: publicationId, local_corpus_id: localCorpusId }),
     });
   }
 
@@ -743,14 +743,28 @@ class ApiClient {
     return this.request<CharacterPackage>(`/character-library/${id}/export`);
   }
 
-  publishLibraryCharacter(current: CharacterLibraryRecord, enabled: boolean) {
-    return this.request<{ share_token: string | null; shared_revision: number | null }>(`/character-library/${current.id}/sharing`, {
-      method: 'PUT', body: JSON.stringify({ revision: current.revision, enabled }),
+  previewCharacterPublication(current: CharacterLibraryRecord, corpusId: string | null, sourceIds: string[]) {
+    return this.request<import('./api-contracts').CharacterPublicationPreview>(`/character-library/${current.id}/sharing-preview`, {
+      method: 'POST', body: JSON.stringify({ revision: current.revision, corpus_id: corpusId, source_ids: sourceIds }),
     });
   }
 
-  copySharedCharacter(token: string) {
-    return this.request<CharacterLibraryRecord>(`/character-library/shared/${encodeURIComponent(token)}/copy`, { method: 'POST' });
+  publishLibraryCharacter(current: CharacterLibraryRecord, enabled: boolean, preview?: import('./api-contracts').CharacterPublicationPreview) {
+    return this.request<{ share_token: string | null; shared_revision: number | null; publication_id: string | null }>(`/character-library/${current.id}/sharing`, {
+      method: 'PUT', body: JSON.stringify({ revision: current.revision, enabled,
+        ...(preview ? { corpus_id: preview.corpus_id, source_ids: preview.sources.map(source => source.id),
+          preview_id: preview.preview_id, previous_publication_id: preview.previous_publication_id } : {}) }),
+    });
+  }
+
+  getSharedCharacter(token: string) {
+    return this.request<import('./api-contracts').SharedCharacterPublication>(`/character-library/shared/${encodeURIComponent(token)}`);
+  }
+
+  copySharedCharacter(token: string, publicationId: string, requestId: string) {
+    return this.request<CharacterLibraryRecord>(`/character-library/shared/${encodeURIComponent(token)}/copy`, {
+      method: 'POST', body: JSON.stringify({ publication_id: publicationId, request_id: requestId }),
+    });
   }
 
   /**

@@ -106,11 +106,13 @@ def test_source_update_http_contract(repo):
     app.dependency_overrides[repository] = lambda: repo
     url = f"/api/character-library/{copied['id']}/source-update"
     with TestClient(app) as client:
-        assert client.get(url).json()["available"]
-        assert client.post(url, json={"revision": 1, "source_revision": 3}).status_code == 409
-        imported = client.post(url, json={"revision": 1, "source_revision": 2})
+        preview = client.get(url).json()
+        assert preview["available"]
+        confirmation = {"publication_id": preview["publication_id"], "local_corpus_id": preview["local_corpus_id"]}
+        assert client.post(url, json={"revision": 1, "source_revision": 3, **confirmation}).status_code == 409
+        imported = client.post(url, json={"revision": 1, "source_revision": 2, **confirmation})
         assert imported.status_code == 200 and imported.json()["revision"] == 2
-        assert client.post(url, json={"revision": 1, "source_revision": 2}).status_code == 409
+        assert client.post(url, json={"revision": 1, "source_revision": 2, **confirmation}).json()["revision"] == 2
         app.dependency_overrides[get_current_user] = lambda: {"user_id": "3"}
         assert client.get(url).status_code == 404
 
@@ -233,3 +235,43 @@ def test_api_ownership_validation_export_and_conflict(repo):
         assert client.put(url, json=body).status_code == 404
         app.dependency_overrides[get_current_user] = lambda: {"user_id": None, "auth_type": "api_key"}
         assert client.get("/api/character-library").status_code == 403
+
+
+@pytest.mark.parametrize("change", ["revoke", "republish", "rotate_token"])
+def test_copy_rechecks_publication_in_creation_transaction(repo, monkeypatch, change):
+    original = repo.create("author", settings())
+    token = repo.publish("author", original["id"], 1, True)["share_token"]
+    read_shared = repo.shared
+
+    def change_after_read(value):
+        snapshot = read_shared(value)
+        if change == "republish":
+            repo.update("author", original["id"], 1, settings("new publication"))
+            repo.publish("author", original["id"], 2, True)
+        else:
+            repo.publish("author", original["id"], 1, False)
+            if change == "rotate_token":
+                repo.publish("author", original["id"], 1, True)
+        return snapshot
+
+    monkeypatch.setattr(repo, "shared", change_after_read)
+    with pytest.raises(RevisionConflictError):
+        repo.copy_shared("recipient", token)
+    assert repo.list("recipient") == []
+    assert len(repo.database.execute_sql("SELECT * FROM character_library_versions")) == (2 if change == "republish" else 1)
+
+
+def test_private_draft_does_not_invalidate_published_copy(repo, monkeypatch):
+    original = repo.create("author", settings())
+    token = repo.publish("author", original["id"], 1, True)["share_token"]
+    read_shared = repo.shared
+
+    def edit_after_read(value):
+        snapshot = read_shared(value)
+        repo.update("author", original["id"], 1, settings("private draft"))
+        return snapshot
+
+    monkeypatch.setattr(repo, "shared", edit_after_read)
+    copied = repo.copy_shared("recipient", token)
+    assert copied["settings"] == settings().model_dump()
+    assert copied["source_revision"] == 1
