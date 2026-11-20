@@ -117,6 +117,7 @@ class ProactiveJob(Revision):
     kind: Literal["follow_up", "event", "fiction"]
     topic: str = Field(min_length=1, max_length=300)
     due_at: float = Field(gt=0, le=1e10)
+    source_turn_id: str | None = Field(default=None, min_length=1, max_length=100)
 
 
 class BrowserSubscription(BaseModel):
@@ -236,6 +237,11 @@ def continuation_preview(session_id: str, owner=Depends(account), repo=Depends(r
 @router.get("/{session_id}/proactive")
 def proactive_state(session_id: str, owner=Depends(account), repo=Depends(repository)):
     return call(CharacterChatProactiveRepository(repo.database).view, owner, session_id)
+
+
+@router.get("/{session_id}/proactive/candidates")
+def proactive_candidates(session_id: str, owner=Depends(account), repo=Depends(repository)):
+    return {"candidates": call(CharacterChatProactiveRepository(repo.database).candidates, owner, session_id)}
 
 
 def push_configuration():

@@ -125,6 +125,13 @@ export interface CharacterProactivePolicy {
 
 export type ProactiveTopicKind = 'follow_up' | 'event' | 'fiction';
 
+export interface ProactiveCandidate {
+  source_turn_id: string;
+  kind: 'follow_up' | 'event';
+  topic: string;
+  suggested_at: number | null;
+}
+
 export interface CharacterProactiveState {
   available: boolean;
   policy: CharacterProactivePolicy;

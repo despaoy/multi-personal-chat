@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 from api.character_chat import repository, router
 from app.dependencies import get_current_user
 from character.library import CharacterSettings
+from character.proactive_candidates import outreach_candidates
 from db.database import SQLiteDB
 from db.errors import RevisionConflictError
 from repositories.character_chat_proactive import CharacterChatProactiveRepository
@@ -36,6 +37,71 @@ def policy(**values):
         "enabled": True, "cadence_hours": 24, "timezone": "Asia/Shanghai", "quiet_start": 22 * 60, "quiet_end": 8 * 60,
         **values,
     }
+
+
+def test_candidates_use_source_time_and_do_not_guess_uncertain_dates():
+    created = "2026-11-20T17:00:00+00:00"
+    turns = [
+        {"id": "new-cancellation", "message": "考试取消了。", "created_at": created},
+        {"id": "old-event", "message": "我下周有考试。", "created_at": created},
+        {"id": "current", "message": "明天我有面试。下周我要答辩。我们下次再聊这份方案。", "created_at": created},
+        {"id": "generic", "message": "比赛怎么报名？如果我参加演讲。", "created_at": created},
+    ]
+    now = datetime.fromisoformat(created).timestamp()
+    candidates = outreach_candidates(turns, "Asia/Shanghai", now)
+    assert [(item["kind"], item["topic"], item["suggested_at"]) for item in candidates] == [
+        ("follow_up", "我们下次再聊这份方案", None),
+        ("event", "下周我要答辩", None),
+        ("event", "明天我有面试", datetime(2026, 11, 23, 1, tzinfo=UTC).timestamp()),
+    ]
+
+
+def test_sourced_job_requires_confirmation_and_disappears_when_source_is_retracted(proactive):
+    repo, session = proactive
+    owner, identity = "owner", session["id"]
+    sentence = "明天我有面试"
+    turn = repo.chats.commit_turn(session, "first", sentence + "。", "我记得了。", "fixture")
+    app = FastAPI()
+    app.include_router(router)
+    app.dependency_overrides[get_current_user] = lambda: {"user_id": owner}
+    app.dependency_overrides[repository] = lambda: repo.chats
+    path = f"/api/character-chats/{identity}/proactive"
+    with TestClient(app) as client:
+        assert client.get(path + "/candidates").json() == {"candidates": []}
+        repo.set_policy(owner, identity, 0, **policy(quiet_start=None, quiet_end=None))
+        candidate, = client.get(path + "/candidates").json()["candidates"]
+        assert candidate["source_turn_id"] == turn["id"]
+        assert candidate["topic"] == sentence and candidate["suggested_at"]
+        assert not repo.view(owner, identity)["jobs"]
+        job = {"revision": 1, "request_id": "first", "kind": "event", "topic": sentence,
+               "source_turn_id": turn["id"], "due_at": candidate["suggested_at"]}
+        assert client.post(path + "/jobs", json={**job, "topic": "伪造原话"}).status_code == 422
+        assert client.post(path + "/jobs", json=job).status_code == 201
+        assert client.post(path + "/jobs", json=job).status_code == 201
+        assert client.post(path + "/jobs", json={**job, "request_id": "duplicate", "due_at": job["due_at"] + 60}).status_code == 422
+        assert client.get(path + "/candidates").json() == {"candidates": []}
+        owner = "other"
+        assert client.get(path + "/candidates").status_code == 404
+        owner = "owner"
+        assert repo.deliver_due(now=job["due_at"]) == 1
+        repo.chats.retract(owner, identity, turn["id"], repo.chats.get(owner, identity)["revision"])
+        assert repo.inbox(owner) == []
+        assert repo.recent_sent(owner, identity) == []
+        assert repo.view(owner, identity)["jobs"] == []
+        assert client.post(path + "/jobs", json={**job, "request_id": "stale"}).status_code == 422
+
+
+def test_edit_cancels_sourced_pending_job(proactive):
+    repo, session = proactive
+    owner, identity = "owner", session["id"]
+    sentence = "我们下次再聊这份方案"
+    turn = repo.chats.commit_turn(session, "first", sentence, "好", "fixture")
+    repo.set_policy(owner, identity, 0, **policy(quiet_start=None, quiet_end=None))
+    repo.schedule(owner, identity, 1, "later", "follow_up", sentence, 101, now=100, source_turn_id=turn["id"])
+    current = repo.chats.get(owner, identity)
+    repo.chats.commit_turn(current, "edit", "你好", "你好", "fixture", replace_turn_id=turn["id"])
+    assert repo.deliver_due(now=101) == 0
+    assert repo.view(owner, identity)["jobs"] == []
 
 
 def test_app_delivery_respects_quiet_hours_frequency_and_is_replay_safe(proactive):

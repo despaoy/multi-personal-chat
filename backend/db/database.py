@@ -868,6 +868,8 @@ class SQLiteDB:
                     ("inactivity_turn_id", "TEXT"), ("inactivity_last_sent_turn_id", "TEXT"),
                 ):
                     self._ensure_column(cursor, table.name, column, sql_type)
+            if model is CharacterChatProactiveJob:
+                self._ensure_column(cursor, table.name, "source_turn_id", "TEXT")
             for index in table.indexes:
                 cursor.execute(str(CreateIndex(index, if_not_exists=True).compile(dialect=dialect())))
         for statement in PUSH_SCHEMA_034:

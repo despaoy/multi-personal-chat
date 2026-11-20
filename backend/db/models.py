@@ -163,9 +163,11 @@ class CharacterChatProactiveJob(Base):
     status: Mapped[str] = mapped_column(Text, nullable=False)
     sent_at: Mapped[Optional[float]] = mapped_column(Float)
     content: Mapped[Optional[str]] = mapped_column(Text)
+    source_turn_id: Mapped[Optional[str]] = mapped_column(Text)
     __table_args__ = (
         Index("ix_chat_proactive_jobs_ready", "status", "next_attempt_at", "session_id"),
         Index("ix_chat_proactive_inbox", "session_id", "status", "sent_at"),
+        Index("ix_chat_proactive_source", "session_id", "source_turn_id"),
     )
 
 

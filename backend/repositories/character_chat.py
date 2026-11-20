@@ -469,7 +469,7 @@ class CharacterChatRepository:
             ))
         if replace_turn_id:
             selected = self.selected_turn(owner, session_id, replace_turn_id)
-            statements.append(self.deactivate_after(session_id, selected["position"]))
+            statements.extend(self.deactivate_after(session_id, selected["position"]))
         position = self.database.execute_sql(
             "SELECT COALESCE(MAX(position),0)+1 AS next_position FROM character_chat_turns WHERE session_id=:id",
             {"id": session_id},
@@ -526,10 +526,14 @@ class CharacterChatRepository:
 
     @staticmethod
     def deactivate_after(session_id, position):
+        params = {"id": session_id, "position": position}
         return (
-            "UPDATE character_chat_turns SET active=0 WHERE session_id=:id AND position>=:position AND active=1",
-            {"id": session_id, "position": position},
-            None,
+            ("UPDATE character_chat_proactive_jobs SET status='cancelled',topic='',content=NULL "
+             "WHERE session_id=:id AND status IN ('pending','sent') AND source_turn_id IN ("
+             "SELECT id FROM character_chat_turns WHERE session_id=:id AND position>=:position AND active=1)",
+             params, None),
+            ("UPDATE character_chat_turns SET active=0 WHERE session_id=:id AND position>=:position AND active=1",
+             params, None),
         )
 
     def before_turn(self, owner, session_id, turn_id):
@@ -548,7 +552,7 @@ class CharacterChatRepository:
         self.database.revision_transaction(
             [
                 self.cas(session, state),
-                self.deactivate_after(session_id, selected["position"]),
+                *self.deactivate_after(session_id, selected["position"]),
                 ("UPDATE character_chat_proactive_policies SET inactivity_due_at=NULL,inactivity_turn_id=NULL "
                  "WHERE session_id=:session AND inactivity_due_at IS NOT NULL", {"session": session_id}, None),
                 *self.revoke_changed_shares(session_id, state),

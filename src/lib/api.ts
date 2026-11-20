@@ -647,6 +647,12 @@ class ApiClient {
     return this.request<import('./api-contracts').CharacterProactiveState>(`/character-chats/${encodeURIComponent(id)}/proactive`);
   }
 
+  getCharacterProactiveCandidates(id: string) {
+    return this.request<{ candidates: import('./api-contracts').ProactiveCandidate[] }>(
+      `/character-chats/${encodeURIComponent(id)}/proactive/candidates`,
+    );
+  }
+
   getCharacterProactiveInbox() {
     return this.request<{ messages: import('./api-contracts').ProactiveInboxMessage[] }>('/character-chats/proactive-inbox');
   }
@@ -675,6 +681,7 @@ class ApiClient {
 
   scheduleCharacterProactive(id: string, job: {
     revision: number; request_id: string; kind: import('./api-contracts').ProactiveTopicKind; topic: string; due_at: number;
+    source_turn_id?: string;
   }) {
     return this.request(`/character-chats/${encodeURIComponent(id)}/proactive/jobs`, {
       method: 'POST', body: JSON.stringify(job),

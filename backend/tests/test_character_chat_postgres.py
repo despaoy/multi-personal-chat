@@ -114,6 +114,26 @@ def test_postgres_browser_reminder_claim_has_one_winner(database):
     assert not push.has_due(now + 1)
 
 
+def test_postgres_sourced_proactive_job_is_cancelled_on_history_change(database):
+    from repositories.character_chat_proactive import CharacterChatProactiveRepository
+
+    repo = CharacterChatProactiveRepository(database)
+    owner = f"source-outreach-{uuid.uuid4().hex}"
+    character = repo.chats.characters.create(owner, CharacterSettings(name="fixture", persona="fixture", greeting="hi"))
+    session = repo.chats.create(owner, character["id"], "outreach")
+    identity = session["id"]
+    topic = "我们下次再聊这份方案"
+    turn = repo.chats.commit_turn(session, "retry", topic, "好", "fixture")
+    repo.set_policy(owner, identity, 0, enabled=True, cadence_hours=24, timezone="UTC", quiet_start=None, quiet_end=None)
+    candidate, = repo.candidates(owner, identity)
+    assert candidate["source_turn_id"] == turn["id"]
+    repo.schedule(owner, identity, 1, "later", "follow_up", topic, 101, now=100, source_turn_id=turn["id"])
+    current = repo.chats.get(owner, identity)
+    repo.chats.retract(owner, identity, turn["id"], current["revision"])
+    assert repo.deliver_due(now=101) == 0
+    assert repo.view(owner, identity)["jobs"] == []
+
+
 def test_postgres_chat_generation_enrichment_retry_and_erasure(database):
     repo = CharacterChatRepository(database)
     char = repo.characters.create("pg-owner", CharacterSettings(name="旅人", persona="谨慎", greeting="你好"))

@@ -57,6 +57,36 @@ const button = (renderer, label) => {
 };
 const click = async (renderer, label) => { const b = button(renderer, label); assert.ok(!b.props.disabled, `${label} disabled`); await act(async () => b.props.onClick?.()); };
 const change = async (node, value) => act(async () => node.props.onChange({ target: { value } }));
+test('conversation candidates only schedule after an explicit confirmation', async () => {
+  const start = Math.floor(Date.now() / 60_000) * 60;
+  const candidate = { source_turn_id: 'source', topic: '明天我有面试', kind: 'event', suggested_at: start + 86400 };
+  const policy = { revision: 1, enabled: true, cadence_hours: 48, timezone: 'UTC', quiet_start: null, quiet_end: null, inactivity_hours: null };
+  const jobs = [];
+  const load = loader({
+    getCharacterProactive: async () => ({ available: true, policy, jobs: [] }),
+    getCharacterProactiveCandidates: async () => ({ candidates: [candidate] }),
+    scheduleCharacterProactive: async (id, job) => jobs.push({ id, ...job }),
+  });
+  let renderer;
+  try {
+    const { ProactivePanel } = load('src/components/chat/ProactivePanel.tsx');
+    await act(async () => { renderer = create(React.createElement(ProactivePanel, { sessionId: 'session' })); });
+    await click(renderer, '从最近对话查找候选');
+    await click(renderer, '使用这句话');
+    assert.equal(jobs.length, 0);
+    const topic = renderer.root.findAllByType('input').find(input => input.props.readOnly);
+    assert.equal(topic.props.value, candidate.topic);
+    const form = renderer.root.findAllByType('form').find(item => text(item).includes('安排应用内消息'));
+    await act(async () => form.props.onSubmit({ preventDefault() {} }));
+    assert.equal(jobs.length, 1);
+    assert.equal(jobs[0].source_turn_id, 'source');
+    assert.equal(jobs[0].due_at, candidate.suggested_at);
+    assert.equal(jobs[0].topic, candidate.topic);
+  } finally {
+    if (renderer) await act(async () => renderer.unmount());
+  }
+});
+
 function loader(api) {
   const cache = new Map();
   function load(file) {

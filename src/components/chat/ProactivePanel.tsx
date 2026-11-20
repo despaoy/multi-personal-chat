@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
 import { createClientId } from '@/lib/client-id';
 import { BrowserPushControl } from './BrowserPushControl';
-import type { CharacterProactivePolicy, CharacterProactiveState, ProactiveTopicKind } from '@/lib/api-contracts';
+import type { CharacterProactivePolicy, CharacterProactiveState, ProactiveCandidate, ProactiveTopicKind } from '@/lib/api-contracts';
 
 function timeLabel(minutes: number | null) {
   return minutes === null ? '' : [Math.floor(minutes / 60), minutes % 60].map(part => String(part).padStart(2, '0')).join(':');
@@ -17,6 +17,11 @@ function minutesAt(value: string) {
   return hours * 60 + minutes;
 }
 
+function localDateTime(timestamp: number) {
+  const date = new Date(timestamp * 1000);
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+}
+
 export function ProactivePanel({ sessionId }: { sessionId: string }) {
   const [view, setView] = useState<CharacterProactiveState>();
   const [draft, setDraft] = useState<CharacterProactivePolicy>();
@@ -25,6 +30,8 @@ export function ProactivePanel({ sessionId }: { sessionId: string }) {
   const [topic, setTopic] = useState('');
   const [kind, setKind] = useState<ProactiveTopicKind>('follow_up');
   const [time, setTime] = useState('');
+  const [candidates, setCandidates] = useState<ProactiveCandidate[]>();
+  const [source, setSource] = useState<ProactiveCandidate>();
   const flight = useRef(false);
   const readGeneration = useRef(0);
   const retry = useRef<{ key: string; id: string } | null>(null);
@@ -118,11 +125,28 @@ export function ProactivePanel({ sessionId }: { sessionId: string }) {
       {view?.policy.revision !== draft.revision && <Button type="button" variant="ghost" disabled={busy}
         onClick={() => { if (view) setDraft(view.policy); }}>重新载入最新设置</Button>}
     </form>}
+    {view?.policy.enabled && <section className="space-y-2" aria-label="从对话选取话题">
+      <Button type="button" variant="outline" disabled={busy} onClick={() => void run(async () => {
+        setCandidates((await api.getCharacterProactiveCandidates(sessionId)).candidates);
+      })}>从最近对话查找候选</Button>
+      {candidates?.length === 0 && <p className="text-sm text-muted-foreground">最近对话没有可选话题。</p>}
+      {!!candidates?.length && <ul className="space-y-2 text-sm">{candidates.map(candidate => <li
+        className="flex flex-wrap items-center gap-2" key={JSON.stringify([candidate.source_turn_id, candidate.kind, candidate.topic])}>
+        <q>{candidate.topic}</q>
+        <Button type="button" variant="ghost" disabled={busy} onClick={() => {
+          setSource(candidate);
+          setKind(candidate.kind);
+          setTopic(candidate.topic);
+          setTime(candidate.suggested_at === null ? '' : localDateTime(candidate.suggested_at));
+        }}>使用这句话</Button>
+      </li>)}</ul>}
+    </section>}
     {view?.policy.enabled && <form className="space-y-2" onSubmit={event => {
       event.preventDefault();
       const dueAt = new Date(time).getTime() / 1000;
       if (!Number.isFinite(dueAt)) return;
-      const job = { revision: view.policy.revision, kind, topic: topic.trim(), due_at: dueAt };
+      const job = { revision: view.policy.revision, kind, topic: topic.trim(), due_at: dueAt,
+        ...(source ? { source_turn_id: source.source_turn_id } : {}) };
       const key = JSON.stringify(job);
       if (retry.current?.key !== key) retry.current = { key, id: createClientId() };
       const requestId = retry.current.id;
@@ -130,18 +154,27 @@ export function ProactivePanel({ sessionId }: { sessionId: string }) {
         await api.scheduleCharacterProactive(sessionId, { ...job, request_id: requestId });
         setTopic('');
         setTime('');
+        setSource(undefined);
+        if (source) setCandidates(previous => previous?.filter(candidate =>
+          candidate.source_turn_id !== source.source_turn_id || candidate.kind !== source.kind || candidate.topic !== source.topic,
+        ));
         retry.current = null;
       });
     }}>
       <label className="block text-sm">消息类型
-        <select className="ml-2 rounded border p-1" value={kind} disabled={busy} onChange={event => setKind(event.target.value as ProactiveTopicKind)}>
+        <select className="ml-2 rounded border p-1" value={kind} disabled={busy || !!source} onChange={event => setKind(event.target.value as ProactiveTopicKind)}>
           <option value="follow_up">接续话题</option>
           <option value="event">关心近况</option>
           <option value="fiction">虚构日常</option>
         </select>
       </label>
       <label className="block text-sm">话题 <input className="ml-2 rounded border p-1" required maxLength={300} value={topic}
-        disabled={busy} onChange={event => setTopic(event.target.value)} /></label>
+        disabled={busy} readOnly={!!source} onChange={event => setTopic(event.target.value)} /></label>
+      {source && <Button type="button" variant="ghost" disabled={busy} onClick={() => {
+        setSource(undefined);
+        setTopic('');
+        setTime('');
+      }}>移除引用并手动填写</Button>}
       <label className="block text-sm">最早发送时间（本机时区） <input className="ml-2 rounded border p-1" required type="datetime-local" value={time}
         disabled={busy} onChange={event => setTime(event.target.value)} /></label>
       <Button type="submit" variant="outline" disabled={busy || !topic.trim()}>安排应用内消息</Button>

@@ -114,8 +114,9 @@ class CharacterChatPushRepository:
         current = self.db.execute_sql(
             "SELECT d.id FROM character_chat_push_subscriptions d JOIN character_chat_proactive_policies p "
             "ON p.session_id=d.session_id JOIN character_chat_push_attempts a ON a.subscription_id=d.id "
+            "JOIN character_chat_proactive_jobs j ON j.session_id=d.session_id AND j.id=a.message_id "
             "WHERE d.id=:id AND d.created_at=:created_at AND p.enabled=1 AND p.revision=:revision "
-            "AND a.message_id=:message_id AND a.token=:token", params,
+            "AND a.message_id=:message_id AND a.token=:token AND j.status='sent'", params,
         )
         if not current:
             return
