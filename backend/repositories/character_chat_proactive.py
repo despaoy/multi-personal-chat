@@ -20,7 +20,7 @@ _INACTIVITY_GREETING = "有一阵子没见了。等你有空，想听听你最�
 _INACTIVITY_READY = (
     "WHERE p.enabled=1 AND p.inactivity_due_at<=:now "
     "AND NOT EXISTS (SELECT 1 FROM character_chat_generations g "
-    "WHERE g.session_id=p.session_id AND g.status='running' AND g.lease_until>:now)"
+    "WHERE g.session_id=p.session_id AND g.request_revision=s.revision AND g.status='running' AND g.lease_until>:now)"
 )
 FICTION_LABEL = "【角色虚构日常】"
 _TEXT = {
@@ -281,6 +281,7 @@ class CharacterChatProactiveRepository:
             "SELECT id FROM character_chat_proactive_jobs "
             "WHERE status='pending' AND next_attempt_at<=:now "
             "UNION ALL SELECT p.session_id FROM character_chat_proactive_policies p "
+            "JOIN character_chat_sessions s ON s.id=p.session_id "
             + _INACTIVITY_READY + " LIMIT 1", {"now": now},
         ))
 
@@ -401,7 +402,8 @@ class CharacterChatProactiveRepository:
         due, turn_id = policy["inactivity_due_at"], policy["inactivity_turn_id"]
         if not policy["enabled"] or due is None or due > now or not turn_id:
             return False
-        params = {"session": session["id"], "revision": policy["revision"], "turn": turn_id, "due": due, "now": now,
+        params = {"session": session["id"], "revision": policy["revision"], "session_revision": session["revision"],
+                  "turn": turn_id, "due": due, "now": now,
                   "cutoff": now - policy["cadence_hours"] * 3600}
         guard = (" WHERE session_id=:session AND revision=:revision AND enabled=1 "
                  "AND inactivity_turn_id=:turn AND inactivity_due_at=:due")
@@ -417,7 +419,7 @@ class CharacterChatProactiveRepository:
             ("UPDATE character_chat_proactive_policies SET last_sent_at=:now,inactivity_due_at=NULL,"
              "inactivity_last_sent_turn_id=:turn" + guard + " AND (last_sent_at IS NULL OR last_sent_at<=:cutoff) "
              "AND NOT EXISTS (SELECT 1 FROM character_chat_generations WHERE session_id=:session "
-             "AND status='running' AND lease_until>:now)", params, 1),
+             "AND request_revision=:session_revision AND status='running' AND lease_until>:now)", params, 1),
             ("INSERT INTO character_chat_proactive_jobs "
              "(session_id,id,policy_revision,kind,topic,due_at,next_attempt_at,status,sent_at,content) "
              "VALUES (:session,:id,:revision,'inactivity','',:due,:due,'sent',:now,:content)",

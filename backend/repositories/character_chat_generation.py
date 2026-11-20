@@ -6,6 +6,7 @@ import uuid
 
 from db.errors import RevisionConflictError
 from repositories.character_chat import CharacterChatRepository
+from repositories.character_library import CharacterNotFoundError
 
 
 class GenerationInProgressError(RuntimeError):
@@ -22,29 +23,32 @@ class CharacterChatGenerationRepository:
         self.chats = CharacterChatRepository(database)
 
     def get(self, owner, session_id, request_id):
-        session = self.chats.get(owner, session_id)
         rows = self.database.execute_sql(
-            "SELECT request_id,status,lease_until,turn_id,error_code,attempt,payload_json,draft_text,draft_revision "
-            "FROM character_chat_generations "
-            "WHERE session_id=:session AND request_id=:request",
-            {"session": session_id, "request": request_id},
+            "SELECT g.request_id,g.status,g.lease_until,g.turn_id,g.error_code,g.attempt,g.payload_json,"
+            "g.draft_text,g.draft_revision,g.request_revision,s.revision AS session_revision,"
+            "EXISTS (SELECT 1 FROM character_chat_turns t WHERE t.id=g.turn_id AND t.session_id=s.id AND t.active=1) AS active_turn "
+            "FROM character_chat_sessions s LEFT JOIN character_chat_generations g ON g.session_id=s.id "
+            "AND g.request_id=:request WHERE s.id=:session AND s.owner_user_id=:owner",
+            {"session": session_id, "owner": owner, "request": request_id},
         )
         if not rows:
+            raise CharacterNotFoundError("会话不存在")
+        if rows[0]["request_id"] is None:
             return None
         result = dict(rows[0])
-        revision, message, replace_turn_id = json.loads(result.pop("payload_json"))
+        payload = result.pop("payload_json")
+        revision = result.pop("request_revision")
+        session_revision = result.pop("session_revision")
+        active_turn = result.pop("active_turn")
         if result["status"] == "running" and result["lease_until"] <= time.time():
             result["status"] = "interrupted"
         if result["status"] == "completed":
-            active = self.database.execute_sql(
-                "SELECT id FROM character_chat_turns WHERE id=:turn AND session_id=:session AND active=1",
-                {"turn": result["turn_id"], "session": session_id},
-            )
-            if not active:
+            if not active_turn:
                 result["status"] = "superseded"
-        elif session["revision"] != revision:
+        elif session_revision != revision:
             result["status"] = "superseded"
         if result["status"] in {"running", "failed", "interrupted"}:
+            _, message, replace_turn_id = json.loads(payload)
             result["body"] = {
                 "revision": revision, "request_id": request_id,
                 "message": message, "replace_turn_id": replace_turn_id,
@@ -54,14 +58,15 @@ class CharacterChatGenerationRepository:
         return result
 
     def pending(self, owner, session_id):
-        self.chats.get(owner, session_id)
+        session = self.chats.get(owner, session_id)
         # Paginate rather than loading every historical failed message at once.
         offset = 0
         while True:
             rows = self.database.execute_sql(
                 "SELECT request_id FROM character_chat_generations WHERE session_id=:session "
-                "AND status IN ('running','failed') ORDER BY lease_until DESC,request_id LIMIT 50 OFFSET :offset",
-                {"session": session_id, "offset": offset},
+                "AND request_revision=:revision AND status IN ('running','failed') "
+                "ORDER BY lease_until DESC,request_id LIMIT 50 OFFSET :offset",
+                {"session": session_id, "revision": session["revision"], "offset": offset},
             )
             for row in rows:
                 result = self.get(owner, session_id, row["request_id"])
@@ -96,15 +101,16 @@ class CharacterChatGenerationRepository:
             ("UPDATE character_chat_sessions SET revision=revision "
              "WHERE id=:session AND owner_user_id=:owner AND revision=:revision", params, 1),
             ("INSERT INTO character_chat_generations "
-             "(session_id,request_id,payload_json,status,lease_token,lease_until,attempt) "
-             "VALUES (:session,:request,:payload,'failed','',0,0) "
+             "(session_id,request_id,payload_json,request_revision,status,lease_token,lease_until,attempt) "
+             "VALUES (:session,:request,:payload,:revision,'failed','',0,0) "
              "ON CONFLICT (session_id,request_id) DO NOTHING", params, None),
             ("UPDATE character_chat_generations SET status='running',lease_token=:token,lease_until=:until,"
              "attempt=attempt+1,error_code=NULL,draft_text='',draft_revision=draft_revision+1 "
-             "WHERE session_id=:session AND request_id=:request "
+             "WHERE session_id=:session AND request_id=:request AND request_revision=:revision "
              "AND payload_json=:payload AND (status='failed' OR (status='running' AND lease_until<=:now)) "
              "AND NOT EXISTS (SELECT 1 FROM character_chat_generations active "
-             "WHERE active.session_id=:session AND active.status='running' AND active.lease_until>:now)", params, 1),
+             "WHERE active.session_id=:session AND active.request_revision=:revision "
+             "AND active.status='running' AND active.lease_until>:now)", params, 1),
         ]
         self.database.revision_transaction(statements)
         return params["token"]

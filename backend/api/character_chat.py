@@ -337,7 +337,8 @@ async def generate_message(
             body.model_dump(),
             lambda: runtime.submit(
                 lambda: chat.generate(owner, session_id, **body.model_dump()),
-                session_id=key,
+                # A rewind can make an active model request obsolete while it is still running.
+                session_id=f"{key}:revision:{body.revision}",
                 priority=runtime.priority_for("web", "private"),
             ),
         )

@@ -860,6 +860,11 @@ class SQLiteDB:
                     cursor.execute(str(CreateIndex(index).compile(dialect=dialect())))
             migrate_baselines(cursor.execute)
 
+        if self._ensure_column(cursor, 'character_chat_generations', 'request_revision', 'INTEGER NOT NULL DEFAULT 0'):
+            cursor.execute(
+                "UPDATE character_chat_generations SET request_revision=CASE WHEN json_valid(payload_json) "
+                "THEN COALESCE(CAST(json_extract(payload_json,'$[0]') AS INTEGER),0) ELSE 0 END"
+            )
         self._ensure_column(cursor, 'character_library', 'publication_id', 'TEXT')
         self._ensure_column(cursor, 'character_library', 'sharing_epoch', 'BIGINT NOT NULL DEFAULT 0')
         self._ensure_column(cursor, 'character_library', 'source_publication_id', 'TEXT')
@@ -920,6 +925,8 @@ class SQLiteDB:
         columns = {row[1] for row in cursor.fetchall()}
         if column not in columns:
             cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+            return True
+        return False
 
     @staticmethod
     def _create_character_memories_table(cursor, table_name: str = "character_memories") -> None:

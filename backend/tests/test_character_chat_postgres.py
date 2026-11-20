@@ -150,10 +150,12 @@ def test_postgres_proactive_delivery_respects_session_consent_and_is_idempotent(
     due = repo._policy(identity)["inactivity_due_at"]
     assert repo.deliver_due(now=due - 1) == 0
     generations = CharacterChatGenerationRepository(database)
-    token = generations.claim(repo.chats.get(owner, identity), "busy", "fixture", lease_seconds=73 * 3600)
+    busy = repo.chats.get(owner, identity)
+    generations.claim(busy, "busy", "fixture", lease_seconds=73 * 3600)
     assert not repo.has_due(due)
     assert repo.deliver_due(now=due) == 0
-    generations.fail(identity, "busy", token, "fixture")
+    repo.chats.update_relationship(owner, identity, busy["revision"], "familiar", "手动修改")
+    assert generations.get(owner, identity, "busy")["status"] == "superseded"
     assert repo.has_due(due)
     assert repo.deliver_due(now=due) == 1
     assert repo.inbox(owner)[0]["kind"] == "inactivity"
@@ -319,6 +321,9 @@ def test_postgres_concurrent_generation_claim_has_one_winner(database):
 
     with ThreadPoolExecutor(max_workers=2) as pool:
         assert sum(value is not None for value in pool.map(claim, ["one", "two"])) == 1
+    current = repo.update_relationship("pg-owner", session["id"], session["revision"], "familiar", "手动修改")
+    fresh = jobs.claim(current, "fresh", "继续聊天")
+    assert repo.commit_turn(current, "fresh", "继续聊天", "好", "test", generation_token=fresh)["active"] == 1
 
 
 def test_postgres_memory_rewind_branch_and_atomic_delete(database):
@@ -463,7 +468,8 @@ def test_postgres_legacy_generation_upgrade_preserves_receipt():
         connection.execute(sa.text("CREATE TABLE character_chat_sessions (id TEXT PRIMARY KEY)"))
         connection.execute(sa.text("CREATE TABLE character_chat_turns (id TEXT PRIMARY KEY)"))
         modules = []
-        for name in ("021_character_chat_generation", "022_character_chat_draft", "023_character_chat_enrichment"):
+        for name in ("021_character_chat_generation", "022_character_chat_draft", "023_character_chat_enrichment",
+                     "039_generation_request_revision"):
             path = Path(__file__).parents[1] / "alembic" / "versions" / (name + ".py")
             spec = importlib.util.spec_from_file_location(name, path)
             module = importlib.util.module_from_spec(spec)
@@ -475,13 +481,14 @@ def test_postgres_legacy_generation_upgrade_preserves_receipt():
         connection.execute(sa.text("INSERT INTO character_chat_sessions (id) VALUES ('legacy-session')"))
         connection.execute(sa.text("INSERT INTO character_chat_generations "
             "(session_id,request_id,payload_json,status,lease_token,lease_until,attempt,turn_id) "
-            "VALUES ('legacy-session','legacy-request','[]','completed','token',0,1,'legacy-turn')"))
+            "VALUES ('legacy-session','legacy-request','[7,\"fixture\",null]','completed','token',0,1,'legacy-turn')"))
         for module in modules[1:]:
             module.upgrade()
             module.upgrade()
         row = connection.execute(sa.text("SELECT * FROM character_chat_generations")).mappings().one()
         assert row["request_id"] == "legacy-request" and row["turn_id"] == "legacy-turn"
         assert row["status"] == "completed" and row["draft_text"] == "" and row["draft_revision"] == 0
+        assert row["request_revision"] == 7
         for module in reversed(modules[1:]):
             module.downgrade()
         assert connection.execute(sa.text("SELECT turn_id FROM character_chat_generations")).scalar_one() == "legacy-turn"

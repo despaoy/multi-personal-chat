@@ -226,6 +226,7 @@ class CharacterChatGeneration(Base):
     session_id: Mapped[str] = mapped_column(Text, ForeignKey("character_chat_sessions.id"), primary_key=True)
     request_id: Mapped[str] = mapped_column(Text, primary_key=True)
     payload_json: Mapped[str] = mapped_column(Text, nullable=False)
+    request_revision: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     status: Mapped[str] = mapped_column(Text, nullable=False)
     lease_token: Mapped[str] = mapped_column(Text, nullable=False)
     lease_until: Mapped[float] = mapped_column(Float, nullable=False)
