@@ -7,6 +7,15 @@ from collections import defaultdict, deque
 from datetime import datetime, timezone
 
 from db.character_chat_erasure import ERASURE_TABLE, SESSION_ROWS
+from db.character_chat_history import (
+    HISTORY_NODES,
+    HISTORY_PATH,
+    ORPHANED_HISTORY_NODE,
+    READ_PATH,
+    create_path,
+    materialize_baseline,
+    stored_baseline,
+)
 from db.errors import RevisionConflictError
 from repositories.character_library import CharacterLibraryRepository, CharacterNotFoundError
 
@@ -32,7 +41,12 @@ class CharacterChatRepository:
         if not rows:
             raise CharacterNotFoundError("会话不存在")
         row = dict(rows[0])
-        row["baseline"] = json.loads(row.pop("baseline_json"))
+        baseline = json.loads(row.pop("baseline_json"))
+        path = (
+            self.database.execute_sql(READ_PATH, {"session": session_id, "owner": owner})
+            if baseline["history_states"] else []
+        )
+        row["baseline"] = materialize_baseline(baseline, path)
         row["network_policy"] = row["baseline"].get("network_policy", "cloud_allowed")
         row["source_corpus_id"] = row["baseline"].get("source_corpus_id")
         row["state"] = json.loads(row.pop("state_json"))
@@ -93,13 +107,20 @@ class CharacterChatRepository:
             if row["revision"] != selection["revision"]:
                 raise RevisionConflictError()
 
+        origins = defaultdict(set)
+        for row in self.database.execute_sql(
+            f"SELECT DISTINCT p.session_id,n.origin_session_id FROM {HISTORY_PATH} p JOIN {HISTORY_NODES} n "
+            "ON n.owner_user_id=p.owner_user_id AND n.node_key=p.node_key "
+            "WHERE p.owner_user_id=:owner AND n.origin_session_id IS NOT NULL",
+            {"owner": owner},
+        ):
+            origins[row["session_id"]].add(row["origin_session_id"])
         children = defaultdict(set)
         for row in rows:
             baseline = json.loads(row["baseline_json"])
-            history = baseline.get("history", [])
-            parents = {row["source_session_id"], *(turn.get("session_id") for turn in history)}
+            parents = {row["source_session_id"], *origins[row["id"]]}
             states = [json.loads(row["state_json"]), baseline.get("state", {})]
-            states.extend(turn.get("state_after", {}) for turn in history)
+            states.extend(step.get("state_after", {}) for step in baseline["history_states"])
             for state in states:
                 for memory in state.get("memories", []):
                     if memory.get("shared_memory_id"):
@@ -138,6 +159,19 @@ class CharacterChatRepository:
                     1,
                 )
             )
+        path_params = {f"session_{index}": session_id for index, session_id in enumerate(ids)}
+        placeholders = ",".join(f":{name}" for name in path_params)
+        nodes = self.database.execute_sql(
+            f"SELECT DISTINCT node_key FROM {HISTORY_PATH} "
+            f"WHERE owner_user_id=:owner AND session_id IN ({placeholders}) ORDER BY node_key",
+            {**path_params, "owner": owner},
+        )
+        node_params = [{"owner": owner, "node": row["node_key"]} for row in nodes]
+        # A path creation holds the same node locks until its references have committed.
+        statements.extend(
+            (f"UPDATE {HISTORY_NODES} SET node_key=node_key WHERE owner_user_id=:owner AND node_key=:node", params, 1)
+            for params in node_params
+        )
         for session_id in sorted(ids):
             params = {"id": session_id}
             statements.extend((
@@ -149,6 +183,11 @@ class CharacterChatRepository:
                 (f"DELETE FROM {table} WHERE {column}=:id", params, 1 if table == "character_chat_sessions" else None)
                 for table, column in SESSION_ROWS
             )
+        statements.extend(
+            (f"DELETE FROM {HISTORY_NODES} WHERE owner_user_id=:owner AND node_key=:node AND {ORPHANED_HISTORY_NODE}",
+             params, None)
+            for params in node_params
+        )
         self.database.revision_transaction(statements)
         return {"deleted_session_ids": ids}
 
@@ -399,7 +438,7 @@ class CharacterChatRepository:
             "source": source_session_id,
             "turn": source_turn_id,
             "hypothesis": hypothesis,
-            "baseline": json.dumps(baseline, ensure_ascii=False),
+            "baseline": stored_baseline(baseline),
             "state": json.dumps(state, ensure_ascii=False),
             "now": now,
         }
@@ -412,6 +451,7 @@ class CharacterChatRepository:
                 1,
             )
         )
+        statements.extend(create_path(owner, session_id, baseline["history"]))
         self.database.revision_transaction(statements)
         return self.get(owner, session_id)
 
@@ -618,7 +658,7 @@ class CharacterChatRepository:
             statements.append(
                 (
                     "UPDATE character_chat_sessions SET baseline_json=:baseline WHERE id=:id",
-                    {"id": session_id, "baseline": json.dumps(baseline, ensure_ascii=False)},
+                    {"id": session_id, "baseline": stored_baseline(baseline)},
                     1,
                 )
             )
@@ -706,7 +746,7 @@ class CharacterChatRepository:
         statements.append(
             (
                 "UPDATE character_chat_sessions SET baseline_json=:baseline WHERE id=:id",
-                {"id": session_id, "baseline": json.dumps(baseline, ensure_ascii=False)},
+                {"id": session_id, "baseline": stored_baseline(baseline)},
                 1,
             )
         )

@@ -837,6 +837,8 @@ class SQLiteDB:
         # use the same character version constraints.
         from sqlalchemy.dialects.sqlite import dialect
         from sqlalchemy.schema import CreateIndex, CreateTable
+        from db.character_chat_history import HISTORY_PATH, migrate_baselines
+        from db.models import CharacterChatHistoryNode, CharacterChatHistoryStep
         from db.models import CharacterLibraryEntry, CharacterLibraryVersion, CharacterChatSession, CharacterChatTurn, CharacterSharedMemory, CharacterChatEvidence, CharacterChatGeneration, CharacterChatEnrichmentJob, CharacterChatMemoryVector, CharacterSourceCorpus, CharacterPublication, CharacterPublicationCopy, CharacterSourceUpdateReceipt
 
         for model in (CharacterLibraryEntry, CharacterLibraryVersion, CharacterChatSession, CharacterChatTurn, CharacterSharedMemory, CharacterChatEvidence, CharacterChatGeneration, CharacterChatEnrichmentJob, CharacterChatMemoryVector, CharacterSourceCorpus, CharacterPublication, CharacterPublicationCopy, CharacterSourceUpdateReceipt):
@@ -844,6 +846,19 @@ class SQLiteDB:
             cursor.execute(str(CreateTable(table, if_not_exists=True).compile(dialect=dialect())))
             for index in table.indexes:
                 cursor.execute(str(CreateIndex(index, if_not_exists=True).compile(dialect=dialect())))
+
+        if not conn.in_transaction:
+            cursor.execute("BEGIN IMMEDIATE")
+        needs_history_migration = cursor.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=:name", {"name": HISTORY_PATH},
+        ).fetchone() is None
+        if needs_history_migration:
+            for model in (CharacterChatHistoryNode, CharacterChatHistoryStep):
+                table = model.__table__
+                cursor.execute(str(CreateTable(table).compile(dialect=dialect())))
+                for index in table.indexes:
+                    cursor.execute(str(CreateIndex(index).compile(dialect=dialect())))
+            migrate_baselines(cursor.execute)
 
         self._ensure_column(cursor, 'character_library', 'publication_id', 'TEXT')
         self._ensure_column(cursor, 'character_library', 'source_publication_id', 'TEXT')

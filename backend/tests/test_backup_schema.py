@@ -1,19 +1,21 @@
 """Each supported backup artifact must preserve SQLite schema and behavior."""
 
-from app.runtime import RuntimeContainer
-from infra.concurrency_control import inference_runtime
+import json
 import sqlite3
 from contextlib import closing
 from pathlib import Path
 
 import pytest
-
-from infra.backup_manager import BackupManager, BackupType
 from scripts.restore_sqlite_backup import restore_sqlite_backup
+
+from app.runtime import RuntimeContainer
+from infra.backup_manager import BackupManager, BackupType
+from infra.concurrency_control import inference_runtime
 
 
 @pytest.mark.asyncio
-async def test_restore_keeps_chat_erasure_receipts_and_purges_older_session_rows(tmp_path):
+@pytest.mark.parametrize("legacy_history", [False, True])
+async def test_restore_keeps_chat_erasure_receipts_and_purges_older_session_rows(tmp_path, legacy_history):
     from character.library import CharacterSettings
     from db.database import SQLiteDB
     from repositories.character_chat import CharacterChatRepository
@@ -35,6 +37,14 @@ async def test_restore_keeps_chat_erasure_receipts_and_purges_older_session_rows
                              quiet_start=None, quiet_end=None)
         proactive.schedule("1", erased["id"], 1, "old-job", "event", "deleted topic", 101, now=100)
         db.execute_sql("DROP TABLE character_chat_erasure_receipts")
+        if legacy_history:
+            with closing(sqlite3.connect(path)) as connection, connection:
+                connection.executemany("UPDATE character_chat_sessions SET baseline_json=? WHERE id=?", [
+                    (json.dumps(session["baseline"], ensure_ascii=False), session["id"])
+                    for session in (erased, kept, copy)
+                ])
+                connection.execute("DROP TABLE character_chat_history_path")
+                connection.execute("DROP TABLE character_chat_history_nodes")
         before = await BackupManager(str(path), backup_dir=str(tmp_path / "archives")).backup()
     finally:
         db.close_connection()
@@ -47,6 +57,8 @@ async def test_restore_keeps_chat_erasure_receipts_and_purges_older_session_rows
     # Replaying the same old backup keeps both the deletion and its receipt.
     for _ in range(2):
         restore_sqlite_backup(Path(before.path), path)
+        if legacy_history:
+            SQLiteDB(path).close_connection()
         with closing(sqlite3.connect(path)) as connection:
             assert {row[0] for row in connection.execute("SELECT id FROM character_chat_sessions")} == {kept["id"], copy["id"]}
             assert connection.execute("SELECT session_id FROM character_chat_erasure_receipts").fetchall() == [(erased["id"],)]
@@ -54,12 +66,26 @@ async def test_restore_keeps_chat_erasure_receipts_and_purges_older_session_rows
             assert connection.execute("SELECT * FROM character_chat_enrichment_jobs WHERE session_id=?", (erased["id"],)).fetchall() == []
             assert connection.execute("SELECT * FROM character_chat_proactive_jobs").fetchall() == []
             assert connection.execute("SELECT * FROM character_chat_proactive_policies").fetchall() == []
+            assert connection.execute("SELECT session_id FROM character_chat_history_path").fetchall() == [(copy["id"],)]
+            assert connection.execute("SELECT origin_session_id FROM character_chat_history_nodes").fetchall() == [(erased["id"],)]
 
     # Recovery into a new file can use a surviving, newer SQLite receipt source.
     recovered = tmp_path / "recovered.sqlite"
     restore_sqlite_backup(Path(before.path), recovered, deletion_records_from=path)
     with closing(sqlite3.connect(recovered)) as connection:
         assert connection.execute("SELECT id FROM character_chat_sessions WHERE id=?", (erased["id"],)).fetchone() is None
+
+    db = SQLiteDB(path)
+    try:
+        CharacterChatRepository(db).delete_sessions("1", [{"id": copy["id"], "revision": copy["revision"]}])
+    finally:
+        db.close_connection()
+    restore_sqlite_backup(Path(before.path), path)
+    if legacy_history:
+        SQLiteDB(path).close_connection()
+    with closing(sqlite3.connect(path)) as connection:
+        assert connection.execute("SELECT * FROM character_chat_history_path").fetchall() == []
+        assert connection.execute("SELECT * FROM character_chat_history_nodes").fetchall() == []
 
 
 @pytest.mark.asyncio

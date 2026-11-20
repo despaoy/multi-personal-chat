@@ -154,7 +154,7 @@ python -m alembic current
 python run.py --host 127.0.0.1 --port 8000 --workers 1
 ```
 
-角色聊天分支的迁移 head 为 `036_source_edition_order`。SQLite 本地运行由后端启动时补齐表和字段。两种数据库都采用 `BACKEND_WORKERS=1`，因为部分会话锁和 nonce 使用进程内状态。旧 AstrBot 部署仍需让插件和后端使用兼容版本。
+角色聊天分支的迁移 head 为 `037_character_chat_history`。该迁移将继承历史的正文与出处转为账号内共享节点，保留每条路径各自的关系和记忆检查点。SQLite 本地运行由后端启动时完成同样的迁移。升级前先备份，并停止旧版 API 和聊天 worker。两种数据库都采用 `BACKEND_WORKERS=1`，因为部分会话锁和 nonce 使用进程内状态。旧 AstrBot 部署仍需让插件和后端使用兼容版本。
 
 生产 PostgreSQL 的 API 和聊天 worker 启动前会检查数据库的 Alembic 版本。未迁移、落后或超前的数据库会拒绝启动。标准 Docker Compose 在首次启动或版本升级时，可在备份后从 `deploy/` 使用当前版本的后端镜像运行迁移：
 

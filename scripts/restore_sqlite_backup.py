@@ -18,6 +18,11 @@ if not __package__:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from backend.db.character_chat_erasure import ERASURE_TABLE, SESSION_ROWS
+from backend.db.character_chat_history import (
+    HISTORY_NODES,
+    HISTORY_PATH,
+    ORPHANED_HISTORY_NODE,
+)
 
 
 def _validate_sqlite(path: Path) -> None:
@@ -66,6 +71,8 @@ def _prepare_restored_chat(candidate: Path, receipts):
             for table, column in SESSION_ROWS:
                 if table in tables:
                     connection.execute(f"DELETE FROM {table} WHERE {column} IN ({erased})")
+            if {HISTORY_NODES, HISTORY_PATH} <= tables:
+                connection.execute(f"DELETE FROM {HISTORY_NODES} WHERE {ORPHANED_HISTORY_NODE}")
         if has_outreach:
             # An older snapshot cannot speak for a user's current consent.
             columns = {row[1] for row in connection.execute("PRAGMA table_info(character_chat_proactive_policies)")}

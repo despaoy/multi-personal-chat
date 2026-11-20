@@ -1,6 +1,9 @@
 """Versioned conversation mechanics through real storage and HTTP contracts."""
 
 import asyncio
+import json
+import sqlite3
+from contextlib import closing
 
 import pytest
 from fastapi import FastAPI
@@ -174,6 +177,50 @@ def test_selected_deletion_erases_inactive_history_and_shares_only_in_scope(repo
     )
     assert repo.list("1") == []
     assert repo.characters.get("1", entry["id"])
+    assert repo.database.execute_sql("SELECT * FROM character_chat_history_path") == []
+    assert repo.database.execute_sql("SELECT * FROM character_chat_history_nodes") == []
+
+
+def test_migrates_legacy_inherited_history_on_sqlite_reopen(tmp_path):
+    path = tmp_path / "old-history.sqlite"
+    db = SQLiteDB(path)
+    try:
+        repo = CharacterChatRepository(db)
+        entry = character(repo)
+        source = repo.create("1", entry["id"], "来源")
+        source, first = turn(repo, source, "第一条")
+        source, second = turn(repo, source, "第二条")
+        branch = repo.create("1", entry["id"], "旧分支", source_session_id=source["id"],
+                             source_revision=source["revision"], source_turn_id=second["id"])
+        baseline = branch["baseline"]
+        baseline["history"][0].pop("state_after")
+        baseline["history"][0].pop("character_revision")
+        baseline["history"][1]["evidence"] = {"sources": [{"title": "旧出处", "excerpt": "旧出处正文"}]}
+        source_baseline = source["baseline"]
+        with closing(sqlite3.connect(path)) as connection, connection:
+            connection.executemany("UPDATE character_chat_sessions SET baseline_json=? WHERE id=?", [
+                (json.dumps(baseline, ensure_ascii=False), branch["id"]),
+                (json.dumps(source_baseline, ensure_ascii=False), source["id"]),
+            ])
+            connection.execute("DROP TABLE character_chat_history_path")
+            connection.execute("DROP TABLE character_chat_history_nodes")
+    finally:
+        db.close_connection()
+
+    for _ in range(2):
+        db = SQLiteDB(path)
+        try:
+            repo = CharacterChatRepository(db)
+            assert repo.get("1", branch["id"])["baseline"] == baseline
+            assert repo.get("1", source["id"])["baseline"] == source_baseline
+            rows = db.execute_sql("SELECT baseline_json FROM character_chat_sessions WHERE id=:id", {"id": branch["id"]})
+            assert "旧出处正文" not in rows[0]["baseline_json"]
+            assert len(db.execute_sql("SELECT * FROM character_chat_history_path")) == 2
+            with pytest.raises(ValueError, match="未保存逐轮状态"):
+                repo.create("1", entry["id"], "缺少旧状态", source_session_id=branch["id"],
+                            source_revision=branch["revision"], source_turn_id=first["id"])
+        finally:
+            db.close_connection()
 
 
 def test_delete_selected_http_ownership_and_atomic_conflicts(repo):
@@ -482,6 +529,11 @@ def test_branch_from_inherited_point_preserves_original_version_and_state(repo):
     assert branch["character_revision"] == 1
     assert branch["state"]["memories"][0]["content"] == "喜欢咖啡"
     assert [item["id"] for item in branch["baseline"]["history"]] == [first["id"]]
+    path_nodes = repo.database.execute_sql(
+        "SELECT session_id,node_key FROM character_chat_history_path WHERE position=0"
+    )
+    assert {row["session_id"] for row in path_nodes} == {continuation["id"], branch["id"]}
+    assert len({row["node_key"] for row in path_nodes}) == 1
     branch, local = turn(repo, branch, "避雨")
     nested = repo.create(
         "1",

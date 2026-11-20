@@ -17,6 +17,7 @@ from sqlalchemy import (
     Text,
     Float,
     ForeignKey,
+    ForeignKeyConstraint,
     UniqueConstraint,
     CheckConstraint,
     Index,
@@ -24,6 +25,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import UserDefinedType
+
+from db.character_chat_history import HISTORY_NODES, HISTORY_OWNER_INDEX, HISTORY_PATH
 
 
 class Base(DeclarativeBase):
@@ -130,8 +133,34 @@ class CharacterChatSession(Base):
     created_at: Mapped[str] = mapped_column(Text, nullable=False)
     updated_at: Mapped[str] = mapped_column(Text, nullable=False)
     __table_args__ = (
+        Index(HISTORY_OWNER_INDEX, "id", "owner_user_id", unique=True),
         CheckConstraint("revision >= 1", name="ck_character_chat_revision"),
         CheckConstraint("mode IN ('initial','continuation','branch')", name="ck_character_chat_mode"),
+    )
+
+
+class CharacterChatHistoryNode(Base):
+    __tablename__ = HISTORY_NODES
+    owner_user_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    node_key: Mapped[str] = mapped_column(Text, primary_key=True)
+    origin_session_id: Mapped[str | None] = mapped_column(Text)
+    payload_json: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class CharacterChatHistoryStep(Base):
+    __tablename__ = HISTORY_PATH
+    session_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    position: Mapped[int] = mapped_column(Integer, primary_key=True)
+    owner_user_id: Mapped[str] = mapped_column(Text, nullable=False)
+    node_key: Mapped[str] = mapped_column(Text, nullable=False)
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ("session_id", "owner_user_id"), ("character_chat_sessions.id", "character_chat_sessions.owner_user_id"),
+        ),
+        ForeignKeyConstraint(
+            ("owner_user_id", "node_key"), (f"{HISTORY_NODES}.owner_user_id", f"{HISTORY_NODES}.node_key"),
+        ),
+        Index("ix_character_chat_path_node", "owner_user_id", "node_key"),
     )
 
 

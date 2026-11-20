@@ -2,10 +2,12 @@
 
 import asyncio
 import importlib.util
+import json
 import os
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Barrier
 from time import time
 
 import pytest
@@ -262,6 +264,109 @@ def test_postgres_memory_rewind_branch_and_atomic_delete(database):
     repo.delete_sessions("branch-owner", [{"id": session["id"], "revision": session["revision"]}])
     assert database.execute_sql(receipts, {"id": session["id"]}) == [{"session_id": session["id"]}]
     assert repo.get("branch-owner", branch["id"])["baseline"]["history"][0]["message"] == "去海边"
+
+
+def test_postgres_path_can_reuse_content_while_last_existing_branch_is_deleted(database):
+    repo = CharacterChatRepository(database)
+    owner = uuid.uuid4().hex
+    character = repo.characters.create(owner, CharacterSettings(name="旅人", persona="谨慎", greeting="你好"))
+    source = repo.create(owner, character["id"], "来源")
+    turn = repo.commit_turn(source, "request", "去海边", "好", "test")
+    source = repo.get(owner, source["id"])
+
+    def create_branch():
+        return repo.create(owner, character["id"], "分支", source_session_id=source["id"],
+                           source_revision=source["revision"], source_turn_id=turn["id"])
+
+    old = create_branch()
+    sync = Barrier(2, timeout=10)
+
+    def remove_old():
+        sync.wait()
+        repo.delete_sessions(owner, [{"id": old["id"], "revision": old["revision"]}])
+
+    def create_new():
+        sync.wait()
+        return create_branch()
+
+    with ThreadPoolExecutor(2) as pool:
+        deletion = pool.submit(remove_old)
+        creation = pool.submit(create_new)
+        deletion.result(timeout=20)
+        new = creation.result(timeout=20)
+
+    assert new["baseline"]["history"][0]["message"] == "去海边"
+    assert database.execute_sql(
+        "SELECT session_id FROM character_chat_history_path WHERE owner_user_id=:owner", {"owner": owner},
+    ) == [{"session_id": new["id"]}]
+    assert len(database.execute_sql(
+        "SELECT node_key FROM character_chat_history_nodes WHERE owner_user_id=:owner", {"owner": owner},
+    )) == 1
+    repo.delete_sessions(owner, [{"id": new["id"], "revision": new["revision"]}])
+    assert database.execute_sql(
+        "SELECT node_key FROM character_chat_history_nodes WHERE owner_user_id=:owner", {"owner": owner},
+    ) == []
+
+
+def test_postgres_legacy_history_migration_preserves_body_and_path_local_state():
+    import sqlalchemy as sa
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+    from sqlalchemy.ext.asyncio import create_async_engine
+
+    def migrate(connection):
+        connection.execute(sa.text("CREATE SCHEMA history_migration_fixture"))
+        connection.execute(sa.text("SET LOCAL search_path TO history_migration_fixture"))
+        connection.execute(sa.text(
+            "CREATE TABLE character_chat_sessions (id TEXT PRIMARY KEY,owner_user_id TEXT NOT NULL,baseline_json TEXT NOT NULL)"
+        ))
+        name = "037_character_chat_history"
+        path = Path(__file__).parents[1] / "alembic" / "versions" / f"{name}.py"
+        spec = importlib.util.spec_from_file_location(name, path)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        module.op = Operations(MigrationContext.configure(connection))
+        source = {"id": "turn", "session_id": "deleted-source", "message": "旧正文", "reply": "旧回覆",
+                  "evidence": {"sources": [{"title": "旧资料"}]}}
+        original = {
+            "a": {"history": [{**source, "state_after": {"memories": ["红茶"]}}], "state": {}},
+            "b": {"history": [{**source, "state_after": {"memories": ["绿茶"]}}], "state": {}},
+            "c": {"history": [source], "state": {}},
+        }
+        connection.execute(
+            sa.text("INSERT INTO character_chat_sessions VALUES (:id,'owner',:baseline)"),
+            [{"id": key, "baseline": json.dumps(value, ensure_ascii=False)} for key, value in original.items()],
+        )
+        module.upgrade()
+        module.upgrade()
+        assert connection.execute(sa.text("SELECT count(*) FROM character_chat_history_nodes")).scalar_one() == 1
+        assert connection.execute(sa.text("SELECT count(*) FROM character_chat_history_path")).scalar_one() == 3
+        connection.execute(sa.text(
+            "INSERT INTO character_chat_history_nodes SELECT 'wrong-account',node_key,origin_session_id,payload_json "
+            "FROM character_chat_history_nodes"
+        ))
+        with pytest.raises(sa.exc.IntegrityError), connection.begin_nested():
+            connection.execute(sa.text(
+                "INSERT INTO character_chat_history_path (session_id,position,owner_user_id,node_key) "
+                "SELECT 'a',1,owner_user_id,node_key FROM character_chat_history_nodes WHERE owner_user_id='wrong-account'"
+            ))
+        module.downgrade()
+        rows = connection.execute(sa.text("SELECT id,baseline_json FROM character_chat_sessions"))
+        assert {key: json.loads(value) for key, value in rows} == original
+
+    async def exercise():
+        engine = create_async_engine(os.environ["DATABASE_URL"])
+        try:
+            async with engine.connect() as connection:
+                transaction = await connection.begin()
+                try:
+                    await connection.run_sync(migrate)
+                finally:
+                    await transaction.rollback()
+        finally:
+            await engine.dispose()
+
+    asyncio.run(exercise())
 
 
 def test_postgres_legacy_generation_upgrade_preserves_receipt():

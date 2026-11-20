@@ -12,13 +12,14 @@ from datetime import datetime
 from functools import partial
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from db.training_tasks import training_config_json, training_config_update, training_task_record
 from cache.ttl_value_cache import BoundedTTLCache
 from db import memory_source
+from db.character_chat_history import CREATE_HISTORY_OWNER_INDEX, HISTORY_PATH, migrate_baselines
 from db.conversation_indexes import SOURCE_INDEX_STATEMENTS
 from db.errors import RegistrationClosedError
 from db.memory_claim_guard import (
@@ -119,7 +120,16 @@ class PgDatabase:
 
                 await conn.run_sync(require_current_migrations)
             await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+            needs_history_migration = False
+            if not self._require_migrations:
+                needs_history_migration = await conn.run_sync(lambda db: not inspect(db).has_table(HISTORY_PATH))
+                if needs_history_migration and await conn.run_sync(
+                    lambda db: inspect(db).has_table("character_chat_sessions")
+                ):
+                    await conn.execute(text(CREATE_HISTORY_OWNER_INDEX))
             await conn.run_sync(metadata.create_all)
+            if needs_history_migration:
+                await conn.run_sync(lambda db: migrate_baselines(lambda sql, params: db.execute(text(sql), params)))
             await self._ensure_column(conn, "memory_sources", "body_digest", "TEXT")
             await self._ensure_column(conn, "messages", "platform", "TEXT NOT NULL DEFAULT 'qq'")
             await self._ensure_column(conn, "messages", "adapter", "TEXT NOT NULL DEFAULT 'nonebot'")
