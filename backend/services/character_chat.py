@@ -57,6 +57,7 @@ def prepare_request(session, turns, message, retrieved_memories=None, *, proacti
         persona += (
             "\n原作问题中的人物、事件或时间线无法确定时，本轮只问一个聚焦的澄清问题。"
             "即使检索到了泛泛的作品背景，也不要先复述背景、补猜情节或添加引用。"
+            "澄清时只询问缺少的人物、地点、场景或时间，不列举对话中未明确提到的情节作为选项。"
             "例如只问‘你指的是哪一段？’。等对方说清之后，再基于有依据的相关资料回答。"
         )
     context = CompiledCharacterContext(
