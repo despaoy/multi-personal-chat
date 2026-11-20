@@ -47,6 +47,33 @@ export interface CharacterSourceUpdate {
   local_corpus_id: string | null;
   sources: CharacterOriginalSource[];
   current_sources: CharacterOriginalSource[];
+  incoming_sources: CharacterOriginalSource[];
+  baseline_publication_id: string | null;
+  source_merge: CharacterSourceMerge;
+}
+
+export type SourceChoices = Record<string, 'local' | 'author'>;
+export interface CharacterSourceMerge {
+  status: 'ready' | 'conflict' | 'blocked';
+  reason: string | null;
+  actions: Array<{ id: string; action: string }>;
+  conflicts: Array<{ id: string; kind: string }>;
+  merged_sources: CharacterOriginalSource[];
+  resolved_conflicts?: Array<{ id: string; kind: string; choice: 'local' | 'author' }>;
+}
+export interface SourceUpdateRequest {
+  revision: number;
+  source_revision: number;
+  publication_id: string;
+  local_corpus_id: string | null;
+  choices: SourceChoices;
+}
+export interface FinalSourceUpdatePreview extends SourceUpdateRequest {
+  preview_id: string;
+  baseline_publication_id: string;
+  settings: CharacterSettings;
+  sources: CharacterOriginalSource[];
+  source_merge: CharacterSourceMerge;
 }
 
 export interface CharacterPublicationPreview {

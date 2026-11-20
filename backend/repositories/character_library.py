@@ -11,6 +11,10 @@ class CharacterNotFoundError(LookupError):
     pass
 
 
+class SourceMergeBlockedError(ValueError):
+    """The source update requires an explicit resolution that this API cannot express."""
+
+
 class CharacterLibraryRepository:
     def __init__(self, database):
         self.database = database
@@ -121,5 +125,10 @@ class CharacterLibraryRepository:
     def source_update(self, owner, character_id):
         return self.publications().source_update(owner, character_id)
 
-    def import_source_update(self, owner, character_id, revision, source_revision, publication_id=None, local_corpus_id=None):
-        return self.publications().import_update(owner, character_id, revision, source_revision, publication_id, local_corpus_id)
+    def preview_source_update(self, owner, character_id, revision, source_revision, publication_id, local_corpus_id, choices):
+        return self.publications().preview_update(owner, character_id, revision, source_revision, publication_id, local_corpus_id, choices)
+
+    def import_source_update(self, owner, character_id, revision, source_revision, publication_id=None, local_corpus_id=None,
+                             choices=None, preview_id=None):
+        return self.publications().import_update(owner, character_id, revision, source_revision, publication_id, local_corpus_id,
+                                                 choices, preview_id)

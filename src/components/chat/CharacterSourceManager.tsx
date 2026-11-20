@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,9 +9,19 @@ import type { CharacterLibraryRecord, CharacterOriginalSource, CharacterSourceEd
 
 const processingLabels = { pending: '等待处理', submitted: '处理中', completed: '处理完成', failed: '处理失败' };
 
-export function CharacterSourceManager({ character }: { character: CharacterLibraryRecord }) {
+export function CharacterSourceManager({ character, disabled, draft, onDraftChange, acquire, release, onSaved }: {
+  character: CharacterLibraryRecord; disabled: boolean;
+  draft: { sources: CharacterOriginalSource[]; baseline: CharacterOriginalSource[] };
+  onDraftChange: (value: { sources: CharacterOriginalSource[]; baseline: CharacterOriginalSource[] }) => void;
+  acquire: () => boolean; release: () => void; onSaved: () => void;
+}) {
   const [editions, setEditions] = useState<CharacterSourceEditionSummary[]>([]);
-  const [sources, setSources] = useState<CharacterOriginalSource[]>([]);
+  const sources = draft.sources;
+  const dirty = JSON.stringify(sources) !== JSON.stringify(draft.baseline);
+  const flight = useRef(false);
+  function setSources(value: CharacterOriginalSource[] | ((previous: CharacterOriginalSource[]) => CharacterOriginalSource[])) {
+    onDraftChange({ ...draft, sources: typeof value === 'function' ? value(sources) : value });
+  }
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -20,7 +30,7 @@ export function CharacterSourceManager({ character }: { character: CharacterLibr
   const hasPending = editions.some(edition => edition.index_status === 'pending' || edition.index_status === 'submitted');
 
   useEffect(() => {
-    if (busy || !hasPending) return;
+    if (busy || disabled || !hasPending) return;
     let active = true;
     let timer: ReturnType<typeof setTimeout>;
     async function refresh() {
@@ -46,7 +56,7 @@ export function CharacterSourceManager({ character }: { character: CharacterLibr
     }
     timer = setTimeout(() => void refresh(), 5000);
     return () => { active = false; clearTimeout(timer); };
-  }, [busy, hasPending, editions.length, character.id, character.revision]);
+  }, [busy, disabled, hasPending, editions.length, character.id, character.revision]);
 
   useEffect(() => {
     let active = true;
@@ -57,10 +67,11 @@ export function CharacterSourceManager({ character }: { character: CharacterLibr
   }, [character.id, character.revision]);
 
   async function run(operation: () => Promise<void>) {
-    setBusy(true); setError(''); setNotice('');
+    if (flight.current || !acquire()) return;
+    flight.current = true; setBusy(true); setError(''); setNotice('');
     try { await operation(); }
     catch (error) { setError(error instanceof Error ? error.message : String(error)); }
-    finally { setBusy(false); }
+    finally { flight.current = false; setBusy(false); release(); }
   }
 
   function edit(index: number, field: 'title' | 'content', value: string) {
@@ -78,31 +89,35 @@ export function CharacterSourceManager({ character }: { character: CharacterLibr
       <ul className="mt-3 space-y-2">{editions.map(edition => <li key={edition.id} className="flex flex-wrap items-center gap-2 rounded border p-2">
         <span className="text-sm">{new Date(edition.created_at).toLocaleString()} · {edition.id.slice(0, 8)}</span>
         <span className="text-sm" role="status">{processingLabels[edition.index_status]} · 第 {edition.index_attempt} 次处理</span>
-        {edition.index_status === 'failed' && <Button type="button" variant="outline" disabled={busy} onClick={() => void run(async () => {
+        {edition.index_status === 'failed' && <Button type="button" variant="outline" disabled={busy || disabled} onClick={() => void run(async () => {
           const result = await api.retryCharacterSources(character.id, edition.id, edition.index_attempt);
           setEditions(previous => previous.map(item => item.id === result.id ? result : item));
           setNotice('已重新提交处理，完成后可用于原作问答。');
         })}>重试处理</Button>}
-        <Button type="button" variant="outline" disabled={busy} onClick={() => void run(async () => {
-          if (sources.length && !window.confirm('载入该版本会替换下方未发布的草稿，是否继续？')) return;
+        <Button type="button" variant="outline" disabled={busy || disabled} onClick={() => void run(async () => {
+          if (dirty && !window.confirm('载入该版本会替换下方未发布的草稿，是否继续？')) return;
           const result = await api.getCharacterSources(character.id, edition.id);
-          setSources(result.sources); setNotice('已载入原文，可查看或编辑后另发新版。');
+          onDraftChange({ sources: result.sources, baseline: result.sources }); setNotice('已载入原文，可查看或编辑后另发新版。');
         })}>查看或作为新版起点</Button>
-        <Button type="button" variant="outline" disabled={busy} onClick={() => {
+        <Button type="button" variant="outline" disabled={busy || disabled} onClick={() => {
           if (!window.confirm('撤销此资料版本后，绑定它的会话将无法再检索该版原文。包含它的分享也将停止新预览和复制；已有独立副本、聊天和出处快照不会因此删除。是否继续？')) return;
-          void run(async () => { await api.revokeCharacterSources(character.id, edition.id); setEditions(previous => previous.filter(item => item.id !== edition.id)); setNotice('资料版本已撤销。'); });
+          void run(async () => { await api.revokeCharacterSources(character.id, edition.id); setEditions(previous => previous.filter(item => item.id !== edition.id)); setNotice('资料版本已撤销。'); onSaved(); });
         }}>撤销</Button>
       </li>)}</ul>
-      {more && <Button type="button" variant="outline" disabled={busy} onClick={() => void run(async () => {
+      {more && <Button type="button" variant="outline" disabled={busy || disabled} onClick={() => void run(async () => {
         const result = await api.listCharacterSources(character.id, character.revision, editions.length);
         setEditions(previous => [...previous, ...result.corpora]); setMore(result.corpora.length === 50);
       })}>加载更多版本</Button>}
     </details>
+    {dirty && <p role="status">有未保存的原作资料编辑，保存后需重新检查作者更新。</p>}
+    <Button type="button" variant="outline" disabled={busy || disabled || !dirty} onClick={() => {
+      if (window.confirm('确定丢弃未保存的原作资料编辑？')) onDraftChange({ sources: draft.baseline, baseline: draft.baseline });
+    }}>丢弃资料编辑，恢复载入版本</Button>
     <form className="space-y-4" onSubmit={event => { event.preventDefault(); void run(async () => {
       const result = await api.publishCharacterSources(character.id, character.revision, sources);
-      setEditions(previous => [result, ...previous]); setSources([]); setNotice('新版资料已保存。现有会话没有切换版本。');
+      setEditions(previous => [result, ...previous]); onDraftChange({ sources, baseline: sources }); onSaved(); setNotice('新版资料已保存。现有会话没有切换版本。');
     }); }}>
-      <fieldset disabled={busy} className="space-y-4">
+      <fieldset disabled={busy || disabled} className="space-y-4">
         {sources.map((source, index) => <div key={source.id} className="space-y-2 rounded border p-3">
           <Label htmlFor={`source-title-${source.id}`}>资料 {index + 1} 标题</Label>
           <Input id={`source-title-${source.id}`} required maxLength={300} value={source.title} onChange={event => edit(index, 'title', event.target.value)} />

@@ -73,6 +73,16 @@ class CharacterPublicationCopy(Base):
     character_id: Mapped[str] = mapped_column(Text, nullable=False)
 
 
+class CharacterSourceUpdateReceipt(Base):
+    """Only successful, exact preview confirmations receive a durable receipt."""
+    __tablename__ = "character_source_update_receipts"
+    owner_user_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    character_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    preview_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    request_json: Mapped[str] = mapped_column(Text, nullable=False)
+    result_revision: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
 class CharacterLibraryVersion(Base):
     """A stable settings snapshot that existing conversations can reference."""
     __tablename__ = "character_library_versions"

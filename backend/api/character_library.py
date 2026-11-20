@@ -1,5 +1,7 @@
 """Authenticated, account-owned character editing and portable sharing."""
 
+from typing import Annotated, Literal
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -7,7 +9,7 @@ from app.dependencies import get_current_user
 from app.runtime import get_runtime_container
 from character.library import CharacterPackage, CharacterSettings
 from db.errors import RevisionConflictError
-from repositories.character_library import CharacterLibraryRepository, CharacterNotFoundError
+from repositories.character_library import CharacterLibraryRepository, CharacterNotFoundError, SourceMergeBlockedError
 from repositories.character_sources import CharacterSourceRepository, OriginalSource
 
 router = APIRouter(prefix="/api/character-library", tags=["character-library"])
@@ -55,12 +57,30 @@ class CopyPublication(BaseModel):
     request_id: str = Field(min_length=1, max_length=100)
 
 
-class ImportSourceUpdate(BaseModel):
+class SourceUpdateIdentity(BaseModel):
     model_config = ConfigDict(extra="forbid")
     revision: int = Field(ge=1)
     source_revision: int = Field(ge=1)
     publication_id: str = Field(min_length=1, max_length=150)
     local_corpus_id: str | None = Field(min_length=1, max_length=100)
+
+
+SourceChoices = dict[Annotated[str, Field(min_length=1, max_length=100, pattern=r'^[a-zA-Z0-9_-]+$')], Literal['local', 'author']]
+
+
+class FinalSourceUpdatePreview(SourceUpdateIdentity):
+    choices: SourceChoices = Field(max_length=100)
+
+
+class ImportSourceUpdate(SourceUpdateIdentity):
+    choices: SourceChoices | None = Field(default=None, max_length=100)
+    preview_id: str | None = Field(default=None, pattern=r'^[a-f0-9]{64}$')
+
+    @model_validator(mode='after')
+    def require_final_preview(self):
+        if (self.choices is None) != (self.preview_id is None):
+            raise ValueError('逐篇选择与最终预览编号必须一起提交')
+        return self
 
 
 class PublishOriginalSources(BaseModel):
@@ -127,6 +147,8 @@ def call(operation, *args):
         return operation(*args)
     except CharacterNotFoundError as exc:
         raise HTTPException(404, str(exc)) from exc
+    except SourceMergeBlockedError as exc:
+        raise HTTPException(409, str(exc)) from exc
     except RevisionConflictError as exc:
         raise HTTPException(409, "角色已被修改，请刷新后重试") from exc
 
@@ -198,6 +220,13 @@ def source_update(character_id: str, owner=Depends(account), repo=Depends(reposi
     return call(repo.source_update, owner, character_id)
 
 
+@router.post("/{character_id}/source-update/preview")
+def preview_source_update(character_id: str, body: FinalSourceUpdatePreview, owner=Depends(account), repo=Depends(repository)):
+    return source_call(repo.preview_source_update, owner, character_id, body.revision, body.source_revision,
+                       body.publication_id, body.local_corpus_id, body.choices)
+
+
 @router.post("/{character_id}/source-update")
 def import_source_update(character_id: str, body: ImportSourceUpdate, owner=Depends(account), repo=Depends(repository)):
-    return call(repo.import_source_update, owner, character_id, body.revision, body.source_revision, body.publication_id, body.local_corpus_id)
+    return source_call(repo.import_source_update, owner, character_id, body.revision, body.source_revision,
+                       body.publication_id, body.local_corpus_id, body.choices, body.preview_id)

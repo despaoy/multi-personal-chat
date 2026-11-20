@@ -837,9 +837,9 @@ class SQLiteDB:
         # use the same character version constraints.
         from sqlalchemy.dialects.sqlite import dialect
         from sqlalchemy.schema import CreateIndex, CreateTable
-        from db.models import CharacterLibraryEntry, CharacterLibraryVersion, CharacterChatSession, CharacterChatTurn, CharacterSharedMemory, CharacterChatEvidence, CharacterChatGeneration, CharacterChatEnrichmentJob, CharacterChatMemoryVector, CharacterSourceCorpus, CharacterPublication, CharacterPublicationCopy
+        from db.models import CharacterLibraryEntry, CharacterLibraryVersion, CharacterChatSession, CharacterChatTurn, CharacterSharedMemory, CharacterChatEvidence, CharacterChatGeneration, CharacterChatEnrichmentJob, CharacterChatMemoryVector, CharacterSourceCorpus, CharacterPublication, CharacterPublicationCopy, CharacterSourceUpdateReceipt
 
-        for model in (CharacterLibraryEntry, CharacterLibraryVersion, CharacterChatSession, CharacterChatTurn, CharacterSharedMemory, CharacterChatEvidence, CharacterChatGeneration, CharacterChatEnrichmentJob, CharacterChatMemoryVector, CharacterSourceCorpus, CharacterPublication, CharacterPublicationCopy):
+        for model in (CharacterLibraryEntry, CharacterLibraryVersion, CharacterChatSession, CharacterChatTurn, CharacterSharedMemory, CharacterChatEvidence, CharacterChatGeneration, CharacterChatEnrichmentJob, CharacterChatMemoryVector, CharacterSourceCorpus, CharacterPublication, CharacterPublicationCopy, CharacterSourceUpdateReceipt):
             table = model.__table__
             cursor.execute(str(CreateTable(table, if_not_exists=True).compile(dialect=dialect())))
             for index in table.indexes:

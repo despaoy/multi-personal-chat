@@ -8,9 +8,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api';
-import { CharacterSharing, SharedCharacterPreview, SourceChanges } from '@/components/chat/CharacterSharing';
+import { CharacterSharing, SharedCharacterPreview } from '@/components/chat/CharacterSharing';
+import { CharacterSourceUpdatePanel } from '@/components/chat/CharacterSourceUpdatePanel';
 import { CharacterSourceManager } from '@/components/chat/CharacterSourceManager';
-import type { CharacterLibraryRecord, CharacterPackage, CharacterSettings, CharacterSourceUpdate } from '@/lib/api-contracts';
+import type { CharacterLibraryRecord, CharacterPackage, CharacterSettings, CharacterOriginalSource } from '@/lib/api-contracts';
 
 const emptySettings: CharacterSettings = {
   name: '', persona: '', greeting: '', scenario: '', relationships: '', examples: [], reference_text: '',
@@ -30,7 +31,45 @@ function CharacterLibrary() {
   const [notice, setNotice] = useState('');
   const [shareToken, setShareToken] = useState('');
   const [hasMore, setHasMore] = useState(false);
-  const [sourceUpdate, setSourceUpdate] = useState<CharacterSourceUpdate>();
+  const [sourceDraft, setSourceDraft] = useState<{ sources: CharacterOriginalSource[]; baseline: CharacterOriginalSource[] }>({ sources: [], baseline: [] });
+  const [sourceEpoch, setSourceEpoch] = useState(0);
+  const gate = useRef(false);
+  const sourceDirty = JSON.stringify(sourceDraft.sources) !== JSON.stringify(sourceDraft.baseline);
+  const settingsDirty = JSON.stringify(draft) !== JSON.stringify(current?.settings || emptySettings) ||
+    examples !== JSON.stringify(current?.settings.examples || [], null, 2);
+  const dirty = sourceDirty || settingsDirty;
+
+  function acquire() {
+    if (gate.current) return false;
+    gate.current = true; setBusy(true); return true;
+  }
+  function release() { gate.current = false; setBusy(false); }
+  function discardAllowed() {
+    return !dirty || window.confirm('有未保存的角色设定或原作资料。确定明确丢弃这些编辑并继续？取消将保留编辑，可先保存后重新预览。');
+  }
+  function beginUpdate() {
+    if (gate.current || !discardAllowed()) return false;
+    if (dirty) {
+      setDraft({ ...(current?.settings || emptySettings) });
+      setExamples(JSON.stringify(current?.settings.examples || [], null, 2));
+      setSourceDraft({ sources: [], baseline: [] });
+    }
+    return acquire();
+  }
+  useEffect(() => {
+    const unload = (event: BeforeUnloadEvent) => {
+      if (dirty || gate.current) { event.preventDefault(); event.returnValue = ''; }
+    };
+    const navigate = (event: MouseEvent) => {
+      if (!(event.target instanceof Element) || !event.target.closest('a[href]')) return;
+      if (gate.current || (dirty && !window.confirm('离开会丢弃未保存编辑，确定离开？'))) {
+        event.preventDefault(); event.stopPropagation();
+      }
+    };
+    window.addEventListener('beforeunload', unload);
+    document.addEventListener('click', navigate, true);
+    return () => { window.removeEventListener('beforeunload', unload); document.removeEventListener('click', navigate, true); };
+  }, [dirty]);
   const [importPreview, setImportPreview] = useState<CharacterPackage>();
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -45,34 +84,30 @@ function CharacterLibrary() {
     setShareToken(new URLSearchParams(window.location.search).get('share') || '');
   }, [refresh]);
 
-  useEffect(() => {
-    let active = true;
-    setSourceUpdate(undefined);
-    if (current?.source_character_id) {
-      api.getCharacterSourceUpdate(current.id).then(update => { if (active) setSourceUpdate(update); })
-        .catch(error => { if (active) setError(String(error)); });
-    }
-    return () => { active = false; };
-  }, [current?.id, current?.revision, current?.source_character_id]);
-
   function select(character?: CharacterLibraryRecord) {
     setCurrent(character);
+    setSourceDraft({ sources: [], baseline: [] });
     setDraft(character ? { ...character.settings } : { ...emptySettings });
     setExamples(JSON.stringify(character?.settings.examples || [], null, 2));
     setError('');
     setNotice('');
   }
 
+  function choose(character?: CharacterLibraryRecord) {
+    if (!gate.current && discardAllowed()) select(character);
+  }
+
   async function run(operation: () => Promise<void>) {
-    setBusy(true);
+    if (!acquire()) return;
     setError('');
     setNotice('');
     try { await operation(); }
     catch (error) { setError(error instanceof Error ? error.message : String(error)); }
-    finally { setBusy(false); }
+    finally { release(); }
   }
 
   async function save() {
+    if (sourceDirty) throw new Error('请先保存或明确丢弃原作资料草稿，再保存角色设定，避免切换版本丢失资料编辑。');
     const parsed: unknown = JSON.parse(examples);
     if (!Array.isArray(parsed) || !parsed.every(item => item &&
       (item.role === 'user' || item.role === 'assistant') && typeof item.content === 'string')) {
@@ -110,7 +145,7 @@ function CharacterLibrary() {
     <div className="flex flex-wrap items-center justify-between gap-3">
       <h1 className="text-2xl font-semibold">我的角色</h1>
       <div className="flex gap-2">
-        <Button disabled={busy} onClick={() => select()}>创建角色</Button>
+        <Button disabled={busy} onClick={() => choose()}>创建角色</Button>
         <Button disabled={busy} variant="outline" onClick={() => fileInput.current?.click()}>导入角色</Button>
         <Button disabled={busy} variant="outline" onClick={() => void run(refresh)}>刷新列表</Button>
       </div>
@@ -137,6 +172,7 @@ function CharacterLibrary() {
       </details>
       <div className="flex gap-2">
         <Button disabled={busy} onClick={() => void run(async () => {
+          if (!discardAllowed()) return;
           const imported = await api.importLibraryCharacter(importPreview);
           select(imported); setImportPreview(undefined); setNotice('角色已导入，可继续编辑或开始试聊。');
           await refresh();
@@ -146,17 +182,21 @@ function CharacterLibrary() {
     </section>}
     {error && <p role="alert" className="rounded-lg border border-destructive p-3 text-destructive">{error}</p>}
     {notice && <p role="status" className="text-sm text-muted-foreground">{notice}</p>}
-    {shareToken && <SharedCharacterPreview key={shareToken} token={shareToken} onCopied={async character => {
+    {shareToken && <SharedCharacterPreview key={shareToken} token={shareToken} disabled={busy} acquire={() => !gate.current && discardAllowed() && acquire()} release={release} onCopied={async character => {
       select(character); setShareToken('');
       window.history.replaceState(null, '', '/character-library');
       setNotice('已复制为独立角色，资料处理状态见下方。'); await refresh();
     }} />}
+    {current?.source_character_id && <CharacterSourceUpdatePanel key={`update:${current.id}:${current.revision}:${sourceEpoch}`}
+      character={current} disabled={busy} begin={beginUpdate} end={release} onImported={async saved => {
+        select(saved); setNotice('已导入最终预览中的更新，已有会话保持原版本。'); await refresh();
+      }} />}
     <div className="grid gap-6 md:grid-cols-[220px_1fr]">
       <nav aria-label="角色列表" className="space-y-2">
         {characters.map(character => <button key={character.id} disabled={busy}
           aria-current={current?.id === character.id ? 'true' : undefined}
           className={`block w-full rounded-lg border p-3 text-left ${current?.id === character.id ? 'bg-muted' : ''}`}
-          onClick={() => select(character)}>
+          onClick={() => choose(character)}>
           <span className="block font-medium">{character.settings.name}</span>
           <span className="text-sm text-muted-foreground">版本 {character.revision}</span>
         </button>)}
@@ -169,29 +209,6 @@ function CharacterLibrary() {
       </nav>
       <form className="space-y-4 rounded-xl border p-5" onSubmit={event => { event.preventDefault(); void run(save); }}>
         <fieldset disabled={busy} className="space-y-4">
-          {current?.source_character_id && <div className="space-y-3 rounded-lg border p-3">
-            <p>{sourceUpdate?.available ? `原作者已发布更新（设定版本 ${sourceUpdate.source_revision}）` : '暂无可导入的作者更新'}</p>
-            <Button type="button" variant="outline" onClick={() => void run(async () => { setSourceUpdate(await api.getCharacterSourceUpdate(current.id)); })}>检查作者更新</Button>
-            {sourceUpdate?.available && <>
-              <p className="text-sm text-muted-foreground">导入将使用作者发布的完整设定及资料，替换本地修改和未保存设定。旧设定与资料仍保留，已有会话不会切换。</p>
-              <details><summary className="cursor-pointer">查看与已保存设定的差异</summary>
-                {Object.entries(sourceUpdate.changes).map(([field, change]) => <div key={field} className="my-2 space-y-1">
-                  <p className="font-medium">{({ name: '名字', persona: '人物设定', greeting: '开场白', scenario: '初始场景', relationships: '人物关系', examples: '示范对话', reference_text: '参考资料' } as Record<string, string>)[field] || field}</p>
-                  <pre className="whitespace-pre-wrap break-words text-sm">当前：{typeof change.current === 'string' ? change.current : JSON.stringify(change.current, null, 2)}</pre>
-                  <pre className="whitespace-pre-wrap break-words text-sm">更新：{typeof change.incoming === 'string' ? change.incoming : JSON.stringify(change.incoming, null, 2)}</pre>
-                </div>)}
-              </details>
-              <SourceChanges current={sourceUpdate.current_sources} incoming={sourceUpdate.sources} />
-              <Button type="button" onClick={() => {
-                if (!window.confirm('确认按已预览的差异导入完整设定和资料，并替换当前编辑内容？旧会话保持不变。')) return;
-                void run(async () => {
-                  if (sourceUpdate.source_revision === null || sourceUpdate.publication_id === null) return;
-                  select(await api.importCharacterSourceUpdate(current.id, sourceUpdate.revision, sourceUpdate.source_revision, sourceUpdate.publication_id, sourceUpdate.local_corpus_id));
-                  setNotice('已导入作者更新，已有会话保持原版本'); await refresh();
-                });
-              }}>导入此版本</Button>
-            </>}
-          </div>}
           <div className="space-y-2"><Label htmlFor="character-name">名字</Label>
             <Input id="character-name" required maxLength={100} value={draft.name} onChange={event => setDraft({ ...draft, name: event.target.value })} /></div>
           {([
@@ -222,9 +239,11 @@ function CharacterLibrary() {
         </fieldset>
       </form>
     </div>
-    {current && <CharacterSharing key={`sharing:${current.id}:${current.revision}`} character={current} onPublished={async () => {
+    {current && <CharacterSharing disabled={busy} acquire={acquire} release={release} key={`sharing:${current.id}:${current.revision}`} character={current} onPublished={async () => {
       setCurrent(await api.getLibraryCharacter(current.id)); await refresh();
     }} />}
-    {current && <CharacterSourceManager key={`${current.id}:${current.revision}`} character={current} />}
+    {current && <CharacterSourceManager key={`${current.id}:${current.revision}`} character={current} disabled={busy}
+      draft={sourceDraft} onDraftChange={setSourceDraft} acquire={acquire} release={release}
+      onSaved={() => setSourceEpoch(value => value + 1)} />}
   </div>;
 }

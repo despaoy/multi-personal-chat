@@ -29,7 +29,8 @@ export function SourceChanges({ current, incoming }: { current: CharacterOrigina
   </div>;
 }
 
-export function CharacterSharing({ character, onPublished }: {
+export function CharacterSharing({ character, onPublished, disabled = false, acquire, release }: {
+  disabled?: boolean; acquire?: () => boolean; release?: () => void;
   character: CharacterLibraryRecord;
   onPublished: () => Promise<void>;
 }) {
@@ -42,11 +43,14 @@ export function CharacterSharing({ character, onPublished }: {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
 
+  const flight = useRef(false);
+
   async function run(operation: () => Promise<void>) {
-    setBusy(true); setError(''); setNotice('');
+    if (flight.current || (acquire && !acquire())) return;
+    flight.current = true; setBusy(true); setError(''); setNotice('');
     try { await operation(); }
     catch (error) { setError(error instanceof Error ? error.message : String(error)); }
-    finally { setBusy(false); }
+    finally { flight.current = false; setBusy(false); release?.(); }
   }
 
   async function load(offset = 0) {
@@ -60,7 +64,7 @@ export function CharacterSharing({ character, onPublished }: {
     <p className="text-sm text-muted-foreground">仅发布已保存的设定。独立资料默认不选；可从当前角色版本的一份资料集中逐篇选择。不会携带私人对话、记忆、聊天关系或账号配置。</p>
     {error && <p role="alert" className="text-destructive">{error}</p>}
     {notice && <p role="status">{notice}</p>}
-    <fieldset disabled={busy} className="space-y-3">
+    <fieldset disabled={busy || disabled} className="space-y-3">
       <Button type="button" variant="outline" onClick={() => void run(() => load())}>加载或刷新可选资料版本</Button>
       <label className="block space-y-1">资料版本
         <select aria-label="分享资料版本" className="block w-full rounded border bg-background p-2" value={edition?.id || ''}
@@ -99,23 +103,26 @@ export function CharacterSharing({ character, onPublished }: {
   </section>;
 }
 
-export function SharedCharacterPreview({ token, onCopied }: { token: string; onCopied: (value: CharacterLibraryRecord) => Promise<void> }) {
+export function SharedCharacterPreview({ token, onCopied, disabled = false, acquire, release }: { token: string; onCopied: (value: CharacterLibraryRecord) => Promise<void>; disabled?: boolean; acquire?: () => boolean; release?: () => void }) {
   const [preview, setPreview] = useState<SharedCharacterPublication>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const request = useRef('');
 
+  const flight = useRef(false);
+
   async function run(operation: () => Promise<void>) {
-    setBusy(true); setError('');
+    if (flight.current || (acquire && !acquire())) return;
+    flight.current = true; setBusy(true); setError('');
     try { await operation(); }
     catch (error) { setError(error instanceof Error ? error.message : String(error)); }
-    finally { setBusy(false); }
+    finally { flight.current = false; setBusy(false); release?.(); }
   }
 
   return <section className="space-y-3 rounded-lg border p-4" aria-label="收到角色分享">
     <p>收到角色分享，请先预览。确认后创建你的独立角色和资料副本。</p>
     {error && <p role="alert" className="text-destructive">{error}</p>}
-    <Button disabled={busy} onClick={() => void run(async () => {
+    <Button disabled={busy || disabled} onClick={() => void run(async () => {
       const result = await api.getSharedCharacter(token);
       if (result.publication_id !== preview?.publication_id) request.current = crypto.randomUUID();
       setPreview(result);
@@ -125,7 +132,7 @@ export function SharedCharacterPreview({ token, onCopied }: { token: string; onC
       <details><summary className="cursor-pointer">查看完整角色设定</summary><pre className="max-h-80 overflow-auto whitespace-pre-wrap break-words text-sm">{JSON.stringify(preview.settings, null, 2)}</pre></details>
       <SourcePreview sources={preview.sources} />
       <p className="text-sm">副本可自行修改，作者更新不会自动覆盖。复制后的资料需要独立处理，可在资料管理中查看状态和重试。</p>
-      <Button disabled={busy} onClick={() => void run(async () => {
+      <Button disabled={busy || disabled} onClick={() => void run(async () => {
         await onCopied(await api.copySharedCharacter(token, preview.publication_id, request.current));
       })}>确认复制此发布内容</Button>
     </>}

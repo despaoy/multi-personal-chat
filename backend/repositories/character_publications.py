@@ -7,7 +7,8 @@ from datetime import datetime, timezone
 
 from character.library import CharacterSettings
 from db.errors import RevisionConflictError
-from repositories.character_library import CharacterNotFoundError
+from repositories.character_library import CharacterNotFoundError, SourceMergeBlockedError
+from repositories.character_source_merge import blocked, plan_source_merge
 
 
 def encode(value):
@@ -210,10 +211,59 @@ class CharacterPublicationRepository:
                 '((:corpus IS NULL AND NOT EXISTS (SELECT 1 FROM character_source_corpora WHERE character_id=:id AND character_revision=:previous AND revoked=0)) '
                 'OR :corpus=(SELECT id FROM character_source_corpora WHERE character_id=:id AND character_revision=:previous AND revoked=0 ORDER BY created_at DESC,id DESC LIMIT 1))', params, 1)
 
+    def _source_baseline(self, current):
+        """Only the imported author's still-authorized publication can be a baseline.
+
+        Never substitute the current author version, the recipient's edited corpus,
+        or a snapshot belonging to another character. Do not expose baseline text.
+        """
+        from repositories.character_sources import CharacterSourceRepository
+
+        if not current['source_publication_id']:
+            return None
+        rows = self.db.execute_sql(
+            'SELECT p.*,c.owner_user_id FROM character_publications p '
+            'JOIN character_library c ON c.id=p.character_id '
+            'WHERE p.id=:publication AND p.character_id=:source AND p.character_revision=:revision '
+            'AND c.share_token IS NOT NULL',
+            {'publication': current['source_publication_id'], 'source': current['source_character_id'],
+             'revision': current['source_revision']})
+        if not rows:
+            return None
+        value = rows[0]
+        try:
+            if value['corpus_id']:
+                corpus = CharacterSourceRepository(self.db).get(value['owner_user_id'], value['corpus_id'])
+                if corpus['character_id'] != value['character_id'] or corpus['character_revision'] != value['character_revision']:
+                    return None
+            source = self._public(value)
+            # A settings-only publication cannot hide an unbound source snapshot.
+            if not value['corpus_id'] and source['sources']:
+                return None
+            if value['corpus_id']:
+                originals = {s['id']: s for s in corpus['sources']}
+                if any(originals.get(s['id']) != s for s in source['sources']):
+                    return None
+            return value
+        except (CharacterNotFoundError, ValueError, TypeError, KeyError):
+            return None
+
+    def _baseline_guards(self, baseline):
+        statements = [(
+            'UPDATE character_publications SET id=id WHERE id=:id AND character_id=:character '
+            'AND character_revision=:revision AND sources_json=:sources',
+            {'id': baseline['id'], 'character': baseline['character_id'],
+             'revision': baseline['character_revision'], 'sources': baseline['sources_json']}, 1)]
+        if baseline['corpus_id']:
+            statements.append(self._corpus_guard(baseline['corpus_id'], baseline['character_id'], baseline['owner_user_id']))
+        return statements
+
     def source_update(self, owner, character_id):
         current = self.characters.get(owner, character_id)
         empty = {'available': False, 'revision': current['revision'], 'source_revision': None,
-                 'publication_id': None, 'changes': {}, 'sources': [], 'current_sources': [], 'local_corpus_id': None}
+                 'publication_id': None, 'changes': {}, 'sources': [], 'current_sources': [], 'local_corpus_id': None,
+                 'incoming_sources': [], 'baseline_publication_id': None,
+                 'source_merge': blocked('incoming_publication_unavailable')}
         if not current['source_character_id']:
             return empty
         try:
@@ -225,18 +275,19 @@ class CharacterPublicationRepository:
         # Legacy copies retain their settings-only source revision until their author republishes.
         available = (source['publication_id'] != current['source_publication_id'] if current['source_publication_id']
                      else source['settings_revision'] > (current['source_revision'] or 0) or not source['publication_id'].startswith('legacy-'))
+        baseline = self._source_baseline(current)
+        plan = (plan_source_merge(self._public(baseline)['sources'], sources, source['sources'])
+                if baseline else blocked('baseline_unavailable'))
         return {**empty, 'available': available, 'source_revision': source['settings_revision'],
                 'publication_id': source['publication_id'], 'local_corpus_id': corpus_id,
-                'sources': source['sources'], 'current_sources': sources,
+                'sources': plan['merged_sources'] if plan['status'] == 'ready' else source['sources'],
+                'incoming_sources': source['sources'], 'current_sources': sources, 'source_merge': plan,
+                'baseline_publication_id': baseline['id'] if baseline else None,
                 'changes': {k: {'current': current['settings'][k], 'incoming': v}
                             for k, v in source['settings'].items() if v != current['settings'][k]}}
 
-    def import_update(self, owner, character_id, revision, source_revision, publication_id=None, local_corpus_id=None):
+    def _prepare_update(self, owner, character_id, revision, source_revision, publication_id, local_corpus_id, choices):
         current = self.characters.get(owner, character_id)
-        # A response lost after commit can be retried without making another version.
-        if (publication_id and current['revision'] == revision + 1
-                and current['source_publication_id'] == publication_id and current['source_revision'] == source_revision):
-            return current
         preview = self.source_update(owner, character_id)
         if (current['revision'] != revision or not preview['available'] or preview['source_revision'] != source_revision
                 or (publication_id is not None and (publication_id != preview['publication_id'] or local_corpus_id != preview['local_corpus_id']))):
@@ -244,17 +295,108 @@ class CharacterPublicationRepository:
         publication = self._publication(character_id=current['source_character_id'])
         if publication['id'] != preview['publication_id']:
             raise RevisionConflictError()
+        if preview['source_merge']['status'] == 'blocked':
+            raise SourceMergeBlockedError('资料基线不可用或合并超限；需明确处理，不能自动覆盖')
+        baseline = self._source_baseline(current)
+        if not baseline:
+            raise SourceMergeBlockedError('原导入资料基线已不可用；需明确处理，不能自动覆盖')
         source = self._public(publication)
+        originals = self._public(baseline)['sources']
+        unchosen = plan_source_merge(originals, preview['current_sources'], source['sources'])
+        if baseline['id'] != preview['baseline_publication_id'] or unchosen != preview['source_merge']:
+            raise RevisionConflictError()
+        plan = plan_source_merge(originals, preview['current_sources'], source['sources'], choices)
+        if plan['status'] != 'ready':
+            raise SourceMergeBlockedError('资料存在未解决冲突、来源ID碰撞或合并超限；不能自动覆盖')
+        return current, preview, publication, baseline, source, plan
+
+    @staticmethod
+    def _update_request(owner, character_id, revision, source_revision, publication_id, local_corpus_id, choices):
+        return {'owner': owner, 'character_id': character_id, 'revision': revision, 'source_revision': source_revision,
+                'publication_id': publication_id, 'local_corpus_id': local_corpus_id, 'choices': choices}
+
+    @staticmethod
+    def _final_preview(request, prepared):
+        current, preview, publication, baseline, source, plan = prepared
+        # The digest is a content/version precondition, not permission to read a source.
+        # Authority and all transaction guards still apply at confirmation time.
+        binding = {'format': 'source-update-preview-v1', 'request': request,
+                   'baseline_id': baseline['id'], 'baseline_sources': json.loads(baseline['sources_json']),
+                   'current_settings': current['settings'], 'local_sources': preview['current_sources'],
+                   'author_settings': source['settings'], 'author_sources': source['sources'],
+                   'share_token': publication['share_token'], 'plan': plan}
+        return {'revision': current['revision'], 'source_revision': source['settings_revision'],
+                'publication_id': source['publication_id'], 'local_corpus_id': preview['local_corpus_id'],
+                'baseline_publication_id': baseline['id'], 'choices': request['choices'],
+                'preview_id': hashlib.sha256(encode(binding).encode('utf-8')).hexdigest(),
+                'settings': source['settings'], 'sources': plan['merged_sources'], 'source_merge': plan}
+
+    def preview_update(self, owner, character_id, revision, source_revision, publication_id, local_corpus_id, choices):
+        if choices is None:
+            raise ValueError('最终预览必须提供逐篇选择；无冲突时提供空选择')
+        prepared = self._prepare_update(owner, character_id, revision, source_revision, publication_id, local_corpus_id, choices)
+        request = self._update_request(owner, character_id, revision, source_revision, publication_id, local_corpus_id, choices)
+        return self._final_preview(request, prepared)
+
+    def _completed_update(self, owner, character_id, preview_id, request):
+        current = self.characters.get(owner, character_id)
+        rows = self.db.execute_sql(
+            'SELECT request_json,result_revision FROM character_source_update_receipts '
+            'WHERE owner_user_id=:owner AND character_id=:character AND preview_id=:preview',
+            {'owner': owner, 'character': character_id, 'preview': preview_id})
+        if not rows:
+            return None
+        if rows[0]['request_json'] != encode(request) or rows[0]['result_revision'] != current['revision']:
+            raise RevisionConflictError()
+        return current
+
+    def import_update(self, owner, character_id, revision, source_revision, publication_id=None, local_corpus_id=None,
+                      choices=None, preview_id=None):
+        current = self.characters.get(owner, character_id)
+        if (choices is None) != (preview_id is None):
+            raise ValueError('逐篇选择与最终预览编号必须一起提交')
+        request = self._update_request(owner, character_id, revision, source_revision, publication_id, local_corpus_id, choices)
+        if preview_id is not None:
+            completed = self._completed_update(owner, character_id, preview_id, request)
+            if completed:
+                return completed
+        elif (publication_id and current['revision'] == revision + 1
+                and current['source_publication_id'] == publication_id and current['source_revision'] == source_revision):
+            # Compatibility for the existing conflict-free confirmation protocol.
+            return current
+        try:
+            prepared = self._prepare_update(owner, character_id, revision, source_revision, publication_id, local_corpus_id, choices)
+        except RevisionConflictError:
+            # An identical confirmation may have committed after the initial receipt lookup.
+            if preview_id is not None:
+                completed = self._completed_update(owner, character_id, preview_id, request)
+                if completed:
+                    return completed
+            raise
+        current, preview, publication, baseline, source, plan = prepared
+        if preview_id is not None and self._final_preview(request, prepared)['preview_id'] != preview_id:
+            raise RevisionConflictError()
         params = {'id': character_id, 'owner': owner, 'previous': revision, 'revision': revision + 1,
                   'source_revision': source_revision, 'publication': publication['id'], 'settings': encode(source['settings']),
                   'now': now(), 'corpus': preview['local_corpus_id']}
-        statements = self._guards(publication, publication['share_token']) + [(
+        statements = self._guards(publication, publication['share_token']) + self._baseline_guards(baseline) + [(
             'UPDATE character_library SET revision=:revision,source_revision=:source_revision,source_publication_id=:publication,updated_at=:now '
             'WHERE id=:id AND owner_user_id=:owner AND revision=:previous', params, 1),
-            # Source publishing locks the character row too; reject changed local source selection.
             self._local_guard(params)]
         if preview['local_corpus_id']:
             statements.append(self._corpus_guard(preview['local_corpus_id'], character_id, owner))
-        statements += [self.characters._insert_version(params)] + self._copy_sources(owner, character_id, revision + 1, source['sources'])
-        self.db.revision_transaction(statements)
+        statements += [self.characters._insert_version(params)] + self._copy_sources(owner, character_id, revision + 1, plan['merged_sources'])
+        if preview_id is not None:
+            statements.append((
+                'INSERT INTO character_source_update_receipts (owner_user_id,character_id,preview_id,request_json,result_revision) '
+                'VALUES (:owner,:id,:preview,:request,:revision)',
+                {**params, 'preview': preview_id, 'request': encode(request)}, 1))
+        try:
+            self.db.revision_transaction(statements)
+        except RevisionConflictError:
+            if preview_id is not None:
+                completed = self._completed_update(owner, character_id, preview_id, request)
+                if completed:
+                    return completed
+            raise
         return self.characters.get(owner, character_id, revision + 1)

@@ -720,6 +720,19 @@ class ApiClient {
     });
   }
 
+  previewCharacterSourceUpdate(id: string, request: import('./api-contracts').SourceUpdateRequest) {
+    return this.request<import('./api-contracts').FinalSourceUpdatePreview>(`/character-library/${encodeURIComponent(id)}/source-update/preview`, {
+      method: 'POST', body: JSON.stringify(request),
+    });
+  }
+
+  confirmCharacterSourceUpdate(id: string, preview: import('./api-contracts').FinalSourceUpdatePreview) {
+    const { revision, source_revision, publication_id, local_corpus_id, choices, preview_id } = preview;
+    return this.request<CharacterLibraryRecord>(`/character-library/${encodeURIComponent(id)}/source-update`, {
+      method: 'POST', body: JSON.stringify({ revision, source_revision, publication_id, local_corpus_id, choices, preview_id }),
+    });
+  }
+
   listCharacterLibrary(offset = 0) {
     return this.request<{ characters: CharacterLibraryRecord[] }>(`/character-library?limit=100&offset=${offset}`);
   }
