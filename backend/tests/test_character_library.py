@@ -49,6 +49,34 @@ def test_import_preview_validates_without_persisting_and_rejects_private_fields(
         assert exported.json() == preview.json()
 
 
+def test_confirmed_import_can_retry_without_recreating_or_overwriting_a_role(repo):
+    app = FastAPI()
+    app.include_router(router)
+    owner = "import-owner"
+    app.dependency_overrides[get_current_user] = lambda: {"user_id": owner}
+    app.dependency_overrides[repository] = lambda: repo
+    path = "/api/character-library/import"
+    package = {"settings": settings("文件角色").model_dump(), "request_id": "confirm-one"}
+    with TestClient(app) as client:
+        with ThreadPoolExecutor(2) as pool:
+            results = list(pool.map(lambda _: client.post(path, json=package), range(2)))
+        assert [item.status_code for item in results] == [201, 201]
+        imported, replay = [item.json() for item in results]
+        assert imported["id"] == replay["id"] and len(repo.list(owner)) == 1
+        character_id = imported["id"]
+        updated = repo.update(owner, character_id, 1, settings("编辑后"))
+        assert client.post(path, json=package).json() == updated
+        mismatch = {**package, "settings": settings("另一个文件").model_dump()}
+        assert client.post(path, json=mismatch).status_code == 409
+        assert len(repo.list(owner)) == 1
+        intentional_copy = client.post(path, json={**package, "request_id": "confirm-two"})
+        assert intentional_copy.status_code == 201 and intentional_copy.json()["id"] != character_id
+        owner = "other-owner"
+        foreign = client.post(path, json=package)
+        assert foreign.status_code == 201 and foreign.json()["id"] != character_id
+        assert client.get("/api/character-library/" + character_id).status_code == 404
+
+
 def test_preset_installation_is_independent_repeatable_and_scope_checked(repo):
     sources = CharacterSourceRepository(repo.database)
     app = FastAPI()

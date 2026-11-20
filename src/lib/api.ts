@@ -817,7 +817,7 @@ class ApiClient {
     });
   }
 
-  importLibraryCharacter(value: unknown) {
+  importLibraryCharacter(value: CharacterPackage & { request_id?: string }) {
     return this.request<CharacterLibraryRecord>('/character-library/import', { method: 'POST', body: JSON.stringify(value) });
   }
 

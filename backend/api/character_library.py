@@ -33,6 +33,10 @@ class UpdateCharacter(BaseModel):
     settings: CharacterSettings
 
 
+class CharacterImport(CharacterPackage):
+    request_id: str | None = Field(default=None, min_length=1, max_length=100)
+
+
 class PublicationSelection(BaseModel):
     model_config = ConfigDict(extra="forbid")
     revision: int = Field(ge=1)
@@ -167,8 +171,8 @@ def create_character(body: CharacterSettings, owner=Depends(account), repo=Depen
 
 
 @router.post("/import", status_code=201)
-def import_character(body: CharacterPackage, owner=Depends(account), repo=Depends(repository)):
-    return repo.create(owner, body.settings)
+def import_character(body: CharacterImport, owner=Depends(account), repo=Depends(repository)):
+    return call(repo.import_package, owner, body.settings, body.request_id)
 
 
 @router.post("/presets/{preset_key}", status_code=201)

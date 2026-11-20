@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api';
+import { createClientId } from '@/lib/client-id';
 import { CharacterSharing, SharedCharacterPreview } from '@/components/chat/CharacterSharing';
 import { CharacterSourceUpdatePanel } from '@/components/chat/CharacterSourceUpdatePanel';
 import { CharacterSourceManager } from '@/components/chat/CharacterSourceManager';
@@ -70,7 +71,7 @@ function CharacterLibrary() {
     document.addEventListener('click', navigate, true);
     return () => { window.removeEventListener('beforeunload', unload); document.removeEventListener('click', navigate, true); };
   }, [dirty]);
-  const [importPreview, setImportPreview] = useState<CharacterPackage>();
+  const [importPreview, setImportPreview] = useState<CharacterPackage & { request_id: string }>();
   const fileInput = useRef<HTMLInputElement>(null);
 
   const refresh = useCallback(async () => {
@@ -163,10 +164,14 @@ function CharacterLibrary() {
         event.target.value = '';
         if (!file) return;
         void run(async () => {
-          if (file.size > 1024 * 1024) throw new Error('角色文件不能超过 1 MB');
           setImportPreview(undefined);
-          const preview = await api.previewLibraryCharacterImport(JSON.parse(await file.text()));
-          setImportPreview(preview);
+          if (file.size > 1024 * 1024) throw new Error('角色文件不能超过 1 MB');
+          const contents = await file.text();
+          let decoded: unknown;
+          try { decoded = JSON.parse(contents); }
+          catch { throw new Error('角色文件不是有效的 JSON。'); }
+          const preview = await api.previewLibraryCharacterImport(decoded);
+          setImportPreview({ ...preview, request_id: createClientId() });
         });
       }} />
     <p className="text-sm text-muted-foreground">支持本应用导出的角色 JSON 文件（multipersonal-character-v1），最大 1 MB；暂不支持 PNG 角色卡及其他应用格式。导入前可预览，确认后创建独立角色。</p>

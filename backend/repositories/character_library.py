@@ -5,6 +5,7 @@ import uuid
 from datetime import datetime, timezone
 
 from character.library import CharacterSettings
+from db.errors import RevisionConflictError
 
 
 class CharacterNotFoundError(LookupError):
@@ -49,6 +50,19 @@ class CharacterLibraryRepository:
     def create(self, owner: str, settings: CharacterSettings):
         character_id = uuid.uuid4().hex
         self.database.revision_transaction(self.creation_statements(owner, settings, character_id))
+        return self.get(owner, character_id)
+
+    def import_package(self, owner: str, settings: CharacterSettings, request_id: str | None):
+        if request_id is None:
+            return self.create(owner, settings)
+        identity = json.dumps([owner, request_id], ensure_ascii=False)
+        character_id = uuid.uuid5(uuid.NAMESPACE_URL, f"urn:multipersonal:character-import:{identity}").hex
+        try:
+            self.database.revision_transaction(self.creation_statements(owner, settings, character_id))
+        except RevisionConflictError:
+            original = self.get(owner, character_id, 1)
+            if original["settings"] != settings.model_dump():
+                raise
         return self.get(owner, character_id)
 
     def creation_statements(self, owner, settings, character_id):

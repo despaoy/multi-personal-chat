@@ -45,6 +45,18 @@ def test_postgres_concurrent_preset_installation_keeps_one_pending_edition(datab
     assert len(sources.get(owner, edition["id"])["sources"]) == 3
 
 
+def test_postgres_concurrent_import_confirmation_creates_one_character(database):
+    from repositories.character_library import CharacterLibraryRepository
+
+    repo = CharacterLibraryRepository(database)
+    owner = uuid.uuid4().hex
+    settings = CharacterSettings(name="导入角色", persona="谨慎", greeting="你好")
+    with ThreadPoolExecutor(2) as pool:
+        records = list(pool.map(lambda _: repo.import_package(owner, settings, "same-confirmation"), range(2)))
+    assert records[0]["id"] == records[1]["id"]
+    assert len(repo.list(owner)) == 1
+
+
 def test_postgres_production_startup_requires_current_migration_head():
     from sqlalchemy import text
 
