@@ -28,6 +28,29 @@ def database():
     db.close()
 
 
+def test_postgres_production_startup_requires_current_migration_head():
+    from sqlalchemy import text
+
+    from db.pg_database import PgDatabase
+    from db.schema_readiness import require_current_migrations
+
+    async def check():
+        pg = PgDatabase(os.environ["DATABASE_URL"], require_migrations=True)
+        try:
+            await pg.init()
+            async with pg.engine.connect() as connection:
+                async with connection.begin() as transaction:
+                    await connection.execute(text("UPDATE alembic_version SET version_num='fixture_stale'"))
+                    with pytest.raises(RuntimeError, match="schema does not match"):
+                        await connection.run_sync(require_current_migrations)
+                    await transaction.rollback()
+                await connection.run_sync(require_current_migrations)
+        finally:
+            await pg.engine.dispose()
+
+    asyncio.run(check())
+
+
 def test_postgres_proactive_delivery_respects_session_consent_and_is_idempotent(database):
     from repositories.character_chat_proactive import CharacterChatProactiveRepository
 

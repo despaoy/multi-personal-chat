@@ -66,6 +66,8 @@ Next.js 本地启动如需覆盖 `BACKEND_URL`，写入仓库根目录 `.env.loc
 
 `deploy/scripts/start_all.sh docker` 使用 Compose 的 `up --wait --wait-timeout 300` 等待实际服务的健康检查，要求支持该选项的 Docker Compose v2。服务失败或超时会以非零状态退出，不再依赖手写容器名清单，也不会将未就绪报告为启动成功。
 
+生产 PostgreSQL 首次启动或版本升级时，先按[启动顺序](#6-启动顺序)完成数据库迁移，再执行一键启动。
+
 ```bash
 cd "$MULTIPERSONAL_LAB_ROOT/multi-personal-chat"
 cp .env.example deploy/.env
@@ -153,6 +155,17 @@ python run.py --host 127.0.0.1 --port 8000 --workers 1
 ```
 
 角色聊天分支的迁移 head 为 `036_source_edition_order`。SQLite 本地运行由后端启动时补齐表和字段。两种数据库都采用 `BACKEND_WORKERS=1`，因为部分会话锁和 nonce 使用进程内状态。旧 AstrBot 部署仍需让插件和后端使用兼容版本。
+
+生产 PostgreSQL 的 API 和聊天 worker 启动前会检查数据库的 Alembic 版本。未迁移、落后或超前的数据库会拒绝启动。标准 Docker Compose 在首次启动或版本升级时，可在备份后从 `deploy/` 使用当前版本的后端镜像运行迁移：
+
+```bash
+docker compose up -d --wait postgres
+docker compose build backend
+docker compose run --rm --no-deps backend python -m alembic upgrade head
+docker compose run --rm --no-deps backend python -m alembic current
+```
+
+迁移成功后再按正常流程启动应用。运行迁移的容器使用与 API 相同的 PostgreSQL 配置。
 
 独立角色聊天 worker 在同一代码版本和后端目录运行，与 API 指向同一个数据库：
 

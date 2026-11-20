@@ -86,10 +86,11 @@ def _row_to_dict(row) -> dict:
 class PgDatabase:
     """PostgreSQL 异步数据库类 - 与 SQLiteDB 相同接口的异步版本"""
 
-    def __init__(self, database_url: Optional[str] = None):
+    def __init__(self, database_url: Optional[str] = None, *, require_migrations: bool = False):
         self.database_url = resolve_runtime_database_url(database_url or None)
         if not self.database_url:
             raise ValueError("DATABASE_URL or PG_PASSWORD is required when USE_POSTGRESQL=true")
+        self._require_migrations = require_migrations
         self.engine = create_async_engine(
             self.database_url,
             echo=False,
@@ -113,6 +114,10 @@ class PgDatabase:
         if self._initialized:
             return
         async with self.engine.begin() as conn:
+            if self._require_migrations:
+                from db.schema_readiness import require_current_migrations
+
+                await conn.run_sync(require_current_migrations)
             await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
             await conn.run_sync(metadata.create_all)
             await self._ensure_column(conn, "memory_sources", "body_digest", "TEXT")
@@ -2675,7 +2680,7 @@ class PgDatabase:
 # ============================================
 # 全局单例
 # ============================================
-pg_db = PgDatabase()
+pg_db = PgDatabase(require_migrations=os.getenv("ENVIRONMENT", "").strip().lower() == "production")
 
 
 # ============================================
