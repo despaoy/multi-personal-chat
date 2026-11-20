@@ -95,6 +95,66 @@ def literal_grounded_query(monkeypatch):
 
 
 @pytest.fixture
+def synthetic_multiscale_index(monkeypatch, tmp_path):
+    """Write all bundled document types through the production artifact writer."""
+    import numpy as np
+    from multiscale_test_support import FakeQueryEmbeddingProvider
+
+    from knowledge.multiscale_rag import runtime
+    from knowledge.multiscale_rag.vector_runtime import LocalMeanPoolingEmbeddingProvider, write_vector_artifacts
+    from knowledge.retrieval_core.documents import KnowledgeIndexDocument, SourceReference
+
+    monkeypatch.setenv("RERANKER_ENABLED", "false")
+    monkeypatch.setenv("CHARACTER_RAG_RERANKER_ENABLED", "false")
+    monkeypatch.delenv("CHARACTER_RAG_INDEX_ROOT", raising=False)
+    monkeypatch.delenv("MULTISCALE_RAG_INDEX_ROOT", raising=False)
+    monkeypatch.setattr(runtime, "_REPO_ROOT", tmp_path)
+    provider = LocalMeanPoolingEmbeddingProvider(model_path="synthetic-no-model-assets")
+    monkeypatch.setattr(provider, "embed_query", FakeQueryEmbeddingProvider().embed_query)
+    monkeypatch.setattr(runtime, "LocalMeanPoolingEmbeddingProvider", lambda **_kwargs: provider)
+
+    source_text = "合成测试资料：妃和琉璃共同参加活动，记录两人的关系。"
+    source_file = tmp_path / "synthetic-source.txt"
+    source_file.write_text(source_text, encoding="utf-8")
+    index_root = tmp_path / "synthetic-index"
+    for directory, kinds in (
+        ("card_index", ("fact", "relation", "event")),
+        ("scene_story_index", ("scene", "story")),
+        ("evidence_index", ("evidence",)),
+    ):
+        records = [
+            KnowledgeIndexDocument(
+                id=f"synthetic-{kind}",
+                domain_id="tsukiyashiro_kisaki",
+                document_type=kind,
+                title=f"合成{kind}：妃和琉璃的关系",
+                summary=source_text,
+                content=source_text,
+                embedding_text=f"{kind} {source_text}",
+                keywords=["妃", "琉璃", "关系"],
+                entities=["妃", "琉璃"],
+                source=SourceReference(source_file.name, 1, 1),
+                metadata={"parent_id": "synthetic-relation"} if kind == "evidence" else {},
+            )
+            for kind in kinds
+        ]
+        vectors = np.vstack([provider.embed_query(record.embedding_text) for record in records])
+        write_vector_artifacts(
+            index_root / directory,
+            records,
+            vectors,
+            {
+                "document_count": len(records),
+                "vector_dimension": provider.dimension,
+                "normalized": True,
+                "embedding_model": provider.model_id,
+                "embedding_encoding": provider.encoding_contract,
+            },
+        )
+    return index_root
+
+
+@pytest.fixture
 def controlled_public_bundle(monkeypatch):
     """Pre-reviewed synthetic bundles for transport tests, not semantic evidence."""
     async def binding(*args, **kwargs):

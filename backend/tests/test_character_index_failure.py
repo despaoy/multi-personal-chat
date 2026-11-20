@@ -4,7 +4,7 @@ from unittest.mock import Mock
 
 import numpy as np
 import pytest
-from test_multiscale_rag_runtime import FakeQueryEmbeddingProvider
+from multiscale_test_support import FakeQueryEmbeddingProvider
 
 from knowledge.multiscale_rag import runtime as module
 from knowledge.retrieval_core.documents import KnowledgeIndexDocument, SourceReference
