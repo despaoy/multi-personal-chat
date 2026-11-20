@@ -47,7 +47,11 @@ const API_BASE_URL = '/api';
 import type { CharacterChatRelationshipDimensions, CharacterChatSession, CharacterChatSummary, CharacterChatTurn, CreateCharacterChat, SendCharacterChatMessage, CharacterLibraryRecord, CharacterPackage, CharacterSettings } from './api-contracts';
 
 export class ApiRequestError extends Error {
-  constructor(public readonly status: number, public readonly detail: unknown) {
+  constructor(
+    public readonly status: number,
+    public readonly detail: unknown,
+    public readonly retryAfterSeconds?: number,
+  ) {
     const message = detail && typeof detail === 'object' && 'message' in detail
       ? detail.message
       : detail;
@@ -883,7 +887,9 @@ class ApiClient {
       } catch {
         detail = response.statusText;
       }
-      throw new ApiRequestError(response.status, detail);
+      const retryAfter = Number(response.headers.get('Retry-After'));
+      const validDelay = response.status === 429 && Number.isSafeInteger(retryAfter) && retryAfter > 0;
+      throw new ApiRequestError(response.status, detail, validDelay ? retryAfter : undefined);
     }
 
     // 204 No Content

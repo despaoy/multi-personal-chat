@@ -60,6 +60,19 @@ test('non-JSON failure remains an error without exposing an upstream HTML body',
   });
 });
 
+test('chat rate limit exposes a bounded retry delay without performing another request', async (t) => {
+  let calls = 0;
+  t.mock.method(globalThis, 'fetch', async () => {
+    calls++;
+    return Response.json({ detail: '请求过于频繁，请稍后重试' }, {
+      status: 429, headers: { 'Retry-After': '2' },
+    });
+  });
+  await assert.rejects(api.sendCharacterChat('session', { revision: 1, request_id: 'test', message: '你好' }),
+    error => error.status === 429 && error.retryAfterSeconds === 2);
+  assert.equal(calls, 1);
+});
+
 test('successful generation still returns the original result', async (t) => {
   const result = { success: true, dialogues: [], total: 0, cost_time: 0.25 };
   t.mock.method(globalThis, 'fetch', async () => Response.json(result));

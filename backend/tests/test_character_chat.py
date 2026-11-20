@@ -15,6 +15,7 @@ from app.runtime import RuntimeContainer
 from character.library import CharacterSettings
 from db.database import SQLiteDB
 from db.errors import RevisionConflictError
+from infra.concurrency_control import RateLimitExceeded
 from repositories.character_chat import CharacterChatRepository
 from repositories.character_library import CharacterNotFoundError
 from services.character_chat import CharacterChatService
@@ -96,6 +97,8 @@ def test_provider_path_compiles_prompt_and_records_usage(repo, monkeypatch):
     assert result["reply"] == "我们从这里开始。"
     assert "谨慎" in calls[0][0]["content"]
     assert "只复述已有对话、设定和核实资料明确支持的细节" in calls[0][0]["content"]
+    assert "连举例也不要转回已暂停的话题" in calls[0][0]["content"]
+    assert "不追加对方没要的建议、安排或追问" in calls[0][0]["content"]
     records = repo.database.execute_sql(
         'SELECT * FROM model_invocations WHERE "traceId"=:trace', {"trace": "provider-path"}
     )
@@ -399,8 +402,11 @@ def test_generation_edits_idempotency_and_inflight_conflict(repo):
 
 def test_http_session_generation_and_scope(repo):
     class Runtime:
+        limited = True
+
         async def check_rate_limits(self, *args):
-            pass
+            if self.limited:
+                raise RateLimitExceeded("sender", 1.2)
 
         def priority_for(self, *args):
             return 1
@@ -414,9 +420,8 @@ def test_http_session_generation_and_scope(repo):
 
     app = FastAPI()
     app.include_router(router)
-    app.state.runtime_container = RuntimeContainer(
-        db=repo.database, is_pg_mode=lambda: False, inference_runtime=Runtime()
-    )
+    runtime = Runtime()
+    app.state.runtime_container = RuntimeContainer(db=repo.database, is_pg_mode=lambda: False, inference_runtime=runtime)
     app.dependency_overrides[get_current_user] = lambda: {"user_id": "1"}
     app.dependency_overrides[repository] = lambda: repo
     app.dependency_overrides[service] = lambda: CharacterChatService(repo.database, complete)
@@ -426,7 +431,12 @@ def test_http_session_generation_and_scope(repo):
         assert response.status_code == 201
         session = response.json()
         url = "/api/character-chats/" + session["id"]
-        reply = client.post(url + "/messages", json={"revision": 1, "request_id": "test", "message": "你好"})
+        body = {"revision": 1, "request_id": "test", "message": "你好"}
+        limited = client.post(url + "/messages", json=body)
+        assert limited.status_code == 429 and limited.headers["Retry-After"] == "2"
+        assert client.get(url + "/generations/test").status_code == 404
+        runtime.limited = False
+        reply = client.post(url + "/messages", json=body)
         assert reply.status_code == 200, reply.text
         assert reply.json()["reply"] == "你好，旅行者。"
         assert len(client.get(url).json()["turns"]) == 1

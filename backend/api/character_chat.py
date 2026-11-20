@@ -2,6 +2,7 @@
 
 import asyncio
 from functools import partial
+from math import ceil
 from typing import Annotated, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -332,7 +333,9 @@ async def generate_message(
     except EnrichmentInProgressError as exc:
         raise HTTPException(409, "上一轮记忆和关系仍在整理，请稍后继续发送") from exc
     except RateLimitExceeded as exc:
-        raise HTTPException(429, "请求过于频繁，请稍后重试") from exc
+        raise HTTPException(
+            429, "请求过于频繁，请稍后重试", headers={"Retry-After": str(max(1, ceil(exc.retry_after)))},
+        ) from exc
     except (InferenceQueueFull, TimeoutError) as exc:
         raise HTTPException(503, "生成未完成，请刷新会话核对后重试") from exc
 

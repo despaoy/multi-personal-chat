@@ -214,7 +214,11 @@ function ChatWorkspace() {
     setBusy(true);
     setError('');
     try { await operation(); }
-    catch (error) { setError(error instanceof Error ? error.message : String(error)); }
+    catch (error) {
+      setError(error instanceof ApiRequestError && error.retryAfterSeconds
+        ? `请求过于频繁，请等待约 ${error.retryAfterSeconds} 秒后再试。`
+        : error instanceof Error ? error.message : String(error));
+    }
     finally { setBusy(false); }
   }
 
