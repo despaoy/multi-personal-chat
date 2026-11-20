@@ -9,6 +9,7 @@
 - `local-verify.ps1`：Windows 完整验证流水线。
 - `start-local-backend.ps1`：保留现有模型配置启动本地后端；仅显式传入 `-Mock` 才切换为模拟推理，且只允许 development/test 环境。Python 子进程异常退出会报错。
 - `restore_sqlite_backup.py`：在路径和目标检查后恢复 SQLite 备份。
+- `prepare_postgres_restore.py` 合并较新数据库的会话删除回执，并撤销 PostgreSQL 恢复副本中的旧主动联系授权。
 - `download_model.py`：模型下载默认使用 ModelScope；可显式选择 `--source hf`。移除 `--source auto` 与失败后自动换源；失败会直接报错，不混用两个源的下载状态。
 - `validate_lora_training.py`：LoRA 训练前只读检查。
 

@@ -257,4 +257,16 @@ python scripts/restore_sqlite_backup.py \
 
 离线恢复会关闭备份中的主动联系授权，并取消尚未发送的安排。已送达的应用内消息继续作为正式记录，用户可以在恢复后重新授权。
 
-如检测到目标 SQLite 文件存在未检查点的 WAL，脚本会中止。需先确保所有写入方停止，再让 SQLite 完成检查点后重试。此流程适用于 SQLite；PostgreSQL 的备份恢复需单独验证删除回执的保留与重放。
+如检测到目标 SQLite 文件存在未检查点的 WAL，脚本会中止。需先确保所有写入方停止，再让 SQLite 完成检查点后重试。
+
+## 10. PostgreSQL 备份与离线恢复
+
+定期使用 `pg_dump --format=custom` 生成备份。恢复时保留原数据库与备份，停止 API、聊天 worker 和其他写入方。在独立且名称不同的数据库中用 `pg_restore --exit-on-error` 导入备份，再运行项目的 Alembic 迁移到当前版本。这些操作沿用上面的 PostgreSQL 连接配置，迁移进程连接恢复副本。
+
+通过受保护的环境配置设置 `RESTORE_STAGED_DATABASE_URL` 和 `RESTORE_RECEIPT_DATABASE_URL`。前者指向迁移后的恢复副本，后者指向原数据库或含最新删除回执的独立数据库。回执连接只需读取删除回执表。两个数据库需来自同一原服务，回执源应包含直到所有写入方停止时的删除。缺失的回执无法从旧备份推断。
+
+```bash
+python scripts/prepare_postgres_restore.py --confirm-writers-stopped
+```
+
+脚本在同一事务内合并回执、删除恢复出来的已擦除会话及附属记录，并清理无人引用的历史节点。仍有路径引用的节点、未选中的分支和已送达的应用内消息保留。恢复副本上的主动联系授权关闭，未发送任务取消，浏览器需要重新授权。若遇到表锁或数据约束错误，事务整体回滚。先核对恢复副本中的删除和保留样本、启动检查及登录，再切换 API 和 worker 的数据库连接。保留原库供回退。
