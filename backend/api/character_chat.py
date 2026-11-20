@@ -54,6 +54,7 @@ class CreateSession(BaseModel):
     shared_memory_ids: list[str] = Field(default_factory=list, max_length=50)
     network_policy: Literal["cloud_allowed", "local_only"] | None = None
     source_corpus_id: str | None = Field(default=None, min_length=1, max_length=100)
+    without_original_sources: bool = False
 
 
 class SendMessage(BaseModel):

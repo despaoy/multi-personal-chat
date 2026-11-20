@@ -88,7 +88,7 @@ function ChatWorkspace() {
   const [title, setTitle] = useState('新的相遇');
   const [acceptChange, setAcceptChange] = useState(false);
   const [previewResult, setPreview] = useState<ContinuationPreview>();
-  const [useNewSources, setUseNewSources] = useState(false);
+  const [sourceSelection, setSourceSelection] = useState<'default' | 'latest' | 'none'>('default');
   const [excludedMemories, setExcludedMemories] = useState<string[]>([]);
   const [resetRelationship, setResetRelationship] = useState(false);
   const [inheritHistory, setInheritHistory] = useState(true);
@@ -113,6 +113,8 @@ function ChatWorkspace() {
   const preview = previewResult?.source_session_id === source ? previewResult : undefined;
   const settingsChanged = Boolean(preview && preview.previous_character_revision !== preview.character_revision);
   const latestEdition = preview?.latest_source_corpus;
+  const sourceRevoked = Boolean(preview?.source_corpus_id && preview.source_corpus_available === false);
+  const needsSourceChoice = sourceRevoked && sourceSelection === 'default';
   const loadVersion = useRef(0);
   const requestedSession = useRef<{ characterId: string; sessionId: string } | null>(null);
 
@@ -126,7 +128,7 @@ function ChatWorkspace() {
   useEffect(() => {
     let active = true;
     setPreview(undefined);
-    setUseNewSources(false);
+    setSourceSelection('default');
     setSelectedShared([]);
     setAcceptChange(false);
     setExcludedMemories([]);
@@ -437,12 +439,13 @@ function ChatWorkspace() {
       <section className="min-w-0 space-y-4">
         {newSession ? <form className="space-y-4 rounded-xl border p-5" onSubmit={event => { event.preventDefault(); void run(async () => {
           if (!selectedCharacter) return;
-          if (source && !preview) return;
+          if ((source && !preview) || needsSourceChoice) return;
           const created = await api.createCharacterChat({ character_id: characterId, title,
             ...(localOnly ? { network_policy: 'local_only' as const } : {}),
             expected_character_revision: preview?.character_revision ?? selectedCharacter.revision,
             ...(!source ? { shared_memory_ids: selectedShared } : {}),
-            ...(latestEdition && (useNewSources || settingsChanged) ? { source_corpus_id: latestEdition.id } : {}),
+            ...(preview && sourceSelection === 'none' ? { without_original_sources: true }
+              : latestEdition && (sourceSelection === 'latest' || settingsChanged) ? { source_corpus_id: latestEdition.id } : {}),
             ...(preview ? { source_session_id: preview.source_session_id, source_revision: preview.source_revision, accept_settings_change: acceptChange,
               excluded_memory_ids: excludedMemories, reset_relationship: resetRelationship, inherit_history: inheritHistory } : {}) });
           await refreshSessions(characterId); await open(created.id); setDraft(''); setEditing(undefined); pending.current = null;
@@ -471,12 +474,25 @@ function ChatWorkspace() {
             })}>加载更多共享记忆</Button>}
           </details>}
           {source && <Button type="button" variant="outline" disabled={busy} onClick={() => void run(async () => {
-            setAcceptChange(false); setPreview(undefined); setUseNewSources(false); setExcludedMemories([]); setResetRelationship(false); setInheritHistory(true);
+            setAcceptChange(false); setPreview(undefined); setSourceSelection('default'); setExcludedMemories([]); setResetRelationship(false); setInheritHistory(true);
             setPreview(await api.getContinuationPreview(source));
           })}>刷新继承预览</Button>}
-          {preview && latestEdition && preview.source_corpus_id !== latestEdition.id && <div className="space-y-2 rounded-lg border p-3 text-sm">
+          {sourceRevoked && <fieldset className="space-y-2 rounded-lg border p-3 text-sm" disabled={busy}>
+            <legend>原会话绑定的资料版本已撤销</legend>
+            <p>请选择新会话使用的资料。原会话中已保存的出处仍可查看。</p>
+            {latestEdition && <label className="flex items-start gap-2">
+              <input type="radio" name="continuation-sources" checked={sourceSelection === 'latest'} onChange={() => setSourceSelection('latest')} />
+              在新会话中使用最新资料版本
+              {latestEdition.index_status !== 'completed' && '（索引尚未就绪）'}
+            </label>}
+            <label className="flex items-start gap-2">
+              <input type="radio" name="continuation-sources" checked={sourceSelection === 'none'} onChange={() => setSourceSelection('none')} />
+              不使用原作资料
+            </label>
+          </fieldset>}
+          {!sourceRevoked && preview && latestEdition && preview.source_corpus_id !== latestEdition.id && <div className="space-y-2 rounded-lg border p-3 text-sm">
             {settingsChanged ? <p>延续到新角色设定时，将使用与它对应的资料版本。</p> : <label className="flex items-start gap-2">
-              <input type="checkbox" checked={useNewSources} disabled={busy} onChange={event => setUseNewSources(event.target.checked)} />
+              <input type="checkbox" checked={sourceSelection === 'latest'} disabled={busy} onChange={event => setSourceSelection(event.target.checked ? 'latest' : 'default')} />
               在新会话中使用最新资料版本
             </label>}
             <p>资料发布于 {new Date(latestEdition.created_at).toLocaleString()}。{latestEdition.index_status === 'completed' ? '索引已就绪。' : '索引尚未就绪，暂时无法核对原文。'}原会话继续使用原来的版本。</p>
@@ -503,7 +519,7 @@ function ChatWorkspace() {
             <input type="checkbox" checked={acceptChange} disabled={busy} onChange={event => setAcceptChange(event.target.checked)} />
             角色设定从版本 {preview?.previous_character_revision} 更新为 {preview?.character_revision}。确认使用所展示的新设定，并按上方选择继承关系、记忆与对话。
           </label>}
-          <Button disabled={busy || !characterId || (Boolean(source) && !preview) || (settingsChanged && !acceptChange)}>开始聊天</Button>
+          <Button disabled={busy || !characterId || (Boolean(source) && !preview) || needsSourceChoice || (settingsChanged && !acceptChange)}>开始聊天</Button>
         </form> : session && <>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-lg font-medium">{session.title}</h2>
@@ -514,7 +530,7 @@ function ChatWorkspace() {
             {session.mode === 'branch' && session.source_session_id && <Button disabled={busy} variant="outline"
               onClick={() => void run(() => returnToBranchSource(session))}>返回来源会话</Button>}
             {session.mode !== 'branch' && <Button disabled={busy} variant="outline" onClick={() => {
-              setSource(session.id); setAcceptChange(false); setUseNewSources(false); setNewSession(true);
+              setSource(session.id); setAcceptChange(false); setSourceSelection('default'); setNewSession(true);
             }}>延续此会话</Button>}
           </div>
           {session.hypothesis && <p className="rounded-lg bg-muted p-3">剧情假设：{session.hypothesis}</p>}

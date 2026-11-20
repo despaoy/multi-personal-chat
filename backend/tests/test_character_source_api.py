@@ -1,6 +1,8 @@
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from api.character_chat import repository as chat_repository
+from api.character_chat import router as chat_router
 from api.character_library import original_sources, router
 from app.dependencies import get_current_user
 from character.library import CharacterSettings
@@ -18,8 +20,10 @@ def test_source_api_authorization_and_immutable_session_binding(tmp_path):
         other = sources.characters.create('owner', CharacterSettings(name='另一个', persona='谨慎', greeting='你好'))
         app = FastAPI()
         app.include_router(router)
+        app.include_router(chat_router)
         app.dependency_overrides[get_current_user] = lambda: {'user_id': 'owner'}
         app.dependency_overrides[original_sources] = lambda: sources
+        app.dependency_overrides[chat_repository] = lambda: chats
         path = f'/api/character-library/{char["id"]}/sources'
         with TestClient(app) as client:
             payload = {'character_revision': 1, 'sources': [{'id': 'chapter1', 'title': '第一章', 'content': '原文第一版'}]}
@@ -70,6 +74,26 @@ def test_source_api_authorization_and_immutable_session_binding(tmp_path):
             assert client.delete(path + '/' + first['id']).status_code == 200
             assert client.get(path + '/' + first['id']).status_code == 404
             assert chats.get('owner', old['id'])['source_corpus_id'] == first['id']  # Never silently switch editions.
+            start = '/api/character-chats'
+            revoked = client.get(f'{start}/{old["id"]}/continuation-preview').json()
+            assert revoked['source_corpus_available'] is False
+            assert revoked['latest_source_corpus']['id'] == second['id']
+            session_body = {'character_id': char['id'], 'title': '资料已撤销后的续聊',
+                            'source_session_id': old['id'], 'source_revision': revoked['source_revision']}
+            assert client.post(start, json=session_body).status_code == 404
+            assert client.post(start, json={**session_body, 'source_corpus_id': second['id'],
+                                            'without_original_sources': True}).status_code == 409
+            assert client.post(start, json={**session_body, 'source_turn_id': turn['id'],
+                                            'without_original_sources': True}).status_code == 409
+            migrated = client.post(start, json={**session_body, 'source_corpus_id': second['id']})
+            assert migrated.status_code == 201 and migrated.json()['source_corpus_id'] == second['id']
+            assert client.delete(path + '/' + second['id']).status_code == 200
+            no_edition = client.get(f'{start}/{old["id"]}/continuation-preview').json()
+            assert no_edition['latest_source_corpus'] is None
+            continued = client.post(start, json={**session_body, 'without_original_sources': True})
+            assert continued.status_code == 201 and continued.json()['source_corpus_id'] is None
+            assert continued.json()['baseline']['history'][0]['id'] == turn['id']
+            assert chats.get('owner', old['id'])['source_corpus_id'] == first['id']
             payload['sources'] *= 2
             assert client.post(path, json=payload).status_code == 422
     finally:

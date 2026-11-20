@@ -40,6 +40,13 @@ class CharacterSourceRepository:
             {'owner': owner, 'character': character_id, 'revision': character_revision, 'limit': limit, 'offset': offset},
         )
 
+    def is_available(self, owner, character_id, character_revision, corpus_id):
+        return bool(self.database.execute_sql(
+            'SELECT 1 FROM character_source_corpora WHERE id=:id AND owner_user_id=:owner '
+            'AND character_id=:character AND character_revision=:revision AND revoked=0',
+            {'id': corpus_id, 'owner': owner, 'character': character_id, 'revision': character_revision},
+        ))
+
     def publish(self, owner, character_id, character_revision, sources):
         self.characters.get(owner, character_id, character_revision)
         params = self._edition_params(owner, character_id, character_revision, sources)

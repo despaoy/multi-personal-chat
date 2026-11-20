@@ -235,6 +235,7 @@ export interface CharacterChatGeneration {
 
 export interface CreateCharacterChat {
   source_corpus_id?: string;
+  without_original_sources?: boolean;
   network_policy?: 'cloud_allowed' | 'local_only';
   character_id: string;
   title: string;
@@ -279,6 +280,7 @@ export interface CharacterSourceEdition extends CharacterSourceEditionSummary {
 export interface ContinuationPreview {
   source_session_id: string;
   source_corpus_id: string | null;
+  source_corpus_available: boolean;
   latest_source_corpus: CharacterSourceEditionSummary | null;
   source_revision: number;
   character_revision: number;

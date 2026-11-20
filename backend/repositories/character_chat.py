@@ -211,7 +211,9 @@ class CharacterChatRepository:
 
         source = self.get(owner, session_id)
         latest = self.characters.get(owner, source["character_id"])
-        editions = CharacterSourceRepository(self.database).list(
+        sources = CharacterSourceRepository(self.database)
+        bound_corpus = source["source_corpus_id"]
+        editions = sources.list(
             owner, source["character_id"], latest["settings_revision"], 1,
         )
         return {
@@ -219,7 +221,10 @@ class CharacterChatRepository:
             "source_revision": source["revision"],
             "character_revision": latest["settings_revision"],
             "previous_character_revision": source["character_revision"],
-            "source_corpus_id": source["source_corpus_id"],
+            "source_corpus_id": bound_corpus,
+            "source_corpus_available": bool(bound_corpus) and sources.is_available(
+                owner, source["character_id"], source["character_revision"], bound_corpus,
+            ),
             "latest_source_corpus": editions[0] if editions else None,
             "changes": {
                 key: {"previous": source["character"]["settings"][key], "next": value}
@@ -248,6 +253,7 @@ class CharacterChatRepository:
         shared_memory_ids=None,
         network_policy=None,
         source_corpus_id=None,
+        without_original_sources=False,
     ):
         if network_policy not in {None, "cloud_allowed", "local_only"}:
             raise ValueError("无效的模型网络策略")
@@ -426,7 +432,10 @@ class CharacterChatRepository:
         from repositories.character_sources import CharacterSourceRepository
 
         source_repo = CharacterSourceRepository(self.database)
-        if mode == 'branch':
+        if without_original_sources:
+            if mode != 'continuation' or source_corpus_id is not None:
+                raise ValueError('仅可为延续会话选择不使用原作资料，且不能同时指定资料版本')
+        elif mode == 'branch':
             inherited_corpus = selected.get('source_corpus_id')
             if source_corpus_id is not None and source_corpus_id != inherited_corpus:
                 raise ValueError('分支必须使用起点的资料版本')
