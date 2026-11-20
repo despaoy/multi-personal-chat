@@ -421,7 +421,10 @@ def get_knowledge_source_storage() -> KnowledgeSourceStorage:
 
 
 def _scan_directory(
-    storage: KnowledgeSourceStorage, directory: PurePosixPath, entry: SourceEntry, ancestors: frozenset[str],
+    storage: KnowledgeSourceStorage,
+    directory: PurePosixPath,
+    entry: SourceEntry,
+    ancestors: frozenset[str],
 ) -> dict:
     """扫描目录结构，返回树形结构"""
     if entry.identity in ancestors:

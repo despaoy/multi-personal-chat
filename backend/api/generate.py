@@ -34,9 +34,9 @@ from inference.generation_request import (
     ReplyValidationError,
 )
 from inference.history import HistoryFormatError, validate_history
+from inference.local_model_access import get_local_model_lock as _get_local_model_lock
 from inference.lora_registry import get_lora_character_id
 from inference.lora_utils import resolve_lora_served_name
-from inference.local_model_access import get_local_model_lock as _get_local_model_lock
 from inference.openai_protocol import ProviderResponseError, validate_completion_options, with_provider_error
 from inference.usage import collect_usage, has_pending_usage, usage_record_started
 from infra.circuit_breaker import CircuitOpenError
