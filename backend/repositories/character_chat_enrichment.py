@@ -27,6 +27,10 @@ class CharacterChatEnrichmentRepository:
         ))
 
     def load(self, turn_id, expected_revision=None):
+        loaded = self.load_snapshot(turn_id, expected_revision)
+        return loaded[:2] if loaded is not None else None
+
+    def load_snapshot(self, turn_id, expected_revision=None):
         rows = self.database.execute_sql(
             "SELECT j.*,s.owner_user_id FROM character_chat_enrichment_jobs j "
             "JOIN character_chat_sessions s ON s.id=j.session_id WHERE j.turn_id=:turn", {"turn": turn_id},
@@ -42,9 +46,22 @@ class CharacterChatEnrichmentRepository:
             if session["revision"] != job["expected_revision"] or turn is None:
                 self.supersede(turn_id, job["expected_revision"])
                 return None
-            return session, turn
+            return session, turn, turns
         except CharacterNotFoundError:
             return None
+
+    def keep_active(self, turn_id, expected_revision):
+        current = self.database.execute_sql(
+            "SELECT j.turn_id FROM character_chat_enrichment_jobs j "
+            "JOIN character_chat_sessions s ON s.id=j.session_id "
+            "JOIN character_chat_turns t ON t.id=j.turn_id AND t.session_id=j.session_id "
+            "WHERE j.turn_id=:turn AND j.expected_revision=:revision AND s.revision=:revision "
+            "AND t.active=1 AND j.status IN ('pending','submitted')",
+            {"turn": turn_id, "revision": expected_revision},
+        )
+        if not current:
+            self.supersede(turn_id, expected_revision)
+        return bool(current)
 
     def supersede(self, turn_id, expected_revision):
         self.database.revision_transaction([

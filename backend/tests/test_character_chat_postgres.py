@@ -252,10 +252,14 @@ def test_postgres_chat_generation_enrichment_retry_and_erasure(database):
     turn = repo.commit_turn(session, "request", "喜欢茶", "知道了", "test", generation_token=token, enqueue_enrichment=True)
     assert jobs.get("pg-owner", session["id"], "request")["status"] == "completed"
     enrichment = CharacterChatEnrichmentRepository(database)
+    assert enrichment.keep_active(turn["id"], 2)
     assert enrichment.fail(turn["id"], 2) == "failed"
     enrichment.retry("pg-owner", session["id"], 3)
+    assert not enrichment.keep_active(turn["id"], 2)
+    assert enrichment.keep_active(turn["id"], 4)
     loaded, source = enrichment.load(turn["id"], 4)
     assert enrichment.commit(loaded, source, loaded["state"])
+    assert not enrichment.keep_active(turn["id"], 4)
     assert enrichment.fail(turn["id"], 2) == "inactive"
     assert repo.list("pg-owner", char["id"])[0]["id"] == session["id"]
     assert any(item["id"] == session["id"] for item in repo.list("pg-owner"))

@@ -304,6 +304,53 @@ def test_background_enrichment_cannot_overwrite_later_user_actions(setup, change
         assert repo.get("1", session["id"])["state"]["memories"] == []
 
 
+@pytest.mark.parametrize("interrupted", ["memory", "relationship", "summary", None])
+def test_background_enrichment_stops_before_next_stage_after_user_changes(setup, interrupted, monkeypatch):
+    from services.character_chat_enrichment import process_enrichment
+
+    db, repo, session, _ = setup
+    turn = repo.commit_turn(session, "request", "喜欢茶", "知道了", "test", enqueue_enrichment=True)
+    identity = session["id"]
+    calls = []
+
+    def unused_history(*args):
+        pytest.fail("Enrichment must reuse the revision-checked history snapshot")
+
+    monkeypatch.setattr(CharacterChatRepository, "turns", unused_history)
+
+    async def stage(name, current):
+        calls.append(name)
+        if name == interrupted:
+            if name == "memory":
+                await asyncio.to_thread(repo.update_relationship, "1", identity, 2, "close", "手动设定")
+            elif name == "relationship":
+                await asyncio.to_thread(repo.retract, "1", identity, turn["id"], 2)
+            else:
+                await asyncio.to_thread(repo.delete_sessions, "1", [{"id": identity, "revision": 2}])
+        return current["state"]
+
+    async def memory(message, current, request_id):
+        return await stage("memory", current)
+
+    async def relationship(message, reply, current, request_id):
+        return await stage("relationship", current)
+
+    async def summary(current, history, request_id):
+        assert [entry["id"] for entry in history] == [turn["id"]]
+        return await stage("summary", current)
+
+    outcome = asyncio.run(process_enrichment(
+        turn["id"], database=db, expected_revision=2, enrich=memory, relationship=relationship,
+        summary=summary, embeddings=lambda _: calls.append("embeddings"),
+    ))
+    stages = ["memory", "relationship", "summary", "embeddings"]
+    if interrupted:
+        assert outcome == "superseded"
+        assert calls == stages[:stages.index(interrupted) + 1]
+    else:
+        assert outcome == "completed" and calls == stages
+
+
 def test_draft_is_fenced_resettable_and_never_a_saved_turn(setup):
     _, repo, session, jobs = setup
     old = jobs.claim(session, "request", "你好", lease_seconds=-1)
