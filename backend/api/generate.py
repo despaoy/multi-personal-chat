@@ -207,6 +207,53 @@ def _response_cache_keys(
     return prompt_hash, cache_key, 60 if use_knowledge_base else 300
 
 
+async def _read_cached_response(
+    request: MessageRequest,
+    lora_name: str,
+    runtime_config: dict[str, Any],
+    *,
+    provider,
+    request_provider: str,
+    enable_rag: bool,
+) -> tuple[GenerateResponse | None, str, str, int]:
+    try:
+        model_identity = {
+            "provider": request_provider,
+            "status": provider.get_status(),
+            "endpoint": getattr(provider, "base_url", None),
+            "credential_sha256": hashlib.sha256(getattr(provider, "api_key", "").encode()).hexdigest(),
+        }
+    except Exception as exc:
+        raise HTTPException(503, "模型配置读取失败，请检查配置及模型状态后重试") from exc
+    try:
+        prompt_hash, cache_key, cache_ttl = _response_cache_keys(
+            request,
+            lora_name,
+            runtime_config,
+            enable_rag=enable_rag,
+            model_identity=model_identity,
+        )
+        cached = await response_cache.get(prompt_hash, cache_key)
+        response = GenerateResponse.model_validate(cached) if cached is not None else None
+    except ValidationError as exc:
+        raise HTTPException(
+            503,
+            detail={
+                "stage": "response_cache",
+                "reason": "invalid_cached_response",
+                "fields": list(
+                    dict.fromkeys(
+                        str(error["loc"][0]) if error["loc"] else "$" for error in exc.errors(include_input=False)
+                    )
+                ),
+                "message": "缓存的生成结果缺少必要字段或内容无效，请清理该条缓存后重试。",
+            },
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(503, "回复缓存读取失败，请检查缓存状态后重试") from exc
+    return response, prompt_hash, cache_key, cache_ttl
+
+
 async def _generate_reply_impl(
     request: MessageRequest,
     current_user: dict | None = None,
@@ -474,41 +521,14 @@ async def _generate_reply_body(
     )
     provider = request_context.provider
     if use_response_cache:
-        try:
-            model_identity = {
-                "provider": request_provider,
-                "status": provider.get_status(),
-                "endpoint": getattr(provider, "base_url", None),
-                "credential_sha256": hashlib.sha256(getattr(provider, "api_key", "").encode()).hexdigest(),
-            }
-        except Exception as exc:
-            raise HTTPException(503, "模型配置读取失败，请检查配置及模型状态后重试") from exc
-        try:
-            prompt_hash, cache_key, cache_ttl = _response_cache_keys(
-                request,
-                lora_name,
-                runtime_config,
-                enable_rag=enable_rag,
-                model_identity=model_identity,
-            )
-            cached = await response_cache.get(prompt_hash, cache_key)
-            response = GenerateResponse.model_validate(cached) if cached is not None else None
-        except ValidationError as exc:
-            raise HTTPException(
-                503,
-                detail={
-                    "stage": "response_cache",
-                    "reason": "invalid_cached_response",
-                    "fields": list(
-                        dict.fromkeys(
-                            str(error["loc"][0]) if error["loc"] else "$" for error in exc.errors(include_input=False)
-                        )
-                    ),
-                    "message": "缓存的生成结果缺少必要字段或内容无效，请清理该条缓存后重试。",
-                },
-            ) from exc
-        except Exception as exc:
-            raise HTTPException(503, "回复缓存读取失败，请检查缓存状态后重试") from exc
+        response, prompt_hash, cache_key, cache_ttl = await _read_cached_response(
+            request,
+            lora_name,
+            runtime_config,
+            provider=provider,
+            request_provider=request_provider,
+            enable_rag=enable_rag,
+        )
         if response is not None:
             logger.debug("response cache hit")
             if persist_message:
@@ -770,86 +790,105 @@ async def _generate_reply_body(
             except HTTPException as record_error:
                 # Keep the model cause and recording error on separate chains.
                 raise HTTPException(503, detail=with_provider_error(record_error.detail, e)) from e
-        if isinstance(e, TimeoutError) and deadline.expired():
-            raise HTTPException(
-                503,
-                detail={
-                    "stage": "generation",
-                    "reason": "deadline_exceeded",
-                    "modelInvoked": model_invoked,
-                    "messageSaved": False,
-                    "message": "聊天生成等待超时，本轮回复未保存。请检查所选模型及检索服务后重试。",
-                },
-            ) from e
-        if isinstance(e, ValidationError):
-            raise HTTPException(
-                503,
-                detail={
-                    "stage": "generation_result",
-                    "reason": "invalid_generation_result",
-                    "messageSaved": message_saved,
-                    "fields": sorted({str(error["loc"][0]) for error in e.errors(include_input=False) if error["loc"]}),
-                    "message": "生成结果结构无效，本轮结果未保存。请检查生成及检索返回格式后重试。",
-                },
-            ) from e
-        if isinstance(e, (HistoryFormatError, InputBudgetError)):
-            raise HTTPException(503, detail=e.public_detail()) from e
-        if isinstance(e, _ModelIdentityError):
-            raise HTTPException(
-                503,
-                detail={
-                    "stage": "model_status",
-                    "reason": "model_identity_unavailable",
-                    "modelInvoked": True,
-                    "messageSaved": False,
-                    "message": "生成后模型标识读取失败，本轮结果未保存。请检查所选模型配置后重试。",
-                },
-            ) from e
-        if isinstance(e, ProviderResponseError):
-            raise HTTPException(e.http_status, detail=e.public_detail()) from e
-        if isinstance(e, CircuitOpenError):
-            raise HTTPException(
-                503,
-                detail={
-                    "stage": "model_circuit",
-                    "reason": "circuit_open",
-                    "message": "模型服务连续失败，暂时停止调用。请恢复所选模型服务后重试。",
-                    "modelInvoked": False,
-                },
-            ) from e
-        if isinstance(e, ContextAuthorityChangedError):
-            raise HTTPException(
-                503,
-                detail={
-                    "stage": "context_authority",
-                    "reason": "repeated_authority_change",
-                    "message": "本轮资料在生成期间持续变化，未返回答案，请稍后重新请求。",
-                },
-            ) from e
-        if isinstance(e, ReplyValidationError):
-            raise HTTPException(
-                503,
-                detail={
-                    "stage": "reply_validation",
-                    "reason": "model_output_invalid",
-                    "violations": list(e.violations),
-                    "message": "模型回复经一次修正仍未通过校验，本轮未返回回复。请重试或检查模型与输出策略。",
-                },
-            ) from e
-        # 安全：不把内部异常字符串返回给客户端（信息泄露），
-        # 日志记录错误类型；异常链保留内部原因，客户端收到通用消息。
-        raise HTTPException(
-            503 if is_vllm else 500,
+        raise _generation_http_error(
+            e,
+            deadline_exceeded=isinstance(e, TimeoutError) and deadline.expired(),
+            model_invoked=model_invoked,
+            message_saved=message_saved,
+            is_vllm=is_vllm,
+        ) from e
+
+
+def _generation_http_error(
+    failure: Exception,
+    *,
+    deadline_exceeded: bool,
+    model_invoked: bool | None,
+    message_saved: bool,
+    is_vllm: bool,
+) -> HTTPException:
+    if deadline_exceeded:
+        return HTTPException(
+            503,
             detail={
                 "stage": "generation",
-                "messageSaved": message_saved,
-                "message": (
-                    "回复已存档，但后续处理失败。请核对聊天记录。"
-                    if message_saved
-                    else "生成回复失败，请检查所选模型服务后重试"
-                ),
+                "reason": "deadline_exceeded",
+                "modelInvoked": model_invoked,
+                "messageSaved": False,
+                "message": "聊天生成等待超时，本轮回复未保存。请检查所选模型及检索服务后重试。",
             },
-        ) from e
+        )
+    if isinstance(failure, ValidationError):
+        return HTTPException(
+            503,
+            detail={
+                "stage": "generation_result",
+                "reason": "invalid_generation_result",
+                "messageSaved": message_saved,
+                "fields": sorted(
+                    {str(error["loc"][0]) for error in failure.errors(include_input=False) if error["loc"]}
+                ),
+                "message": "生成结果结构无效，本轮结果未保存。请检查生成及检索返回格式后重试。",
+            },
+        )
+    if isinstance(failure, (HistoryFormatError, InputBudgetError)):
+        return HTTPException(503, detail=failure.public_detail())
+    if isinstance(failure, _ModelIdentityError):
+        return HTTPException(
+            503,
+            detail={
+                "stage": "model_status",
+                "reason": "model_identity_unavailable",
+                "modelInvoked": True,
+                "messageSaved": False,
+                "message": "生成后模型标识读取失败，本轮结果未保存。请检查所选模型配置后重试。",
+            },
+        )
+    if isinstance(failure, ProviderResponseError):
+        return HTTPException(failure.http_status, detail=failure.public_detail())
+    if isinstance(failure, CircuitOpenError):
+        return HTTPException(
+            503,
+            detail={
+                "stage": "model_circuit",
+                "reason": "circuit_open",
+                "message": "模型服务连续失败，暂时停止调用。请恢复所选模型服务后重试。",
+                "modelInvoked": False,
+            },
+        )
+    if isinstance(failure, ContextAuthorityChangedError):
+        return HTTPException(
+            503,
+            detail={
+                "stage": "context_authority",
+                "reason": "repeated_authority_change",
+                "message": "本轮资料在生成期间持续变化，未返回答案，请稍后重新请求。",
+            },
+        )
+    if isinstance(failure, ReplyValidationError):
+        return HTTPException(
+            503,
+            detail={
+                "stage": "reply_validation",
+                "reason": "model_output_invalid",
+                "violations": list(failure.violations),
+                "message": "模型回复经一次修正仍未通过校验，本轮未返回回复。请重试或检查模型与输出策略。",
+            },
+        )
+    # 安全：不把内部异常字符串返回给客户端（信息泄露），
+    # 日志记录错误类型；异常链保留内部原因，客户端收到通用消息。
+    return HTTPException(
+        503 if is_vllm else 500,
+        detail={
+            "stage": "generation",
+            "messageSaved": message_saved,
+            "message": (
+                "回复已存档，但后续处理失败。请核对聊天记录。"
+                if message_saved
+                else "生成回复失败，请检查所选模型服务后重试"
+            ),
+        },
+    )
 
 
 # ═══════════════════════════════════════════

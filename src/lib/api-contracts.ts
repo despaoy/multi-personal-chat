@@ -53,7 +53,7 @@ export interface CharacterSourceUpdate {
 }
 
 export type SourceChoices = Record<string, 'local' | 'author'>;
-export interface CharacterSourceMerge {
+interface CharacterSourceMerge {
   status: 'ready' | 'conflict' | 'blocked';
   reason: string | null;
   actions: Array<{ id: string; action: string }>;
@@ -179,7 +179,7 @@ export interface CharacterChatTurn {
   evidence?: CharacterChatEvidence;
 }
 
-export interface CharacterChatMemory {
+interface CharacterChatMemory {
   id: string;
   content: string;
   status: 'confirmed' | 'pending';
@@ -297,21 +297,21 @@ export interface SendCharacterChatMessage {
   replace_turn_id?: string;
 }
 
-export interface GoldRubricCriterion {
+interface GoldRubricCriterion {
   name: string;
   weight: number;
   scale: number;
   description: string;
 }
 
-export type GoldPromptCategory =
+type GoldPromptCategory =
   | 'persona'
   | 'safety'
   | 'rag_grounded'
   | 'factual'
   | 'multiturn';
 
-export type GoldPromptSplit = 'eval' | 'held_out';
+type GoldPromptSplit = 'eval' | 'held_out';
 
 export interface GoldPromptRecord {
   id: string;
@@ -394,7 +394,7 @@ export interface ExperimentStartResponse {
   error?: string;
 }
 
-export interface RouterCompatibilityRecord {
+interface RouterCompatibilityRecord {
   compatible: boolean;
   checked_at: string;
   checks: Record<string, boolean>;
@@ -415,7 +415,7 @@ export interface RouterAdaptersResponse {
 }
 
 export type PreferenceReviewStatus = 'pending' | 'approved' | 'rejected';
-export type PreferenceRubric = Record<string, number>;
+type PreferenceRubric = Record<string, number>;
 
 export interface PreferencePairRecord {
   id: string;
@@ -502,7 +502,7 @@ export interface PreferenceSampleRequest {
   min_length?: number;
 }
 
-export type PlatformConnectionState =
+type PlatformConnectionState =
   | 'connected'
   | 'idle'
   | 'degraded'
@@ -524,7 +524,7 @@ export interface AstrBotGatewayStatus {
   port: number;
 }
 
-export interface TokenBucketMetrics {
+interface TokenBucketMetrics {
   rate: number;
   capacity: number;
   active_buckets: number;
@@ -532,7 +532,7 @@ export interface TokenBucketMetrics {
   rejected: number;
 }
 
-export interface InferenceQueueMetrics {
+interface InferenceQueueMetrics {
   submitted: number;
   completed: number;
   failed: number;
@@ -549,13 +549,13 @@ export interface InferenceQueueMetrics {
   };
 }
 
-export interface ObservabilityMetrics {
+interface ObservabilityMetrics {
   counters: Record<string, number>;
   consecutive: Record<string, number>;
   recent5m: Record<string, number>;
 }
 
-export interface MetricsAlert {
+interface MetricsAlert {
   severity: 'critical' | 'warning';
   type: string;
   message: string;
@@ -583,12 +583,12 @@ export interface StatsMetricsResponse {
   alerts: MetricsAlert[];
 }
 
-export interface UserDataEntry {
+interface UserDataEntry {
   data_json: string;
   updated_at: string;
 }
 
-export interface UserPageData extends UserDataEntry {
+interface UserPageData extends UserDataEntry {
   page_key: string;
 }
 
@@ -610,7 +610,7 @@ export interface IntentTaskStatus {
   message: string;
 }
 
-export interface IntentTrainingResult {
+interface IntentTrainingResult {
   success?: boolean;
   cancelled?: boolean;
   error?: string;
@@ -643,7 +643,7 @@ export interface IntentModelInfo {
 }
 
 /** Current backend shape persisted from the knowledge base table. */
-export interface ActiveKnowledgeBaseRecord {
+interface ActiveKnowledgeBaseRecord {
   id: number;
   name: string;
   description?: string;
@@ -654,7 +654,7 @@ export interface ActiveKnowledgeBaseRecord {
 }
 
 /** Legacy shape retained so existing active_kbs.json files remain readable. */
-export interface LegacyActiveKnowledgeBaseRecord {
+interface LegacyActiveKnowledgeBaseRecord {
   kbName: string;
   isActive: boolean | number;
 }
@@ -668,7 +668,7 @@ export interface ActiveKnowledgeBasesResponse {
   active_kbs: ActiveKnowledgeBase[];
 }
 
-export interface DatasetCreationStats {
+interface DatasetCreationStats {
   dataset_dir: string;
   total_samples: number;
   train_samples: number;
@@ -678,7 +678,7 @@ export interface DatasetCreationStats {
   custom_prompt: string | null;
 }
 
-export interface CreatedDataset {
+interface CreatedDataset {
   name: string;
   path: string;
   count: number;

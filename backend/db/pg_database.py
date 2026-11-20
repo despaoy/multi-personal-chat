@@ -130,55 +130,61 @@ class PgDatabase:
             await conn.run_sync(metadata.create_all)
             if needs_history_migration:
                 await conn.run_sync(lambda db: migrate_baselines(lambda sql, params: db.execute(text(sql), params)))
-            await self._ensure_column(conn, "memory_sources", "body_digest", "TEXT")
-            await self._ensure_column(conn, "messages", "platform", "TEXT NOT NULL DEFAULT 'qq'")
-            await self._ensure_column(conn, "messages", "adapter", "TEXT NOT NULL DEFAULT 'nonebot'")
-            await self._ensure_column(conn, "messages", "conversationId", "TEXT")
-            await self._ensure_column(conn, "messages", "senderId", "TEXT")
-            await self._ensure_column(conn, "messages", "sourceMessageId", "TEXT")
-            await self._ensure_column(conn, "messages", "traceId", "TEXT")
-            await self._ensure_column(conn, "messages", "conversationType", "TEXT")
-            await self._ensure_column(conn, "messages", "senderName", "TEXT")
-            await self._ensure_column(conn, "messages", "branchId", "TEXT")
-            await self._ensure_column(conn, "messages", "characterId", "TEXT")
-            for statement in SOURCE_INDEX_STATEMENTS:
-                await conn.execute(text(statement))
-            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_messages_branch ON messages ("branchId", "createdAt")'))
-            # Existing deployments may predate versioned memory claims. Keep
-            # runtime initialization compatible even before Alembic 007 runs.
-            memory_claim_columns = {
-                "scope_level": "TEXT NOT NULL DEFAULT 'conversation'",
-                "revision": "INTEGER NOT NULL DEFAULT 0",
-                "relation_type": "TEXT NOT NULL DEFAULT 'ADD'",
-                "status": "TEXT NOT NULL DEFAULT 'active'",
-                "parent_memory_id": "INTEGER",
-                "supersedes_memory_id": "INTEGER",
-                "confidence": "DOUBLE PRECISION NOT NULL DEFAULT 1.0",
-                "source_message_ids_json": "TEXT NOT NULL DEFAULT '[]'",
-                "evidence_json": "TEXT NOT NULL DEFAULT '[]'",
-                "metadata_json": "TEXT NOT NULL DEFAULT '{}'",
-                "valid_from": "TEXT",
-                "valid_to": "TEXT",
-                "observed_at": "TEXT",
-            }
-            for column, definition in memory_claim_columns.items():
-                await self._ensure_column(conn, "character_memories", column, definition)
-            await conn.execute(text("ALTER TABLE character_memories DROP CONSTRAINT IF EXISTS uq_character_memory_key"))
-            await conn.execute(
-                text(
-                    "CREATE UNIQUE INDEX IF NOT EXISTS uq_character_memory_revision ON character_memories ("
-                    "character_id, platform, adapter, sender_id, conversation_type, conversation_id, "
-                    "scope_level, memory_key, revision)"
-                )
+            await self._upgrade_legacy_schema(conn)
+            await self._ensure_query_indexes(conn)
+        self._initialized = True
+        logger.info(f"✅ PostgreSQL 数据库初始化完成: {self.database_url.split('@')[-1]}")
+
+    async def _upgrade_legacy_schema(self, conn):
+        await self._ensure_column(conn, "memory_sources", "body_digest", "TEXT")
+        await self._ensure_column(conn, "messages", "platform", "TEXT NOT NULL DEFAULT 'qq'")
+        await self._ensure_column(conn, "messages", "adapter", "TEXT NOT NULL DEFAULT 'nonebot'")
+        await self._ensure_column(conn, "messages", "conversationId", "TEXT")
+        await self._ensure_column(conn, "messages", "senderId", "TEXT")
+        await self._ensure_column(conn, "messages", "sourceMessageId", "TEXT")
+        await self._ensure_column(conn, "messages", "traceId", "TEXT")
+        await self._ensure_column(conn, "messages", "conversationType", "TEXT")
+        await self._ensure_column(conn, "messages", "senderName", "TEXT")
+        await self._ensure_column(conn, "messages", "branchId", "TEXT")
+        await self._ensure_column(conn, "messages", "characterId", "TEXT")
+        for statement in SOURCE_INDEX_STATEMENTS:
+            await conn.execute(text(statement))
+        await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_messages_branch ON messages ("branchId", "createdAt")'))
+        # Existing deployments may predate versioned memory claims. Keep
+        # runtime initialization compatible even before Alembic 007 runs.
+        memory_claim_columns = {
+            "scope_level": "TEXT NOT NULL DEFAULT 'conversation'",
+            "revision": "INTEGER NOT NULL DEFAULT 0",
+            "relation_type": "TEXT NOT NULL DEFAULT 'ADD'",
+            "status": "TEXT NOT NULL DEFAULT 'active'",
+            "parent_memory_id": "INTEGER",
+            "supersedes_memory_id": "INTEGER",
+            "confidence": "DOUBLE PRECISION NOT NULL DEFAULT 1.0",
+            "source_message_ids_json": "TEXT NOT NULL DEFAULT '[]'",
+            "evidence_json": "TEXT NOT NULL DEFAULT '[]'",
+            "metadata_json": "TEXT NOT NULL DEFAULT '{}'",
+            "valid_from": "TEXT",
+            "valid_to": "TEXT",
+            "observed_at": "TEXT",
+        }
+        for column, definition in memory_claim_columns.items():
+            await self._ensure_column(conn, "character_memories", column, definition)
+        await conn.execute(text("ALTER TABLE character_memories DROP CONSTRAINT IF EXISTS uq_character_memory_key"))
+        await conn.execute(
+            text(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_character_memory_revision ON character_memories ("
+                "character_id, platform, adapter, sender_id, conversation_type, conversation_id, "
+                "scope_level, memory_key, revision)"
             )
-            # One-way compatibility migration: legacy session_settings is folded into
-            # conversations and then removed. Fresh databases never create this table.
-            try:
-                result = await conn.execute(text("SELECT to_regclass('public.session_settings')"))
-                if result.scalar():
-                    migrated_at = datetime.now().isoformat()
-                    await conn.execute(
-                        text("""
+        )
+        # One-way compatibility migration: legacy session_settings is folded into
+        # conversations and then removed. Fresh databases never create this table.
+        try:
+            result = await conn.execute(text("SELECT to_regclass('public.session_settings')"))
+            if result.scalar():
+                migrated_at = datetime.now().isoformat()
+                await conn.execute(
+                    text("""
                         INSERT INTO conversations (
                             platform, "conversationId", "conversationType", "displayName",
                             "botEnabled", "replyPolicy", "createdAt", "updatedAt"
@@ -199,104 +205,105 @@ class PgDatabase:
                             "displayName" = EXCLUDED."displayName",
                             "updatedAt" = EXCLUDED."updatedAt"
                     """),
-                        {"migrated_at": migrated_at},
-                    )
-                    await conn.execute(text("DROP TABLE IF EXISTS session_settings"))
-            except Exception:
-                logger.warning("session_settings migration skipped", exc_info=True)
-            await self._ensure_column(conn, "training_tasks", "task_id", "TEXT")
-            await self._ensure_column(conn, "training_tasks", "lora_name", "TEXT DEFAULT ''")
-            await self._ensure_column(conn, "training_tasks", "error_message", "TEXT DEFAULT ''")
-            await self._ensure_column(conn, "training_tasks", "config_json", "TEXT DEFAULT '{}'")
-            await self._ensure_column(conn, "training_tasks", "created_at", "TEXT DEFAULT ''")
-            await self._ensure_column(conn, "training_tasks", "updated_at", "TEXT DEFAULT ''")
-            # C4 fix: 为已有 PG 数据库添加 users.role 列（新数据库由 create_all 创建）
-            await self._ensure_column(conn, "users", "role", "TEXT NOT NULL DEFAULT 'user'")
-            await self._ensure_column(conn, "model_invocations", "usageSource", "TEXT NOT NULL DEFAULT 'legacy_unverified'")
-            await self._ensure_column(conn, "model_invocations", "purpose", "TEXT NOT NULL DEFAULT 'chat'")
-            await conn.execute(
-                text("CREATE UNIQUE INDEX IF NOT EXISTS idx_training_tasks_task_id ON training_tasks (task_id)")
-            )
-            await conn.execute(
-                text(
-                    'CREATE INDEX IF NOT EXISTS idx_messages_platform_conversation ON messages (platform, "conversationId", "createdAt")'
+                    {"migrated_at": migrated_at},
                 )
+                await conn.execute(text("DROP TABLE IF EXISTS session_settings"))
+        except Exception:
+            logger.warning("session_settings migration skipped", exc_info=True)
+        await self._ensure_column(conn, "training_tasks", "task_id", "TEXT")
+        await self._ensure_column(conn, "training_tasks", "lora_name", "TEXT DEFAULT ''")
+        await self._ensure_column(conn, "training_tasks", "error_message", "TEXT DEFAULT ''")
+        await self._ensure_column(conn, "training_tasks", "config_json", "TEXT DEFAULT '{}'")
+        await self._ensure_column(conn, "training_tasks", "created_at", "TEXT DEFAULT ''")
+        await self._ensure_column(conn, "training_tasks", "updated_at", "TEXT DEFAULT ''")
+        # C4 fix: 为已有 PG 数据库添加 users.role 列（新数据库由 create_all 创建）
+        await self._ensure_column(conn, "users", "role", "TEXT NOT NULL DEFAULT 'user'")
+        await self._ensure_column(conn, "model_invocations", "usageSource", "TEXT NOT NULL DEFAULT 'legacy_unverified'")
+        await self._ensure_column(conn, "model_invocations", "purpose", "TEXT NOT NULL DEFAULT 'chat'")
+        await conn.execute(
+            text("CREATE UNIQUE INDEX IF NOT EXISTS idx_training_tasks_task_id ON training_tasks (task_id)")
+        )
+
+    @staticmethod
+    async def _ensure_query_indexes(conn):
+        await conn.execute(
+            text(
+                'CREATE INDEX IF NOT EXISTS idx_messages_platform_conversation ON messages (platform, "conversationId", "createdAt")'
             )
-            await conn.execute(
-                text(
-                    'CREATE INDEX IF NOT EXISTS idx_messages_source_dedup ON messages (platform, adapter, "sourceMessageId")'
-                )
+        )
+        await conn.execute(
+            text(
+                'CREATE INDEX IF NOT EXISTS idx_messages_source_dedup ON messages (platform, adapter, "sourceMessageId")'
             )
-            await conn.execute(
-                text('CREATE INDEX IF NOT EXISTS idx_messages_session_created ON messages ("sessionId", "createdAt")')
+        )
+        await conn.execute(
+            text('CREATE INDEX IF NOT EXISTS idx_messages_session_created ON messages ("sessionId", "createdAt")')
+        )
+        await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages ("createdAt")'))
+        await conn.execute(text("DROP INDEX IF EXISTS idx_conversations_platform_conversation"))
+        # UNIQUE(platform, conversationId, conversationType) 已自动创建索引。
+        await conn.execute(
+            text('CREATE INDEX IF NOT EXISTS idx_integration_events_trace ON integration_events ("traceId")')
+        )
+        await conn.execute(
+            text(
+                'CREATE INDEX IF NOT EXISTS idx_integration_events_platform_created ON integration_events (platform, "createdAt")'
             )
-            await conn.execute(text('CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages ("createdAt")'))
-            await conn.execute(text("DROP INDEX IF EXISTS idx_conversations_platform_conversation"))
-            # UNIQUE(platform, conversationId, conversationType) 已自动创建索引。
-            await conn.execute(
-                text('CREATE INDEX IF NOT EXISTS idx_integration_events_trace ON integration_events ("traceId")')
+        )
+        await conn.execute(
+            text('CREATE INDEX IF NOT EXISTS idx_model_invocations_trace ON model_invocations ("traceId")')
+        )
+        await conn.execute(
+            text('CREATE INDEX IF NOT EXISTS idx_model_invocations_created ON model_invocations ("createdAt")')
+        )
+        await conn.execute(
+            text("CREATE INDEX IF NOT EXISTS idx_experiment_runs_type ON experiment_runs (experiment_type)")
+        )
+        await conn.execute(
+            text("CREATE INDEX IF NOT EXISTS idx_preference_pairs_status ON preference_pairs (review_status)")
+        )
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_feedback_created ON feedback (created_at)"))
+        await conn.execute(
+            text("CREATE INDEX IF NOT EXISTS idx_adapter_compat_name ON adapter_compatibility (adapter_name)")
+        )
+        # 补充此前缺失的高频外键/过滤列索引（与 SQLite 一致）
+        await conn.execute(
+            text('CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_documentId ON knowledge_chunks ("documentId")')
+        )
+        await conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS idx_knowledge_documents_kb_id ON knowledge_documents (knowledge_base_id)"
             )
-            await conn.execute(
-                text(
-                    'CREATE INDEX IF NOT EXISTS idx_integration_events_platform_created ON integration_events (platform, "createdAt")'
-                )
+        )
+        await conn.execute(
+            text("CREATE INDEX IF NOT EXISTS idx_knowledge_documents_folder_id ON knowledge_documents (folder_id)")
+        )
+        await conn.execute(
+            text("CREATE INDEX IF NOT EXISTS idx_training_tasks_lora_name ON training_tasks (lora_name)")
+        )
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_training_tasks_status ON training_tasks (status)"))
+        await conn.execute(
+            text('CREATE INDEX IF NOT EXISTS idx_intent_samples_kbName ON intent_samples ("kbName")')
+        )
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_feedback_trace_id ON feedback (trace_id)"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_feedback_message_id ON feedback (message_id)"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs (timestamp)"))
+        await conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS idx_character_memories_active_lookup ON character_memories "
+                "(platform, adapter, sender_id, scope_level, status, updated_at)"
             )
-            await conn.execute(
-                text('CREATE INDEX IF NOT EXISTS idx_model_invocations_trace ON model_invocations ("traceId")')
+        )
+        await conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS idx_character_memories_parent ON character_memories (parent_memory_id)"
             )
-            await conn.execute(
-                text('CREATE INDEX IF NOT EXISTS idx_model_invocations_created ON model_invocations ("createdAt")')
+        )
+        await conn.execute(
+            text(
+                "CREATE INDEX IF NOT EXISTS idx_character_memories_supersedes ON character_memories (supersedes_memory_id)"
             )
-            await conn.execute(
-                text("CREATE INDEX IF NOT EXISTS idx_experiment_runs_type ON experiment_runs (experiment_type)")
-            )
-            await conn.execute(
-                text("CREATE INDEX IF NOT EXISTS idx_preference_pairs_status ON preference_pairs (review_status)")
-            )
-            await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_feedback_created ON feedback (created_at)"))
-            await conn.execute(
-                text("CREATE INDEX IF NOT EXISTS idx_adapter_compat_name ON adapter_compatibility (adapter_name)")
-            )
-            # 补充此前缺失的高频外键/过滤列索引（与 SQLite 一致）
-            await conn.execute(
-                text('CREATE INDEX IF NOT EXISTS idx_knowledge_chunks_documentId ON knowledge_chunks ("documentId")')
-            )
-            await conn.execute(
-                text(
-                    "CREATE INDEX IF NOT EXISTS idx_knowledge_documents_kb_id ON knowledge_documents (knowledge_base_id)"
-                )
-            )
-            await conn.execute(
-                text("CREATE INDEX IF NOT EXISTS idx_knowledge_documents_folder_id ON knowledge_documents (folder_id)")
-            )
-            await conn.execute(
-                text("CREATE INDEX IF NOT EXISTS idx_training_tasks_lora_name ON training_tasks (lora_name)")
-            )
-            await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_training_tasks_status ON training_tasks (status)"))
-            await conn.execute(
-                text('CREATE INDEX IF NOT EXISTS idx_intent_samples_kbName ON intent_samples ("kbName")')
-            )
-            await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_feedback_trace_id ON feedback (trace_id)"))
-            await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_feedback_message_id ON feedback (message_id)"))
-            await conn.execute(text("CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs (timestamp)"))
-            await conn.execute(
-                text(
-                    "CREATE INDEX IF NOT EXISTS idx_character_memories_active_lookup ON character_memories "
-                    "(platform, adapter, sender_id, scope_level, status, updated_at)"
-                )
-            )
-            await conn.execute(
-                text(
-                    "CREATE INDEX IF NOT EXISTS idx_character_memories_parent ON character_memories (parent_memory_id)"
-                )
-            )
-            await conn.execute(
-                text(
-                    "CREATE INDEX IF NOT EXISTS idx_character_memories_supersedes ON character_memories (supersedes_memory_id)"
-                )
-            )
-        self._initialized = True
-        logger.info(f"✅ PostgreSQL 数据库初始化完成: {self.database_url.split('@')[-1]}")
+        )
 
     async def _ensure_column(self, conn, table_name: str, column_name: str, definition: str):
         await conn.execute(text(f'ALTER TABLE "{table_name}" ADD COLUMN IF NOT EXISTS "{column_name}" {definition}'))

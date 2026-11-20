@@ -189,130 +189,7 @@ class SQLiteDB:
             )
         ''')
 
-        # 创建知识库表
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS knowledge_bases (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL UNIQUE,
-                description TEXT DEFAULT '',
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            )
-        ''')
-
-        # 创建知识库文件夹表
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS knowledge_folders (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                knowledge_base_id INTEGER NOT NULL,
-                name TEXT NOT NULL,
-                description TEXT DEFAULT '',
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL,
-                FOREIGN KEY (knowledge_base_id) REFERENCES knowledge_bases(id) ON DELETE CASCADE,
-                UNIQUE(knowledge_base_id, name)
-            )
-        ''')
-
-        # 创建知识库文档表
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS knowledge_documents (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                title TEXT NOT NULL,
-                content TEXT NOT NULL,
-                category TEXT NOT NULL DEFAULT '未分类',
-                knowledge_base_id INTEGER,
-                folder_id INTEGER,
-                sourceType TEXT NOT NULL DEFAULT 'text',
-                sourceUrl TEXT,
-                fileType TEXT,
-                fileSize INTEGER,
-                chunkCount INTEGER DEFAULT 0,
-                createdAt TEXT NOT NULL,
-                updatedAt TEXT NOT NULL,
-                FOREIGN KEY (knowledge_base_id) REFERENCES knowledge_bases(id) ON DELETE SET NULL,
-                FOREIGN KEY (folder_id) REFERENCES knowledge_folders(id) ON DELETE SET NULL
-            )
-        ''')
-
-        self._ensure_column(cursor, "knowledge_documents", "category", "TEXT NOT NULL DEFAULT '未分类'")
-        self._ensure_column(cursor, "knowledge_documents", "knowledge_base_id", "INTEGER REFERENCES knowledge_bases(id) ON DELETE SET NULL")
-        self._ensure_column(cursor, "knowledge_documents", "folder_id", "INTEGER REFERENCES knowledge_folders(id) ON DELETE SET NULL")
-
-        # 创建知识库向量表（用于RAG）
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS knowledge_chunks (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                documentId INTEGER NOT NULL,
-                chunkIndex INTEGER NOT NULL,
-                content TEXT NOT NULL,
-                embedding INTEGER,
-                createdAt TEXT NOT NULL,
-                FOREIGN KEY (documentId) REFERENCES knowledge_documents(id) ON DELETE CASCADE
-            )
-        ''')
-        # 老库迁移：将 embedding 列从 BLOB 类型重建为 INTEGER（SQLite 无法直接
-        # 修改列类型，需要重建表）。
-        #
-        # 旧实现用 `SELECT typeof(embedding) FROM knowledge_chunks LIMIT 1` 判断，
-        # 但 typeof() 返回的是"某一行实际存储的值的类型"而非"列声明类型"：
-        #   - 空表 → fetchone() 返回 None，跳过迁移（但列仍是 BLOB）
-        #   - 首行 embedding 为 NULL → typeof 返回 'null'，跳过迁移
-        #   - 首行恰好存了整数 → typeof 返回 'integer'，跳过迁移
-        #   - 只有首行恰好是 BLOB 字节流时才迁移，概率极低。
-        # 正确做法是用 PRAGMA table_info 读取列的声明类型 dtd_type。
-        #
-        # 数据保留策略：旧 BLOB 列可能保存了向量字节流（pickle/np.tobytes()），
-        # 也可能在新版代码运行后保存了有效的 FAISS ID 整数。用 CASE 在行级
-        # 判断 typeof()，仅保留整数，BLOB/NULL 置 NULL 让上层重建向量索引。
-        #
-        # 异常处理：用 SAVEPOINT 包裹表重建，失败时回滚到保存点，避免留下
-        # 新空表和 knowledge_chunks_old 残留导致旧数据不可见。
-        cursor.execute("PRAGMA table_info(knowledge_chunks)")
-        columns = cursor.fetchall()
-        # columns: (cid, name, type, notnull, dflt_value, pk)
-        embedding_decl_type = ""
-        for col in columns:
-            if col[1] == "embedding":
-                embedding_decl_type = (col[2] or "").upper()
-                break
-
-        needs_migration = embedding_decl_type in ("", "BLOB")
-        if needs_migration:
-            cursor.execute("SAVEPOINT embed_migration")
-            try:
-                cursor.execute("ALTER TABLE knowledge_chunks RENAME TO knowledge_chunks_old")
-                cursor.execute('''
-                    CREATE TABLE knowledge_chunks (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        documentId INTEGER NOT NULL,
-                        chunkIndex INTEGER NOT NULL,
-                        content TEXT NOT NULL,
-                        embedding INTEGER,
-                        createdAt TEXT NOT NULL,
-                        FOREIGN KEY (documentId) REFERENCES knowledge_documents(id) ON DELETE CASCADE
-                    )
-                ''')
-                # 行级判断：仅保留 typeof()='integer' 的值，BLOB/NULL 置 NULL。
-                # 这避免了"把向量字节流当作 FAISS ID 复制"的数据损坏，
-                # 同时不丢失已经正确存储为整数的有效 FAISS ID。
-                cursor.execute('''
-                    INSERT INTO knowledge_chunks (id, documentId, chunkIndex, content, embedding, createdAt)
-                    SELECT id, documentId, chunkIndex, content,
-                           CASE WHEN typeof(embedding) = 'integer' THEN embedding ELSE NULL END,
-                           createdAt
-                    FROM knowledge_chunks_old
-                ''')
-                cursor.execute("DROP TABLE knowledge_chunks_old")
-                cursor.execute("RELEASE SAVEPOINT embed_migration")
-                logger.info(
-                    "已将 knowledge_chunks.embedding 从 %s 重建为 INTEGER（保留有效整数，BLOB/NULL 置 NULL）",
-                    embedding_decl_type or "未声明",
-                )
-            except BaseException:
-                cursor.execute("ROLLBACK TO SAVEPOINT embed_migration")
-                cursor.execute("RELEASE SAVEPOINT embed_migration")
-                raise
+        self._init_knowledge_schema(cursor)
 
         # 创建用户表
         cursor.execute('''
@@ -375,52 +252,7 @@ class SQLiteDB:
             )
         ''')
 
-        # 创建训练任务表
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS training_tasks (
-                id TEXT PRIMARY KEY,
-                task_id TEXT UNIQUE,
-                lora_name TEXT NOT NULL DEFAULT '',
-                status TEXT NOT NULL DEFAULT 'pending',
-                progress REAL DEFAULT 0,
-                error_message TEXT DEFAULT '',
-                config_json TEXT DEFAULT '{}',
-                created_at TEXT DEFAULT '',
-                updated_at TEXT DEFAULT ''
-            )
-        ''')
-        # Legacy tables used task_id as the primary key, sometimes with an
-        # additional non-primary id column. Inspect once, then migrate atomically.
-        columns = {row[1]: row for row in cursor.execute("PRAGMA table_info(training_tasks)")}
-        if columns["task_id"][5] == 1 and ("id" not in columns or columns["id"][5] == 0):
-            source_id = "id" if "id" in columns else "task_id"
-            cursor.execute("SAVEPOINT training_task_migration")
-            try:
-                cursor.execute("ALTER TABLE training_tasks RENAME TO training_tasks_old")
-                cursor.execute("""
-                    CREATE TABLE training_tasks (
-                        id TEXT PRIMARY KEY,
-                        task_id TEXT UNIQUE,
-                        lora_name TEXT NOT NULL DEFAULT '',
-                        status TEXT NOT NULL DEFAULT 'pending',
-                        progress REAL DEFAULT 0,
-                        error_message TEXT DEFAULT '',
-                        config_json TEXT DEFAULT '{}',
-                        created_at TEXT DEFAULT '',
-                        updated_at TEXT DEFAULT ''
-                    )
-                """)
-                cursor.execute(f"""
-                    INSERT INTO training_tasks (id, task_id, lora_name, status, progress, error_message, config_json, created_at, updated_at)
-                    SELECT {source_id}, task_id, lora_name, status, progress, error_message, config_json, created_at, updated_at
-                    FROM training_tasks_old
-                """)
-                cursor.execute("DROP TABLE training_tasks_old")
-                cursor.execute("RELEASE SAVEPOINT training_task_migration")
-            except BaseException:
-                cursor.execute("ROLLBACK TO SAVEPOINT training_task_migration")
-                cursor.execute("RELEASE SAVEPOINT training_task_migration")
-                raise
+        self._init_training_task_schema(cursor)
 
         # 创建 Claw 自定义工具表
         cursor.execute('''
@@ -712,79 +544,7 @@ class SQLiteDB:
         # 可空分支作用域：NULL=正史。正史读取过滤 branchId IS NULL。
         self._ensure_column(cursor, "messages", "branchId", "TEXT")
         self._ensure_column(cursor, "messages", "characterId", "TEXT")
-        # One-way compatibility migration: legacy session_settings is folded into
-        # conversations and then removed. Fresh databases never create this table.
-        cursor.execute("SAVEPOINT session_settings_migration")
-        try:
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='session_settings'")
-            if cursor.fetchone():
-                # Older legacy tables may lack the columns introduced later.
-                cursor.execute("PRAGMA table_info(session_settings)")
-                legacy_cols = {row[1] for row in cursor.fetchall()}
-                if "platform" not in legacy_cols:
-                    cursor.execute("ALTER TABLE session_settings ADD COLUMN platform TEXT NOT NULL DEFAULT 'qq'")
-                if "conversationId" not in legacy_cols:
-                    cursor.execute("ALTER TABLE session_settings ADD COLUMN conversationId TEXT")
-                if "conversationType" not in legacy_cols:
-                    cursor.execute("ALTER TABLE session_settings ADD COLUMN conversationType TEXT NOT NULL DEFAULT 'private'")
-                    cursor.execute("UPDATE session_settings SET conversationType = sessionType")
-                if "sessionName" not in legacy_cols:
-                    cursor.execute("ALTER TABLE session_settings ADD COLUMN sessionName TEXT")
-                if "bot_enabled" not in legacy_cols:
-                    cursor.execute("ALTER TABLE session_settings ADD COLUMN bot_enabled INTEGER NOT NULL DEFAULT 1")
-                if "updated_at" not in legacy_cols:
-                    cursor.execute("ALTER TABLE session_settings ADD COLUMN updated_at TEXT")
-                migrated_at = datetime.now().isoformat()
-                cursor.execute('''
-                    INSERT OR IGNORE INTO conversations (
-                        platform, conversationId, conversationType, displayName,
-                        botEnabled, replyPolicy, createdAt, updatedAt
-                    )
-                    SELECT
-                        COALESCE(platform, 'qq'),
-                        COALESCE(conversationId, sessionId),
-                        COALESCE(conversationType, sessionType, 'private'),
-                        COALESCE(NULLIF(sessionName, ''), sessionId),
-                        bot_enabled,
-                        'default',
-                        COALESCE(updated_at, ?),
-                        COALESCE(updated_at, ?)
-                    FROM session_settings
-                ''', (migrated_at, migrated_at))
-                # SQLite does not allow DO UPDATE with INSERT...SELECT...FROM;
-                # refresh existing conversations so the latest legacy state wins.
-                cursor.execute('''
-                    UPDATE conversations
-                    SET
-                        botEnabled = COALESCE((SELECT s.bot_enabled FROM session_settings s
-                                              WHERE COALESCE(s.platform, 'qq') = conversations.platform
-                                                AND COALESCE(s.conversationId, s.sessionId) = conversations.conversationId
-                                                AND COALESCE(s.conversationType, s.sessionType, 'private') = conversations.conversationType),
-                                             conversations.botEnabled),
-                        displayName = COALESCE((SELECT COALESCE(NULLIF(s.sessionName, ''), s.sessionId) FROM session_settings s
-                                              WHERE COALESCE(s.platform, 'qq') = conversations.platform
-                                                AND COALESCE(s.conversationId, s.sessionId) = conversations.conversationId
-                                                AND COALESCE(s.conversationType, s.sessionType, 'private') = conversations.conversationType),
-                                             conversations.displayName),
-                        updatedAt = COALESCE((SELECT s.updated_at FROM session_settings s
-                                             WHERE COALESCE(s.platform, 'qq') = conversations.platform
-                                               AND COALESCE(s.conversationId, s.sessionId) = conversations.conversationId
-                                               AND COALESCE(s.conversationType, s.sessionType, 'private') = conversations.conversationType),
-                                             conversations.updatedAt)
-                    WHERE EXISTS (
-                        SELECT 1 FROM session_settings s
-                        WHERE COALESCE(s.platform, 'qq') = conversations.platform
-                          AND COALESCE(s.conversationId, s.sessionId) = conversations.conversationId
-                          AND COALESCE(s.conversationType, s.sessionType, 'private') = conversations.conversationType
-                    )
-                ''')
-                cursor.execute("DROP TABLE session_settings")
-                logger.info("已迁移并删除旧的 session_settings 表")
-        except BaseException:
-            cursor.execute("ROLLBACK TO SAVEPOINT session_settings_migration")
-            cursor.execute("RELEASE SAVEPOINT session_settings_migration")
-            raise
-        cursor.execute("RELEASE SAVEPOINT session_settings_migration")
+        self._migrate_legacy_session_settings(cursor)
 
         conn.commit()
 
@@ -836,7 +596,153 @@ class SQLiteDB:
         for statement in SOURCE_INDEX_STATEMENTS:
             cursor.execute(statement)
 
+        self._init_character_chat_schema(conn, cursor)
+
         # 初始化LoRA数据（如果表为空）
+        cursor.execute('SELECT COUNT(*) FROM loras')
+        if cursor.fetchone()[0] == 0:
+            self._init_default_loras(cursor)
+        else:
+            # 清理无对应文件的旧记录（如硬编码的 hutao_style）
+            self._cleanup_stale_loras(cursor)
+            # 同步：扫描 loras/ 目录，自动注册新增的 LoRA
+            self._sync_loras_from_disk(cursor)
+
+        # 初始化配置数据（如果表为空）
+        cursor.execute('SELECT COUNT(*) FROM config')
+        if cursor.fetchone()[0] == 0:
+            self._init_default_config(cursor)
+
+        conn.commit()
+        logger.info(f"✅ 数据库初始化完成: {self.db_path}")
+
+    def _init_knowledge_schema(self, cursor):
+        # 创建知识库表
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS knowledge_bases (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                description TEXT DEFAULT '',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+        ''')
+
+        # 创建知识库文件夹表
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS knowledge_folders (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                knowledge_base_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT DEFAULT '',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (knowledge_base_id) REFERENCES knowledge_bases(id) ON DELETE CASCADE,
+                UNIQUE(knowledge_base_id, name)
+            )
+        ''')
+
+        # 创建知识库文档表
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS knowledge_documents (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                content TEXT NOT NULL,
+                category TEXT NOT NULL DEFAULT '未分类',
+                knowledge_base_id INTEGER,
+                folder_id INTEGER,
+                sourceType TEXT NOT NULL DEFAULT 'text',
+                sourceUrl TEXT,
+                fileType TEXT,
+                fileSize INTEGER,
+                chunkCount INTEGER DEFAULT 0,
+                createdAt TEXT NOT NULL,
+                updatedAt TEXT NOT NULL,
+                FOREIGN KEY (knowledge_base_id) REFERENCES knowledge_bases(id) ON DELETE SET NULL,
+                FOREIGN KEY (folder_id) REFERENCES knowledge_folders(id) ON DELETE SET NULL
+            )
+        ''')
+
+        self._ensure_column(cursor, "knowledge_documents", "category", "TEXT NOT NULL DEFAULT '未分类'")
+        self._ensure_column(cursor, "knowledge_documents", "knowledge_base_id", "INTEGER REFERENCES knowledge_bases(id) ON DELETE SET NULL")
+        self._ensure_column(cursor, "knowledge_documents", "folder_id", "INTEGER REFERENCES knowledge_folders(id) ON DELETE SET NULL")
+
+        # 创建知识库向量表（用于RAG）
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS knowledge_chunks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                documentId INTEGER NOT NULL,
+                chunkIndex INTEGER NOT NULL,
+                content TEXT NOT NULL,
+                embedding INTEGER,
+                createdAt TEXT NOT NULL,
+                FOREIGN KEY (documentId) REFERENCES knowledge_documents(id) ON DELETE CASCADE
+            )
+        ''')
+        # 老库迁移：将 embedding 列从 BLOB 类型重建为 INTEGER（SQLite 无法直接
+        # 修改列类型，需要重建表）。
+        #
+        # 旧实现用 `SELECT typeof(embedding) FROM knowledge_chunks LIMIT 1` 判断，
+        # 但 typeof() 返回的是"某一行实际存储的值的类型"而非"列声明类型"：
+        #   - 空表 → fetchone() 返回 None，跳过迁移（但列仍是 BLOB）
+        #   - 首行 embedding 为 NULL → typeof 返回 'null'，跳过迁移
+        #   - 首行恰好存了整数 → typeof 返回 'integer'，跳过迁移
+        #   - 只有首行恰好是 BLOB 字节流时才迁移，概率极低。
+        # 正确做法是用 PRAGMA table_info 读取列的声明类型 dtd_type。
+        #
+        # 数据保留策略：旧 BLOB 列可能保存了向量字节流（pickle/np.tobytes()），
+        # 也可能在新版代码运行后保存了有效的 FAISS ID 整数。用 CASE 在行级
+        # 判断 typeof()，仅保留整数，BLOB/NULL 置 NULL 让上层重建向量索引。
+        #
+        # 异常处理：用 SAVEPOINT 包裹表重建，失败时回滚到保存点，避免留下
+        # 新空表和 knowledge_chunks_old 残留导致旧数据不可见。
+        cursor.execute("PRAGMA table_info(knowledge_chunks)")
+        columns = cursor.fetchall()
+        # columns: (cid, name, type, notnull, dflt_value, pk)
+        embedding_decl_type = ""
+        for col in columns:
+            if col[1] == "embedding":
+                embedding_decl_type = (col[2] or "").upper()
+                break
+
+        needs_migration = embedding_decl_type in ("", "BLOB")
+        if needs_migration:
+            cursor.execute("SAVEPOINT embed_migration")
+            try:
+                cursor.execute("ALTER TABLE knowledge_chunks RENAME TO knowledge_chunks_old")
+                cursor.execute('''
+                    CREATE TABLE knowledge_chunks (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        documentId INTEGER NOT NULL,
+                        chunkIndex INTEGER NOT NULL,
+                        content TEXT NOT NULL,
+                        embedding INTEGER,
+                        createdAt TEXT NOT NULL,
+                        FOREIGN KEY (documentId) REFERENCES knowledge_documents(id) ON DELETE CASCADE
+                    )
+                ''')
+                # 行级判断：仅保留 typeof()='integer' 的值，BLOB/NULL 置 NULL。
+                # 这避免了"把向量字节流当作 FAISS ID 复制"的数据损坏，
+                # 同时不丢失已经正确存储为整数的有效 FAISS ID。
+                cursor.execute('''
+                    INSERT INTO knowledge_chunks (id, documentId, chunkIndex, content, embedding, createdAt)
+                    SELECT id, documentId, chunkIndex, content,
+                           CASE WHEN typeof(embedding) = 'integer' THEN embedding ELSE NULL END,
+                           createdAt
+                    FROM knowledge_chunks_old
+                ''')
+                cursor.execute("DROP TABLE knowledge_chunks_old")
+                cursor.execute("RELEASE SAVEPOINT embed_migration")
+                logger.info(
+                    "已将 knowledge_chunks.embedding 从 %s 重建为 INTEGER（保留有效整数，BLOB/NULL 置 NULL）",
+                    embedding_decl_type or "未声明",
+                )
+            except BaseException:
+                cursor.execute("ROLLBACK TO SAVEPOINT embed_migration")
+                cursor.execute("RELEASE SAVEPOINT embed_migration")
+                raise
+
+    def _init_character_chat_schema(self, conn, cursor):
         # Compile the shared schema so both development SQLite and PostgreSQL
         # use the same character version constraints.
         from sqlalchemy.dialects.sqlite import dialect
@@ -916,22 +822,131 @@ class SQLiteDB:
             cursor.execute(CREATE_SOURCE_REVOCATIONS)
             cursor.execute(BACKFILL_SOURCE_REVOCATIONS)
         cursor.execute("UPDATE character_source_corpora SET index_status='completed' WHERE index_receipt_json IS NOT NULL AND index_status='pending'")
-        cursor.execute('SELECT COUNT(*) FROM loras')
-        if cursor.fetchone()[0] == 0:
-            self._init_default_loras(cursor)
-        else:
-            # 清理无对应文件的旧记录（如硬编码的 hutao_style）
-            self._cleanup_stale_loras(cursor)
-            # 同步：扫描 loras/ 目录，自动注册新增的 LoRA
-            self._sync_loras_from_disk(cursor)
 
-        # 初始化配置数据（如果表为空）
-        cursor.execute('SELECT COUNT(*) FROM config')
-        if cursor.fetchone()[0] == 0:
-            self._init_default_config(cursor)
+    @staticmethod
+    def _init_training_task_schema(cursor):
+        # 创建训练任务表
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS training_tasks (
+                id TEXT PRIMARY KEY,
+                task_id TEXT UNIQUE,
+                lora_name TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'pending',
+                progress REAL DEFAULT 0,
+                error_message TEXT DEFAULT '',
+                config_json TEXT DEFAULT '{}',
+                created_at TEXT DEFAULT '',
+                updated_at TEXT DEFAULT ''
+            )
+        ''')
+        # Legacy tables used task_id as the primary key, sometimes with an
+        # additional non-primary id column. Inspect once, then migrate atomically.
+        columns = {row[1]: row for row in cursor.execute("PRAGMA table_info(training_tasks)")}
+        if columns["task_id"][5] == 1 and ("id" not in columns or columns["id"][5] == 0):
+            source_id = "id" if "id" in columns else "task_id"
+            cursor.execute("SAVEPOINT training_task_migration")
+            try:
+                cursor.execute("ALTER TABLE training_tasks RENAME TO training_tasks_old")
+                cursor.execute("""
+                    CREATE TABLE training_tasks (
+                        id TEXT PRIMARY KEY,
+                        task_id TEXT UNIQUE,
+                        lora_name TEXT NOT NULL DEFAULT '',
+                        status TEXT NOT NULL DEFAULT 'pending',
+                        progress REAL DEFAULT 0,
+                        error_message TEXT DEFAULT '',
+                        config_json TEXT DEFAULT '{}',
+                        created_at TEXT DEFAULT '',
+                        updated_at TEXT DEFAULT ''
+                    )
+                """)
+                cursor.execute(f"""
+                    INSERT INTO training_tasks (id, task_id, lora_name, status, progress, error_message, config_json, created_at, updated_at)
+                    SELECT {source_id}, task_id, lora_name, status, progress, error_message, config_json, created_at, updated_at
+                    FROM training_tasks_old
+                """)
+                cursor.execute("DROP TABLE training_tasks_old")
+                cursor.execute("RELEASE SAVEPOINT training_task_migration")
+            except BaseException:
+                cursor.execute("ROLLBACK TO SAVEPOINT training_task_migration")
+                cursor.execute("RELEASE SAVEPOINT training_task_migration")
+                raise
 
-        conn.commit()
-        logger.info(f"✅ 数据库初始化完成: {self.db_path}")
+    @staticmethod
+    def _migrate_legacy_session_settings(cursor):
+        # One-way compatibility migration: legacy session_settings is folded into
+        # conversations and then removed. Fresh databases never create this table.
+        cursor.execute("SAVEPOINT session_settings_migration")
+        try:
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='session_settings'")
+            if cursor.fetchone():
+                # Older legacy tables may lack the columns introduced later.
+                cursor.execute("PRAGMA table_info(session_settings)")
+                legacy_cols = {row[1] for row in cursor.fetchall()}
+                if "platform" not in legacy_cols:
+                    cursor.execute("ALTER TABLE session_settings ADD COLUMN platform TEXT NOT NULL DEFAULT 'qq'")
+                if "conversationId" not in legacy_cols:
+                    cursor.execute("ALTER TABLE session_settings ADD COLUMN conversationId TEXT")
+                if "conversationType" not in legacy_cols:
+                    cursor.execute("ALTER TABLE session_settings ADD COLUMN conversationType TEXT NOT NULL DEFAULT 'private'")
+                    cursor.execute("UPDATE session_settings SET conversationType = sessionType")
+                if "sessionName" not in legacy_cols:
+                    cursor.execute("ALTER TABLE session_settings ADD COLUMN sessionName TEXT")
+                if "bot_enabled" not in legacy_cols:
+                    cursor.execute("ALTER TABLE session_settings ADD COLUMN bot_enabled INTEGER NOT NULL DEFAULT 1")
+                if "updated_at" not in legacy_cols:
+                    cursor.execute("ALTER TABLE session_settings ADD COLUMN updated_at TEXT")
+                migrated_at = datetime.now().isoformat()
+                cursor.execute('''
+                    INSERT OR IGNORE INTO conversations (
+                        platform, conversationId, conversationType, displayName,
+                        botEnabled, replyPolicy, createdAt, updatedAt
+                    )
+                    SELECT
+                        COALESCE(platform, 'qq'),
+                        COALESCE(conversationId, sessionId),
+                        COALESCE(conversationType, sessionType, 'private'),
+                        COALESCE(NULLIF(sessionName, ''), sessionId),
+                        bot_enabled,
+                        'default',
+                        COALESCE(updated_at, ?),
+                        COALESCE(updated_at, ?)
+                    FROM session_settings
+                ''', (migrated_at, migrated_at))
+                # SQLite does not allow DO UPDATE with INSERT...SELECT...FROM;
+                # refresh existing conversations so the latest legacy state wins.
+                cursor.execute('''
+                    UPDATE conversations
+                    SET
+                        botEnabled = COALESCE((SELECT s.bot_enabled FROM session_settings s
+                                              WHERE COALESCE(s.platform, 'qq') = conversations.platform
+                                                AND COALESCE(s.conversationId, s.sessionId) = conversations.conversationId
+                                                AND COALESCE(s.conversationType, s.sessionType, 'private') = conversations.conversationType),
+                                             conversations.botEnabled),
+                        displayName = COALESCE((SELECT COALESCE(NULLIF(s.sessionName, ''), s.sessionId) FROM session_settings s
+                                              WHERE COALESCE(s.platform, 'qq') = conversations.platform
+                                                AND COALESCE(s.conversationId, s.sessionId) = conversations.conversationId
+                                                AND COALESCE(s.conversationType, s.sessionType, 'private') = conversations.conversationType),
+                                             conversations.displayName),
+                        updatedAt = COALESCE((SELECT s.updated_at FROM session_settings s
+                                             WHERE COALESCE(s.platform, 'qq') = conversations.platform
+                                               AND COALESCE(s.conversationId, s.sessionId) = conversations.conversationId
+                                               AND COALESCE(s.conversationType, s.sessionType, 'private') = conversations.conversationType),
+                                             conversations.updatedAt)
+                    WHERE EXISTS (
+                        SELECT 1 FROM session_settings s
+                        WHERE COALESCE(s.platform, 'qq') = conversations.platform
+                          AND COALESCE(s.conversationId, s.sessionId) = conversations.conversationId
+                          AND COALESCE(s.conversationType, s.sessionType, 'private') = conversations.conversationType
+                    )
+                ''')
+                cursor.execute("DROP TABLE session_settings")
+                logger.info("已迁移并删除旧的 session_settings 表")
+        except BaseException:
+            cursor.execute("ROLLBACK TO SAVEPOINT session_settings_migration")
+            cursor.execute("RELEASE SAVEPOINT session_settings_migration")
+            raise
+        cursor.execute("RELEASE SAVEPOINT session_settings_migration")
 
     def _ensure_column(self, cursor, table: str, column: str, definition: str):
         cursor.execute(f"PRAGMA table_info({table})")
