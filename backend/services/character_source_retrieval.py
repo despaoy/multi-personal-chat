@@ -9,9 +9,14 @@ import httpx
 
 from db.errors import RevisionConflictError
 from inference.generation_request import RetrievalResult
-from infra.environment import read_bool
+from infra.environment import read_bool, read_positive_float
 from knowledge.character_search import CharacterSearchIndex, CharacterSearchScope
-from knowledge.character_source_ranking import SOURCE_CANDIDATE_LIMIT, expand_source_context, rank_verified_sources
+from knowledge.character_source_ranking import (
+    SOURCE_CANDIDATE_LIMIT,
+    expand_source_context,
+    rank_source_candidates,
+    rerank_source_model,
+)
 from knowledge.evidence_packets import document_evidence_packets
 from repositories.character_chat import CharacterChatRepository
 from repositories.character_sources import CharacterSourceRepository, SourceIndexNotReadyError
@@ -27,7 +32,7 @@ def _unavailable(request):
     ))
 
 
-async def retrieve_source_context(request, session, *, database, index, provider, rerank=None):
+async def retrieve_source_context(request, session, *, database, index, provider, rerank=None, rerank_timeout=None):
     corpus_id = session.get('source_corpus_id')
     if not corpus_id:
         return request
@@ -63,7 +68,7 @@ async def retrieve_source_context(request, session, *, database, index, provider
         return _unavailable(request)
     documents = await asyncio.to_thread(repo.verify_candidates, owner, session['character_id'],
                                         session['character_revision'], corpus_id, candidates)
-    ranked = await asyncio.to_thread(rank_verified_sources, request.message, documents, rerank=rerank)
+    ranked = await rank_source_candidates(request.message, documents, rerank=rerank, timeout=rerank_timeout)
     corpus = await asyncio.to_thread(validate)
     documents = await asyncio.to_thread(expand_source_context, ranked, corpus)
     packets = document_evidence_packets(documents)
@@ -90,15 +95,11 @@ async def retrieve_configured_sources(request, session, *, database):
         raise ValueError('CHARACTER_SEARCH_URL is required for original-source retrieval')
     require_local_endpoint(session, url)
     provider = get_default_embedding_provider()
-    def model_rerank(query, documents):
-        from knowledge.reranker import get_reranker
-
-        return get_reranker().rerank(query, documents, top_k=len(documents))
-
-    rerank = model_rerank if read_bool(os.environ, 'RERANKER_ENABLED') else None
+    rerank = rerank_source_model if read_bool(os.environ, 'RERANKER_ENABLED') else None
+    timeout = read_positive_float(os.environ, 'CHARACTER_SOURCE_RERANK_TIMEOUT_SECONDS', 25.0) if rerank else None
     username, password = os.getenv('CHARACTER_SEARCH_USERNAME'), os.getenv('CHARACTER_SEARCH_PASSWORD')
     async with httpx.AsyncClient(base_url=url, auth=(username, password or '') if username else None,
                                  timeout=30, trust_env=False, follow_redirects=False) as client:
         index = CharacterSearchIndex(client, os.getenv('CHARACTER_SEARCH_INDEX', 'character-sources-v1'), provider.dimension)
         return await retrieve_source_context(request, session, database=database, index=index, provider=provider,
-                                             rerank=rerank)
+                                             rerank=rerank, rerank_timeout=timeout)

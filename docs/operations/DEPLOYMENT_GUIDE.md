@@ -58,6 +58,7 @@ chmod 600 backend/.env
 - `EMBEDDING_MODEL_PATH="$MULTIPERSONAL_LAB_ROOT"/runtime/models/paraphrase-multilingual-MiniLM-L12-v2`
 - `RERANKER_MODEL_PATH="$MULTIPERSONAL_LAB_ROOT"/runtime/models/bge-reranker-v2-m3`
 - `RERANKER_DEVICE=auto` 默认按可用设备选择。需要把重排留在 CPU 时设为 `cpu`，也可显式指定 `cuda:0` 等设备。
+- 原作资料启用模型重排时，每个 API 进程最多同时执行两次。`CHARACTER_SOURCE_RERANK_TIMEOUT_SECONDS` 默认 25 秒，限制这一轮等待模型重排的时间。名额已满或超时时，按已核实原文的字面覆盖率排序并继续回复。
 - `CHARACTER_RAG_INDEX_ROOT="$MULTIPERSONAL_LAB_ROOT"/runtime/rag/character_knowledge_index_v3`
 - `CHARACTER_RAG_ABSTAIN_THRESHOLD=0.25`
 

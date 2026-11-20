@@ -1,7 +1,9 @@
 """Second-stage ranking and bounded context for verified character sources."""
 
+import asyncio
 import logging
 from hashlib import sha256
+from threading import BoundedSemaphore
 
 from knowledge.retrieval_core.tokenization import segment
 
@@ -10,20 +12,47 @@ SOURCE_EVIDENCE_LIMIT = 8
 _CONTEXT_LINES = 2
 _CONTEXT_CHARS = 1800
 logger = logging.getLogger(__name__)
+_model_slots = BoundedSemaphore(2)
+
+
+def rerank_source_model(query, documents):
+    if not _model_slots.acquire(blocking=False):
+        return None
+    try:
+        from knowledge.reranker import get_reranker
+
+        return get_reranker().rerank(query, documents, top_k=len(documents))
+    finally:
+        # Keep the slot until native inference finishes, even after a request stops waiting.
+        _model_slots.release()
+
+
+async def rank_source_candidates(query, documents, *, rerank=None, timeout=None):
+    async def rank(method):
+        return await asyncio.to_thread(rank_verified_sources, query, documents, rerank=method)
+
+    if rerank is None or timeout is None:
+        return await rank(rerank)
+    try:
+        return await asyncio.wait_for(rank(rerank), timeout)
+    except TimeoutError:
+        logger.warning("Character source rerank exceeded its request time budget")
+        return await rank(None)
 
 
 def rank_verified_sources(query, documents, *, rerank=None):
     if not documents:
         return []
     if rerank is not None:
-        by_id = {document["id"]: document for document in documents}
         try:
             ranked = rerank(query, [dict(document) for document in documents])
-            order = [document["id"] for document in ranked]
-            if len(order) != len(documents) or set(order) != by_id.keys():
-                raise ValueError("Source reranker returned a different candidate set")
-            # Reordering does not alter the authoritative text or lineage.
-            return [by_id[identity] for identity in order[:SOURCE_EVIDENCE_LIMIT]]
+            if ranked is not None:
+                by_id = {document["id"]: document for document in documents}
+                order = [document["id"] for document in ranked]
+                if len(order) != len(documents) or set(order) != by_id.keys():
+                    raise ValueError("Source reranker returned a different candidate set")
+                # Reordering does not alter the authoritative text or lineage.
+                return [by_id[identity] for identity in order[:SOURCE_EVIDENCE_LIMIT]]
         except Exception as exc:
             logger.warning("Character source rerank unavailable type=%s", type(exc).__name__)
 

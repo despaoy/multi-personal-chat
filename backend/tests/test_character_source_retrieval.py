@@ -1,6 +1,7 @@
 import asyncio
 import re
 from functools import partial
+from threading import BoundedSemaphore, Event
 
 import httpx
 import pytest
@@ -9,6 +10,7 @@ from character.library import CharacterSettings
 from db.database import SQLiteDB
 from db.errors import RevisionConflictError
 from inference.generation_request import GenerationRequest, generate_character_response
+from knowledge.character_source_ranking import rank_source_candidates, rerank_source_model
 from repositories.character_chat import CharacterChatRepository
 from repositories.character_library import CharacterNotFoundError
 from repositories.character_sources import CharacterSourceRepository
@@ -25,6 +27,43 @@ class Provider:
 
     def embed_query(self, message):
         return [1, 0, 0]
+
+
+def test_timed_out_source_rerank_keeps_its_slot_without_blocking_following_requests(monkeypatch):
+    from knowledge import character_source_ranking, reranker
+
+    started = Event()
+    resume = Event()
+    calls = []
+
+    class Model:
+        def rerank(self, query, documents, top_k):
+            calls.append(query)
+            started.set()
+            assert resume.wait(timeout=5)
+            return list(reversed(documents))[:top_k]
+
+    monkeypatch.setattr(reranker, "get_reranker", Model)
+    monkeypatch.setattr(character_source_ranking, "_model_slots", BoundedSemaphore(1))
+    literal = {"id": "literal", "title": "灯塔", "content": "小满送信到灯塔"}
+    alternate = {"id": "alternate", "title": "车站", "content": "列车出发"}
+    rows = [literal, alternate]
+
+    async def exercise():
+        first = asyncio.create_task(rank_source_candidates("灯塔", rows, rerank=rerank_source_model, timeout=0.2))
+        try:
+            assert await asyncio.to_thread(started.wait, 2)
+            assert (await first)[0] == literal
+            second = await rank_source_candidates("小满", rows, rerank=rerank_source_model, timeout=0.2)
+            assert second[0] == literal
+            assert calls == ["灯塔"]
+        finally:
+            resume.set()
+
+    asyncio.run(exercise())
+    recovered = asyncio.run(rank_source_candidates("灯塔", rows, rerank=rerank_source_model, timeout=1))
+    assert recovered[0] == alternate
+    assert calls == ["灯塔", "灯塔"]
 
 
 def test_unfinished_index_allows_reply_without_source_admission(tmp_path):
