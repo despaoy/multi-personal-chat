@@ -861,6 +861,7 @@ class SQLiteDB:
             migrate_baselines(cursor.execute)
 
         self._ensure_column(cursor, 'character_library', 'publication_id', 'TEXT')
+        self._ensure_column(cursor, 'character_library', 'sharing_epoch', 'BIGINT NOT NULL DEFAULT 0')
         self._ensure_column(cursor, 'character_library', 'source_publication_id', 'TEXT')
         cursor.execute("INSERT OR IGNORE INTO character_publications (id,character_id,character_revision,settings_json,sources_json,created_at) "
                        "SELECT 'legacy-' || c.id || '-' || CAST(c.shared_revision AS TEXT),c.id,c.shared_revision,v.settings_json,'[]',c.updated_at "

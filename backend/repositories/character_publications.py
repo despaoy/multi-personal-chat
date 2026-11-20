@@ -19,12 +19,22 @@ def now():
     return datetime.now(timezone.utc).isoformat()
 
 
+def publication_digest(payload):
+    return hashlib.sha256(encode(payload).encode()).hexdigest()
+
+
 class CharacterPublicationRepository:
     def __init__(self, characters):
         self.characters = characters
         self.db = characters.database
 
     def preview(self, owner, character_id, revision, corpus_id=None, source_ids=None):
+        payload, current = self._snapshot(owner, character_id, revision, corpus_id, source_ids)
+        # Keep the immutable publication identity separate from confirmation authority.
+        preview_id = publication_digest([publication_digest(payload), current['sharing_epoch']])
+        return {**payload, 'preview_id': preview_id, 'previous_publication_id': current['publication_id']}
+
+    def _snapshot(self, owner, character_id, revision, corpus_id, source_ids):
         from repositories.character_sources import CharacterSourceRepository
 
         character = self.characters.get(owner, character_id)
@@ -45,31 +55,31 @@ class CharacterPublicationRepository:
                 raise CharacterNotFoundError('所选原文不存在')
         payload = {'character_id': character_id, 'revision': revision, 'corpus_id': corpus_id,
                    'settings': character['settings'], 'sources': sources}
-        return {**payload, 'preview_id': hashlib.sha256(encode(payload).encode()).hexdigest(),
-                'previous_publication_id': character['publication_id']}
+        return payload, character
 
     def publish(self, owner, character_id, revision, enabled, corpus_id=None, source_ids=None,
                 preview_id=None, previous_publication_id=None):
-        current = self.characters.get(owner, character_id)
         if not enabled:
+            self.characters.get(owner, character_id)
             self.db.revision_transaction([(
-                'UPDATE character_library SET share_token=NULL,shared_revision=NULL,publication_id=NULL '
+                'UPDATE character_library SET share_token=NULL,shared_revision=NULL,publication_id=NULL,'
+                'sharing_epoch=sharing_epoch+1 '
                 'WHERE id=:id AND owner_user_id=:owner AND revision=:revision',
                 {'id': character_id, 'owner': owner, 'revision': revision}, 1)])
             return {'share_token': None, 'shared_revision': None, 'publication_id': None}
-        preview = self.preview(owner, character_id, revision, corpus_id, source_ids)
-        if preview_id is not None and preview['preview_id'] != preview_id:
+        payload, current = self._snapshot(owner, character_id, revision, corpus_id, source_ids)
+        publication_id = publication_digest(payload)
+        epoch = current['sharing_epoch']
+        if preview_id is not None and publication_digest([publication_id, epoch]) != preview_id:
             raise RevisionConflictError()
-        # Exact content identity makes a retried publication idempotent.
-        publication_id = preview['preview_id']
         expected = previous_publication_id if preview_id is not None else current['publication_id']
         token = current['share_token'] or secrets.token_urlsafe(32)
         params = {'id': character_id, 'owner': owner, 'revision': revision, 'token': token,
-                  'publication': publication_id, 'previous': expected, 'corpus': corpus_id,
-                  'settings': encode(preview['settings']), 'sources': encode(preview['sources']), 'now': now()}
+                  'publication': publication_id, 'previous': expected, 'corpus': corpus_id, 'epoch': epoch,
+                  'settings': encode(payload['settings']), 'sources': encode(payload['sources']), 'now': now()}
         statements = [(
             'UPDATE character_library SET share_token=COALESCE(share_token,:token),shared_revision=:revision,publication_id=:publication '
-            'WHERE id=:id AND owner_user_id=:owner AND revision=:revision '
+            'WHERE id=:id AND owner_user_id=:owner AND revision=:revision AND sharing_epoch=:epoch '
             'AND (publication_id=:previous OR (publication_id IS NULL AND :previous IS NULL) OR publication_id=:publication)', params, 1)]
         if corpus_id:
             statements.append(self._corpus_guard(corpus_id, character_id, owner))
@@ -79,7 +89,8 @@ class CharacterPublicationRepository:
             'WHERE NOT EXISTS (SELECT 1 FROM character_publications WHERE id=:publication)', params, None))
         self.db.revision_transaction(statements)
         published = self.characters.get(owner, character_id)
-        if published['publication_id'] != publication_id or not published['share_token']:
+        if (published['publication_id'] != publication_id or published['sharing_epoch'] != epoch
+                or not published['share_token']):
             raise RevisionConflictError()
         return {'share_token': published['share_token'], 'shared_revision': revision, 'publication_id': publication_id}
 

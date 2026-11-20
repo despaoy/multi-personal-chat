@@ -57,6 +57,26 @@ def test_postgres_concurrent_import_confirmation_creates_one_character(database)
     assert len(repo.list(owner)) == 1
 
 
+def test_postgres_closing_character_share_rejects_old_confirmations(database):
+    from repositories.character_library import CharacterLibraryRepository
+
+    repo = CharacterLibraryRepository(database)
+    owner = uuid.uuid4().hex
+    character = repo.create(owner, CharacterSettings(name="角色", persona="谨慎", greeting="你好"))["id"]
+
+    first_preview = repo.publish_preview(owner, character, 1)
+    first = repo.publish(owner, character, 1, True, preview_id=first_preview["preview_id"])
+    repo.publish(owner, character, 1, False)
+    with pytest.raises(RevisionConflictError):
+        repo.publish(owner, character, 1, True, preview_id=first_preview["preview_id"])
+    assert repo.get(owner, character)["share_token"] is None
+
+    new_preview = repo.publish_preview(owner, character, 1)
+    new = repo.publish(owner, character, 1, True, preview_id=new_preview["preview_id"])
+    assert new["publication_id"] == first["publication_id"]
+    assert new["share_token"] != first["share_token"]
+
+
 def test_postgres_production_startup_requires_current_migration_head():
     from sqlalchemy import text
 

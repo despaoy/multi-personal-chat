@@ -49,6 +49,7 @@ class CharacterLibraryEntry(Base):
     share_token: Mapped[Optional[str]] = mapped_column(Text, unique=True)
     shared_revision: Mapped[Optional[int]] = mapped_column(Integer)
     publication_id: Mapped[str | None] = mapped_column(Text)
+    sharing_epoch: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("0"))
     source_publication_id: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[str] = mapped_column(Text, nullable=False)
     updated_at: Mapped[str] = mapped_column(Text, nullable=False)

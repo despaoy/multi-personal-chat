@@ -119,6 +119,57 @@ def test_publication_preview_tampering_and_stale_confirmation(env):
         library.publish('author', author['id'], 1, True, corpus['id'], ['public'], preview['preview_id'], None)
 
 
+def test_closing_share_invalidates_earlier_http_confirmation(env):
+    library, _, author, corpus = env
+    app = FastAPI()
+    app.include_router(router)
+    app.dependency_overrides[get_current_user] = lambda: {'user_id': 'author'}
+    app.dependency_overrides[repository] = lambda: library
+    url = f"/api/character-library/{author['id']}/sharing"
+    selection = {'revision': 1, 'corpus_id': corpus['id'], 'source_ids': ['public']}
+
+    with TestClient(app) as client:
+        def confirmation():
+            response = client.post(url + '-preview', json=selection)
+            assert response.status_code == 200
+            preview = response.json()
+            return {**selection, 'enabled': True, 'preview_id': preview['preview_id'],
+                    'previous_publication_id': preview['previous_publication_id']}
+
+        original = confirmation()
+        first = client.put(url, json=original)
+        assert first.status_code == 200
+        assert client.put(url, json=original).json() == first.json()
+        assert client.put(url, json={'revision': 1, 'enabled': False}).status_code == 200
+        assert client.put(url, json=original).status_code == 409
+        assert library.get('author', author['id'])['share_token'] is None
+
+        reopened = client.put(url, json=confirmation())
+        assert reopened.status_code == 200
+        assert reopened.json()['publication_id'] == first.json()['publication_id']
+        assert reopened.json()['share_token'] != first.json()['share_token']
+        assert client.put(url, json=original).status_code == 409
+
+
+def test_share_closed_after_preview_check_cannot_be_reopened_by_inflight_publish(env, monkeypatch):
+    library, _, author, corpus = env
+    character = author['id']
+    selected = (corpus['id'], ['public'])
+    preview = library.publish_preview('author', character, 1, *selected)
+    run_transaction = library.database.revision_transaction
+
+    def close_then_publish(statements):
+        monkeypatch.setattr(library.database, 'revision_transaction', run_transaction)
+        library.publish('author', character, 1, False)
+        return run_transaction(statements)
+
+    monkeypatch.setattr(library.database, 'revision_transaction', close_then_publish)
+    with pytest.raises(RevisionConflictError):
+        library.publish('author', character, 1, True, *selected, preview['preview_id'], None)
+    assert library.get('author', character)['share_token'] is None
+    assert library.database.execute_sql('SELECT id FROM character_publications') == []
+
+
 @pytest.mark.parametrize('action', ['close', 'revoke'])
 def test_revocation_denies_new_read_and_copy_but_keeps_completed_copy(env, action):
     library, sources, author, corpus = env
@@ -440,14 +491,14 @@ def test_concurrent_identical_publications_keep_one_valid_token(env, monkeypatch
 
     library, _, author, _ = env
     barrier = Barrier(2)
-    original = CharacterPublicationRepository.preview
+    original = CharacterPublicationRepository._snapshot
 
     def simultaneous_preview(self, *args, **kwargs):
         result = original(self, *args, **kwargs)
         barrier.wait(timeout=10)
         return result
 
-    monkeypatch.setattr(CharacterPublicationRepository, 'preview', simultaneous_preview)
+    monkeypatch.setattr(CharacterPublicationRepository, '_snapshot', simultaneous_preview)
 
     def do_publish(_):
         try:
