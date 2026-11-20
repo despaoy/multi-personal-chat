@@ -63,13 +63,18 @@ async def test_restore_keeps_chat_erasure_receipts_and_purges_older_session_rows
 
 
 @pytest.mark.asyncio
-async def test_restore_does_not_regrant_old_outreach_consent(tmp_path):
+async def test_restore_does_not_regrant_old_outreach_consent(tmp_path, monkeypatch):
+    from test_character_chat_push import device_keys
+
     from character.library import CharacterSettings
     from db.database import SQLiteDB
+    from repositories import character_chat_push
     from repositories.character_chat_proactive import CharacterChatProactiveRepository
+    from repositories.character_chat_push import CharacterChatPushRepository
 
     path = tmp_path / "restore-consent.sqlite"
     db = SQLiteDB(path)
+    monkeypatch.setattr(character_chat_push, "time", lambda: 100)
     try:
         repo = CharacterChatProactiveRepository(db)
         character = repo.chats.characters.create("1", CharacterSettings(name="fixture", persona="fixture", greeting="hi"))
@@ -77,6 +82,9 @@ async def test_restore_does_not_regrant_old_outreach_consent(tmp_path):
         identity = session["id"]
         settings = dict(cadence_hours=24, timezone="UTC", quiet_start=None, quiet_end=None)
         repo.set_policy("1", identity, 0, enabled=True, inactivity_hours=72, **settings)
+        CharacterChatPushRepository(db).register(
+            "1", identity, "https://fcm.googleapis.com/fcm/send/archived-subscription", *device_keys(),
+        )
         repo.chats.commit_turn(session, "activity", "hello", "hi", "fixture")
         repo.schedule("1", identity, 1, "delivered", "event", "已有正式记录", 101, now=100)
         repo.schedule("1", identity, 1, "waiting", "event", "原待发话题", 300, now=100)
@@ -93,6 +101,7 @@ async def test_restore_does_not_regrant_old_outreach_consent(tmp_path):
         assert not view["policy"]["enabled"]
         assert [job["id"] for job in view["jobs"]] == ["delivered"]
         assert not repo.has_due(4102444800)
+        assert not CharacterChatPushRepository(db).registered("1", identity)
     finally:
         db.close_connection()
 

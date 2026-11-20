@@ -17,6 +17,7 @@ import type { NextRequest } from 'next/server';
  */
 export function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname;
+  if (path === '/character-push-worker.js') return NextResponse.next();
   const isLoginPage = path === '/login';
   // C6 fix: ?expired=1 表示客户端刚检测到 401，正在主动跳转登出。
   // 此时 Cookie 可能尚未被后端清除（异步请求），必须放行到 /login，

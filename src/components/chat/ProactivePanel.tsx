@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
 import { createClientId } from '@/lib/client-id';
+import { BrowserPushControl } from './BrowserPushControl';
 import type { CharacterProactivePolicy, CharacterProactiveState, ProactiveTopicKind } from '@/lib/api-contracts';
 
 function timeLabel(minutes: number | null) {
@@ -78,6 +79,7 @@ export function ProactivePanel({ sessionId }: { sessionId: string }) {
     </div>}
     <details className="space-y-3 rounded-lg border p-4">
     <summary className="cursor-pointer">主动联系与消息</summary>
+    <BrowserPushControl sessionId={sessionId} authorized={Boolean(view?.policy.enabled)} />
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     {draft && <form className="space-y-2" onSubmit={event => {
       event.preventDefault();

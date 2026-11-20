@@ -24,9 +24,12 @@ from workflows.chat_enrichment import ChatEnrichmentWorkflow
 
 
 @pytest.mark.skipif(os.getenv("RUN_TEMPORAL_INTEGRATION") != "1", reason="requires local Temporal dev server")
-def test_real_proactive_worker_commits_one_private_application_message(tmp_path):
+def test_real_proactive_worker_commits_one_private_application_message(tmp_path, monkeypatch):
+    from test_character_chat_push import device_keys
+
     from repositories.character_chat_proactive import CharacterChatProactiveRepository
-    from services.temporal_proactive import ChatProactiveActivities, dispatch_proactive
+    from repositories.character_chat_push import CharacterChatPushRepository
+    from services.temporal_proactive import ChatProactiveActivities, WebPushConfig, dispatch_proactive
     from workflows.chat_proactive import ChatProactiveWorkflow
 
     db = SQLiteDB(tmp_path / "proactive.db")
@@ -35,12 +38,23 @@ def test_real_proactive_worker_commits_one_private_application_message(tmp_path)
     session = repo.chats.create("owner", character["id"], "主动消息")
     identity = session["id"]
     repo.set_policy("owner", identity, 0, enabled=True, cadence_hours=24, timezone="UTC", quiet_start=None, quiet_end=None)
+    CharacterChatPushRepository(db).register(
+        "owner", identity, "https://fcm.googleapis.com/fcm/send/private-subscription", *device_keys(),
+    )
     due = time() - 1
     repo.schedule("owner", identity, 1, "job", "event", "PRIVATE-TOPIC", due, now=due - 1)
     idle = repo.chats.create("owner", character["id"], "久未联系")
     repo.chats.commit_turn(idle, "idle-start", "hi", "hi", "test")
     repo.set_policy("owner", idle["id"], 0, enabled=True, cadence_hours=24, timezone="UTC", quiet_start=None,
                     quiet_end=None, inactivity_hours=72, now=due - 72 * 3600)
+    reminders = []
+
+    class Sender:
+        def send(self, endpoint, public_key, auth, tag):
+            reminders.append(tag)
+            return 201
+
+    monkeypatch.setattr(WebPushConfig, "from_env", staticmethod(lambda: None))
 
     async def exercise():
         cache = Path(__file__).resolve().parents[2] / ".uv-cache" / "temporal"
@@ -54,6 +68,13 @@ def test_real_proactive_worker_commits_one_private_application_message(tmp_path)
                 handle = env.client.get_workflow_handle(f"character-chat-proactive-{queue}-1")
                 assert await asyncio.wait_for(handle.result(), 30) == 2
                 assert "PRIVATE-TOPIC" not in (await handle.fetch_history()).to_json()
+                monkeypatch.setattr(WebPushConfig, "from_env", staticmethod(Sender))
+                await dispatch_proactive(db, env.client, queue, 2)
+                push_handle = env.client.get_workflow_handle(f"character-chat-proactive-{queue}-2")
+                assert await asyncio.wait_for(push_handle.result(), 30) == 0
+                push_history = (await push_handle.fetch_history()).to_json()
+                assert "private-subscription" not in push_history and "PRIVATE-TOPIC" not in push_history
+                assert len(reminders) == 1
             message, = repo.view("owner", identity)["jobs"]
             assert message["status"] == "sent" and "PRIVATE-TOPIC" in message["content"]
             assert repo.view("owner", idle["id"])["jobs"][0]["kind"] == "inactivity"

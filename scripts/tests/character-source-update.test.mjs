@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { resolve, dirname } from 'node:path';
 import test from 'node:test';
+import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
 
 // Real React hooks/components, controlled HTTP. Optional isolated renderer installation
@@ -12,6 +13,35 @@ const React = testRequire('react');
 const { create, act } = testRequire('react-test-renderer');
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const root = resolve(import.meta.dirname, '../..');
+test('the reminder worker shows generic text and only opens the inbox', async () => {
+  const listeners = {};
+  const notifications = [];
+  const destinations = [];
+  const self = {
+    addEventListener: (type, handler) => { listeners[type] = handler; },
+    registration: { showNotification: async (title, options) => notifications.push({ title, ...options }) },
+    clients: { openWindow: async url => destinations.push(url) },
+    location: { origin: 'https://chat.example.invalid' },
+  };
+  runInNewContext(readFileSync(resolve(root, 'public/character-push-worker.js'), 'utf8'), { self, URL });
+  const pending = [];
+  const waitUntil = promise => pending.push(promise);
+  const tag = 'a'.repeat(32);
+  listeners.push({ data: { json: () => ({ tag: 'invalid' }) }, waitUntil });
+  listeners.push({ data: { json: () => ({ tag, body: 'private', url: 'https://wrong.example.invalid' }) }, waitUntil });
+  await Promise.all(pending);
+  assert.deepEqual(notifications, [{
+    title: '有一条角色消息', body: '打开应用查看消息。', tag: 'character-' + tag, renotify: false,
+  }]);
+  let closed = 0;
+  const click = tag => listeners.notificationclick({ notification: { tag, close: () => closed++ }, waitUntil });
+  click('other-app');
+  click(notifications[0].tag);
+  await Promise.all(pending);
+  assert.equal(closed, 1);
+  assert.deepEqual(destinations, ['https://chat.example.invalid/chat']);
+});
+
 const doc = (id, content = id) => ({ id, title: id, content });
 const settings = { name: '旅人', persona: '人物', greeting: '你好', scenario: '', relationships: '', examples: [], reference_text: '' };
 const character = { id: 'copy', revision: 1, settings_revision: 1, settings, source_character_id: 'author', source_revision: 1 };
@@ -38,7 +68,11 @@ function loader(api) {
     const req = id => {
       if (id === 'react' || id === 'react/jsx-runtime') return testRequire(id);
       if (id === '@/lib/api' && api) return {
-        api: { getCharacterProactiveInbox: async () => ({ messages: [] }), ...api }, ApiRequestError: ErrorClass,
+        api: {
+          getCharacterProactiveInbox: async () => ({ messages: [] }),
+          getCharacterBrowserPush: async () => ({ public_key: null, subscription_ids: [] }),
+          ...api,
+        }, ApiRequestError: ErrorClass,
       };
       if (id.startsWith('@/components/ui/')) {
         const tag = id.endsWith('button') ? 'button' : id.endsWith('input') ? 'input' : 'label';
@@ -165,6 +199,46 @@ test('viewing a delivered character message does not request notification permis
     if (renderer) await unmount(renderer);
     if (original === undefined) delete globalThis.Notification;
     else globalThis.Notification = original;
+  }
+});
+
+test('push control requests permission only after a click and supports disabling', async () => {
+  const saved = new Map();
+  const originals = Object.getOwnPropertyDescriptors(globalThis);
+  const requests = [];
+  const setGlobal = (name, value) => Object.defineProperty(globalThis, name, { configurable: true, value });
+  setGlobal('window', { isSecureContext: true, PushManager: class {}, Notification: {} });
+  setGlobal('localStorage', { getItem: key => saved.get(key), setItem: (key, value) => saved.set(key, value),
+    removeItem: key => saved.delete(key) });
+  setGlobal('Notification', { requestPermission: async () => { requests.push('permission'); return 'granted'; } });
+  setGlobal('navigator', { serviceWorker: {
+    register: async route => { assert.equal(route, '/character-push-worker.js'); },
+    ready: Promise.resolve({ pushManager: {
+      getSubscription: async () => null,
+      subscribe: async () => ({ toJSON: () => ({ endpoint: 'fixture', keys: { p256dh: 'public', auth: 'auth' } }) }),
+    } }),
+  } });
+  const load = loader({
+    getCharacterBrowserPush: async () => ({ public_key: 'AQ', subscription_ids: [] }),
+    registerCharacterBrowserPush: async id => { requests.push(id); return { id: 'browser' }; },
+    removeCharacterBrowserPush: async (session, id) => { requests.push([session, id]); },
+  });
+  let renderer;
+  try {
+    const { BrowserPushControl } = load('src/components/chat/BrowserPushControl.tsx');
+    await act(async () => { renderer = create(React.createElement(BrowserPushControl, { sessionId: 'session', authorized: true })); });
+    assert.deepEqual(requests, []);
+    await click(renderer, '为此会话开启浏览器提醒');
+    assert.deepEqual(requests, ['permission', 'session']);
+    await click(renderer, '关闭此浏览器提醒');
+    assert.deepEqual(requests, ['permission', 'session', ['session', 'browser']]);
+    assert.equal(saved.size, 0);
+  } finally {
+    if (renderer) await unmount(renderer);
+    for (const name of ['window', 'navigator', 'Notification', 'localStorage']) {
+      if (originals[name]) Object.defineProperty(globalThis, name, originals[name]);
+      else delete globalThis[name];
+    }
   }
 });
 

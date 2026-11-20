@@ -50,7 +50,8 @@ def _prepare_restored_chat(candidate: Path, receipts):
             connection.execute(f"SELECT 1 FROM {ERASURE_TABLE} LIMIT 1").fetchone()
         ))
         has_outreach = "character_chat_proactive_policies" in tables
-        if not has_erasure and not has_outreach:
+        has_push = "character_chat_push_subscriptions" in tables
+        if not has_erasure and not has_outreach and not has_push:
             return False
         connection.execute("PRAGMA foreign_keys=ON")
         connection.execute("PRAGMA secure_delete=ON")
@@ -74,6 +75,10 @@ def _prepare_restored_chat(candidate: Path, receipts):
             )
         if "character_chat_proactive_jobs" in tables:
             connection.execute("UPDATE character_chat_proactive_jobs SET status='cancelled',topic='' WHERE status='pending'")
+        if "character_chat_push_attempts" in tables:
+            connection.execute("DELETE FROM character_chat_push_attempts")
+        if "character_chat_push_subscriptions" in tables:
+            connection.execute("DELETE FROM character_chat_push_subscriptions")
     return True
 
 

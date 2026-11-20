@@ -122,11 +122,17 @@ class CharacterChatProactiveRepository:
             "CASE WHEN inactivity_last_sent_turn_id=:idle_turn THEN NULL ELSE CAST(:idle_due AS DOUBLE PRECISION) END "
             "WHERE session_id=:session AND revision=:revision"
         )
-        self.db.revision_transaction([
+        statements = [
             self._session_guard(session), (statement, params, 1),
             ("UPDATE character_chat_proactive_jobs SET status='cancelled',topic='' "
              "WHERE session_id=:session AND status='pending'", params, None),
-        ])
+        ]
+        if not settings["enabled"]:
+            statements.extend([
+                ("DELETE FROM character_chat_push_attempts WHERE session_id=:session", params, None),
+                ("DELETE FROM character_chat_push_subscriptions WHERE session_id=:session", params, None),
+            ])
+        self.db.revision_transaction(statements)
         return self._public_policy(session_id)
 
     def schedule(self, owner, session_id, revision, request_id, kind, topic, due_at, *, now=None):

@@ -857,6 +857,7 @@ class SQLiteDB:
 
         backfill_legacy_copy_baselines(cursor.execute)
         from db.models import CharacterChatErasureReceipt, CharacterChatProactiveJob, CharacterChatProactivePolicy
+        from db.character_push_schema import PUSH_SCHEMA_034
 
         for model in (CharacterChatErasureReceipt, CharacterChatProactivePolicy, CharacterChatProactiveJob):
             table = model.__table__
@@ -869,6 +870,8 @@ class SQLiteDB:
                     self._ensure_column(cursor, table.name, column, sql_type)
             for index in table.indexes:
                 cursor.execute(str(CreateIndex(index, if_not_exists=True).compile(dialect=dialect())))
+        for statement in PUSH_SCHEMA_034:
+            cursor.execute(statement)
         self._ensure_column(cursor, 'character_source_corpora', 'index_receipt_json', 'TEXT')
         self._ensure_column(cursor, 'character_source_corpora', 'index_status', "TEXT NOT NULL DEFAULT 'pending'")
         self._ensure_column(cursor, 'character_source_corpora', 'index_attempt', 'INTEGER NOT NULL DEFAULT 1')

@@ -6,6 +6,7 @@ import os
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from time import time
 
 import pytest
 
@@ -77,6 +78,40 @@ def test_postgres_legacy_copy_can_preview_and_confirm_an_author_update(database)
     preview = library.preview_source_update(*args)
     assert preview['sources'] == []
     assert library.import_source_update(*args, preview['preview_id'])['settings']['name'] == 'new'
+
+
+def test_postgres_browser_reminder_claim_has_one_winner(database):
+    from test_character_chat_push import device_keys
+
+    from repositories.character_chat_proactive import CharacterChatProactiveRepository
+    from repositories.character_chat_push import CharacterChatPushRepository
+
+    repo = CharacterChatProactiveRepository(database)
+    push = CharacterChatPushRepository(database)
+    owner = f"push-{uuid.uuid4().hex}"
+    character = repo.chats.characters.create(owner, CharacterSettings(name="fixture", persona="fixture", greeting="hi"))
+    session = repo.chats.create(owner, character["id"], "push")
+    identity = session["id"]
+    repo.set_policy(owner, identity, 0, enabled=True, cadence_hours=24, timezone="UTC", quiet_start=None, quiet_end=None)
+    device = push.register(owner, identity, "https://fcm.googleapis.com/fcm/send/fixture", *device_keys())
+    now = time()
+    repo.schedule(owner, identity, 1, "push", "event", "test event", now + 1, now=now)
+    assert repo.deliver_due(now=now + 1) == 1
+    sent = []
+
+    class Sender:
+        def send(self, endpoint, public_key, auth, tag):
+            sent.append(tag)
+            return 201
+
+    with ThreadPoolExecutor(2) as pool:
+        list(pool.map(lambda _: push.deliver(Sender(), now=now + 1), range(2)))
+    assert len(sent) == 1
+    assert not push.has_due(now + 1)
+    assert push.registered(owner, identity) == [device["id"]]
+    session = repo.chats.get(owner, identity)
+    repo.chats.delete_sessions(owner, [{"id": identity, "revision": session["revision"]}])
+    assert not push.has_due(now + 1)
 
 
 def test_postgres_chat_generation_enrichment_retry_and_erasure(database):

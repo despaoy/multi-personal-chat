@@ -2,7 +2,7 @@
 
 import asyncio
 from functools import partial
-from typing import Literal
+from typing import Annotated, Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -22,6 +22,7 @@ from repositories.character_chat_generation import (
     GenerationInProgressError,
 )
 from repositories.character_chat_proactive import CharacterChatProactiveRepository
+from repositories.character_chat_push import CharacterChatPushRepository
 from repositories.character_library import CharacterNotFoundError
 from services.character_chat import CharacterChatService, complete_with_provider
 from services.character_chat_events import generation_events
@@ -29,6 +30,7 @@ from services.character_chat_memory import enrich_state
 from services.character_chat_relationship import enrich_relationship
 from services.character_chat_vectors import select_memories
 from services.character_source_retrieval import retrieve_configured_sources
+from services.character_web_push import WebPushConfig
 
 router = APIRouter(prefix="/api/character-chats", tags=["character-chats"])
 
@@ -115,6 +117,13 @@ class ProactiveJob(Revision):
     kind: Literal["follow_up", "event", "fiction"]
     topic: str = Field(min_length=1, max_length=300)
     due_at: float = Field(gt=0, le=1e10)
+
+
+class BrowserSubscription(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    endpoint: str = Field(min_length=1, max_length=2048)
+    p256dh: str = Field(min_length=1, max_length=100)
+    auth: str = Field(min_length=1, max_length=32)
 
 
 def repository(request: Request):
@@ -227,6 +236,37 @@ def continuation_preview(session_id: str, owner=Depends(account), repo=Depends(r
 @router.get("/{session_id}/proactive")
 def proactive_state(session_id: str, owner=Depends(account), repo=Depends(repository)):
     return call(CharacterChatProactiveRepository(repo.database).view, owner, session_id)
+
+
+def push_configuration():
+    try:
+        return WebPushConfig.from_env()
+    except ValueError as exc:
+        raise HTTPException(503, "浏览器通知配置不可用") from exc
+
+
+@router.get("/{session_id}/browser-push")
+def push_state(session_id: str, owner=Depends(account), repo=Depends(repository)):
+    registered = call(CharacterChatPushRepository(repo.database).registered, owner, session_id)
+    config = push_configuration()
+    return {"public_key": config.public_key if config else None, "subscription_ids": registered}
+
+
+@router.post("/{session_id}/browser-push", status_code=201)
+def subscribe_browser(session_id: str, body: BrowserSubscription, owner=Depends(account), repo=Depends(repository)):
+    if push_configuration() is None:
+        raise HTTPException(503, "服务端未开启浏览器通知")
+    try:
+        return call(lambda: CharacterChatPushRepository(repo.database).register(owner, session_id, **body.model_dump()))
+    except ValueError as exc:
+        raise HTTPException(422, "浏览器订阅无效或已达到设备上限") from exc
+
+
+@router.delete("/{session_id}/browser-push/{subscription_id}")
+def unsubscribe_browser(session_id: str, subscription_id: Annotated[str, Field(pattern=r"^[a-f0-9]{64}$")],
+                        owner=Depends(account), repo=Depends(repository)):
+    call(CharacterChatPushRepository(repo.database).unregister, owner, session_id, subscription_id)
+    return {"removed": True}
 
 
 @router.put("/{session_id}/proactive")

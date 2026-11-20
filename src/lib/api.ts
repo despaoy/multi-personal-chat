@@ -651,6 +651,22 @@ class ApiClient {
     return this.request<{ messages: import('./api-contracts').ProactiveInboxMessage[] }>('/character-chats/proactive-inbox');
   }
 
+  getCharacterBrowserPush(id: string) {
+    return this.request<{ public_key: string | null; subscription_ids: string[] }>(
+      `/character-chats/${encodeURIComponent(id)}/browser-push`,
+    );
+  }
+
+  registerCharacterBrowserPush(id: string, subscription: { endpoint: string; p256dh: string; auth: string }) {
+    return this.request<{ id: string }>(`/character-chats/${encodeURIComponent(id)}/browser-push`, {
+      method: 'POST', body: JSON.stringify(subscription),
+    });
+  }
+
+  removeCharacterBrowserPush(id: string, subscriptionId: string) {
+    return this.request(`/character-chats/${encodeURIComponent(id)}/browser-push/${encodeURIComponent(subscriptionId)}`, { method: 'DELETE' });
+  }
+
   saveCharacterProactive(id: string, policy: import('./api-contracts').CharacterProactivePolicy) {
     return this.request<import('./api-contracts').CharacterProactivePolicy>(`/character-chats/${encodeURIComponent(id)}/proactive`, {
       method: 'PUT', body: JSON.stringify(policy),
