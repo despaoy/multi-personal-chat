@@ -8,6 +8,7 @@ import time
 from contextlib import nullcontext
 from dataclasses import replace
 
+from character.decision_policy import relationship_stage_guidance
 from character.models import CompiledCharacterContext
 from db.errors import RevisionConflictError
 from inference.generation_options import read_generation_options
@@ -35,6 +36,9 @@ def prepare_request(session, turns, message, retrieved_memories=None, *, proacti
         persona += "\n以下是表达风格示例，不是与当前用户发生过的经历：\n" + json.dumps(
             settings["examples"], ensure_ascii=False
         )
+    relationship = session["state"]["relationship"]
+    persona += "\n按当前已生效的关系调整表达：" + relationship_stage_guidance(relationship.get("stage", "stranger"))
+    persona += "。尊重用户此刻明确的边界，并保留人物的独立立场。"
     if session["mode"] == "branch":
         persona += "\n本轮处于假想分支，按用户明确给出的剧情假设推演，并保持未被修改的人物立场。"
     else:
@@ -49,7 +53,7 @@ def prepare_request(session, turns, message, retrieved_memories=None, *, proacti
         reference_context="",
         conversation_reference_context=json.dumps(
             {
-                "relationship": session["state"]["relationship"],
+                "relationship": relationship,
                 "memories": [item for item in (session["state"]["memories"] if retrieved_memories is None else retrieved_memories)
                              if item.get("status") == "confirmed"],
                 "creator_reference": settings["reference_text"],

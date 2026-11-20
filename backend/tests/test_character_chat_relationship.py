@@ -13,7 +13,7 @@ from db.database import SQLiteDB
 from db.errors import RevisionConflictError
 from repositories.character_chat import CharacterChatRepository
 from repositories.character_library import CharacterNotFoundError
-from services.character_chat import CharacterChatService
+from services.character_chat import CharacterChatService, prepare_request
 from services.character_chat_relationship import enrich_relationship
 
 
@@ -25,6 +25,26 @@ class Completion:
     async def complete(self, messages):
         self.calls += 1
         return json.dumps(self.proposal, ensure_ascii=False)
+
+
+def test_relationship_guidance_uses_only_the_committed_stage(tmp_path):
+    db = SQLiteDB(tmp_path / "relationship-prompt.db")
+    try:
+        repo = CharacterChatRepository(db)
+        character = repo.characters.create("1", CharacterSettings(name="迟禾", persona="谨慎", greeting="你好"))
+        session = repo.create("1", character["id"], "关系表达")
+        message = "又见面了。"
+        initial = prepare_request(session, [], message)
+        assert "礼貌而不假定熟悉" in initial.persona_prompt
+        familiar = repo.update_relationship("1", session["id"], 1, "familiar", "此前多次讨论修钟")
+        familiar["state"]["relationship_proposal"] = {"stage": "close", "summary": "待确认内容"}
+        prepared = prepare_request(familiar, [], message)
+        assert "仅在相关时引用共同记忆" in prepared.persona_prompt
+        assert "越过边界" in prepared.persona_prompt
+        assert "关心不等于追问" not in prepared.persona_prompt
+        assert "待确认内容" not in prepared.character_context.conversation_reference_context
+    finally:
+        db.close_connection()
 
 
 @pytest.fixture
