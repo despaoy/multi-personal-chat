@@ -236,6 +236,38 @@ def test_postgres_browser_reminder_claim_has_one_winner(database, monkeypatch):
     assert not push.has_due(now + 1)
 
 
+def test_postgres_push_result_cannot_delete_subscription_after_successful_retry(database):
+    from test_character_chat_push import device_keys
+
+    from repositories.character_chat_proactive import CharacterChatProactiveRepository
+    from repositories.character_chat_push import CharacterChatPushRepository
+
+    outreach = CharacterChatProactiveRepository(database)
+    push = CharacterChatPushRepository(database)
+    owner = f"push-lease-{uuid.uuid4().hex}"
+    role = outreach.chats.characters.create(owner, CharacterSettings(name="fixture", persona="fixture", greeting="hi"))
+    session = outreach.chats.create(owner, role["id"], "提醒")
+    identity = session["id"]
+    outreach.set_policy(owner, identity, 0, enabled=True, cadence_hours=24, timezone="UTC", quiet_start=None, quiet_end=None)
+    device = push.register(owner, identity, "https://fcm.googleapis.com/fcm/send/fixture", *device_keys())["id"]
+    now = time()
+    outreach.schedule(owner, identity, 1, "push", "event", "fixture", now + 1, now=now)
+    assert outreach.deliver_due(now=now + 1) == 1
+
+    class Accepted:
+        def send(self, *_):
+            return 201
+
+    class Older:
+        def send(self, *_):
+            push.deliver(Accepted(), now=now + 61)
+            return 410
+
+    push.deliver(Older(), now=now + 1)
+    assert push.registered(owner, identity) == [device]
+    assert [item["id"] for item in outreach.inbox(owner)] == ["push"]
+
+
 def test_postgres_sourced_proactive_job_is_cancelled_on_history_change(database):
     from repositories.character_chat_proactive import CharacterChatProactiveRepository
 

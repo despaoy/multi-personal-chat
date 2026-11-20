@@ -68,6 +68,36 @@ def test_retry_never_duplicates_application_message(setup):
     assert len(proactive.inbox("a")) == 1
 
 
+@pytest.mark.parametrize("newer_attempt", [False, True])
+def test_invalid_endpoint_response_requires_current_attempt_but_not_current_chat_revision(setup, newer_attempt):
+    proactive, push, session, _ = setup
+    identity = session["id"]
+    endpoint = "https://fcm.googleapis.com/fcm/send/fixture"
+    device = push.register("a", identity, endpoint, *device_keys())["id"]
+    proactive.schedule("a", identity, 1, "message", "event", "fixture", 101, now=100)
+    assert proactive.deliver_due(now=101) == 1
+    successful = []
+
+    class FirstSender:
+        def send(self, *_):
+            if newer_attempt:
+                def accepted(*_):
+                    successful.append(True)
+                    return 201
+
+                push.deliver(SimpleNamespace(send=accepted), now=161)
+            else:
+                current = proactive.chats.get("a", identity)
+                proactive.chats.update_relationship("a", identity, current["revision"], "familiar", "手动设置")
+            return 410
+
+    push.deliver(FirstSender(), now=101)
+    assert push.registered("a", identity) == ([device] if newer_attempt else [])
+    assert successful == ([True] if newer_attempt else [])
+    assert not push.has_due(161)
+    assert len(proactive.inbox("a")) == 1
+
+
 def test_quiet_candidates_do_not_starve_later_devices_or_expand_send_budget(setup):
     proactive, push, original, settings = setup
     quiet_begins = 22 * 3600

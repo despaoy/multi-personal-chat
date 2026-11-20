@@ -139,11 +139,18 @@ class CharacterChatPushRepository:
         status = sender.send(row["endpoint"], row["p256dh"], row["auth"], tag)
         if status in {404, 410}:
             self.db.revision_transaction([
-                self.outreach._session_guard(session),
+                # Serialize against registration and unregistration without
+                # making endpoint cleanup depend on unrelated chat edits.
+                ("UPDATE character_chat_sessions SET revision=revision "
+                 "WHERE id=:session_id AND owner_user_id=:owner_user_id", params, 1),
                 ("UPDATE character_chat_push_subscriptions SET id=id "
-                 "WHERE id=:id AND created_at=:created_at", params, 1),
-                ("DELETE FROM character_chat_push_attempts WHERE subscription_id=:id", params, None),
-                ("DELETE FROM character_chat_push_subscriptions WHERE id=:id", params, 1),
+                 "WHERE id=:id AND session_id=:session_id AND created_at=:created_at "
+                 "AND EXISTS (SELECT 1 FROM character_chat_push_attempts "
+                 "WHERE subscription_id=:id AND session_id=:session_id AND message_id=:message_id AND token=:token)",
+                 params, 1),
+                ("DELETE FROM character_chat_push_attempts WHERE subscription_id=:id AND session_id=:session_id",
+                 params, None),
+                ("DELETE FROM character_chat_push_subscriptions WHERE id=:id AND session_id=:session_id", params, 1),
             ])
         else:
             retry = status in {408, 429} or status >= 500
