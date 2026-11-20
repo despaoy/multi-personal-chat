@@ -12,7 +12,7 @@ from inference.generation_request import GenerationRequest, generate_character_r
 from repositories.character_chat import CharacterChatRepository
 from repositories.character_library import CharacterNotFoundError
 from repositories.character_sources import CharacterSourceRepository
-from services.character_chat import CharacterChatService
+from services.character_chat import CharacterChatService, prepare_request
 from services.character_chat_evidence import CharacterChatCompletion, evidence_snapshot
 from services.character_chat_vectors import embedding_identity
 from services.character_source_retrieval import retrieve_source_context
@@ -35,6 +35,9 @@ def test_unfinished_index_allows_reply_without_source_admission(tmp_path):
         char = sources.characters.create('owner', CharacterSettings(name='旅人', persona='谨慎', greeting='你好'))
         corpus = sources.publish('owner', char['id'], 1, [{'id': 'private', 'title': '资料', 'content': '待索引正文'}])
         session = chats.create('owner', char['id'], '普通聊天')
+        prompt = prepare_request(session, [], "她当时见到的那个人是谁？").persona_prompt
+        assert "只问一个聚焦的澄清问题" in prompt
+        assert "不要先复述背景、补猜情节或添加引用" in prompt
 
         class Index:
             index = 'test-index'

@@ -53,6 +53,12 @@ def prepare_request(session, turns, message, retrieved_memories=None, *, proacti
             "如果只知道地点的大致范围，就只说到这个范围。用角色自己的语气说明不知道的部分，"
             "不要把新想象的地点细节、物件特征或过去行动说成已经记得的事实。"
         )
+    if session.get("source_corpus_id"):
+        persona += (
+            "\n原作问题中的人物、事件或时间线无法确定时，本轮只问一个聚焦的澄清问题。"
+            "即使检索到了泛泛的作品背景，也不要先复述背景、补猜情节或添加引用。"
+            "例如只问‘你指的是哪一段？’。等对方说清之后，再基于有依据的相关资料回答。"
+        )
     context = CompiledCharacterContext(
         profile_context=persona,
         dynamic_context="",
