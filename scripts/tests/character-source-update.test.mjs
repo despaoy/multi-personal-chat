@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { resolve, dirname } from 'node:path';
@@ -263,21 +264,34 @@ test('push control requests permission only after a click and supports disabling
   const saved = new Map();
   const originals = Object.getOwnPropertyDescriptors(globalThis);
   const requests = [];
+  let focus;
+  let subscription = null;
+  const device = {
+    endpoint: 'https://fcm.googleapis.com/test-device',
+    options: { applicationServerKey: Uint8Array.of(1).buffer },
+    toJSON() { return { endpoint: this.endpoint, keys: { p256dh: 'public', auth: 'auth' } }; },
+  };
+  const id = createHash('sha256').update('session\0' + device.endpoint).digest('hex');
+  const registration = { pushManager: {
+    getSubscription: async () => subscription,
+    subscribe: async () => { subscription = device; return subscription; },
+  } };
   const setGlobal = (name, value) => Object.defineProperty(globalThis, name, { configurable: true, value });
-  setGlobal('window', { isSecureContext: true, PushManager: class {}, Notification: {} });
+  setGlobal('window', { isSecureContext: true, PushManager: class {}, Notification: {},
+    addEventListener: (_, callback) => { focus = callback; }, removeEventListener: () => { focus = undefined; } });
   setGlobal('localStorage', { getItem: key => saved.get(key), setItem: (key, value) => saved.set(key, value),
     removeItem: key => saved.delete(key) });
-  setGlobal('Notification', { requestPermission: async () => { requests.push('permission'); return 'granted'; } });
+  setGlobal('Notification', { permission: 'default', requestPermission: async () => {
+    requests.push('permission'); Notification.permission = 'granted'; return 'granted';
+  } });
   setGlobal('navigator', { serviceWorker: {
     register: async route => { assert.equal(route, '/character-push-worker.js'); },
-    ready: Promise.resolve({ pushManager: {
-      getSubscription: async () => null,
-      subscribe: async () => ({ toJSON: () => ({ endpoint: 'fixture', keys: { p256dh: 'public', auth: 'auth' } }) }),
-    } }),
+    getRegistration: async () => registration,
+    ready: Promise.resolve(registration),
   } });
   const load = loader({
     getCharacterBrowserPush: async () => ({ public_key: 'AQ', subscription_ids: [] }),
-    registerCharacterBrowserPush: async id => { requests.push(id); return { id: 'browser' }; },
+    registerCharacterBrowserPush: async session => { requests.push(session); return { id }; },
     removeCharacterBrowserPush: async (session, id) => { requests.push([session, id]); },
   });
   let renderer;
@@ -287,8 +301,19 @@ test('push control requests permission only after a click and supports disabling
     assert.deepEqual(requests, []);
     await click(renderer, '为此会话开启浏览器提醒');
     assert.deepEqual(requests, ['permission', 'session']);
+    await act(async () => focus());
+    assert.equal(renderer.root.findAllByProps({ role: 'status' }).length, 0);
+    subscription = { ...device, endpoint: 'https://fcm.googleapis.com/rotated-device' };
+    await act(async () => focus());
+    assert.match(text(renderer.root.findByProps({ role: 'status' })), /权限或订阅已失效/);
+    subscription = device;
+    await act(async () => focus());
+    assert.equal(renderer.root.findAllByProps({ role: 'status' }).length, 0);
+    Notification.permission = 'denied';
+    await act(async () => focus());
+    assert.match(text(renderer.root.findByProps({ role: 'status' })), /权限或订阅已失效/);
     await click(renderer, '关闭此浏览器提醒');
-    assert.deepEqual(requests, ['permission', 'session', ['session', 'browser']]);
+    assert.deepEqual(requests, ['permission', 'session', ['session', id]]);
     assert.equal(saved.size, 0);
   } finally {
     if (renderer) await unmount(renderer);

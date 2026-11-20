@@ -14,6 +14,7 @@ export function BrowserPushControl({ sessionId, authorized }: { sessionId: strin
   const [supported, setSupported] = useState<boolean>();
   const [publicKey, setPublicKey] = useState<string | null>();
   const [subscriptionId, setSubscriptionId] = useState('');
+  const [deviceReady, setDeviceReady] = useState<boolean>();
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -31,6 +32,36 @@ export function BrowserPushControl({ sessionId, authorized }: { sessionId: strin
     return () => { active = false; };
   }, [authorized, localKey, sessionId]);
 
+  useEffect(() => {
+    if (!subscriptionId || !supported || !publicKey) return;
+    let generation = 0;
+    const check = async () => {
+      const current = ++generation;
+      try {
+        const registration = await navigator.serviceWorker.getRegistration('/');
+        const subscription = await registration?.pushManager.getSubscription();
+        const registeredKey = subscription?.options.applicationServerKey;
+        // The server identifies a subscription by the session and its endpoint.
+        const digest = subscription && await crypto.subtle.digest(
+          'SHA-256', new TextEncoder().encode(sessionId + '\0' + subscription.endpoint),
+        );
+        const id = digest && Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+        if (generation === current) setDeviceReady(
+          Notification.permission === 'granted' && id === subscriptionId
+          && !!registeredKey && new Uint8Array(registeredKey).join(',') === applicationKey(publicKey).join(','),
+        );
+      } catch {
+        if (generation === current) setDeviceReady(false);
+      }
+    };
+    void check();
+    window.addEventListener('focus', check);
+    return () => {
+      generation = -1;
+      window.removeEventListener('focus', check);
+    };
+  }, [publicKey, sessionId, subscriptionId, supported]);
+
   async function toggle() {
     setBusy(true);
     setError('');
@@ -38,6 +69,7 @@ export function BrowserPushControl({ sessionId, authorized }: { sessionId: strin
       if (subscriptionId) {
         await api.removeCharacterBrowserPush(sessionId, subscriptionId);
         setSubscriptionId('');
+        setDeviceReady(undefined);
         localStorage.removeItem(localKey);
         return;
       }
@@ -69,6 +101,7 @@ export function BrowserPushControl({ sessionId, authorized }: { sessionId: strin
     <p className="font-medium">浏览器提醒</p>
     {supported === false ? <p>此浏览器或地址不支持 Web Push。应用内消息仍可查看。</p>
       : publicKey === null ? <p>服务器尚未启用浏览器提醒。</p>
+      : subscriptionId && deviceReady === false ? <p role="status">此浏览器的通知权限或订阅已失效。请关闭旧登记，再重新开启。</p>
       : <p>提醒不显示聊天内容，点击后可进入收件箱。</p>}
     {error && <p role="alert" className="text-destructive">{error}</p>}
     <Button type="button" variant="outline" disabled={busy || (!subscriptionId && (!authorized || !publicKey || !supported))}
