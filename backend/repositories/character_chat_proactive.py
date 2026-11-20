@@ -17,6 +17,11 @@ _DEFAULT = {
     "inactivity_last_sent_turn_id": None,
 }
 _INACTIVITY_GREETING = "有一阵子没见了。等你有空，想听听你最近过得怎么样。"
+_INACTIVITY_READY = (
+    "WHERE p.enabled=1 AND p.inactivity_due_at<=:now "
+    "AND NOT EXISTS (SELECT 1 FROM character_chat_generations g "
+    "WHERE g.session_id=p.session_id AND g.status='running' AND g.lease_until>:now)"
+)
 _TEXT = {
     "follow_up": "上次说到「{topic}」，如果你想继续，我还在听。",
     "event": "你之前提过「{topic}」。如果愿意聊，后来怎么样了？",
@@ -231,8 +236,8 @@ class CharacterChatProactiveRepository:
         return bool(self.db.execute_sql(
             "SELECT id FROM character_chat_proactive_jobs "
             "WHERE status='pending' AND next_attempt_at<=:now "
-            "UNION ALL SELECT session_id FROM character_chat_proactive_policies "
-            "WHERE enabled=1 AND inactivity_due_at<=:now LIMIT 1", {"now": now},
+            "UNION ALL SELECT p.session_id FROM character_chat_proactive_policies p "
+            + _INACTIVITY_READY + " LIMIT 1", {"now": now},
         ))
 
     def deliver_due(self, *, now=None):
@@ -257,7 +262,7 @@ class CharacterChatProactiveRepository:
         inactivity = self.db.execute_sql(
             "SELECT p.session_id,s.owner_user_id FROM character_chat_proactive_policies p "
             "JOIN character_chat_sessions s ON s.id=p.session_id "
-            "WHERE p.enabled=1 AND p.inactivity_due_at<=:now ORDER BY p.inactivity_due_at,p.session_id LIMIT 100",
+            + _INACTIVITY_READY + " ORDER BY p.inactivity_due_at,p.session_id LIMIT 100",
             {"now": ready_at},
         )
         for entry in inactivity:

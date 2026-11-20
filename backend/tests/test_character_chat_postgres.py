@@ -70,6 +70,12 @@ def test_postgres_proactive_delivery_respects_session_consent_and_is_idempotent(
     repo.chats.commit_turn(session, "reply", "hi", "hello", "test")
     due = repo._policy(identity)["inactivity_due_at"]
     assert repo.deliver_due(now=due - 1) == 0
+    generations = CharacterChatGenerationRepository(database)
+    token = generations.claim(repo.chats.get(owner, identity), "busy", "fixture", lease_seconds=73 * 3600)
+    assert not repo.has_due(due)
+    assert repo.deliver_due(now=due) == 0
+    generations.fail(identity, "busy", token, "fixture")
+    assert repo.has_due(due)
     assert repo.deliver_due(now=due) == 1
     assert repo.inbox(owner)[0]["kind"] == "inactivity"
     for number in (1, 2):

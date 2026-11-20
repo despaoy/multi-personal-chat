@@ -252,6 +252,61 @@ def test_idle_greeting_is_opt_in_and_delivered_once_per_activity(proactive, monk
     assert [job["kind"] for job in repo.view("owner", identity)["jobs"]] == ["inactivity"]
 
 
+def test_running_generations_do_not_fill_the_inactivity_batch(proactive):
+    from repositories.character_chat_generation import CharacterChatGenerationRepository
+
+    repo, original = proactive
+    generations = CharacterChatGenerationRepository(repo.db)
+    rules = policy(quiet_start=None, quiet_end=None, inactivity_hours=72)
+    begin = 100
+    due = begin + 72 * 3600
+    for number in range(100):
+        busy = repo.chats.create("owner", original["character_id"], f"busy-{number}")
+        repo.chats.commit_turn(busy, "first", "你好", "你好", "test")
+        repo.set_policy("owner", busy["id"], 0, now=begin, **rules)
+        generations.claim(repo.chats.get("owner", busy["id"]), "running", "已经回来了")
+    assert not repo.has_due(due)
+    assert repo.deliver_due(now=due) == 0
+    repo.chats.commit_turn(original, "first", "你好", "你好", "test")
+    repo.set_policy("owner", original["id"], 0, now=begin + 1, **rules)
+    assert repo.has_due(due + 1)
+    assert repo.deliver_due(now=due + 1) == 1
+    assert [item["session_id"] for item in repo.inbox("owner")] == [original["id"]]
+    assert not repo.has_due(due + 1)
+    expired_at = repo.db.execute_sql(
+        "SELECT MAX(lease_until) AS expired_at FROM character_chat_generations",
+    )[0]["expired_at"]
+    assert repo.has_due(expired_at)
+    assert repo.deliver_due(now=expired_at) == 100
+    assert not repo.has_due(expired_at)
+
+
+def test_inactivity_rechecks_a_generation_claim_after_scan(proactive, monkeypatch):
+    from repositories.character_chat_generation import CharacterChatGenerationRepository
+
+    repo, session = proactive
+    identity = session["id"]
+    repo.chats.commit_turn(session, "first", "你好", "你好", "test")
+    repo.set_policy("owner", identity, 0, now=100,
+                    **policy(quiet_start=None, quiet_end=None, inactivity_hours=72))
+    due = 100 + 72 * 3600
+    generations = CharacterChatGenerationRepository(repo.db)
+    deliver = repo._deliver_inactivity
+    token = None
+
+    def claim_before_delivery(entry, now):
+        nonlocal token
+        token = generations.claim(repo.chats.get("owner", identity), "running", "我回来了")
+        return deliver(entry, now)
+
+    monkeypatch.setattr(repo, "_deliver_inactivity", claim_before_delivery)
+    assert repo.deliver_due(now=due) == 0
+    assert token is not None and repo.inbox("owner") == []
+    generations.fail(identity, "running", token, "fixture")
+    monkeypatch.setattr(repo, "_deliver_inactivity", deliver)
+    assert repo.deliver_due(now=due) == 1
+
+
 def test_cross_session_inbox_is_owner_scoped_and_uses_latest_message(proactive):
     repo, first = proactive
     second = repo.chats.create("owner", first["character_id"], "另一个会话")
