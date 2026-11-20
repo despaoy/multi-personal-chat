@@ -23,7 +23,12 @@ from services.character_chat_summary import RECENT_TURNS, summaries_for_prompt, 
 
 
 def prepare_request(session, turns, message, retrieved_memories=None, *, proactive_messages=None):
-    retained = [*session["baseline"]["history"], *turns]
+    inherited = session["baseline"]["history"]
+    retained = [*inherited, *turns]
+    revision = session.get("character_revision")
+    mixed_settings = revision is not None and any(
+        turn.get("character_revision") not in {None, revision} for turn in inherited
+    )
     summaries = valid_summaries(session["state"], retained)
     covered = {source["turn_id"] for segment in summaries for source in segment["sources"]}
     recent = {turn["id"] for turn in retained[-RECENT_TURNS:]}
@@ -60,6 +65,13 @@ def prepare_request(session, turns, message, retrieved_memories=None, *, proacti
             "澄清时只询问缺少的人物、地点、场景或时间，不列举对话中未明确提到的情节作为选项。"
             "例如只问‘你指的是哪一段？’。等对方说清之后，再基于有依据的相关资料回答。"
         )
+    if mixed_settings:
+        persona += (
+            f"\n当前会话绑定角色设定版本 {revision}。带旧设定标识的对话是旧版本当时的记录。"
+            "询问现在的角色背景、物件或场景时，以当前设定和本会话已确认的变化为准。"
+            "询问过去时，按当时的原话说明。比较现在和过去时，分别给出两者，"
+            "不要用旧对话、继承记忆或旧摘要覆盖当前角色设定，也不要把当前设定写回过去。"
+        )
     context = CompiledCharacterContext(
         profile_context=persona,
         dynamic_context="",
@@ -80,11 +92,19 @@ def prepare_request(session, turns, message, retrieved_memories=None, *, proacti
             ensure_ascii=False,
         ),
     )
-    history = [{"role": "assistant", "content": settings["greeting"]}]
-    for turn in retained:
+    greeting = {"role": "assistant", "content": settings["greeting"]}
+    history = [] if mixed_settings else [greeting]
+    for index, turn in enumerate(retained):
+        if mixed_settings and index == len(inherited):
+            history.append(greeting)
         if turn["id"] in covered and turn["id"] not in recent:
             continue
-        history.extend([{"role": "user", "content": turn["message"]}, {"role": "assistant", "content": turn["reply"]}])
+        turn_revision = turn.get("character_revision")
+        prefix = f"【旧设定版本 {turn_revision} 时】" if mixed_settings and turn_revision not in {None, revision} else ""
+        history.extend([{"role": "user", "content": prefix + turn["message"]},
+                        {"role": "assistant", "content": prefix + turn["reply"]}])
+    if mixed_settings and not turns:
+        history.append(greeting)
     return GenerationRequest(
         message=message, persona_prompt=persona, history=history, character_context=context, memory_write_enabled=False
     )

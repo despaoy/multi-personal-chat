@@ -19,6 +19,15 @@ const relationshipStages = { stranger: '初识', acquaintance: '认识', familia
 const relationshipTones = { restrained: '保持克制', playful: '可以轻松接梗' };
 const relationshipInitiatives = { wait: '跟随我的话题', offer: '适时追问或提议' };
 
+function rememberChatLocation(characterId: string, sessionId?: string) {
+  const url = new URL(window.location.href);
+  if (url.pathname !== '/chat') return;
+  url.searchParams.set('character', characterId);
+  if (sessionId) url.searchParams.set('session', sessionId);
+  else url.searchParams.delete('session');
+  if (url.href !== window.location.href) window.history.replaceState(null, '', url);
+}
+
 function describeRelationshipDimensions(dimensions?: CharacterChatRelationshipDimensions) {
   const tone = dimensions?.tone ? relationshipTones[dimensions.tone] : '随人物和情境';
   const initiative = dimensions?.initiative ? relationshipInitiatives[dimensions.initiative] : '随人物和情境';
@@ -138,6 +147,7 @@ function ChatWorkspace() {
     const response = await api.getCharacterChat(id);
     if (initial && initial.version !== loadVersion.current) return response;
     if (initial && response.session.character_id !== initial.characterId) throw new Error('会话不属于所选角色');
+    rememberChatLocation(response.session.character_id, response.session.id);
     setSession(response.session);
     setGeneration(response.generation);
     setEnrichmentPending(response.enrichment_pending);
@@ -246,6 +256,7 @@ function ChatWorkspace() {
       setDeletedInboxSessions(previous => new Set([...previous, ...result.deleted_session_ids]));
       setDeleteSelection([]); setSource(''); setSourceExcerpt(undefined);
       if (session && result.deleted_session_ids.includes(session.id)) {
+        rememberChatLocation(characterId);
         setSession(undefined); setTurns([]); setNewSession(true); setDraft(''); setEditing(undefined); setBranchTurn(undefined); pending.current = null;
       }
       await refreshSessions(characterId); await refreshShared();
@@ -353,7 +364,11 @@ function ChatWorkspace() {
     <div className="grid gap-5 md:grid-cols-[240px_1fr]">
       <aside className="space-y-3">
         <Label htmlFor="chat-character">角色</Label>
-        <select id="chat-character" disabled={busy} className="w-full rounded-md border bg-background p-2" value={characterId} onChange={event => setCharacterId(event.target.value)}>
+        <select id="chat-character" disabled={busy} className="w-full rounded-md border bg-background p-2" value={characterId} onChange={event => {
+          const nextCharacter = event.target.value;
+          rememberChatLocation(nextCharacter);
+          setCharacterId(nextCharacter);
+        }}>
           <option value="" disabled>选择角色</option>
           {characters.map(character => <option key={character.id} value={character.id}>{character.settings.name}</option>)}
         </select>
@@ -363,7 +378,10 @@ function ChatWorkspace() {
           setCharacterOffset(previous => previous + response.characters.length); setMoreCharacters(response.characters.length === 100);
         })}>加载更多角色</Button>}
         {!characters.length && <p className="text-sm text-muted-foreground">先在“我的角色”中创建或导入角色。</p>}
-        <Button disabled={busy || !characterId} className="w-full" onClick={() => { setNewSession(true); setSource(''); setAcceptChange(false); setSelectedShared([]); }}>新会话</Button>
+        <Button disabled={busy || !characterId} className="w-full" onClick={() => {
+          rememberChatLocation(characterId);
+          setNewSession(true); setSource(''); setAcceptChange(false); setSelectedShared([]);
+        }}>新会话</Button>
         <nav aria-label="会话列表" className="space-y-2">
           {sessions.map(item => <button key={item.id} disabled={busy} onClick={() => void run(async () => {
             await open(item.id); setDraft(''); setEditing(undefined); pending.current = null;
@@ -636,7 +654,8 @@ function ChatWorkspace() {
             <p className="whitespace-pre-wrap rounded-lg bg-muted p-4">{session.character.settings.greeting}</p>
             {session.baseline.history.length > 0 && <details className="rounded-lg border p-3"><summary className="cursor-pointer">继承的对话经历</summary>
               {session.baseline.history.map((turn, index) => <div key={`${turn.id}-${index}`} id={`turn-${turn.id}`} tabIndex={-1} className="mt-3 space-y-2 whitespace-pre-wrap text-sm focus:outline focus:outline-2 focus:outline-ring">
-                <p>你：{turn.message}</p><p>{session.character.settings.name}：{turn.reply}</p>
+                <p>你：{turn.message}</p><p>{turn.character_revision !== undefined && turn.character_revision !== session.character_revision
+                  ? `角色（旧设定版本 ${turn.character_revision}）` : session.character.settings.name}：{turn.reply}</p>
                 <AnswerSources evidence={turn.evidence} />
                 {turn.character_revision !== undefined && <Button variant="ghost" size="sm" disabled={busy} onClick={() => { setBranchTurn(turn.id); setHypothesis(''); }}>从这里创建分支</Button>}
               </div>)}

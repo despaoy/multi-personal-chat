@@ -668,6 +668,34 @@ def test_continuation_choices_isolate_memory_relationship_and_raw_history(repo):
         repo.create("1", entry["id"], "初识不能调整继承", reset_relationship=True)
 
 
+def test_versioned_continuation_places_new_greeting_after_marked_old_dialogue(repo):
+    from services.character_chat import prepare_request
+
+    entry = character(repo)
+    source = repo.create("1", entry["id"], "旧版")
+    source, first = turn(repo, source, "当时从东门进馆")
+    repo.characters.update("1", entry["id"], 1, CharacterSettings(
+        name="旅人", persona="现在走北门", greeting="请走北门。",
+    ))
+    continued = repo.create("1", entry["id"], "新版", source_session_id=source["id"],
+                            source_revision=source["revision"], accept_settings_change=True,
+                            expected_character_revision=2)
+    original = prepare_request(source, [first], "现在呢？")
+    assert [item["content"] for item in original.history] == ["你好", first["message"], first["reply"]]
+    prepared = prepare_request(continued, [], "以前和现在各从哪里进馆？")
+    assert prepared.history == [
+        {"role": "user", "content": "【旧设定版本 1 时】" + first["message"]},
+        {"role": "assistant", "content": "【旧设定版本 1 时】" + first["reply"]},
+        {"role": "assistant", "content": "请走北门。"},
+    ]
+    assert "现在走北门" in prepared.persona_prompt and "不要把当前设定写回过去" in prepared.persona_prompt
+    continued, current = turn(repo, continued, "去北门")
+    with_new_turn = prepare_request(continued, [current], "我们刚才去哪？")
+    assert with_new_turn.history[:-2] == prepared.history
+    assert with_new_turn.history[-2]["content"] == "去北门"
+    assert continued["baseline"]["history"][0]["message"] == first["message"]
+
+
 @pytest.mark.parametrize(
     ("message", "evidence", "kind", "status"),
     [
