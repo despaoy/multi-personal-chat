@@ -527,6 +527,54 @@ def test_continuation_choices_isolate_memory_relationship_and_raw_history(repo):
         repo.create("1", entry["id"], "初识不能调整继承", reset_relationship=True)
 
 
+@pytest.mark.parametrize(
+    ("message", "evidence", "kind", "status"),
+    [
+        ("今天不想喝咖啡", "今天不想喝咖啡", "dislike", "pending"),
+        ("我好像喜欢咖啡", "喜欢咖啡", "like", "pending"),
+        ("假设我喜欢咖啡", "我喜欢咖啡", "like", "pending"),
+        ("我喜欢咖啡吗？", "我喜欢咖啡", "like", "pending"),
+        ("我喜欢咖啡", "我喜欢咖啡", "like", "confirmed"),
+        ("记住，我平时不喝咖啡", "我平时不喝咖啡", "other_user_fact", "confirmed"),
+    ],
+)
+def test_web_memory_auto_confirmation_requires_user_assertion(repo, message, evidence, kind, status):
+    import json
+
+    from character.memory_llm import MemoryLlmConfig
+    from services.character_chat import prepare_request
+    from services.character_chat_memory import enrich_state
+
+    operation = "ADD"
+
+    class Writer:
+        async def complete(self, messages):
+            return json.dumps({"memories": [{
+                "operation": operation, "kind": kind, "value": "咖啡", "evidence": evidence,
+                "confidence": 0.99, "attributed_to": "user",
+            }]})
+
+    entry = character(repo)
+    session = repo.create("1", entry["id"], "偏好边界")
+    config = MemoryLlmConfig(enabled=True, base_url="https://test.invalid", model="test")
+    state = asyncio.run(enrich_state(message, session, "memory", config=config, completion=Writer()))
+    assert state["memory_processing"] == "completed"
+    candidate, = state["memories"]
+    assert candidate["status"] == status
+    assert candidate["evidence"] == evidence
+    context = prepare_request({**session, "state": state}, [], "我们继续聊").character_context
+    assert ("咖啡" in context.conversation_reference_context) == (status == "confirmed")
+    if kind == "other_user_fact":
+        assert candidate["content"] == "用户平时不喝咖啡"
+        evidence, operation = "我平时喝咖啡", "PENDING"
+        updated = asyncio.run(enrich_state(
+            evidence, {**session, "state": state}, "change", config=config, completion=Writer(),
+        ))
+        first, pending = updated["memories"]
+        assert first == candidate
+        assert pending["status"] == "pending" and pending["memory_key"] == candidate["memory_key"]
+
+
 def test_semantic_memory_is_committed_with_turn_and_conflicts_need_confirmation(repo):
     import json
     from functools import partial
