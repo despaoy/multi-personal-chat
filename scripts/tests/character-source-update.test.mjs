@@ -326,7 +326,14 @@ test('push control requests permission only after a click and supports disabling
 
 test('inbox on a different character opens the linked session even outside the first page', async () => {
   const originalWindow = globalThis.window;
-  globalThis.window = { location: { search: '?character=other-role&session=wanted' } };
+  const replaced = [];
+  globalThis.window = {
+    location: new URL('http://test/chat?character=other-role&session=wanted'),
+    history: { replaceState: (_state, _title, url) => {
+      replaced.push(url.search);
+      globalThis.window.location = new URL(url);
+    } },
+  };
   const receiving = { ...character, id: 'other-role' };
   const opened = [];
   const load = loader({
@@ -337,7 +344,8 @@ test('inbox on a different character opens the linked session even outside the f
     },
     listCharacterChats: async id => {
       assert.equal(id, receiving.id);
-      return { sessions: [] };
+      return { sessions: [{ id: 'listed', character_id: receiving.id, title: '列表里的会话', mode: 'initial',
+        revision: 1, character_revision: 1 }] };
     },
     listSharedChatMemories: async () => ({ memories: [] }),
     getCharacterProactiveInbox: async () => ({ messages: [{
@@ -345,7 +353,7 @@ test('inbox on a different character opens the linked session even outside the f
     }] }),
     getCharacterChat: async id => {
       opened.push(id);
-      return { session: { id, character_id: receiving.id, character: receiving, title: '已打开的会话', mode: 'initial',
+      return { session: { id, character_id: receiving.id, character: receiving, title: id === 'wanted' ? '已打开的会话' : '列表里的会话', mode: 'initial',
         baseline: { history: [] }, state: { relationship: { stage: 'stranger' }, memories: [] } }, turns: [] };
     },
     getCharacterProactive: async () => ({ policy: { enabled: false, revision: 0, quiet_start: null, quiet_end: null }, jobs: [] }),
@@ -354,8 +362,12 @@ test('inbox on a different character opens the linked session even outside the f
   try {
     await act(async () => { renderer = create(React.createElement(load('src/app/chat/page.tsx').default)); });
     assert.deepEqual(opened, ['wanted']);
+    assert.deepEqual(replaced, []);
     assert.ok(renderer.root.findAllByType('h2').some(node => text(node) === '已打开的会话'));
     assert.ok(renderer.root.findAllByType('a').some(node => node.props.href === '/chat?character=other-role&session=wanted'));
+    await click(renderer, '列表里的会话');
+    assert.deepEqual(opened, ['wanted', 'listed']);
+    assert.deepEqual(replaced, ['?character=other-role&session=listed']);
   } finally {
     if (renderer) await unmount(renderer);
     globalThis.window = originalWindow;

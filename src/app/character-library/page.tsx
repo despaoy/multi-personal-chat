@@ -14,6 +14,9 @@ import { CharacterSourceUpdatePanel } from '@/components/chat/CharacterSourceUpd
 import { CharacterSourceManager } from '@/components/chat/CharacterSourceManager';
 import type { CharacterLibraryRecord, CharacterPackage, CharacterSettings, CharacterOriginalSource } from '@/lib/api-contracts';
 
+// Covers the exported JSON of a fully populated v1 role, including escaped characters.
+const CHARACTER_FILE_LIMIT_MIB = 3;
+
 const emptySettings: CharacterSettings = {
   name: '', persona: '', greeting: '', scenario: '', relationships: '', examples: [], reference_text: '',
 };
@@ -165,7 +168,9 @@ function CharacterLibrary() {
         if (!file) return;
         void run(async () => {
           setImportPreview(undefined);
-          if (file.size > 1024 * 1024) throw new Error('角色文件不能超过 1 MB');
+          if (file.size > CHARACTER_FILE_LIMIT_MIB * 1024 * 1024) {
+            throw new Error(`角色文件不能超过 ${CHARACTER_FILE_LIMIT_MIB} MiB`);
+          }
           const contents = await file.text();
           let decoded: unknown;
           try { decoded = JSON.parse(contents); }
@@ -174,7 +179,7 @@ function CharacterLibrary() {
           setImportPreview({ ...preview, request_id: createClientId() });
         });
       }} />
-    <p className="text-sm text-muted-foreground">支持本应用导出的角色 JSON 文件（multipersonal-character-v1），最大 1 MB；暂不支持 PNG 角色卡及其他应用格式。导入前可预览，确认后创建独立角色。</p>
+    <p className="text-sm text-muted-foreground">支持本应用导出的角色 JSON 文件（multipersonal-character-v1），最大 {CHARACTER_FILE_LIMIT_MIB} MiB。导入前可预览，确认后创建独立角色。</p>
     {importPreview && <section aria-label="角色导入预览" className="space-y-3 rounded-lg border p-4">
       <h2 className="font-medium">准备导入：{importPreview.settings.name}</h2>
       <p className="whitespace-pre-wrap text-sm">{importPreview.settings.persona}</p>
