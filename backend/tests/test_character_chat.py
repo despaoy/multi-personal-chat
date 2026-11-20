@@ -663,8 +663,15 @@ def test_semantic_memory_is_committed_with_turn_and_conflicts_need_confirmation(
         saved = repo.get("1", session["id"])
         assert [item["status"] for item in saved["state"]["memories"]] == ["confirmed", "pending"]
         candidate = saved["state"]["memories"][-1]
-        saved = repo.manage_memory("1", session["id"], 3, memory_id=candidate["id"], content=candidate["content"])
+        saved = repo.manage_memory("1", session["id"], 3, memory_id=candidate["id"], content="用户偏好清淡饮料")
         assert len(saved["state"]["memories"]) == 1
+        corrected = saved["state"]["memories"][0]
+        assert corrected["origin"] == "user" and corrected["evidence"] == candidate["evidence"]
+        from services.character_chat import prepare_request
+
+        prompt_context = prepare_request(saved, [], "喝什么？").character_context.conversation_reference_context
+        assert "用户偏好清淡饮料" in prompt_context
+        assert candidate["evidence"] not in prompt_context
         saved = repo.retract("1", session["id"], second["id"], saved["revision"])
         assert saved["state"]["memories"][0]["id"] == memory["id"]
         repo.retract("1", session["id"], first["id"], saved["revision"])

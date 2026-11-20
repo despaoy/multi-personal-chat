@@ -668,7 +668,7 @@ class CharacterChatRepository:
                 if item.get("id") != memory_id:
                     items.append(item)
                 elif content is not None:
-                    items.append({**item, "content": content, "status": "confirmed", "updated_at": now})
+                    items.append({**item, "content": content, "status": "confirmed", "origin": "user", "updated_at": now})
             if adding and anchor:
                 items.append(
                     {

@@ -54,8 +54,11 @@ def prepare_request(session, turns, message, retrieved_memories=None, *, proacti
         conversation_reference_context=json.dumps(
             {
                 "relationship": relationship,
-                "memories": [item for item in (session["state"]["memories"] if retrieved_memories is None else retrieved_memories)
-                             if item.get("status") == "confirmed"],
+                "memories": [
+                    {"content": item["content"], "origin": "user"} if item.get("origin") == "user" else item
+                    for item in (session["state"]["memories"] if retrieved_memories is None else retrieved_memories)
+                    if item.get("status") == "confirmed"
+                ],
                 "creator_reference": settings["reference_text"],
                 "branch_hypothesis": session["hypothesis"],
                 "conversation_summaries": summaries,

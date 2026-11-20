@@ -241,6 +241,7 @@ function ChatWorkspace() {
       pending.current = null;
       await open(session.id);
       await refreshSessions(characterId);
+      if (body.replace_turn_id) await refreshShared();
     } catch (error) {
       // A timeout may follow a committed response. Read back before offering a retry.
       try {
@@ -249,6 +250,7 @@ function ChatWorkspace() {
           pending.current = null;
           setDraft('');
           setEditing(undefined);
+          if (body.replace_turn_id) await refreshShared();
           return;
         }
         if (response.session.revision !== body.revision) pending.current = null;
@@ -528,7 +530,7 @@ function ChatWorkspace() {
                 {memory.evidence && <details className="text-sm"><summary className="cursor-pointer">查看来源原文</summary><p className="whitespace-pre-wrap">{memory.evidence}</p></details>}
                 {memory.status === 'pending' && <Button variant="outline" size="sm" disabled={busy} onClick={() => {
                   if (!window.confirm('确认这条记忆？同一事项的旧记忆会由本条替换。')) return;
-                  void run(async () => { await api.saveCharacterChatMemory(session.id, session.revision, memory.content.replace(/^待确认：/, ''), memory.id); await open(session.id); await refreshSessions(characterId); });
+                  void run(async () => { await api.saveCharacterChatMemory(session.id, session.revision, memory.content.replace(/^待确认：/, ''), memory.id); await open(session.id); await refreshSessions(characterId); await refreshShared(); });
                 }}>确认记忆</Button>}
                 <Button variant="ghost" size="sm" disabled={busy} onClick={() => { setMemoryEditing(memory.id); setMemoryDraft(memory.content); }}>纠正</Button>
                 {session.mode !== 'branch' && memory.status === 'confirmed' && <Button variant="ghost" size="sm" disabled={busy} onClick={() => {
@@ -537,13 +539,14 @@ function ChatWorkspace() {
                 }}>共享给其他角色</Button>}
                 <Button variant="ghost" size="sm" disabled={busy} onClick={() => {
                   if (!window.confirm('从当前会话及其状态快照中删除这条记忆？已有分支不受影响。')) return;
-                  void run(async () => { await api.deleteCharacterChatMemory(session.id, session.revision, memory.id); await open(session.id); await refreshSessions(characterId); });
+                  void run(async () => { await api.deleteCharacterChatMemory(session.id, session.revision, memory.id); await open(session.id); await refreshSessions(characterId); await refreshShared(); });
                 }}>删除</Button>
               </li>)}
             </ul>
             <form className="mt-3 space-y-2" onSubmit={event => { event.preventDefault(); void run(async () => {
               await api.saveCharacterChatMemory(session.id, session.revision, memoryDraft, memoryEditing);
               await open(session.id); await refreshSessions(characterId);
+              if (memoryEditing) await refreshShared();
             }); }}>
               <Label htmlFor="memory-content">{memoryEditing ? '纠正记忆内容' : '添加会话记忆'}</Label>
               <textarea id="memory-content" required maxLength={2000} disabled={busy} rows={2} className="w-full rounded-md border bg-background p-2" value={memoryDraft} onChange={event => setMemoryDraft(event.target.value)} />
@@ -574,7 +577,11 @@ function ChatWorkspace() {
                 <Button variant="ghost" size="sm" disabled={busy} onClick={() => { setEditing(turn.id); setDraft(turn.message); pending.current = null; }}>编辑</Button>
                 <Button variant="ghost" size="sm" disabled={busy} onClick={() => {
                   if (!window.confirm('撤回这条消息和后续对话？相关关系和记忆将回到此前状态。')) return;
-                  void run(async () => { await api.retractCharacterChat(session.id, turn.id, session.revision); await open(session.id); await refreshSessions(characterId); setEditing(undefined); setDraft(''); pending.current = null; });
+                  void run(async () => {
+                    await api.retractCharacterChat(session.id, turn.id, session.revision);
+                    await open(session.id); await refreshSessions(characterId); await refreshShared();
+                    setEditing(undefined); setDraft(''); pending.current = null;
+                  });
                 }}>从此处撤回</Button>
                 <Button variant="ghost" size="sm" disabled={busy} onClick={() => { setBranchTurn(turn.id); setHypothesis(''); }}>创建分支</Button>
               </div>
