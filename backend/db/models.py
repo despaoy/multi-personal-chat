@@ -104,6 +104,7 @@ class CharacterSourceCorpus(Base):
     owner_user_id: Mapped[str] = mapped_column(Text, nullable=False)
     character_id: Mapped[str] = mapped_column(Text, ForeignKey("character_library.id", ondelete="CASCADE"), nullable=False)
     character_revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    edition_number: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     content_digest: Mapped[str] = mapped_column(Text, nullable=False)
     sources_json: Mapped[str] = mapped_column(Text, nullable=False)
     revoked: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

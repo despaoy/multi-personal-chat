@@ -121,11 +121,11 @@ pnpm build
 
 ## 6. 启动顺序
 
-1. PostgreSQL/Redis（如启用）。
-2. vLLM。
-3. FastAPI。
-4. Next.js。
-5. AstrBot。
+1. PostgreSQL 和 Redis（按部署选择）。使用角色聊天的后台功能时，准备可达的 Temporal 服务。使用原作资料检索时，准备可达的 OpenSearch 服务。
+2. 启动 vLLM，或配置已授权的云端模型。
+3. 升级 PostgreSQL，启动 FastAPI。
+4. 按需启动独立的角色聊天 worker。
+5. 启动 Next.js，按需接入 AstrBot。
 
 vLLM 示例：
 
@@ -143,15 +143,29 @@ CUDA_VISIBLE_DEVICES=0 vllm serve \
   --max-lora-rank 64
 ```
 
-后端：
+后端。PostgreSQL 部署先备份数据库，将与运行时一致的 `DATABASE_URL` 或 `PG_*` 注入迁移进程，并为 API 和 worker 设置 `USE_POSTGRESQL=true`。目标 PostgreSQL 需安装 pgvector，由数据库管理员预先启用 `vector` 扩展，或让迁移账号启用扩展。
 
 ```bash
 cd "$MULTIPERSONAL_LAB_ROOT/multi-personal-chat/backend"
 python -m alembic upgrade head
+python -m alembic current
 python run.py --host 127.0.0.1 --port 8000 --workers 1
 ```
 
-SQLite 和 PostgreSQL 模式均要求 `BACKEND_WORKERS=1`。会话锁和 nonce 等状态仍包含进程内实现，切换数据库或启用 Redis 不会自动解除该限制。当前迁移 head 为 `008_integration_receipts`；升级前备份数据库，并同时更新 AstrBot 插件和后端。
+角色聊天分支的迁移 head 为 `036_source_edition_order`。SQLite 本地运行由后端启动时补齐表和字段。两种数据库都采用 `BACKEND_WORKERS=1`，因为部分会话锁和 nonce 使用进程内状态。旧 AstrBot 部署仍需让插件和后端使用兼容版本。
+
+独立角色聊天 worker 在同一代码版本和后端目录运行，与 API 指向同一个数据库：
+
+```bash
+python -m workflows.run_chat_worker
+```
+
+- Worker 通过 `TEMPORAL_ADDRESS`、`TEMPORAL_NAMESPACE` 和 `TEMPORAL_CHAT_TASK_QUEUE` 连接 Temporal，可按部署配置 TLS 和 API key。
+- API 开启 `CHARACTER_CHAT_BACKGROUND_ENABLED` 后，正式回复会生成记忆、关系及摘要的后台处理任务。准备好 worker 后再开启。私人记忆向量、摘要和模型分别配置。
+- 原作资料索引由 worker 的 `CHARACTER_SOURCE_INDEXING_ENABLED` 开启。API 和 worker 使用相同的 `CHARACTER_SEARCH_URL`、`CHARACTER_SEARCH_INDEX` 和本地嵌入模型配置。OpenSearch 认证配置可以在两端分别注入。
+- 应用内主动联系由 worker 的 `CHARACTER_CHAT_PROACTIVE_ENABLED` 开启，实际发送仍需要会话授权。浏览器提醒还需向 API 和 worker 注入同一套 VAPID 配置，并通过浏览器的安全上下文访问网页。配置格式见 [浏览器提醒交付记录](../development/MODULE_DELIVERY.md#浏览器提醒)。
+
+现有 Docker Compose 定义应用及基础服务。启用上述后台功能时，需要从能够访问同一数据库和相应依赖的运行环境单独启动角色聊天 worker。可以选用本机或外部 Temporal、OpenSearch 端点，按所选环境注入配置。
 
 前端：
 

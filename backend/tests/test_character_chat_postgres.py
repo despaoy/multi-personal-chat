@@ -143,6 +143,31 @@ def test_postgres_sourced_proactive_job_is_cancelled_on_history_change(database)
     assert repo.view(owner, identity)["jobs"] == []
 
 
+def test_postgres_concurrent_source_editions_have_distinct_sequence_numbers(database, monkeypatch):
+    from repositories import character_sources
+    from repositories.character_sources import CharacterSourceRepository
+
+    sources = CharacterSourceRepository(database)
+    owner = f"edition-{uuid.uuid4().hex}"
+    character = sources.characters.create(owner, CharacterSettings(name="fixture", persona="fixture", greeting="hi"))
+    identity = character["id"]
+    monkeypatch.setattr(character_sources, "timestamp", lambda: "2026-11-20T12:00:00+00:00")
+    original = sources.publish(owner, identity, 1, [{"id": "source", "title": "source", "content": "original"}])
+    with ThreadPoolExecutor(2) as pool:
+        versions = list(pool.map(
+            lambda value: sources.publish(owner, identity, 1, [{"id": "source", "title": "source", "content": value}]),
+            ("first", "second"),
+        ))
+    expected = database.execute_sql(
+        "SELECT id,edition_number FROM character_source_corpora WHERE character_id=:id ORDER BY edition_number DESC",
+        {"id": identity},
+    )
+    assert [row["edition_number"] for row in expected] == [3, 2, 1]
+    assert [item["id"] for item in sources.list(owner, identity, 1)] == [row["id"] for row in expected]
+    assert expected[-1]["id"] == original["id"]
+    assert {item["id"] for item in versions} == {row["id"] for row in expected[:2]}
+
+
 def test_postgres_chat_generation_enrichment_retry_and_erasure(database):
     repo = CharacterChatRepository(database)
     char = repo.characters.create("pg-owner", CharacterSettings(name="旅人", persona="谨慎", greeting="你好"))

@@ -134,8 +134,9 @@ class CharacterPublicationRepository:
             return []
         payload = encode(sources)
         return [(
-            'INSERT INTO character_source_corpora (id,owner_user_id,character_id,character_revision,content_digest,sources_json,revoked,created_at,index_status,index_attempt) '
-            "VALUES (:id,:owner,:character,:revision,:digest,:payload,0,:now,'pending',1)",
+            'INSERT INTO character_source_corpora (id,owner_user_id,character_id,character_revision,content_digest,'
+            'sources_json,revoked,created_at,index_status,index_attempt,edition_number) '
+            "VALUES (:id,:owner,:character,:revision,:digest,:payload,0,:now,'pending',1,1)",
             {'id': uuid.uuid4().hex, 'owner': owner, 'character': character_id, 'revision': revision,
              'digest': hashlib.sha256(payload.encode()).hexdigest(), 'payload': payload, 'now': now()}, 1)]
 
@@ -207,9 +208,14 @@ class CharacterPublicationRepository:
 
     @staticmethod
     def _local_guard(params):
-        return ('UPDATE character_library SET revision=revision WHERE id=:id AND '
-                '((CAST(:corpus AS TEXT) IS NULL AND NOT EXISTS (SELECT 1 FROM character_source_corpora WHERE character_id=:id AND character_revision=:previous AND revoked=0)) '
-                'OR :corpus=(SELECT id FROM character_source_corpora WHERE character_id=:id AND character_revision=:previous AND revoked=0 ORDER BY created_at DESC,id DESC LIMIT 1))', params, 1)
+        return (
+            'UPDATE character_library SET revision=revision WHERE id=:id AND owner_user_id=:owner '
+            'AND ((CAST(:corpus AS TEXT) IS NULL AND NOT EXISTS (SELECT 1 FROM character_source_corpora '
+            'WHERE owner_user_id=:owner AND character_id=:id AND character_revision=:previous AND revoked=0)) '
+            'OR :corpus=(SELECT id FROM character_source_corpora WHERE owner_user_id=:owner AND character_id=:id '
+            'AND character_revision=:previous AND revoked=0 '
+            'ORDER BY edition_number DESC,created_at DESC,id DESC LIMIT 1))', params, 1,
+        )
 
     def _source_baseline(self, current):
         """Only the imported author's still-authorized publication can be a baseline.

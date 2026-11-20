@@ -35,7 +35,7 @@ class CharacterSourceRepository:
         return self.database.execute_sql(
             'SELECT id,character_id,character_revision,content_digest,created_at,index_status,index_attempt FROM character_source_corpora '
             'WHERE owner_user_id=:owner AND character_id=:character AND character_revision=:revision AND revoked=0 '
-            'ORDER BY created_at DESC,id DESC LIMIT :limit OFFSET :offset',
+            'ORDER BY edition_number DESC,created_at DESC,id DESC LIMIT :limit OFFSET :offset',
             {'owner': owner, 'character': character_id, 'revision': character_revision, 'limit': limit, 'offset': offset},
         )
 
@@ -53,8 +53,11 @@ class CharacterSourceRepository:
                   'digest': digest(payload), 'payload': payload, 'now': timestamp()}
         self.database.revision_transaction([
             ('UPDATE character_library SET revision=revision WHERE id=:character AND owner_user_id=:owner AND revision=:revision', params, 1),
-            ('INSERT INTO character_source_corpora (id,owner_user_id,character_id,character_revision,content_digest,sources_json,revoked,created_at) '
-             'VALUES (:id,:owner,:character,:revision,:digest,:payload,0,:now)', params, 1),
+            ('INSERT INTO character_source_corpora (id,owner_user_id,character_id,character_revision,content_digest,'
+             'sources_json,revoked,created_at,edition_number) '
+             'SELECT :id,:owner,:character,:revision,:digest,:payload,0,:now,COALESCE(MAX(edition_number),0)+1 '
+             'FROM character_source_corpora WHERE owner_user_id=:owner AND character_id=:character '
+             'AND character_revision=:revision', params, 1),
         ])
         return self.get(owner, params['id'])
 
@@ -64,6 +67,7 @@ class CharacterSourceRepository:
         if not rows:
             raise CharacterNotFoundError('资料版本不存在或已撤销')
         result = dict(rows[0])
+        result.pop('edition_number')
         payload = result.pop('sources_json')
         if digest(payload) != result['content_digest']:
             raise ValueError('Original corpus integrity check failed')

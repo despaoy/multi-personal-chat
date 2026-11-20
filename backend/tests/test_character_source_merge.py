@@ -1,5 +1,6 @@
 """Source merge plans, ownership, stale confirmations and old-session stability."""
 import json
+from uuid import UUID
 
 import pytest
 from fastapi import FastAPI
@@ -150,7 +151,7 @@ def test_before_preview_local_changes_are_preserved_and_old_sessions_keep_their_
 
 
 @pytest.mark.parametrize('mode', ['modify_modify', 'delete_modify', 'modify_delete', 'id_collision'])
-def test_api_rejects_conflicted_import_without_overwriting_any_state(env, mode):
+def test_api_rejects_conflicted_import_without_overwriting_any_state(env, mode, monkeypatch):
     if mode == 'modify_modify':
         local, remote = [doc('a', 'local')], [doc('a', 'author')]
     elif mode == 'delete_modify':
@@ -159,7 +160,17 @@ def test_api_rejects_conflicted_import_without_overwriting_any_state(env, mode):
         local, remote = [doc('a', 'local')], []
     else:
         local, remote = env['initial'] + [doc('same-id')], env['initial'] + [doc('same-id')]
-    local_edit(env, local)
+    if mode == 'id_collision':
+        from repositories import character_sources
+
+        current = env['recipient']
+        imported, = env['sources'].list('recipient', current['id'], current['revision'])
+        with monkeypatch.context() as clock:
+            clock.setattr(character_sources, 'timestamp', lambda: imported['created_at'])
+            clock.setattr(character_sources.uuid, 'uuid4', lambda: UUID(int=0))
+            local_edit(env, local)
+    else:
+        local_edit(env, local)
     publish_author(env, remote)
     app = FastAPI()
     app.include_router(router)

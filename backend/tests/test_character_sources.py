@@ -1,4 +1,6 @@
 import os
+import sqlite3
+from contextlib import closing
 
 import pytest
 
@@ -30,6 +32,33 @@ def sources(tmp_path):
 
 def publish(repo, char, content='第一行原文\n第二行原文\n第三行原文'):
     return repo.publish('owner', char['id'], 1, [{'id': 'chapter1', 'title': '第一章', 'content': content}])
+
+
+def test_sqlite_source_sequence_upgrade_preserves_old_editions(tmp_path, monkeypatch):
+    from repositories import character_sources
+
+    path = tmp_path / 'old-editions.db'
+    db = SQLiteDB(path)
+    try:
+        repo = CharacterSourceRepository(db)
+        char = repo.characters.create('owner', CharacterSettings(name='旅人', persona='谨慎', greeting='你好'))
+        first = publish(repo, char, '曾经保存的版本')
+    finally:
+        db.close_connection()
+    with closing(sqlite3.connect(path)) as connection, connection:
+        connection.execute('DROP INDEX ix_character_source_edition')
+        connection.execute('ALTER TABLE character_source_corpora DROP COLUMN edition_number')
+    reopened = SQLiteDB(path)
+    try:
+        repo = CharacterSourceRepository(reopened)
+        monkeypatch.setattr(character_sources, 'timestamp', lambda: '2000-01-01T00:00:00+00:00')
+        new = publish(repo, char, '重启并迁移后保存的新版本')
+        assert [row['id'] for row in repo.list('owner', char['id'], 1)] == [new['id'], first['id']]
+        assert repo.get('owner', first['id'])['sources'] == first['sources']
+        repo.revoke('owner', new['id'])
+        assert [row['id'] for row in repo.list('owner', char['id'], 1)] == [first['id']]
+    finally:
+        reopened.close_connection()
 
 
 def test_editions_are_immutable_and_revocation_blocks_stale_candidates(sources):
