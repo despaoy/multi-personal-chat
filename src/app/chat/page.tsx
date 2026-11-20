@@ -15,6 +15,15 @@ import { ProactiveInbox } from '@/components/chat/ProactiveInbox';
 import type { CharacterChatDeletionPreview, CharacterChatGeneration } from '@/lib/api-contracts';
 import type { CharacterChatSession, CharacterChatSummary, CharacterChatTurn, CharacterLibraryRecord, SendCharacterChatMessage, ContinuationPreview, CharacterSharedMemory, CharacterChatEvidence } from '@/lib/api-contracts';
 
+function focusTurn(turnId: string) {
+  const element = document.getElementById(`turn-${turnId}`);
+  if (!element) return;
+  const details = element.closest('details');
+  if (details) details.open = true;
+  element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  element.focus({ preventScroll: true });
+}
+
 function AnswerSources({ evidence }: { evidence?: CharacterChatEvidence }) {
   if (!evidence) return null;
   return <div className="space-y-2 text-sm">
@@ -49,6 +58,7 @@ function ChatWorkspace() {
   const [relatedDeletionIds, setRelatedDeletionIds] = useState<string[]>([]);
   const [deletedInboxSessions, setDeletedInboxSessions] = useState<ReadonlySet<string>>(() => new Set());
   const [sourceExcerpt, setSourceExcerpt] = useState<{ message: string; reply: string; title: string }>();
+  const [branchOrigin, setBranchOrigin] = useState<string>();
   const [session, setSession] = useState<CharacterChatSession>();
   const [turns, setTurns] = useState<CharacterChatTurn[]>([]);
   const [generation, setGeneration] = useState<CharacterChatGeneration | null>(null);
@@ -132,6 +142,10 @@ function ChatWorkspace() {
     setBranchTurn(undefined);
     return response;
   }, []);
+
+  useEffect(() => {
+    if (branchOrigin) focusTurn(branchOrigin);
+  }, [branchOrigin]);
 
   useEffect(() => {
     let active = true;
@@ -224,6 +238,27 @@ function ChatWorkspace() {
       throw error;
     } finally {
       clearDeletionPreview();
+    }
+  }
+
+  async function returnToBranchSource(branch: CharacterChatSession) {
+    if (!branch.source_session_id) return;
+    setBranchOrigin(undefined);
+    try {
+      const parent = await open(branch.source_session_id);
+      setDraft(''); setEditing(undefined); pending.current = null;
+      if (branch.source_turn_id) {
+        if ([...parent.turns, ...parent.session.baseline.history].some(turn => turn.id === branch.source_turn_id)) {
+          setBranchOrigin(branch.source_turn_id);
+        } else {
+          setError('来源消息已撤回或被替换，已打开来源会话。');
+        }
+      }
+    } catch (error) {
+      if (error instanceof ApiRequestError && error.status === 404) {
+        throw new Error('来源会话已删除或不可访问，当前分支仍可继续。');
+      }
+      throw error;
     }
   }
 
@@ -439,6 +474,10 @@ function ChatWorkspace() {
             <h2 className="text-lg font-medium">{session.title}</h2>
             <p className="text-sm text-muted-foreground">{session.network_policy === 'local_only' ? '仅使用本地模型 · 未配置本地辅助模型时，记忆、关系和摘要需手动管理' : '允许使用已配置的云端模型'}</p>
             <Button disabled={busy} variant="outline" onClick={() => void run(async () => { await open(session.id); await refreshSessions(characterId); })}>刷新会话</Button>
+            {session.mode === 'branch' && session.source_turn_id && <Button disabled={busy} variant="outline"
+              onClick={() => { if (session.source_turn_id) focusTurn(session.source_turn_id); }}>查看分支起点</Button>}
+            {session.mode === 'branch' && session.source_session_id && <Button disabled={busy} variant="outline"
+              onClick={() => void run(() => returnToBranchSource(session))}>返回来源会话</Button>}
             {session.mode !== 'branch' && <Button disabled={busy} variant="outline" onClick={() => {
               setSource(session.id); setAcceptChange(false); setUseNewSources(false); setNewSession(true);
             }}>延续此会话</Button>}
@@ -515,11 +554,7 @@ function ChatWorkspace() {
                 {memory.source_turn_id && <Button variant="link" size="sm" disabled={busy} onClick={() => void run(async () => {
                   const local = [...turns, ...session.baseline.history].find(turn => turn.id === memory.source_turn_id);
                   if (local) {
-                    const element = document.getElementById(`turn-${local.id}`);
-                    const details = element?.closest('details');
-                    if (details) details.open = true;
-                    element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    element?.focus({ preventScroll: true });
+                    focusTurn(local.id);
                     return;
                   }
                   const response = await api.getCharacterChat(memory.source_session_id);

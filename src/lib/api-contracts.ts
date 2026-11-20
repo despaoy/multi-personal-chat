@@ -190,6 +190,7 @@ export interface CharacterChatMemory {
 }
 
 export interface CharacterChatSession extends CharacterChatSummary {
+  source_turn_id: string | null;
   source_corpus_id: string | null;
   network_policy: 'cloud_allowed' | 'local_only';
   // Derived summaries remain inspectable alongside their quoted source turns.
