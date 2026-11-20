@@ -75,7 +75,7 @@ cp .env.example deploy/.env
 chmod 600 deploy/.env
 ```
 
-Compose 只从 `deploy/.env` 做变量插值。复制后至少设置：
+从 `deploy/` 运行 Compose 时，`deploy/.env` 提供插值默认值，shell 中已导出的同名变量优先。复制后至少设置：[Compose 环境变量优先级](https://docs.docker.com/compose/how-tos/environment-variables/variable-interpolation/#ways-to-set-variables-with-interpolation)
 
 - `ENVIRONMENT=production`
 - `PG_PASSWORD=<强随机密码>`
@@ -90,6 +90,16 @@ Compose 只从 `deploy/.env` 做变量插值。复制后至少设置：
 模型文件放在 `deploy/data/models/Qwen3-8B-Instruct-AWQ`；不要把宿主机模型路径误写成容器内路径。
 
 生产或公开网络禁止空 token、默认 JWT 密钥和宽泛 CORS。
+
+#### Compose 使用云端模型
+
+从 `deploy/` 运行时，将 `OPENAI_COMPAT_BASE_URL`、`OPENAI_COMPAT_MODEL`、`OPENAI_COMPAT_API_KEY` 配置在受保护的 Compose 环境中。先完成 PostgreSQL 迁移，再叠加云端配置启动。云端配置需要 Compose v2.24.4 或更新版本。[Compose 文件合并规则](https://docs.docker.com/reference/compose-file/merge/#replace-value)
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.cloud.yml up -d --wait
+```
+
+此配置默认启动 PostgreSQL、Redis、API、网页和 Nginx，不调度 vLLM。需要聊天 worker 时，以同一组配置叠加 `--profile character-chat`，按[启动顺序](#6-启动顺序)设置 Temporal。API 与 worker 使用同一云端接入配置。该环境没有本地生成模型时，本地限定会话会提示缺少本地模型，保留其网络限制。已运行环境切换模型应另行安排停机和验证。
 
 ### 4.3 角色知识索引
 

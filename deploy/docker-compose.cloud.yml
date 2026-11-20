@@ -1,0 +1,26 @@
+# Apply after docker-compose.yml for OpenAI-compatible inference.
+x-cloud-model: &cloud-model
+  MODEL_PROVIDER: openai_compat
+  OPENAI_COMPAT_BASE_URL: "${OPENAI_COMPAT_BASE_URL:?set OPENAI_COMPAT_BASE_URL}"
+  OPENAI_COMPAT_MODEL: "${OPENAI_COMPAT_MODEL:?set OPENAI_COMPAT_MODEL}"
+  OPENAI_COMPAT_API_KEY: "${OPENAI_COMPAT_API_KEY:?set OPENAI_COMPAT_API_KEY}"
+  VLLM_ENABLED: "false"
+  # Either URL alone enables vLLM, including the backend image's default.
+  VLLM_BASE_URL: ""
+  VLLM_BASE_URLS: ""
+  LOCAL_MODEL_ALLOWED_ORIGINS: "${LOCAL_MODEL_ALLOWED_ORIGINS:-}"
+
+services:
+  vllm:
+    profiles: [local-gpu]
+
+  backend:
+    depends_on: !override
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment: *cloud-model
+
+  chat-worker:
+    environment: *cloud-model

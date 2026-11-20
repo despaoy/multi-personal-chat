@@ -401,6 +401,8 @@ def test_generation_edits_idempotency_and_inflight_conflict(repo):
 
 
 def test_http_session_generation_and_scope(repo):
+    from services.character_chat_policy import LocalOnlyPolicyError
+
     class Runtime:
         limited = True
 
@@ -415,6 +417,8 @@ def test_http_session_generation_and_scope(repo):
             return await factory()
 
     async def complete(request, session, request_id):
+        if session["network_policy"] == "local_only":
+            raise LocalOnlyPolicyError()
         assert "谨慎" in request.persona_prompt
         return "你好，旅行者。", "controlled-test"
 
@@ -445,6 +449,14 @@ def test_http_session_generation_and_scope(repo):
         memory_id = added.json()["state"]["memories"][0]["id"]
         assert client.put(url + "/memories/" + memory_id, json={"revision": 2, "content": "咖啡"}).status_code == 409
         assert client.post(url + "/memories", json={"revision": 3, "content": "  "}).status_code == 422
+        local = client.post("/api/character-chats", json={
+            "character_id": entry["id"], "title": "仅本地会话", "network_policy": "local_only",
+        })
+        assert local.status_code == 201
+        local_path = f"/api/character-chats/{local.json()['id']}"
+        blocked = client.post(local_path + "/messages", json=body)
+        assert blocked.status_code == 422 and "仅允许本地模型" in blocked.json()["detail"]
+        assert client.get(local_path).json()["turns"] == []
         app.dependency_overrides[get_current_user] = lambda: {"user_id": "2"}
         assert client.get(url).status_code == 404
         assert client.request("DELETE", url + "/memories/" + memory_id, json={"revision": 3}).status_code == 404

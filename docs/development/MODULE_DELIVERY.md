@@ -24,7 +24,7 @@
 | 4 历史与剧情 | Chrome 验证编辑、撤回、分支导航和独立历史；继承历史迁移为账号内不可变节点和有序路径；SQLite 和 PostgreSQL 均验证恢复旧备份后删除回执仍有效 | 保留真实服务切换前的业务验收 |
 | 5 原作资料 | 真实 PostgreSQL 和 OpenSearch 集成已通过；Chrome 验证主动迁移与可展开出处快照；月社妃预设已通过四题的 BGE 重排分数回放、Flash 和网页验证 | 在线重排推理的并发延迟和更广的原作问答场景待验收 |
 | 6 主动互动 | 应用内消息、来源撤回、频率与免打扰有数据库与 worker 测试；真实 Temporal 与 Flash 验证两条月社妃日常连续；Chrome 可显示本机模拟推送 | 外部推送实际送达、更长剧情的人物一致性待验收 |
-| 7 整体集成 | 临时真实 PostgreSQL、Temporal、搜索与网页各有验收记录；完成 PostgreSQL 备份恢复演练；官方 Compose 工具验证默认配置、可选 worker 和 15G 配置 | 生产容器启动和整栈联调待完成 |
+| 7 整体集成 | 临时真实 PostgreSQL、Temporal、搜索与网页各有验收记录；已演练 PostgreSQL 备份恢复；验证本地和云端 Compose 配置，云端配置已通过生产模式 API 联调 | 生产容器启动和整栈联调待完成 |
 
 ## 模块1当前工作
 
@@ -361,5 +361,11 @@ Chrome 经真实 OpenSearch 和 DeepSeek Flash 重跑四题。正式资料排序
 标准 Compose 增加可选的 `character-chat` profile。聊天 worker 在 API 通过就绪检查后启动，与 API 使用同一套构建配置、数据库和模型路径，单独连接配置好的 Temporal。原作资料功能可分别启用查询和索引。标准与 15G 配置都显式允许本地限定会话使用各自容器网络中的 vLLM。
 
 通过官方 Compose v2.39.4 的 `config` 命令检查了默认服务、启用 worker 后的服务关系和配置、15G 服务配置。默认无 worker，启用后其内部端口不对外发布，模型目录只读。32 项 Windows 定向回归通过，LHM 上 11 项 Linux 部署脚本回归通过，其中模拟 Docker 验证启动失败能向调用方返回。LHM 检查到 RTX 4090 D 正在使用，未发现 Docker、Podman 或 Docker socket。生产镜像构建、容器启动和容器内整栈联调待有符合 LHM 路径要求的隔离运行时后验证。[Compose config](https://docs.docker.com/reference/cli/docker/compose/config/)
+
+## Compose 云端模型入口
+
+云端覆盖配置移除 API 对 vLLM 的启动依赖，并将 API 和可选 worker 切到同一 OpenAI 兼容模型连接。官方 Compose 工具验证了开启和关闭 worker 两种组合，默认均不会调度 vLLM，空云端配置会被拒绝。
+
+使用 Compose 解析后的 API 环境，在隔离 FastAPI 和 LHM PostgreSQL 上完成 037 迁移并以生产模式启动。通过 `/ready` 验证数据库与 DeepSeek 模型列表，普通会话得到一条 Flash 回复并可读回。仅本地会话在发送前拒绝云端，接口由通用 500 修正为带配置提示的 422，未留下正式回复。62 项定向回归通过，临时数据库已停止。本轮联调通过测试进程加载配置，Redis 与容器内网络未进入此次联调。
 
 68 项后端回归及仓库完整性检查通过，隔离 OpenSearch 已停止。
