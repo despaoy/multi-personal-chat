@@ -37,6 +37,12 @@ def prepare_request(session, turns, message, retrieved_memories=None, *, proacti
         )
     if session["mode"] == "branch":
         persona += "\n本轮处于假想分支，按用户明确给出的剧情假设推演，并保持未被修改的人物立场。"
+    else:
+        persona += (
+            "\n用户要求回忆前文或确认已经发生的事情时，只复述已有对话、设定和核实资料明确支持的细节。"
+            "如果只知道地点的大致范围，就只说到这个范围。用角色自己的语气说明不知道的部分，"
+            "不要把新想象的地点细节、物件特征或过去行动说成已经记得的事实。"
+        )
     context = CompiledCharacterContext(
         profile_context=persona,
         dynamic_context="",

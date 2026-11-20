@@ -92,6 +92,7 @@ def test_provider_path_compiles_prompt_and_records_usage(repo, monkeypatch):
     result = asyncio.run(chat.generate("1", session["id"], revision=1, request_id="provider-path", message="你好"))
     assert result["reply"] == "我们从这里开始。"
     assert "谨慎" in calls[0][0]["content"]
+    assert "只复述已有对话、设定和核实资料明确支持的细节" in calls[0][0]["content"]
     records = repo.database.execute_sql(
         'SELECT * FROM model_invocations WHERE "traceId"=:trace', {"trace": "provider-path"}
     )
