@@ -252,52 +252,7 @@ class SQLiteDB:
             )
         ''')
 
-        # 创建训练任务表
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS training_tasks (
-                id TEXT PRIMARY KEY,
-                task_id TEXT UNIQUE,
-                lora_name TEXT NOT NULL DEFAULT '',
-                status TEXT NOT NULL DEFAULT 'pending',
-                progress REAL DEFAULT 0,
-                error_message TEXT DEFAULT '',
-                config_json TEXT DEFAULT '{}',
-                created_at TEXT DEFAULT '',
-                updated_at TEXT DEFAULT ''
-            )
-        ''')
-        # Legacy tables used task_id as the primary key, sometimes with an
-        # additional non-primary id column. Inspect once, then migrate atomically.
-        columns = {row[1]: row for row in cursor.execute("PRAGMA table_info(training_tasks)")}
-        if columns["task_id"][5] == 1 and ("id" not in columns or columns["id"][5] == 0):
-            source_id = "id" if "id" in columns else "task_id"
-            cursor.execute("SAVEPOINT training_task_migration")
-            try:
-                cursor.execute("ALTER TABLE training_tasks RENAME TO training_tasks_old")
-                cursor.execute("""
-                    CREATE TABLE training_tasks (
-                        id TEXT PRIMARY KEY,
-                        task_id TEXT UNIQUE,
-                        lora_name TEXT NOT NULL DEFAULT '',
-                        status TEXT NOT NULL DEFAULT 'pending',
-                        progress REAL DEFAULT 0,
-                        error_message TEXT DEFAULT '',
-                        config_json TEXT DEFAULT '{}',
-                        created_at TEXT DEFAULT '',
-                        updated_at TEXT DEFAULT ''
-                    )
-                """)
-                cursor.execute(f"""
-                    INSERT INTO training_tasks (id, task_id, lora_name, status, progress, error_message, config_json, created_at, updated_at)
-                    SELECT {source_id}, task_id, lora_name, status, progress, error_message, config_json, created_at, updated_at
-                    FROM training_tasks_old
-                """)
-                cursor.execute("DROP TABLE training_tasks_old")
-                cursor.execute("RELEASE SAVEPOINT training_task_migration")
-            except BaseException:
-                cursor.execute("ROLLBACK TO SAVEPOINT training_task_migration")
-                cursor.execute("RELEASE SAVEPOINT training_task_migration")
-                raise
+        self._init_training_task_schema(cursor)
 
         # 创建 Claw 自定义工具表
         cursor.execute('''
@@ -867,6 +822,55 @@ class SQLiteDB:
             cursor.execute(CREATE_SOURCE_REVOCATIONS)
             cursor.execute(BACKFILL_SOURCE_REVOCATIONS)
         cursor.execute("UPDATE character_source_corpora SET index_status='completed' WHERE index_receipt_json IS NOT NULL AND index_status='pending'")
+
+    @staticmethod
+    def _init_training_task_schema(cursor):
+        # 创建训练任务表
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS training_tasks (
+                id TEXT PRIMARY KEY,
+                task_id TEXT UNIQUE,
+                lora_name TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'pending',
+                progress REAL DEFAULT 0,
+                error_message TEXT DEFAULT '',
+                config_json TEXT DEFAULT '{}',
+                created_at TEXT DEFAULT '',
+                updated_at TEXT DEFAULT ''
+            )
+        ''')
+        # Legacy tables used task_id as the primary key, sometimes with an
+        # additional non-primary id column. Inspect once, then migrate atomically.
+        columns = {row[1]: row for row in cursor.execute("PRAGMA table_info(training_tasks)")}
+        if columns["task_id"][5] == 1 and ("id" not in columns or columns["id"][5] == 0):
+            source_id = "id" if "id" in columns else "task_id"
+            cursor.execute("SAVEPOINT training_task_migration")
+            try:
+                cursor.execute("ALTER TABLE training_tasks RENAME TO training_tasks_old")
+                cursor.execute("""
+                    CREATE TABLE training_tasks (
+                        id TEXT PRIMARY KEY,
+                        task_id TEXT UNIQUE,
+                        lora_name TEXT NOT NULL DEFAULT '',
+                        status TEXT NOT NULL DEFAULT 'pending',
+                        progress REAL DEFAULT 0,
+                        error_message TEXT DEFAULT '',
+                        config_json TEXT DEFAULT '{}',
+                        created_at TEXT DEFAULT '',
+                        updated_at TEXT DEFAULT ''
+                    )
+                """)
+                cursor.execute(f"""
+                    INSERT INTO training_tasks (id, task_id, lora_name, status, progress, error_message, config_json, created_at, updated_at)
+                    SELECT {source_id}, task_id, lora_name, status, progress, error_message, config_json, created_at, updated_at
+                    FROM training_tasks_old
+                """)
+                cursor.execute("DROP TABLE training_tasks_old")
+                cursor.execute("RELEASE SAVEPOINT training_task_migration")
+            except BaseException:
+                cursor.execute("ROLLBACK TO SAVEPOINT training_task_migration")
+                cursor.execute("RELEASE SAVEPOINT training_task_migration")
+                raise
 
     @staticmethod
     def _migrate_legacy_session_settings(cursor):
