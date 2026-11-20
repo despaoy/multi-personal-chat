@@ -68,6 +68,39 @@ def test_retry_never_duplicates_application_message(setup):
     assert len(proactive.inbox("a")) == 1
 
 
+def test_quiet_candidates_do_not_starve_later_devices_or_expand_send_budget(setup):
+    proactive, push, original, settings = setup
+    quiet_begins = 22 * 3600
+    keys = device_keys()
+    expected = set()
+    for index in range(13):
+        quiet = index < 10
+        session = proactive.chats.create("a", original["character_id"], f"session-{index}")
+        policy = {**settings, "quiet_start": 22 * 60, "quiet_end": 8 * 60} if quiet else settings
+        proactive.set_policy("a", session["id"], 0, **policy)
+        for device in range(5):
+            endpoint = f"https://fcm.googleapis.com/fcm/send/fixture-{index}-{device}"
+            push.register("a", session["id"], endpoint, *keys)
+            if not quiet:
+                expected.add(endpoint)
+        due = quiet_begins - 1 if quiet else quiet_begins + 1
+        proactive.schedule("a", session["id"], 1, "message", "event", "fixture", due, now=100)
+
+    assert proactive.deliver_due(now=quiet_begins - 1) == 10
+    assert proactive.deliver_due(now=quiet_begins + 1) == 3
+    received = []
+
+    class Sender:
+        def send(self, endpoint, p256dh, auth, tag):
+            received.append(endpoint)
+            return 201
+
+    for count in (12, 15, 15):
+        push.deliver(Sender(), now=quiet_begins + 1)
+        assert len(received) == count
+    assert set(received) == expected
+
+
 def test_unregister_and_revocation_prevent_queued_push(setup):
     proactive, push, session, settings = setup
     identity = session["id"]

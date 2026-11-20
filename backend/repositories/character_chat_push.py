@@ -2,6 +2,7 @@
 
 import logging
 from hashlib import sha256
+from itertools import islice
 from time import time
 from uuid import uuid4
 
@@ -11,6 +12,8 @@ from repositories.character_library import CharacterNotFoundError
 from services.character_web_push import validate_endpoint, validate_keys
 
 logger = logging.getLogger(__name__)
+_SEND_BATCH = 12
+_SCAN_PAGE = 48
 _READY = (
     " FROM character_chat_push_subscriptions d "
     "JOIN character_chat_sessions s ON s.id=d.session_id "
@@ -81,12 +84,8 @@ class CharacterChatPushRepository:
         def clock():
             return time() if now is None else now
 
-        rows = self.db.execute_sql(
-            "SELECT d.id,d.session_id,d.endpoint,d.p256dh,d.auth,d.created_at,s.owner_user_id,"
-            "p.revision,p.timezone,p.quiet_start,p.quiet_end,j.id AS message_id,j.sent_at" + _READY
-            + " ORDER BY j.sent_at,d.id,j.id LIMIT 12", self._window(clock()),
-        )
-        for row in rows:
+        pending = (row for row in self._ready_rows(clock()) if not in_quiet_hours(row, clock()))
+        for row in islice(pending, _SEND_BATCH):
             try:
                 self._deliver_one(sender, row, clock())
             except (RevisionConflictError, CharacterNotFoundError):
@@ -94,6 +93,22 @@ class CharacterChatPushRepository:
             except Exception as exc:
                 # Do not log subscription endpoints, keys or network error bodies.
                 logger.warning("Browser reminder failed type=%s", type(exc).__name__)
+
+    def _ready_rows(self, now):
+        params = {**self._window(now), "page": _SCAN_PAGE}
+        after = ""
+        while True:
+            rows = self.db.execute_sql(
+                "SELECT d.id,d.session_id,d.endpoint,d.p256dh,d.auth,d.created_at,s.owner_user_id,"
+                "p.revision,p.timezone,p.quiet_start,p.quiet_end,j.id AS message_id,j.sent_at" + _READY
+                + after + " ORDER BY j.sent_at,d.id,j.id LIMIT :page", params,
+            )
+            yield from rows
+            if len(rows) < _SCAN_PAGE:
+                return
+            last = rows[-1]
+            params.update(sent=last["sent_at"], device=last["id"], message=last["message_id"])
+            after = " AND (j.sent_at,d.id,j.id)>(:sent,:device,:message)"
 
     def _deliver_one(self, sender, row, now):
         if in_quiet_hours(row, now) or row["sent_at"] < now - 300:
