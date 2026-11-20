@@ -2,6 +2,7 @@ import asyncio
 import re
 from functools import partial
 
+import httpx
 import pytest
 
 from character.library import CharacterSettings
@@ -108,8 +109,8 @@ def test_source_lookup_reaches_prompt_and_commits_only_live_authority(tmp_path, 
         db.close_connection()
 
 
-@pytest.mark.parametrize("use_model", [False, True])
-def test_reranking_expands_only_authoritative_neighbor_lines(tmp_path, use_model):
+@pytest.mark.parametrize("mode", ["literal", "model", "model_unavailable", "invalid_order", "search_unavailable"])
+def test_reranking_expands_only_authoritative_neighbor_lines(tmp_path, mode):
     db = SQLiteDB(tmp_path / 'source-ranking.db')
     sources = CharacterSourceRepository(db)
     chats = CharacterChatRepository(db)
@@ -132,17 +133,38 @@ def test_reranking_expands_only_authoritative_neighbor_lines(tmp_path, use_model
             dimension = 3
 
             async def candidates(self, scope, query, vector, *, limit):
+                if mode == "search_unavailable":
+                    raise httpx.ConnectError("fixture service unreachable")
                 return [{**c, 'content': '伪造索引内容'} for c in (unrelated, anchor)]
 
-        class Reranker:
-            def rerank(self, query, documents, *, top_k):
-                assert documents[1]['content'] == anchor['content']
-                assert top_k == len(documents)
-                return [{**document, 'content': '重排器伪造内容'} for document in reversed(documents)]
+        called = []
+
+        def rerank(query, documents):
+            called.append(query)
+            assert documents[1]['content'] == anchor['content']
+            if mode == "model_unavailable":
+                raise RuntimeError("fixture weights unavailable")
+            if mode == "invalid_order":
+                return [{"id": "unverified", "content": "重排器伪造内容"}]
+            return [{**document, 'content': '重排器伪造内容'} for document in reversed(documents)]
 
         request = GenerationRequest(message='小满送信到灯塔')
-        result = asyncio.run(retrieve_source_context(request, session, database=db, index=Index(), provider=Provider(),
-                                                     reranker=Reranker() if use_model else None))
+        retrieve = partial(retrieve_source_context, database=db, index=Index(), provider=Provider(),
+                           rerank=None if mode == "literal" else rerank)
+        if mode == "search_unavailable":
+            async def complete(compiled_request, session, request_id):
+                assert compiled_request.retrieval.reason == "retrieval_unavailable"
+                assert compiled_request.retrieval.documents == ()
+                return "目前没找到原文可以核对。", "fixture"
+
+            chat = CharacterChatService(db, complete, sources=retrieve)
+            turn = asyncio.run(chat.generate('owner', session['id'], revision=1, request_id='offline', message=request.message))
+            assert turn["reply"] == "目前没找到原文可以核对。"
+            assert not turn["evidence"] and not called
+            return
+
+        result = asyncio.run(retrieve(request, session))
+        assert called == ([] if mode == "literal" else [request.message])
         first = result.retrieval.documents[0]
         assert (first['source_id'], first['line_start'], first['line_end']) == ('original', 3, 5)
         assert first['content'] == '风声渐小。\n小满送信到灯塔。\n门卫让她进去。'

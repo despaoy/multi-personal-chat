@@ -1,6 +1,7 @@
 """Join search candidates to authoritative original sources for a bound conversation."""
 
 import asyncio
+import logging
 import os
 from dataclasses import replace
 
@@ -17,8 +18,16 @@ from repositories.character_sources import CharacterSourceRepository, SourceInde
 from services.character_chat_policy import require_local_endpoint
 from services.character_chat_vectors import embedding_identity
 
+logger = logging.getLogger(__name__)
 
-async def retrieve_source_context(request, session, *, database, index, provider, reranker=None):
+
+def _unavailable(request):
+    return replace(request, retrieval=RetrievalResult(
+        status='character_abstention', reason='retrieval_unavailable',
+    ))
+
+
+async def retrieve_source_context(request, session, *, database, index, provider, rerank=None):
     corpus_id = session.get('source_corpus_id')
     if not corpus_id:
         return request
@@ -43,16 +52,18 @@ async def retrieve_source_context(request, session, *, database, index, provider
     except SourceIndexNotReadyError:
         # A newly published or copied corpus may still be indexing. Admit
         # no source text or citations, while allowing an in-character reply.
-        return replace(request, retrieval=RetrievalResult(
-            status='character_abstention', reason='retrieval_unavailable',
-        ))
+        return _unavailable(request)
     vector = await asyncio.to_thread(provider.embed_query, request.message)
     vector = vector.tolist() if hasattr(vector, 'tolist') else list(vector)
     scope = CharacterSearchScope(owner, session['character_id'], session['character_revision'], corpus_id, identity)
-    candidates = await index.candidates(scope, request.message, vector, limit=SOURCE_CANDIDATE_LIMIT)
+    try:
+        candidates = await index.candidates(scope, request.message, vector, limit=SOURCE_CANDIDATE_LIMIT)
+    except httpx.HTTPError as exc:
+        logger.warning("Character source search unavailable type=%s", type(exc).__name__)
+        return _unavailable(request)
     documents = await asyncio.to_thread(repo.verify_candidates, owner, session['character_id'],
                                         session['character_revision'], corpus_id, candidates)
-    ranked = await asyncio.to_thread(rank_verified_sources, request.message, documents, reranker=reranker)
+    ranked = await asyncio.to_thread(rank_verified_sources, request.message, documents, rerank=rerank)
     corpus = await asyncio.to_thread(validate)
     documents = await asyncio.to_thread(expand_source_context, ranked, corpus)
     packets = document_evidence_packets(documents)
@@ -79,14 +90,15 @@ async def retrieve_configured_sources(request, session, *, database):
         raise ValueError('CHARACTER_SEARCH_URL is required for original-source retrieval')
     require_local_endpoint(session, url)
     provider = get_default_embedding_provider()
-    reranker = None
-    if read_bool(os.environ, 'RERANKER_ENABLED'):
+    def model_rerank(query, documents):
         from knowledge.reranker import get_reranker
 
-        reranker = get_reranker()
+        return get_reranker().rerank(query, documents, top_k=len(documents))
+
+    rerank = model_rerank if read_bool(os.environ, 'RERANKER_ENABLED') else None
     username, password = os.getenv('CHARACTER_SEARCH_USERNAME'), os.getenv('CHARACTER_SEARCH_PASSWORD')
     async with httpx.AsyncClient(base_url=url, auth=(username, password or '') if username else None,
                                  timeout=30, trust_env=False, follow_redirects=False) as client:
         index = CharacterSearchIndex(client, os.getenv('CHARACTER_SEARCH_INDEX', 'character-sources-v1'), provider.dimension)
         return await retrieve_source_context(request, session, database=database, index=index, provider=provider,
-                                             reranker=reranker)
+                                             rerank=rerank)
