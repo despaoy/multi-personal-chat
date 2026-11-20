@@ -77,10 +77,10 @@ async def test_two_applications_keep_config_and_check_reports_in_their_own_store
 
 
 @pytest.mark.parametrize('operation', ['list', 'record'])
-async def test_bound_store_failure_is_reported_without_another_store(stores, monkeypatch, operation):
+async def test_bound_store_failure_is_reported_without_another_store(stores, monkeypatch, operation, business_sql_fault):
     database = stores.databases[0]
     reader = Mock(side_effect=OSError('synthetic-private-bound-store-fault'))
-    monkeypatch.setattr(database, 'execute_sql', reader)
+    monkeypatch.setattr(database, 'execute_sql', business_sql_fault(database, 'execute_sql', reader))
     async with client(database) as api:
         response = await api.get('/api/router/adapters') if operation == 'list' else await api.post('/api/router/check/fixture')
     assert response.status_code == 503 and 'synthetic-private' not in response.text

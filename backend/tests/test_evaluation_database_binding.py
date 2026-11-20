@@ -90,15 +90,17 @@ async def test_two_applications_own_records_feedback_and_queued_completion(store
 
 
 @pytest.mark.parametrize('operation', ['read', 'insert'])
-async def test_bound_evaluation_database_fault_cannot_use_global_store(stores, monkeypatch, operation):
+async def test_bound_evaluation_database_fault_cannot_use_global_store(stores, monkeypatch, operation, business_sql_fault):
     database = stores.databases[0]
     schedule = Mock(side_effect=AssertionError('failed insert must not schedule'))
     monkeypatch.setattr(runtime_runner, 'schedule_generation_evaluation', schedule)
     method = 'execute_sql' if operation == 'read' else 'execute_sql_insert'
-    monkeypatch.setattr(database, method, Mock(side_effect=OSError('synthetic-bound-database-down')))
+    fault = Mock(side_effect=OSError('synthetic-bound-database-down'))
+    monkeypatch.setattr(database, method, business_sql_fault(database, method, fault))
     async with client(database) as api:
         response = await api.get('/api/evaluation/runs') if operation == 'read' else await api.post('/api/evaluation/run', json={'mock': False})
     assert response.status_code == (500 if operation == 'read' else 503)
+    fault.assert_called()
     schedule.assert_not_called()
     stores.forbidden.assert_not_called()
 

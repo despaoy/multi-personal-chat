@@ -2,7 +2,7 @@
 
 import time
 
-from db.auth_revocation_schema import MERGE_TOKEN_REVOCATION, PURGE_EXPIRED_TOKEN_REVOCATIONS, TOKEN_REVOCATIONS
+from db.auth_revocation_schema import CHECK_TOKEN_REVOCATION, MERGE_TOKEN_REVOCATION, PURGE_EXPIRED_TOKEN_REVOCATIONS
 
 
 def revoke_token(database, jti: str, expires_at: int) -> None:
@@ -20,7 +20,7 @@ def revoke_token(database, jti: str, expires_at: int) -> None:
 def is_token_revoked(database, jti: str) -> bool:
     return bool(
         database.execute_sql(
-            f"SELECT 1 FROM {TOKEN_REVOCATIONS} WHERE jti = :jti AND expires_at > :now",
+            CHECK_TOKEN_REVOCATION,
             {"jti": jti, "now": int(time.time())},
         )
     )

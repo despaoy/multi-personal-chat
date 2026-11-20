@@ -155,6 +155,24 @@ def synthetic_multiscale_index(monkeypatch, tmp_path):
 
 
 @pytest.fixture
+def business_sql_fault():
+    """Inject a business-store fault while still running the real authentication query."""
+    from db.auth_revocation_schema import CHECK_TOKEN_REVOCATION
+
+    def wrap(database, method, fault):
+        original = getattr(database, method)
+
+        def execute(query, *args, **kwargs):
+            if method == "execute_sql" and query == CHECK_TOKEN_REVOCATION:
+                return original(query, *args, **kwargs)
+            return fault(query, *args, **kwargs)
+
+        return execute
+
+    return wrap
+
+
+@pytest.fixture
 def controlled_public_bundle(monkeypatch):
     """Pre-reviewed synthetic bundles for transport tests, not semantic evidence."""
     async def binding(*args, **kwargs):
