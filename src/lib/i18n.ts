@@ -27,7 +27,6 @@ const translations: Record<Locale, Record<string, string>> = {
     'navigation.logout': '退出登录',
     // 侧边栏
     'sidebar.title': 'QQ 智能助手',
-    'nav.dashboard': '仪表盘',
     'nav.history': '历史记录',
     'nav.training': 'LoRA训练',
     'nav.lora': 'LoRA管理',
@@ -40,8 +39,6 @@ const translations: Record<Locale, Record<string, string>> = {
     'nav.preferences': '偏好',
     'nav.claw': 'Claw工具',
     'nav.settings': '设置',
-    'sidebar.status': '系统运行中',
-    'sidebar.lastCheck': '最后检查',
 
     // 顶部栏
     'header.title': '智能助手管理平台',
@@ -174,7 +171,6 @@ const translations: Record<Locale, Record<string, string>> = {
     'navigation.logout': '登出',
     // 側邊欄
     'sidebar.title': 'QQ 智慧助手',
-    'nav.dashboard': '儀表盤',
     'nav.history': '歷史記錄',
     'nav.training': 'LoRA訓練',
     'nav.lora': 'LoRA管理',
@@ -187,8 +183,6 @@ const translations: Record<Locale, Record<string, string>> = {
     'nav.preferences': '偏好',
     'nav.claw': 'Claw工具',
     'nav.settings': '設定',
-    'sidebar.status': '系統運行中',
-    'sidebar.lastCheck': '最後檢查',
 
     // 頂部欄
     'header.title': '智慧助手管理平台',
@@ -321,7 +315,6 @@ const translations: Record<Locale, Record<string, string>> = {
     'navigation.logout': 'Sign out',
     // Sidebar
     'sidebar.title': 'QQ Smart Assistant',
-    'nav.dashboard': 'Dashboard',
     'nav.history': 'History',
     'nav.training': 'LoRA Training',
     'nav.lora': 'LoRA Models',
@@ -334,8 +327,6 @@ const translations: Record<Locale, Record<string, string>> = {
     'nav.preferences': 'Preferences',
     'nav.claw': 'Claw Tools',
     'nav.settings': 'Settings',
-    'sidebar.status': 'System Running',
-    'sidebar.lastCheck': 'Last Check',
 
     // Header
     'header.title': 'Smart Assistant Platform',
