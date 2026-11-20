@@ -699,6 +699,14 @@ class ApiClient {
     });
   }
 
+  changeCharacterProactiveSchedule(id: string, jobId: string, expectedDueAt: number, dueAt: number | null) {
+    return this.request<{ status: 'pending' | 'cancelled' }>(
+      `/character-chats/${encodeURIComponent(id)}/proactive/jobs/${encodeURIComponent(jobId)}`, {
+        method: 'PATCH', body: JSON.stringify({ expected_due_at: expectedDueAt, due_at: dueAt }),
+      },
+    );
+  }
+
   deleteCharacterChats(sessions: { id: string; revision: number }[]) {
     return this.request<{ deleted_session_ids: string[] }>('/character-chats/delete-selected', {
       method: 'POST', body: JSON.stringify({ sessions }),

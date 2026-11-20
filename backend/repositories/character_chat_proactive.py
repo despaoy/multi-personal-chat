@@ -234,6 +234,48 @@ class CharacterChatProactiveRepository:
             return saved
         raise ValueError("该话题和时间已安排，或待发送消息已达 20 条")
 
+    def change_schedule(self, owner, session_id, job_id, expected_due_at, due_at, *, now=None):
+        session = self.chats.get(owner, session_id)
+        params = {"session": session_id, "id": job_id, "expected_due": expected_due_at, "due": due_at}
+        rows = self.db.execute_sql(
+            "SELECT status,due_at,policy_revision FROM character_chat_proactive_jobs WHERE session_id=:session AND id=:id",
+            params,
+        )
+        if not rows:
+            raise CharacterNotFoundError("安排不存在")
+        job = rows[0]
+        if due_at is None and job["status"] == "cancelled":
+            return {"status": "cancelled"}
+        if job["status"] != "pending":
+            raise RevisionConflictError()
+        if due_at == job["due_at"]:
+            return {"status": "pending"}
+        if job["due_at"] != expected_due_at:
+            raise RevisionConflictError()
+
+        params["revision"] = job["policy_revision"]
+        match = " WHERE session_id=:session AND id=:id AND status='pending' AND due_at=:expected_due"
+        if due_at is None:
+            statement = "UPDATE character_chat_proactive_jobs SET status='cancelled',topic=''" + match
+        else:
+            now = time() if now is None else now
+            if not now <= due_at <= now + 366 * 86400:
+                raise ValueError("请填写未来一年内的提醒时间")
+            statement = (
+                "UPDATE character_chat_proactive_jobs SET due_at=:due,next_attempt_at=:due" + match
+                + " AND NOT EXISTS (SELECT 1 FROM character_chat_proactive_jobs other "
+                "WHERE other.session_id=:session AND other.id<>:id AND other.status IN ('pending','sent') "
+                "AND other.kind=character_chat_proactive_jobs.kind AND other.topic=character_chat_proactive_jobs.topic "
+                "AND other.due_at=:due)"
+            )
+        self.db.revision_transaction([
+            self._session_guard(session),
+            ("UPDATE character_chat_proactive_policies SET revision=revision "
+             "WHERE session_id=:session AND revision=:revision AND enabled=1", params, 1),
+            (statement, params, 1),
+        ])
+        return {"status": "cancelled" if due_at is None else "pending"}
+
     def has_due(self, now):
         return bool(self.db.execute_sql(
             "SELECT id FROM character_chat_proactive_jobs "
@@ -245,7 +287,7 @@ class CharacterChatProactiveRepository:
     def _due_jobs(self, now, *, fiction=None):
         kind = {True: " AND j.kind='fiction'", False: " AND j.kind<>'fiction'", None: ""}
         return self.db.execute_sql(
-            "SELECT j.session_id,j.id,j.kind,j.topic,j.policy_revision,j.next_attempt_at,s.owner_user_id "
+            "SELECT j.session_id,j.id,j.kind,j.topic,j.policy_revision,j.due_at,j.next_attempt_at,s.owner_user_id "
             "FROM character_chat_proactive_jobs j JOIN character_chat_sessions s ON s.id=j.session_id "
             "WHERE j.status='pending' AND j.next_attempt_at<=:now" + kind[fiction]
             + " ORDER BY j.next_attempt_at,j.id LIMIT 100", {"now": now},
@@ -287,12 +329,12 @@ class CharacterChatProactiveRepository:
             return None
         next_allowed = next_allowed_at(policy, now)
         params = {"session": session_id, "id": job["id"], "revision": policy["revision"], "now": now,
-                  "expected_attempt": job["next_attempt_at"]}
+                  "expected_attempt": job["next_attempt_at"], "expected_due": job["due_at"]}
         if next_allowed is not None:
             self.db.revision_transaction([
                 ("UPDATE character_chat_proactive_jobs SET next_attempt_at=:next "
                  "WHERE session_id=:session AND id=:id AND policy_revision=:revision "
-                 "AND status='pending' AND next_attempt_at=:expected_attempt",
+                 "AND status='pending' AND due_at=:expected_due AND next_attempt_at=:expected_attempt",
                  {**params, "next": next_allowed}, None),
             ])
             return None
@@ -316,7 +358,7 @@ class CharacterChatProactiveRepository:
                      {**params, "cutoff": now - policy["cadence_hours"] * 3600}, 1),
                     ("UPDATE character_chat_proactive_jobs SET next_attempt_at=:lease "
                      "WHERE session_id=:session AND id=:id AND policy_revision=:revision AND status='pending' "
-                     "AND next_attempt_at=:expected_attempt", {**params, "lease": lease}, 1),
+                     "AND due_at=:expected_due AND next_attempt_at=:expected_attempt", {**params, "lease": lease}, 1),
                 ])
                 prior = self.fiction_history(job["owner_user_id"], job["session_id"], limit=3)["entries"]
                 return {**job, "next_attempt_at": lease}, session, [item["content"] for item in reversed(prior)]
@@ -348,7 +390,7 @@ class CharacterChatProactiveRepository:
              {**params, "cutoff": now - policy["cadence_hours"] * 3600}, 1),
             ("UPDATE character_chat_proactive_jobs SET status='sent',sent_at=:now,content=:content "
              "WHERE session_id=:session AND id=:id AND policy_revision=:revision "
-             "AND status='pending' AND next_attempt_at=:expected_attempt",
+             "AND status='pending' AND due_at=:expected_due AND next_attempt_at=:expected_attempt",
              {**params, "content": content or _TEXT[job["kind"]].format(topic=job["topic"])}, 1),
         ])
         return True

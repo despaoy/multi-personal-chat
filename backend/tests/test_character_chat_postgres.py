@@ -104,8 +104,12 @@ def test_postgres_proactive_delivery_respects_session_consent_and_is_idempotent(
     identity = session["id"]
     repo.set_policy(owner, identity, 0, enabled=True, cadence_hours=24, timezone="UTC", quiet_start=None, quiet_end=None)
     repo.schedule(owner, identity, 1, "id", "event", "test event", 101, now=100)
+    repo.schedule(owner, identity, 1, "cancel", "event", "different event", 102, now=100)
+    assert repo.change_schedule(owner, identity, "cancel", 102, None) == {"status": "cancelled"}
+    assert repo.change_schedule(owner, identity, "id", 101, 102, now=100) == {"status": "pending"}
+    assert repo.deliver_due(now=101) == 0
     with ThreadPoolExecutor(2) as pool:
-        assert sum(pool.map(lambda _: repo.deliver_due(now=101), range(2))) == 1
+        assert sum(pool.map(lambda _: repo.deliver_due(now=102), range(2))) == 1
     assert repo.view(owner, identity)["jobs"][0]["status"] == "sent"
     repo.set_policy(owner, identity, 1, enabled=True, cadence_hours=24, timezone="UTC", quiet_start=None, quiet_end=None,
                     inactivity_hours=72)

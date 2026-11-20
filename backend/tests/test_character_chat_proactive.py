@@ -140,6 +140,59 @@ def test_fiction_history_is_scoped_paginated_and_preserved_after_revocation(proa
         assert client.get(path).status_code == 404
 
 
+def test_pending_schedule_changes_are_scoped_replayable_and_fence_delivery(proactive, monkeypatch):
+    from repositories import character_chat_proactive
+
+    repo, session = proactive
+    identity = session["id"]
+    repo.set_policy("owner", identity, 0, **policy(quiet_start=None, quiet_end=None))
+    repo.schedule("owner", identity, 1, "first", "event", "面试", 101, now=100)
+    repo.schedule("owner", identity, 1, "second", "event", "面试", 201, now=100)
+    stale, = repo._due_jobs(101)
+    monkeypatch.setattr(character_chat_proactive, "time", lambda: 100)
+    app = FastAPI()
+    app.include_router(router)
+    owner = "other"
+    app.dependency_overrides[get_current_user] = lambda: {"user_id": owner}
+    app.dependency_overrides[repository] = lambda: repo.chats
+    path = f"/api/character-chats/{identity}/proactive/jobs/"
+    with TestClient(app) as client:
+        move = {"expected_due_at": 101, "due_at": 201}
+        assert client.patch(path + "first", json=move).status_code == 404
+        owner = "owner"
+        assert client.patch(path + "first", json=move).status_code == 409
+        for _ in range(2):
+            cancelled = client.patch(path + "second", json={"expected_due_at": 201, "due_at": None})
+            assert cancelled.status_code == 200 and cancelled.json() == {"status": "cancelled"}
+        for _ in range(2):
+            moved = client.patch(path + "first", json=move)
+            assert moved.status_code == 200 and moved.json() == {"status": "pending"}
+        assert client.patch(path + "first", json={"expected_due_at": 101, "due_at": None}).status_code == 409
+        with pytest.raises(RevisionConflictError):
+            repo._deliver(stale, 101)
+        assert repo.deliver_due(now=101) == 0
+        assert repo.deliver_due(now=201) == 1
+        assert repo.deliver_due(now=202) == 0
+        assert client.patch(path + "first", json={"expected_due_at": 201, "due_at": None}).status_code == 409
+    only, = repo.view("owner", identity)["jobs"]
+    assert only["id"] == "first" and only["status"] == "sent" and only["sent_at"] == 201
+
+
+def test_reschedule_at_previous_fiction_lease_fences_the_draft(proactive):
+    repo, session = proactive
+    identity = session["id"]
+    repo.set_policy("owner", identity, 0, **policy(quiet_start=None, quiet_end=None))
+    repo.schedule("owner", identity, 1, "story", "fiction", "意外的旅程", 101, now=100)
+    claim = repo.claim_fiction(now=101)
+    deadline = claim[0]["next_attempt_at"]
+    repo.change_schedule("owner", identity, "story", 101, deadline, now=102)
+    assert not repo.finish_fiction(claim, "旧草稿", now=102)
+    assert not repo.fiction_history("owner", identity)["entries"]
+    new_claim = repo.claim_fiction(now=deadline)
+    assert new_claim is not None and repo.finish_fiction(new_claim, "新草稿", now=deadline)
+    assert repo.fiction_history("owner", identity)["entries"][0]["content"] == "【角色虚构日常】新草稿"
+
+
 def test_app_delivery_respects_quiet_hours_frequency_and_is_replay_safe(proactive):
     repo, session = proactive
     identity = session["id"]

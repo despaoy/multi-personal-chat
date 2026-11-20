@@ -124,6 +124,12 @@ class ProactiveJob(Revision):
     source_turn_id: str | None = Field(default=None, min_length=1, max_length=100)
 
 
+class ProactiveScheduleChange(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_due_at: float = Field(gt=0, le=1e10)
+    due_at: float | None = Field(gt=0, le=1e10)
+
+
 class BrowserSubscription(BaseModel):
     model_config = ConfigDict(extra="forbid")
     endpoint: str = Field(min_length=1, max_length=2048)
@@ -297,6 +303,16 @@ def save_proactive_policy(session_id: str, body: ProactivePolicy, owner=Depends(
 def schedule_proactive_job(session_id: str, body: ProactiveJob, owner=Depends(account), repo=Depends(repository)):
     try:
         return call(lambda: CharacterChatProactiveRepository(repo.database).schedule(owner, session_id, **body.model_dump()))
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@router.patch("/{session_id}/proactive/jobs/{job_id}")
+def change_proactive_schedule(session_id: str, job_id: Annotated[str, Field(min_length=1, max_length=100)],
+                              body: ProactiveScheduleChange, owner=Depends(account), repo=Depends(repository)):
+    try:
+        return call(CharacterChatProactiveRepository(repo.database).change_schedule,
+                    owner, session_id, job_id, body.expected_due_at, body.due_at)
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { api } from '@/lib/api';
+import { api, ApiRequestError } from '@/lib/api';
 import { createClientId } from '@/lib/client-id';
 import { BrowserPushControl } from './BrowserPushControl';
 import type {
@@ -35,6 +35,7 @@ export function ProactivePanel({ sessionId }: { sessionId: string }) {
   const [candidates, setCandidates] = useState<ProactiveCandidate[]>();
   const [source, setSource] = useState<ProactiveCandidate>();
   const [fiction, setFiction] = useState<CharacterFictionHistory>();
+  const [scheduleDraft, setScheduleDraft] = useState<{ id: string; expectedDueAt: number; time: string }>();
   const flight = useRef(false);
   const readGeneration = useRef(0);
   const retry = useRef<{ key: string; id: string } | null>(null);
@@ -77,6 +78,21 @@ export function ProactivePanel({ sessionId }: { sessionId: string }) {
       flight.current = false;
       setBusy(false);
     }
+  }
+
+  function changeSchedule(jobId: string, expectedDueAt: number, dueAt: number | null) {
+    void run(async () => {
+      try {
+        await api.changeCharacterProactiveSchedule(sessionId, jobId, expectedDueAt, dueAt);
+        setScheduleDraft(undefined);
+      } catch (error) {
+        if (error instanceof ApiRequestError && [404, 409].includes(error.status)) {
+          setScheduleDraft(undefined);
+          try { setView(await api.getCharacterProactive(sessionId)); } catch { /* Report the original error. */ }
+        }
+        throw error;
+      }
+    });
   }
 
   return <section aria-label="主动联系" className="space-y-3">
@@ -205,6 +221,23 @@ export function ProactivePanel({ sessionId }: { sessionId: string }) {
       {!!view?.jobs.some(job => job.status === 'pending') && <ul className="space-y-2 text-sm">{view.jobs.filter(job => job.status === 'pending').map(job => <li key={job.id} className="rounded border p-2">
         <p>待发送：{job.topic}</p>
         <time className="text-muted-foreground">{new Date(job.due_at * 1000).toLocaleString()}</time>
+        {scheduleDraft?.id === job.id ? <form className="mt-2 flex flex-wrap items-center gap-2" onSubmit={event => {
+          event.preventDefault();
+          const dueAt = new Date(scheduleDraft.time).getTime() / 1000;
+          if (Number.isFinite(dueAt)) changeSchedule(job.id, scheduleDraft.expectedDueAt, dueAt);
+        }}>
+          <label>新的最早发送时间（本机时区） <input className="rounded border p-1" type="datetime-local" required
+            value={scheduleDraft.time} disabled={busy}
+            onChange={event => setScheduleDraft({ ...scheduleDraft, time: event.target.value })} /></label>
+          <Button type="submit" variant="outline" size="sm" disabled={busy}>保存新时间</Button>
+          <Button type="button" variant="ghost" size="sm" disabled={busy} onClick={() => setScheduleDraft(undefined)}>放弃改期</Button>
+        </form> : <div className="mt-2 flex flex-wrap gap-2">
+          <Button type="button" variant="outline" size="sm" disabled={busy} onClick={() => {
+            setScheduleDraft({ id: job.id, expectedDueAt: job.due_at, time: localDateTime(job.due_at) });
+          }}>改期</Button>
+          <Button type="button" variant="ghost" size="sm" disabled={busy}
+            onClick={() => changeSchedule(job.id, job.due_at, null)}>取消安排</Button>
+        </div>}
       </li>)}</ul>}
     </details>
   </section>;
