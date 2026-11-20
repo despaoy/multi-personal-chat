@@ -341,6 +341,42 @@ def test_deletion_preview_finds_transitive_branches_and_unshared_cross_character
         assert {item["id"] for item in repo.list("1")} == {unrelated["id"], continuation["id"], nested["id"]}
 
 
+def test_deletion_preview_keeps_provenance_across_removed_intermediate_copies(repo):
+    owner = "1"
+    characters = [
+        repo.characters.create(owner, CharacterSettings(name=name, persona="谨慎", greeting="你好"))
+        for name in ("原角色", "第一位接收者", "第二位接收者", "第三位接收者")
+    ]
+    origin = repo.create(owner, characters[0]["id"], "原始记忆")
+    origin = repo.manage_memory(owner, origin["id"], origin["revision"], content="喜欢白茶")
+
+    def copy_from(source, destination):
+        source = repo.share_memory(owner, source["id"], source["state"]["memories"][0]["id"], source["revision"])
+        shared = next(item for item in repo.shared_memories(owner) if item["source_session_id"] == source["id"])
+        return repo.create(owner, destination["id"], destination["settings"]["name"], shared_memory_ids=[shared["id"]])
+
+    first = copy_from(origin, characters[1])
+    intermediate = copy_from(first, characters[2])
+    last = copy_from(intermediate, characters[3])
+    intermediate = repo.get(owner, intermediate["id"])
+    repo.delete_sessions(owner, [{"id": intermediate["id"], "revision": intermediate["revision"]}])
+    first = repo.get(owner, first["id"])
+    selected = [{"id": first["id"], "revision": first["revision"]}]
+    assert [item["id"] for item in repo.preview_deletion(owner, selected)["related"]] == [last["id"]]
+    prompt = build_generation_request(prepare_request(last, [], "聊聊白茶")).messages
+    assert all(first["id"] not in message["content"] for message in prompt)
+
+    last, _ = turn(repo, last, text="聊过白茶")
+    last = repo.manage_memory(owner, last["id"], last["revision"], memory_id=last["state"]["memories"][0]["id"])
+    assert last["state"]["memories"] == []
+    assert [item["id"] for item in repo.preview_deletion(owner, selected)["related"]] == [last["id"]]
+    source = {"source_session_id": last["id"], "source_revision": last["revision"]}
+    continued = repo.create(owner, last["character_id"], "保留聊天记录", **source)
+    repo.create(owner, last["character_id"], "省略聊天记录", inherit_history=False, **source)
+    repo.delete_sessions(owner, [{"id": last["id"], "revision": last["revision"]}])
+    assert [item["id"] for item in repo.preview_deletion(owner, selected)["related"]] == [continued["id"]]
+
+
 def turn(repo, session, text="你好", state=None):
     result = repo.commit_turn(session, str(session["revision"]), text, "收到", "controlled-test", state=state)
     return repo.get("1", session["id"]), result

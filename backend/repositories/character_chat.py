@@ -119,6 +119,8 @@ class CharacterChatRepository:
         for row in rows:
             baseline = json.loads(row["baseline_json"])
             parents = {row["source_session_id"], *origins[row["id"]]}
+            for ancestry in baseline.get("shared_memory_lineage", {}).values():
+                parents.update(ancestry)
             states = [json.loads(row["state_json"]), baseline.get("state", {})]
             states.extend(step.get("state_after", {}) for step in baseline["history_states"])
             for state in states:
@@ -366,6 +368,13 @@ class CharacterChatRepository:
                 )
             )
         session_id, now = uuid.uuid4().hex, timestamp()
+        shared_lineage = {}
+        if source_session_id:
+            retained_ids = {memory.get("id") for memory in state["memories"] if isinstance(memory, dict)}
+            shared_lineage = {
+                identity: ancestry for identity, ancestry in source["baseline"].get("shared_memory_lineage", {}).items()
+                if baseline["history"] or identity in retained_ids
+            }
         if shared_memory_ids:
             if mode != "initial":
                 raise ValueError("共享记忆仅在初识新会话中显式带入")
@@ -386,11 +395,15 @@ class CharacterChatRepository:
                 # Share the chosen fact, not an entire source utterance containing other facts.
                 memory.pop("evidence", None)
                 memory.pop("source_request_id", None)
+                memory_id = uuid.uuid4().hex
+                ancestry = set(shared_source["baseline"].get("shared_memory_lineage", {}).get(rows[0]["source_memory_id"], ()))
+                ancestry.update((memory.get("source_session_id"), memory.get("shared_from_session_id"), shared_source["id"]))
+                shared_lineage[memory_id] = sorted(ancestry - {None})
                 collision = any(item.get("memory_key") == memory.get("memory_key") for item in state["memories"])
                 state["memories"].append(
                     {
                         **memory,
-                        "id": uuid.uuid4().hex,
+                        "id": memory_id,
                         "origin": "shared",
                         "shared_memory_id": shared_id,
                         "shared_from_session_id": shared_source["id"],
@@ -405,6 +418,10 @@ class CharacterChatRepository:
                     )
                 )
             baseline["state"] = state
+        if shared_lineage:
+            # Provenance belongs to the snapshot, so scrubbing the copied memory
+            # does not conceal a conversation that may have used it.
+            baseline["shared_memory_lineage"] = shared_lineage
         baseline["network_policy"] = network_policy or "cloud_allowed"
         from repositories.character_sources import CharacterSourceRepository
 
