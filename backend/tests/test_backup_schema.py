@@ -133,6 +133,59 @@ async def test_restore_does_not_regrant_old_outreach_consent(tmp_path, monkeypat
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("legacy_sharing", [False, True])
+async def test_restore_keeps_character_shares_closed_and_preserves_copies(tmp_path, legacy_sharing):
+    from character.library import CharacterSettings
+    from db.database import SQLiteDB
+    from db.errors import RevisionConflictError
+    from repositories.character_library import CharacterLibraryRepository, CharacterNotFoundError
+
+    path = tmp_path / "shares.sqlite"
+    db = SQLiteDB(path)
+    try:
+        library = CharacterLibraryRepository(db)
+        role = library.create("author", CharacterSettings(name="fixture", persona="fixture", greeting="hi"))
+        identity = role["id"]
+        preview = library.publish_preview("author", identity, 1)
+        published = library.publish("author", identity, 1, True, preview_id=preview["preview_id"])
+        copied = library.copy_shared("recipient", published["share_token"])
+        idle = library.create("author", CharacterSettings(name="idle", persona="fixture", greeting="hi"))["id"]
+        idle_preview = library.publish_preview("author", idle, 1)
+        if legacy_sharing:
+            db.execute_sql("ALTER TABLE character_library DROP COLUMN sharing_epoch")
+            db.execute_sql("ALTER TABLE character_library DROP COLUMN publication_id")
+        backup = await BackupManager(str(path), backup_dir=str(tmp_path / "archives")).backup()
+    finally:
+        db.close_connection()
+
+    db = SQLiteDB(path)
+    try:
+        library = CharacterLibraryRepository(db)
+        library.publish("author", identity, 1, False)
+        later_preview = library.publish_preview("author", identity, 1)
+    finally:
+        db.close_connection()
+
+    for target in (path, tmp_path / "recovered.sqlite"):
+        restore_sqlite_backup(Path(backup.path), target)
+        db = SQLiteDB(target)
+        try:
+            library = CharacterLibraryRepository(db)
+            with pytest.raises(CharacterNotFoundError):
+                library.shared(published["share_token"])
+            for role_id, old_preview in ((identity, preview), (identity, later_preview), (idle, idle_preview)):
+                with pytest.raises(RevisionConflictError):
+                    library.publish("author", role_id, 1, True, preview_id=old_preview["preview_id"])
+            assert library.get("recipient", copied["id"])["settings"] == copied["settings"]
+            fresh = library.publish_preview("author", identity, 1)
+            renewed = library.publish("author", identity, 1, True, preview_id=fresh["preview_id"])
+            assert renewed["share_token"] != published["share_token"]
+            assert renewed["publication_id"] == published["publication_id"]
+        finally:
+            db.close_connection()
+
+
+@pytest.mark.asyncio
 async def test_restore_refuses_uncheckpointed_wal_without_replacing_target(tmp_path):
     source, target = tmp_path / "source.sqlite", tmp_path / "target.sqlite"
     with closing(sqlite3.connect(source)) as connection, connection:

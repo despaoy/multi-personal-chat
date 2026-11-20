@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Replay chat erasures and disable stale outreach in a staged PostgreSQL restore."""
+"""Replay chat erasures and clear stale grants in a staged PostgreSQL restore."""
 
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 
 from db.character_chat_erasure import ERASURE_TABLE, SESSION_ROWS
 from db.character_chat_history import HISTORY_NODES, ORPHANED_HISTORY_NODE
+from db.character_sharing_restore import reset_restored_sharing
 from db.schema_readiness import require_current_migrations
 from db.urls import normalize_async_database_url
 
@@ -50,7 +51,7 @@ async def prepare_restore(staged_url, receipt_url):
     finally:
         await receipt_engine.dispose()
 
-    tables = sorted({ERASURE_TABLE, _EVIDENCE, HISTORY_NODES, *(table for table, _ in SESSION_ROWS)})
+    tables = sorted({ERASURE_TABLE, _EVIDENCE, HISTORY_NODES, "character_library", *(table for table, _ in SESSION_ROWS)})
     staged_engine = create_async_engine(staged, hide_parameters=True)
     try:
         async with staged_engine.begin() as connection:
@@ -78,6 +79,8 @@ async def prepare_restore(staged_url, receipt_url):
             await connection.execute(text(f"UPDATE {_JOBS} SET status='cancelled',topic='' WHERE status='pending'"))
             await connection.execute(text(f"DELETE FROM {_ATTEMPTS}"))
             await connection.execute(text(f"DELETE FROM {_SUBSCRIPTIONS}"))
+            sharing_sql, sharing_params = reset_restored_sharing()
+            await connection.execute(text(sharing_sql), sharing_params)
     finally:
         await staged_engine.dispose()
 
