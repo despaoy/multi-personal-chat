@@ -18,7 +18,7 @@ from repositories.character_sources import CharacterSourceRepository
 from services.character_chat import CharacterChatService, prepare_request
 from services.character_chat_evidence import CharacterChatCompletion, evidence_snapshot
 from services.character_chat_vectors import embedding_identity
-from services.character_source_retrieval import retrieve_source_context
+from services.character_source_retrieval import retrieve_configured_sources, retrieve_source_context
 
 
 class Provider:
@@ -100,7 +100,7 @@ def test_unfinished_index_allows_reply_without_source_admission(tmp_path):
 
 
 @pytest.mark.parametrize('revoke_during_reply', [False, True])
-def test_source_lookup_reaches_prompt_and_commits_only_live_authority(tmp_path, revoke_during_reply):
+def test_source_lookup_reaches_prompt_and_commits_only_live_authority(tmp_path, monkeypatch, revoke_during_reply):
     db = SQLiteDB(tmp_path / 'source-chat.db')
     sources = CharacterSourceRepository(db)
     chats = CharacterChatRepository(db)
@@ -160,6 +160,32 @@ def test_source_lookup_reaches_prompt_and_commits_only_live_authority(tmp_path, 
             with pytest.raises(RevisionConflictError):
                 chats.commit_turn(updated, 'late', '追问', '迟到的答案', 'test', source_corpus_id=corpus['id'])
             assert len(chats.turns('owner', session['id'])) == 1
+            branch = chats.create('owner', char['id'], '旧出处的分支', source_session_id=session['id'],
+                                  source_revision=updated['revision'], source_turn_id=turn['id'])
+            assert branch['baseline']['history'][0]['evidence'] == turn['evidence']
+            assert branch['source_corpus_id'] == corpus['id']
+
+            def unexpected_embedding(*args):
+                pytest.fail('A revoked branch source must not run embedding or search')
+
+            monkeypatch.setattr(Provider, 'embed_query', unexpected_embedding)
+            monkeypatch.delenv('CHARACTER_SEARCH_URL', raising=False)
+            request = prepare_request(branch, [], '原文还说了什么？')
+            declined = asyncio.run(retrieve_source_context(request, branch, database=db, index=Index(), provider=Provider()))
+            assert declined.retrieval.reason == 'source_version_revoked'
+            assert not declined.retrieval.has_evidence
+
+            async def reply_without_sources(request, _session, _request_id):
+                assert request.retrieval.reason == 'source_version_revoked'
+                assert not request.retrieval.documents
+                return '现在没有可核对的原文。', 'controlled'
+
+            branch_chat = CharacterChatService(db, reply_without_sources,
+                                               sources=partial(retrieve_configured_sources, database=db))
+            resumed = asyncio.run(branch_chat.generate(
+                'owner', branch['id'], revision=1, request_id='branch-revoked', message='接下来呢？',
+            ))
+            assert resumed['reply'] == '现在没有可核对的原文。' and resumed['evidence'] == {}
     finally:
         db.close_connection()
 

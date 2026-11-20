@@ -19,6 +19,7 @@ from knowledge.character_source_ranking import (
 )
 from knowledge.evidence_packets import document_evidence_packets
 from repositories.character_chat import CharacterChatRepository
+from repositories.character_library import CharacterNotFoundError
 from repositories.character_sources import CharacterSourceRepository, SourceIndexNotReadyError
 from services.character_chat_policy import require_local_endpoint
 from services.character_chat_vectors import embedding_identity
@@ -26,10 +27,17 @@ from services.character_chat_vectors import embedding_identity
 logger = logging.getLogger(__name__)
 
 
-def _unavailable(request):
+def _unavailable(request, reason='retrieval_unavailable'):
     return replace(request, retrieval=RetrievalResult(
-        status='character_abstention', reason='retrieval_unavailable',
+        status='character_abstention', reason=reason,
     ))
+
+
+def _revoked_branch_edition(repo, session):
+    return session.get('mode') == 'branch' and repo.has_edition(
+        session['owner_user_id'], session['character_id'], session['character_revision'],
+        session['source_corpus_id'], revoked=True,
+    )
 
 
 async def retrieve_source_context(request, session, *, database, index, provider, rerank=None, rerank_timeout=None):
@@ -43,17 +51,23 @@ async def retrieve_source_context(request, session, *, database, index, provider
     if provider.dimension != index.dimension:
         raise ValueError('Source query embedding dimension mismatch')
 
-    def validate():
+    def validate(*, initial=False):
         current = chats.get(owner, session['id'])
         if current['revision'] != session['revision'] or current['source_corpus_id'] != corpus_id:
             raise RevisionConflictError()
-        corpus = repo.require_indexed(owner, corpus_id, index.index, identity)
+        try:
+            corpus = repo.require_indexed(owner, corpus_id, index.index, identity)
+        except CharacterNotFoundError:
+            if initial and _revoked_branch_edition(repo, session):
+                return None
+            raise
         if corpus['character_id'] != session['character_id'] or corpus['character_revision'] != session['character_revision']:
             raise ValueError('Bound source edition no longer matches the character')
         return corpus
 
     try:
-        await asyncio.to_thread(validate)
+        if await asyncio.to_thread(validate, initial=True) is None:
+            return _unavailable(request, 'source_version_revoked')
     except SourceIndexNotReadyError:
         # A newly published or copied corpus may still be indexing. Admit
         # no source text or citations, while allowing an in-character reply.
@@ -88,6 +102,10 @@ async def retrieve_source_context(request, session, *, database, index, provider
 async def retrieve_configured_sources(request, session, *, database):
     if not session.get('source_corpus_id'):
         return request
+    if session.get('mode') == 'branch' and await asyncio.to_thread(
+        _revoked_branch_edition, CharacterSourceRepository(database), session,
+    ):
+        return _unavailable(request, 'source_version_revoked')
     from knowledge.retrieval_core.embedding import get_default_embedding_provider
 
     url = os.getenv('CHARACTER_SEARCH_URL', '').strip()

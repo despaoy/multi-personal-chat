@@ -222,7 +222,7 @@ class CharacterChatRepository:
             "character_revision": latest["settings_revision"],
             "previous_character_revision": source["character_revision"],
             "source_corpus_id": bound_corpus,
-            "source_corpus_available": bool(bound_corpus) and sources.is_available(
+            "source_corpus_available": bool(bound_corpus) and sources.has_edition(
                 owner, source["character_id"], source["character_revision"], bound_corpus,
             ),
             "latest_source_corpus": editions[0] if editions else None,
@@ -446,12 +446,18 @@ class CharacterChatRepository:
             editions = source_repo.list(owner, character_id, character['settings_revision'], 1)
             source_corpus_id = editions[0]['id'] if editions else None
         if source_corpus_id:
-            corpus = source_repo.get(owner, source_corpus_id)
-            if corpus['character_id'] != character_id or corpus['character_revision'] != character['settings_revision']:
-                raise ValueError('资料版本不属于当前角色设定版本')
+            if mode != 'branch':
+                corpus = source_repo.get(owner, source_corpus_id)
+                if corpus['character_id'] != character_id or corpus['character_revision'] != character['settings_revision']:
+                    raise ValueError('资料版本不属于当前角色设定版本')
+            # A historical branch preserves the edition's identity even after
+            # retrieval is revoked. It does not read the edition's source text.
+            active_only = '' if mode == 'branch' else ' AND revoked=0'
             statements.append((
-                'UPDATE character_source_corpora SET revoked=revoked WHERE id=:corpus AND owner_user_id=:owner AND revoked=0',
-                {'corpus': source_corpus_id, 'owner': owner}, 1,
+                'UPDATE character_source_corpora SET revoked=revoked WHERE id=:corpus AND owner_user_id=:owner '
+                'AND character_id=:character AND character_revision=:revision' + active_only,
+                {'corpus': source_corpus_id, 'owner': owner, 'character': character_id,
+                 'revision': character['settings_revision']}, 1,
             ))
         baseline['source_corpus_id'] = source_corpus_id
         params = {

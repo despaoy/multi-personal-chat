@@ -7,6 +7,7 @@ import pytest
 from character.library import CharacterSettings
 from db.database import SQLiteDB
 from db.errors import RevisionConflictError
+from repositories.character_chat import CharacterChatRepository
 from repositories.character_library import CharacterNotFoundError
 from repositories.character_sources import CharacterSourceRepository
 
@@ -71,10 +72,18 @@ def test_editions_are_immutable_and_revocation_blocks_stale_candidates(sources):
     candidate['title'], candidate['content'] = '伪造标题', '索引注入内容'
     verified = repo.verify_candidate('owner', char['id'], 1, first['id'], candidate)
     assert verified['title'] == '第一章' and verified['content'] == '第一行原文\n第二行原文'
+    chats = CharacterChatRepository(repo.database)
+    session = chats.create('owner', char['id'], '旧资料绑定', source_corpus_id=first['id'])
+    turn = chats.commit_turn(session, 'first', '原文是什么？', '回复', 'test')
     repo.revoke('owner', first['id'])
     with pytest.raises(CharacterNotFoundError):
         repo.verify_candidate('owner', char['id'], 1, first['id'], candidate)
     assert repo.get('owner', second['id'])['id'] == second['id']
+    assert repo.has_edition('owner', char['id'], 1, first['id'], revoked=True)
+    assert not repo.has_edition('foreign-owner', char['id'], 1, first['id'], revoked=True)
+    branch = chats.create('owner', char['id'], '历史分支', source_session_id=session['id'],
+                          source_revision=session['revision'] + 1, source_turn_id=turn['id'])
+    assert branch['source_corpus_id'] == first['id']
 
 
 @pytest.mark.parametrize('field,value', [('owner_id', 'other'), ('content_sha256', 'bad'), ('line_end', 100), ('chunk_id', 'forged')])

@@ -85,6 +85,14 @@ def test_source_api_authorization_and_immutable_session_binding(tmp_path):
                                             'without_original_sources': True}).status_code == 409
             assert client.post(start, json={**session_body, 'source_turn_id': turn['id'],
                                             'without_original_sources': True}).status_code == 409
+            assert client.post(start, json={**session_body, 'source_turn_id': turn['id'],
+                                            'source_corpus_id': second['id']}).status_code == 409
+            historical = client.post(start, json={**session_body, 'source_turn_id': turn['id'],
+                                                   'hypothesis': '她留下来等回信。'})
+            assert historical.status_code == 201
+            branch = historical.json()
+            assert branch['mode'] == 'branch' and branch['source_corpus_id'] == first['id']
+            assert branch['baseline']['history'][0]['id'] == turn['id']
             migrated = client.post(start, json={**session_body, 'source_corpus_id': second['id']})
             assert migrated.status_code == 201 and migrated.json()['source_corpus_id'] == second['id']
             assert client.delete(path + '/' + second['id']).status_code == 200
