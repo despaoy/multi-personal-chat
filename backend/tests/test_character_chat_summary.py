@@ -95,6 +95,42 @@ def test_summary_prompt_keeps_relevant_quotes_without_storage_metadata():
     assert len(stored["evidence"]) == 4
 
 
+def test_two_summary_segments_restore_only_the_retained_checkpoint(conversation):
+    db, repo, original, _ = conversation
+    session = repo.create("1", original["character_id"], "跨段回退")
+    turns = []
+
+    async def keep(*args):
+        return args[-2]["state"]
+
+    for index in range(19):
+        message = "这一轮不要保存，也不要记住。" if index == 6 else f"用户原话 {index}"
+        checkpoint = index in {11, 18}
+        turn = repo.commit_turn(session, str(index), message, f"角色回复 {index}", "test", enqueue_enrichment=checkpoint)
+        turns.append(turn)
+        session = repo.get("1", session["id"])
+        if checkpoint:
+            writer = Writer(turns[0 if index == 11 else 7])
+            result = asyncio.run(process_enrichment(
+                turn["id"], database=db, enrich=keep, relationship=keep,
+                summary=summarizer(writer), expected_revision=session["revision"],
+            ))
+            assert result == "completed" and writer.calls == 1
+            session = repo.get("1", session["id"])
+
+    first, second = session["state"]["summaries"]
+    assert [source["turn_id"] for source in first["sources"]] == [turn["id"] for turn in turns[:6]]
+    assert [source["turn_id"] for source in second["sources"]] == [turn["id"] for turn in turns[7:13]]
+    branch = repo.create("1", session["character_id"], "未来保留分支", source_session_id=session["id"],
+                         source_revision=session["revision"], source_turn_id=turns[-1]["id"])
+    rolled = repo.retract("1", session["id"], turns[12]["id"], session["revision"])
+    assert rolled["state"]["summaries"] == [first]
+    request = prepare_request(rolled, repo.turns("1", session["id"]), "回忆以前")
+    summaries = json.loads(request.character_context.conversation_reference_context)["conversation_summaries"]
+    assert len(summaries) == 1
+    assert repo.get("1", branch["id"])["state"]["summaries"] == [first, second]
+
+
 def test_summary_sources_must_still_exist_and_match(conversation):
     _, _, session, turns = conversation
     state = asyncio.run(summarizer(Writer(turns[0]))(session, turns, "summary"))
