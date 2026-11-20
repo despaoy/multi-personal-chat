@@ -8,6 +8,7 @@ import asyncio
 import os
 import sys
 from pathlib import Path
+from time import time
 
 from asyncpg import PostgresError
 from sqlalchemy import make_url, text
@@ -16,6 +17,12 @@ from sqlalchemy.ext.asyncio import create_async_engine
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 
+from db.auth_revocation_schema import (
+    LIVE_TOKEN_REVOCATIONS,
+    MERGE_TOKEN_REVOCATION,
+    PURGE_EXPIRED_TOKEN_REVOCATIONS,
+    TOKEN_REVOCATIONS,
+)
 from db.character_chat_erasure import ERASURE_TABLE, SESSION_ROWS
 from db.character_chat_history import HISTORY_NODES, ORPHANED_HISTORY_NODE
 from db.character_sharing_restore import reset_restored_sharing
@@ -46,6 +53,7 @@ async def prepare_restore(staged_url, receipt_url):
     staged, source = postgres_url(staged_url), postgres_url(receipt_url)
     if staged.database == source.database:
         raise ValueError("Use a separately named staging database")
+    now = int(time())
     receipt_engine = create_async_engine(source, hide_parameters=True)
     try:
         async with receipt_engine.begin() as connection:
@@ -66,11 +74,18 @@ async def prepare_restore(staged_url, receipt_url):
             ))
             if can_read_legacy or not has_receipts:
                 revoked_ids.update(await connection.scalars(text(REVOKED_SOURCE_IDS)))
+            has_token_revocations = await connection.scalar(
+                text("SELECT to_regclass(:table) IS NOT NULL"), {"table": TOKEN_REVOCATIONS}
+            )
+            token_revocations = []
+            if has_token_revocations:
+                result = await connection.execute(text(LIVE_TOKEN_REVOCATIONS), {"now": now})
+                token_revocations = [dict(row) for row in result.mappings()]
     finally:
         await receipt_engine.dispose()
 
     tables = sorted({ERASURE_TABLE, _EVIDENCE, HISTORY_NODES, "character_library", "character_source_corpora",
-                     SOURCE_REVOCATIONS, *(table for table, _ in SESSION_ROWS)})
+                     SOURCE_REVOCATIONS, TOKEN_REVOCATIONS, *(table for table, _ in SESSION_ROWS)})
     staged_engine = create_async_engine(staged, hide_parameters=True)
     try:
         async with staged_engine.begin() as connection:
@@ -86,6 +101,9 @@ async def prepare_restore(staged_url, receipt_url):
             if revoked_ids:
                 await connection.execute(text(INSERT_SOURCE_REVOCATION), [{"id": identity} for identity in revoked_ids])
             await connection.execute(text(REPLAY_SOURCE_REVOCATIONS))
+            await connection.execute(text(PURGE_EXPIRED_TOKEN_REVOCATIONS), {"now": now})
+            if token_revocations:
+                await connection.execute(text(MERGE_TOKEN_REVOCATION), token_revocations)
             erased = f"SELECT session_id FROM {ERASURE_TABLE}"
             await connection.execute(text(
                 f"DELETE FROM {_EVIDENCE} WHERE turn_id IN "

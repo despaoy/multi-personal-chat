@@ -26,6 +26,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import UserDefinedType
 
+from db.auth_revocation_schema import TOKEN_REVOCATION_EXPIRY_INDEX, TOKEN_REVOCATIONS
 from db.character_chat_history import HISTORY_NODES, HISTORY_OWNER_INDEX, HISTORY_PATH
 from db.character_source_schema import SOURCE_REVOCATIONS
 
@@ -321,10 +322,10 @@ class User(Base):
 
 
 class AuthTokenRevocation(Base):
-    __tablename__ = "auth_token_revocations"
+    __tablename__ = TOKEN_REVOCATIONS
     jti: Mapped[str] = mapped_column(Text, primary_key=True)
     expires_at: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    __table_args__ = (Index("idx_auth_token_revocations_expiry", "expires_at"),)
+    __table_args__ = (Index(TOKEN_REVOCATION_EXPIRY_INDEX, "expires_at"),)
 
 
 # ============================================

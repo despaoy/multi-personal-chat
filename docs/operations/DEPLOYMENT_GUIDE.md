@@ -170,7 +170,7 @@ python -m alembic current
 python run.py --host 127.0.0.1 --port 8000 --workers 1
 ```
 
-角色聊天分支的迁移 head 为 `037_character_chat_history`。该迁移将继承历史的正文与出处转为账号内共享节点，保留每条路径各自的关系和记忆检查点。SQLite 本地运行由后端启动时完成同样的迁移。升级前先备份，并停止旧版 API 和聊天 worker。两种数据库都采用 `BACKEND_WORKERS=1`，因为部分会话锁和 nonce 使用进程内状态。旧 AstrBot 部署仍需让插件和后端使用兼容版本。
+角色聊天分支的迁移 head 为 `042_auth_token_revocations`。迁移 037 将继承历史的正文与出处转为账号内共享节点，迁移 042 持久化登录吊销。SQLite 本地运行由后端启动时完成相应升级。升级前先备份，并停止旧版 API 和聊天 worker。两种数据库都采用 `BACKEND_WORKERS=1`，因为部分会话锁和 nonce 使用进程内状态。旧 AstrBot 部署仍需让插件和后端使用兼容版本。
 
 生产 PostgreSQL 的 API 和聊天 worker 启动前会检查数据库的 Alembic 版本。未迁移、落后或超前的数据库会拒绝启动。标准 Docker Compose 在首次启动或版本升级时，可在备份后从 `deploy/` 使用当前版本的后端镜像运行迁移：
 
@@ -288,6 +288,8 @@ python scripts/restore_sqlite_backup.py \
 
 恢复也会合并原作资料撤销回执。回执只存资料版本 ID，即使恢复后的库中没有对应版本，也会保留以供以后恢复时核对。已撤销版本不会回到资料列表、索引任务或检索结果。已保存的出处快照仍随历史回答恢复。目标库丢失时，同一 `--deletion-records-from` 选项可提供较新的撤销记录。
 
+恢复会从备份、当前数据库和 `--deletion-records-from` 提供的快照合并未过期的登录吊销。记录仅包含凭据 ID 和到期时间。如果较新的登录吊销已经丢失，恢复后启用服务前更换 JWT 签名密钥，原有登录需要重新认证。
+
 离线恢复会关闭备份中的主动联系授权，并取消尚未发送的安排。已送达的应用内消息继续作为正式记录，用户可以在恢复后重新授权。
 
 离线恢复也会关闭备份中的角色分享链接，使恢复前的发布预览失效。角色设定、已发布快照和接收方已经创建的独立副本随备份恢复。作者可以重新预览并发布新链接。
@@ -300,7 +302,7 @@ SQLite 和 PostgreSQL 的离线恢复都会清除跨角色记忆共享授权。�
 
 定期使用 `pg_dump --format=custom` 生成备份。恢复时保留原数据库与备份，停止 API、聊天 worker 和其他写入方。在独立且名称不同的数据库中用 `pg_restore --exit-on-error` 导入备份，再运行项目的 Alembic 迁移到当前版本。这些操作沿用上面的 PostgreSQL 连接配置，迁移进程连接恢复副本。
 
-通过受保护的环境配置设置 `RESTORE_STAGED_DATABASE_URL` 和 `RESTORE_RECEIPT_DATABASE_URL`。前者指向迁移后的恢复副本，后者指向原数据库或含最新回执的独立数据库。回执连接需要读取会话删除及原作资料撤销回执表。迁移 040 之前的回执源可以提供资料目录中版本 ID 与撤销状态的列级读取权限。两个数据库需来自同一原服务，回执源应包含直到所有写入方停止时的删除和撤销。缺失的回执无法从旧备份推断。
+通过受保护的环境配置设置 `RESTORE_STAGED_DATABASE_URL` 和 `RESTORE_RECEIPT_DATABASE_URL`。前者指向迁移后的恢复副本，后者指向原数据库或含最新回执的独立数据库。回执连接需要读取会话删除、原作资料撤销和登录吊销表。迁移 040 之前的回执源可以提供资料目录中版本 ID 与撤销状态的列级读取权限。两个数据库需来自同一原服务，回执源应包含直到所有写入方停止时的删除和撤销。如果较新的登录吊销已经丢失，在恢复服务前更换 JWT 签名密钥。
 
 ```bash
 python scripts/prepare_postgres_restore.py --confirm-writers-stopped

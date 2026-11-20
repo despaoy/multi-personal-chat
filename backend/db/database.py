@@ -10,6 +10,7 @@ from typing import Dict, Optional
 
 from cache.ttl_value_cache import BoundedTTLCache
 from db import memory_source
+from db.auth_revocation_schema import CREATE_TOKEN_REVOCATION_EXPIRY_INDEX, CREATE_TOKEN_REVOCATIONS
 from db.conversation_indexes import SOURCE_INDEX_STATEMENTS
 from db.errors import RegistrationClosedError
 from db.lora_metadata import read_lora_metadata
@@ -326,13 +327,8 @@ class SQLiteDB:
         # 使用 _ensure_column 做幂等迁移，已有数据库升级时自动添加该列。
         self._ensure_column(cursor, 'users', 'role', 'TEXT NOT NULL DEFAULT \'user\'')
 
-        cursor.execute('''
-            CREATE TABLE IF NOT EXISTS auth_token_revocations (
-                jti TEXT PRIMARY KEY NOT NULL,
-                expires_at INTEGER NOT NULL
-            )
-        ''')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_auth_token_revocations_expiry ON auth_token_revocations(expires_at)')
+        cursor.execute(CREATE_TOKEN_REVOCATIONS)
+        cursor.execute(CREATE_TOKEN_REVOCATION_EXPIRY_INDEX)
 
         # 创建 API Key 表（统一访问控制，SQLite 与 PostgreSQL 共用主库）
         cursor.execute('''

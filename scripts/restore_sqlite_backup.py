@@ -13,10 +13,19 @@ import uuid
 from contextlib import closing
 from datetime import UTC, datetime
 from pathlib import Path
+from time import time
 
 if not __package__:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from backend.db.auth_revocation_schema import (
+    CREATE_TOKEN_REVOCATION_EXPIRY_INDEX,
+    CREATE_TOKEN_REVOCATIONS,
+    LIVE_TOKEN_REVOCATIONS,
+    MERGE_TOKEN_REVOCATION,
+    PURGE_EXPIRED_TOKEN_REVOCATIONS,
+    TOKEN_REVOCATIONS,
+)
 from backend.db.character_chat_erasure import ERASURE_TABLE, SESSION_ROWS
 from backend.db.character_chat_history import (
     HISTORY_NODES,
@@ -48,8 +57,8 @@ def _table_names(connection):
     return {name for (name,) in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
 
 
-def _read_restore_records(path: Path, *, required=False):
-    erasures, revocations = set(), set()
+def _read_restore_records(path: Path, now: int, *, required=False):
+    erasures, revocations, token_revocations = set(), set(), []
     with closing(sqlite3.connect(path.as_uri() + "?mode=ro", uri=True)) as connection:
         tables = _table_names(connection)
         if ERASURE_TABLE in tables:
@@ -60,10 +69,15 @@ def _read_restore_records(path: Path, *, required=False):
             revocations.update(identity for (identity,) in connection.execute(f"SELECT corpus_id FROM {SOURCE_REVOCATIONS}"))
         if "character_source_corpora" in tables:
             revocations.update(identity for (identity,) in connection.execute(REVOKED_SOURCE_IDS))
-    return erasures, revocations
+        if TOKEN_REVOCATIONS in tables:
+            token_revocations = [
+                {"jti": jti, "expires_at": expires_at}
+                for jti, expires_at in connection.execute(LIVE_TOKEN_REVOCATIONS, {"now": now})
+            ]
+    return erasures, revocations, token_revocations
 
 
-def _prepare_restored_state(candidate: Path, receipts, revocations):
+def _prepare_restored_state(candidate: Path, receipts, revocations, token_revocations, now: int):
     with closing(sqlite3.connect(candidate)) as connection, connection:
         tables = _table_names(connection)
         has_erasure = bool(receipts) or (ERASURE_TABLE in tables and bool(
@@ -74,10 +88,19 @@ def _prepare_restored_state(candidate: Path, receipts, revocations):
         has_sharing = "character_library" in tables
         has_memory_shares = "character_shared_memories" in tables
         has_catalog = "character_source_corpora" in tables
-        if not any((has_erasure, has_outreach, has_push, has_sharing, has_memory_shares, has_catalog, revocations)):
+        has_token_revocations = TOKEN_REVOCATIONS in tables or bool(token_revocations)
+        if not any((
+            has_erasure, has_outreach, has_push, has_sharing, has_memory_shares, has_catalog, revocations,
+            has_token_revocations,
+        )):
             return False
         connection.execute("PRAGMA foreign_keys=ON")
         connection.execute("PRAGMA secure_delete=ON")
+        if has_token_revocations:
+            connection.execute(CREATE_TOKEN_REVOCATIONS)
+            connection.execute(CREATE_TOKEN_REVOCATION_EXPIRY_INDEX)
+            connection.execute(PURGE_EXPIRED_TOKEN_REVOCATIONS, {"now": now})
+            connection.executemany(MERGE_TOKEN_REVOCATION, token_revocations)
         if has_erasure:
             connection.execute(f"CREATE TABLE IF NOT EXISTS {ERASURE_TABLE} (session_id TEXT PRIMARY KEY NOT NULL)")
             connection.executemany(f"INSERT OR IGNORE INTO {ERASURE_TABLE} (session_id) VALUES (?)",
@@ -143,14 +166,18 @@ def restore_sqlite_backup(
             target.flush()
             os.fsync(target.fileno())
         _validate_sqlite(temporary)
-        receipts, revocations = _read_restore_records(database) if database.exists() else (set(), set())
+        now = int(time())
+        receipts, revocations, token_revocations = (
+            _read_restore_records(database, now) if database.exists() else (set(), set(), [])
+        )
         if deletion_records_from is not None:
-            additional_receipts, additional_revocations = _read_restore_records(
-                deletion_records_from.expanduser().resolve(), required=True,
+            additional_receipts, additional_revocations, additional_token_revocations = _read_restore_records(
+                deletion_records_from.expanduser().resolve(), now, required=True,
             )
             receipts.update(additional_receipts)
             revocations.update(additional_revocations)
-        if _prepare_restored_state(temporary, receipts, revocations):
+            token_revocations.extend(additional_token_revocations)
+        if _prepare_restored_state(temporary, receipts, revocations, token_revocations, now):
             _validate_sqlite(temporary)
 
         if database.exists():
@@ -172,7 +199,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--database", required=True, type=Path)
     parser.add_argument(
         "--deletion-records-from", type=Path,
-        help="Additional SQLite database with newer chat erasures and source revocations.",
+        help="Additional SQLite database with newer chat erasures, source and login revocations.",
     )
     parser.add_argument(
         "--confirm-backend-stopped",

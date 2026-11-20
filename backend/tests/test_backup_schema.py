@@ -4,6 +4,7 @@ import json
 import sqlite3
 from contextlib import closing
 from pathlib import Path
+from time import time
 
 import pytest
 from scripts.restore_sqlite_backup import restore_sqlite_backup
@@ -277,6 +278,55 @@ async def test_restore_replays_revoked_editions_across_older_backups(tmp_path, l
             assert CharacterChatRepository(db).turns(owner, chat["id"])[0]["evidence"] == evidence
         finally:
             db.close_connection()
+
+
+@pytest.mark.asyncio
+async def test_restore_preserves_unexpired_login_revocations_from_target_and_additional_snapshot(tmp_path):
+    from db.database import SQLiteDB
+    from infra.token_revocation import is_token_revoked, revoke_token
+
+    now = int(time())
+    path = tmp_path / "auth.sqlite"
+    database = SQLiteDB(path)
+    database.close_connection()
+    with closing(sqlite3.connect(path)) as connection, connection:
+        connection.execute("DROP TABLE auth_token_revocations")
+    legacy = await BackupManager(str(path), backup_dir=str(tmp_path / "legacy")).backup()
+
+    database = SQLiteDB(path)
+    revoke_token(database, "archived", now + 600)
+    revoke_token(database, "shared-id", now + 600)
+    previous = await BackupManager(str(path), backup_dir=str(tmp_path / "previous")).backup()
+    revoke_token(database, "recent", now + 600)
+    revoke_token(database, "shared-id", now + 900)
+    database.close_connection()
+
+    additional = tmp_path / "additional.sqlite"
+    extra_database = SQLiteDB(additional)
+    revoke_token(extra_database, "separate-snapshot", now + 800)
+    revoke_token(extra_database, "shared-id", now + 650)
+    extra_database.execute_sql(
+        "INSERT INTO auth_token_revocations (jti, expires_at) VALUES ('expired', :expires_at)",
+        {"expires_at": now - 10},
+    )
+    extra_database.close_connection()
+
+    restore_sqlite_backup(Path(legacy.path), path, deletion_records_from=additional)
+    for snapshot in (None, previous, previous):
+        if snapshot is not None:
+            restore_sqlite_backup(Path(snapshot.path), path)
+        restored = SQLiteDB(path)
+        try:
+            assert all(is_token_revoked(restored, jti) for jti in ("archived", "recent", "separate-snapshot", "shared-id"))
+            assert not is_token_revoked(restored, "other")
+            assert restored.execute_sql("SELECT jti, expires_at FROM auth_token_revocations ORDER BY jti") == [
+                {"jti": "archived", "expires_at": now + 600},
+                {"jti": "recent", "expires_at": now + 600},
+                {"jti": "separate-snapshot", "expires_at": now + 800},
+                {"jti": "shared-id", "expires_at": now + 900},
+            ]
+        finally:
+            restored.close_connection()
 
 
 @pytest.mark.asyncio
