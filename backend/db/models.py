@@ -191,6 +191,7 @@ class CharacterChatProactivePolicy(Base):
 
 class CharacterChatProactiveJob(Base):
     __tablename__ = "character_chat_proactive_jobs"
+    event_key: Mapped[str | None] = mapped_column(Text)
     session_id: Mapped[str] = mapped_column(Text, ForeignKey("character_chat_sessions.id"), primary_key=True)
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     policy_revision: Mapped[int] = mapped_column(Integer, nullable=False)

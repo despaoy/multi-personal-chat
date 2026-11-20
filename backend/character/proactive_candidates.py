@@ -26,7 +26,7 @@ _WEEKDAYS = {day: position for position, day in enumerate("一二三四五六日
 _WEEKDAYS["天"] = _WEEKDAYS["日"]
 
 
-def _event_follow_up_at(quote, created_at, timezone):
+def _event_day(quote, created_at, timezone):
     local = datetime.fromisoformat(created_at).astimezone(ZoneInfo(timezone))
     hints = list(_DATE_HINT.finditer(quote))
     if len(hints) != 1:
@@ -48,36 +48,56 @@ def _event_follow_up_at(quote, created_at, timezone):
             return None
         if day < local.date():
             return None
-        return datetime.combine(day + timedelta(days=1), time(9), local.tzinfo).timestamp()
+        return day
     except (ValueError, OverflowError):
         return None
+
+
+def _event_key(events, day):
+    return f"{next(iter(events))}:{day.isoformat()}" if day is not None and len(events) == 1 else None
+
+
+def dated_event_key(quote, created_at, timezone):
+    """Recover the same identity from a saved source quote on older jobs."""
+    return _event_key(set(_EVENT.findall(quote)), _event_day(quote, created_at, timezone))
 
 
 def outreach_candidates(turns, timezone, now):
     """Read newest-first active user turns. Dates only prefill a user-confirmed draft."""
     candidates = []
     seen_events = set()
+    seen_dated = set()
+    seen_undated = set()
     seen_topics = set()
     for turn in turns:
         for sentence in reversed(_SENTENCE.findall(turn["message"])):
             quote = sentence.strip()
             events = set(_EVENT.findall(quote))
             excluded = bool(_CANCEL_OR_HYPOTHETICAL.search(quote))
-            kind, suggested_at = None, None
+            kind, suggested_at, event_key = None, None, None
             if events:
-                unseen = events - seen_events
+                day = _event_day(quote, turn["created_at"], timezone)
+                if day is None:
+                    unseen = events - seen_events
+                    seen_undated.update(events)
+                else:
+                    unseen = {event for event in events - seen_undated if (event, day) not in seen_dated}
+                    seen_dated.update((event, day) for event in events)
                 seen_events.update(events)
                 if not excluded and unseen and not _PAST.search(quote) and (
                     _DATE_HINT.search(quote) or _EVENT_INTENT.search(quote)
                 ):
                     kind = "event"
-                    suggested_at = _event_follow_up_at(quote, turn["created_at"], timezone)
-                    if suggested_at is not None and not now < suggested_at <= now + 366 * 86400:
-                        suggested_at = None
+                    event_key = _event_key(events, day)
+                    if day is not None and day < date.max:
+                        next_day = datetime.combine(day + timedelta(days=1), time(9), ZoneInfo(timezone)).timestamp()
+                        if now < next_day <= now + 366 * 86400:
+                            suggested_at = next_day
             elif not excluded and _FOLLOW_UP.search(quote):
                 kind = "follow_up"
             if kind is None or not 4 <= len(quote) <= 300 or (kind, quote) in seen_topics:
                 continue
             seen_topics.add((kind, quote))
-            candidates.append({"source_turn_id": turn["id"], "kind": kind, "topic": quote, "suggested_at": suggested_at})
+            candidates.append({"source_turn_id": turn["id"], "kind": kind, "topic": quote,
+                               "suggested_at": suggested_at, "event_key": event_key})
     return candidates

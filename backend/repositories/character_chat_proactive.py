@@ -5,7 +5,7 @@ from time import time
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
-from character.proactive_candidates import outreach_candidates
+from character.proactive_candidates import dated_event_key, outreach_candidates
 from db.errors import RevisionConflictError
 from repositories.character_chat import CharacterChatRepository
 from repositories.character_library import CharacterNotFoundError
@@ -72,18 +72,35 @@ class CharacterChatProactiveRepository:
         )
         return outreach_candidates(turns, timezone, now)
 
+    def _used_candidates(self, session_id, timezone):
+        rows = self.db.execute_sql(
+            "SELECT j.source_turn_id,j.kind,j.topic,j.event_key,t.created_at FROM character_chat_proactive_jobs j "
+            "LEFT JOIN character_chat_turns t ON t.id=j.source_turn_id AND t.session_id=j.session_id "
+            "WHERE j.session_id=:session AND j.source_turn_id IS NOT NULL AND j.status IN ('pending','sent')",
+            {"session": session_id},
+        )
+        quotes, events = set(), set()
+        for row in rows:
+            quotes.add((row["source_turn_id"], row["kind"], row["topic"]))
+            key = row["event_key"]
+            if key is None and row["kind"] == "event" and row["created_at"]:
+                key = dated_event_key(row["topic"], row["created_at"], timezone)
+            if key is not None:
+                events.add(key)
+        return quotes, events
+
     def candidates(self, owner, session_id):
         session = self.chats.get(owner, session_id)
         policy = self._policy(session_id)
         if session["mode"] == "branch" or not policy["enabled"]:
             return []
-        already_used = {(row["source_turn_id"], row["kind"], row["topic"]) for row in self.db.execute_sql(
-            "SELECT source_turn_id,kind,topic FROM character_chat_proactive_jobs "
-            "WHERE session_id=:session AND source_turn_id IS NOT NULL AND status IN ('pending','sent')",
-            {"session": session_id},
-        )}
-        return [item for item in self._candidates(session_id, policy["timezone"], time())
-                if (item["source_turn_id"], item["kind"], item["topic"]) not in already_used][:8]
+        used_quotes, used_events = self._used_candidates(session_id, policy["timezone"])
+        return [
+            {key: value for key, value in item.items() if key != "event_key"}
+            for item in self._candidates(session_id, policy["timezone"], time())
+            if (item["source_turn_id"], item["kind"], item["topic"]) not in used_quotes
+            and item["event_key"] not in used_events
+        ][:8]
 
     @staticmethod
     def _session_guard(session):
@@ -212,22 +229,31 @@ class CharacterChatProactiveRepository:
             return saved
         if not now <= due_at <= now + 366 * 86400 or kind not in _TEXT or not topic.strip():
             raise ValueError("请填写有效话题和未来一年内的提醒时间")
-        if source_turn_id is not None and not any(
-            (candidate["source_turn_id"], candidate["kind"], candidate["topic"]) == (source_turn_id, kind, topic)
-            for candidate in self._candidates(session_id, policy["timezone"], now)
-        ):
-            raise ValueError("候选话题已过期，请重新读取当前对话")
+        params["event_key"] = None
+        if source_turn_id is not None:
+            candidate = next((item for item in self._candidates(session_id, policy["timezone"], now)
+                              if (item["source_turn_id"], item["kind"], item["topic"]) == (source_turn_id, kind, topic)), None)
+            if candidate is None:
+                raise ValueError("候选话题已过期，请重新读取当前对话")
+            event_key = candidate["event_key"]
+            if event_key is not None:
+                _, used_events = self._used_candidates(session_id, policy["timezone"])
+                if event_key in used_events:
+                    if saved := existing():
+                        return saved
+                    raise ValueError("该事件已有安排")
+            params["event_key"] = event_key
         self.db.revision_transaction([
             self._session_guard(session),
             ("UPDATE character_chat_proactive_policies SET revision=revision "
              "WHERE session_id=:session AND revision=:revision AND enabled=1", params, 1),
             ("INSERT INTO character_chat_proactive_jobs "
-             "(session_id,id,policy_revision,kind,topic,due_at,next_attempt_at,status,source_turn_id) "
-             "SELECT :session,:id,:revision,:kind,:topic,:due,:due,'pending',CAST(:source AS TEXT) "
+             "(session_id,id,policy_revision,kind,topic,due_at,next_attempt_at,status,source_turn_id,event_key) "
+             "SELECT :session,:id,:revision,:kind,:topic,:due,:due,'pending',CAST(:source AS TEXT),:event_key "
              "WHERE (SELECT COUNT(*) FROM character_chat_proactive_jobs WHERE session_id=:session AND status='pending')<20 "
              "AND NOT EXISTS (SELECT 1 FROM character_chat_proactive_jobs WHERE session_id=:session "
              "AND kind=:kind AND status IN ('pending','sent') "
-             "AND topic=:topic AND (due_at=:due OR source_turn_id=CAST(:source AS TEXT))) "
+             "AND (event_key=:event_key OR (topic=:topic AND (due_at=:due OR source_turn_id=CAST(:source AS TEXT))))) "
              "ON CONFLICT (session_id,id) DO NOTHING", params, None),
         ])
         if saved := existing():

@@ -276,6 +276,37 @@ def test_postgres_push_result_cannot_delete_subscription_after_successful_retry(
     assert [item["id"] for item in outreach.inbox(owner)] == ["push"]
 
 
+def test_postgres_dated_event_matches_existing_reminder(database, monkeypatch):
+    from datetime import datetime
+
+    from repositories.character_chat_proactive import CharacterChatProactiveRepository
+
+    created = "2026-11-20T17:00:00+00:00"
+    now = datetime.fromisoformat(created).timestamp()
+    monkeypatch.setattr("repositories.character_chat.timestamp", lambda: created)
+    monkeypatch.setattr("repositories.character_chat_proactive.time", lambda: now)
+    repo = CharacterChatProactiveRepository(database)
+    owner = f"dated-outreach-{uuid.uuid4().hex}"
+    char = repo.chats.characters.create(owner, CharacterSettings(name="fixture", persona="fixture", greeting="hi"))
+    session = repo.chats.create(owner, char["id"], "event")
+    identity = session["id"]
+    repo.set_policy(owner, identity, 0, enabled=True, cadence_hours=24, timezone="Asia/Shanghai",
+                    quiet_start=None, quiet_end=None)
+    first = repo.chats.commit_turn(session, "first", "我下周三有面试", "好", "fixture")
+    candidate, = repo.candidates(owner, identity)
+    repo.schedule(owner, identity, 1, "scheduled", "event", first["message"], candidate["suggested_at"],
+                  source_turn_id=first["id"], now=now)
+    assert database.execute_sql("SELECT event_key FROM character_chat_proactive_jobs WHERE session_id=:id",
+                                {"id": identity})[0]["event_key"] == "面试:2026-11-25"
+
+    current = repo.chats.get(owner, identity)
+    repeat = repo.chats.commit_turn(current, "repeat", "我11月25日参加面试", "好", "fixture")
+    assert repo.candidates(owner, identity) == []
+    with pytest.raises(ValueError, match="已有安排"):
+        repo.schedule(owner, identity, 1, "duplicate", "event", repeat["message"], candidate["suggested_at"] + 3600,
+                      source_turn_id=repeat["id"], now=now)
+
+
 def test_postgres_sourced_proactive_job_is_cancelled_on_history_change(database):
     from repositories.character_chat_proactive import CharacterChatProactiveRepository
 

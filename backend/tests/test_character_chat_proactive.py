@@ -116,6 +116,43 @@ def test_sourced_job_requires_confirmation_and_disappears_when_source_is_retract
         assert client.post(path + "/jobs", json={**job, "request_id": "stale"}).status_code == 422
 
 
+@pytest.mark.parametrize("legacy", [False, True])
+@pytest.mark.parametrize("already_sent", [False, True])
+def test_rephrasing_a_dated_event_does_not_create_a_second_reminder(proactive, monkeypatch, legacy, already_sent):
+    repo, initial = proactive
+    owner, identity = "owner", initial["id"]
+    created = "2026-11-20T17:00:00+00:00"
+    now = datetime.fromisoformat(created).timestamp()
+    monkeypatch.setattr("repositories.character_chat.timestamp", lambda: created)
+    monkeypatch.setattr("repositories.character_chat_proactive.time", lambda: now)
+    repo.set_policy(owner, identity, 0, **policy(quiet_start=None, quiet_end=None))
+
+    def mention(request, wording):
+        return repo.chats.commit_turn(repo.chats.get(owner, identity), request, wording, "了解", "fixture")
+
+    first = mention("first", "下周三我有面试")
+    suggested, = repo.candidates(owner, identity)
+    due = suggested["suggested_at"]
+    repo.schedule(owner, identity, 1, "first-reminder", "event", first["message"], due, source_turn_id=first["id"], now=now)
+    if legacy:
+        repo.db.execute_sql("UPDATE character_chat_proactive_jobs SET event_key=NULL")
+    if already_sent:
+        assert repo.deliver_due(now=due) == 1
+        now = due + 60
+    repeat = mention("same-event", "我11月25日参加面试")
+    assert repo.candidates(owner, identity) == []
+    with pytest.raises(ValueError):
+        repo.schedule(owner, identity, 1, "duplicate", "event", repeat["message"], due + 3600,
+                      source_turn_id=repeat["id"], now=now)
+
+    different = mention("another-event", "下周五我有面试")
+    remaining, = repo.candidates(owner, identity)
+    assert remaining["source_turn_id"] == different["id"]
+    choice = repo.schedule(owner, identity, 1, "different-reminder", "event", different["message"],
+                           remaining["suggested_at"], source_turn_id=different["id"], now=now)
+    assert choice["id"] == "different-reminder"
+
+
 def test_edit_cancels_sourced_pending_job(proactive):
     repo, session = proactive
     owner, identity = "owner", session["id"]
