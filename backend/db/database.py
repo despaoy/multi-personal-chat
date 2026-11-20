@@ -589,79 +589,7 @@ class SQLiteDB:
         # 可空分支作用域：NULL=正史。正史读取过滤 branchId IS NULL。
         self._ensure_column(cursor, "messages", "branchId", "TEXT")
         self._ensure_column(cursor, "messages", "characterId", "TEXT")
-        # One-way compatibility migration: legacy session_settings is folded into
-        # conversations and then removed. Fresh databases never create this table.
-        cursor.execute("SAVEPOINT session_settings_migration")
-        try:
-            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='session_settings'")
-            if cursor.fetchone():
-                # Older legacy tables may lack the columns introduced later.
-                cursor.execute("PRAGMA table_info(session_settings)")
-                legacy_cols = {row[1] for row in cursor.fetchall()}
-                if "platform" not in legacy_cols:
-                    cursor.execute("ALTER TABLE session_settings ADD COLUMN platform TEXT NOT NULL DEFAULT 'qq'")
-                if "conversationId" not in legacy_cols:
-                    cursor.execute("ALTER TABLE session_settings ADD COLUMN conversationId TEXT")
-                if "conversationType" not in legacy_cols:
-                    cursor.execute("ALTER TABLE session_settings ADD COLUMN conversationType TEXT NOT NULL DEFAULT 'private'")
-                    cursor.execute("UPDATE session_settings SET conversationType = sessionType")
-                if "sessionName" not in legacy_cols:
-                    cursor.execute("ALTER TABLE session_settings ADD COLUMN sessionName TEXT")
-                if "bot_enabled" not in legacy_cols:
-                    cursor.execute("ALTER TABLE session_settings ADD COLUMN bot_enabled INTEGER NOT NULL DEFAULT 1")
-                if "updated_at" not in legacy_cols:
-                    cursor.execute("ALTER TABLE session_settings ADD COLUMN updated_at TEXT")
-                migrated_at = datetime.now().isoformat()
-                cursor.execute('''
-                    INSERT OR IGNORE INTO conversations (
-                        platform, conversationId, conversationType, displayName,
-                        botEnabled, replyPolicy, createdAt, updatedAt
-                    )
-                    SELECT
-                        COALESCE(platform, 'qq'),
-                        COALESCE(conversationId, sessionId),
-                        COALESCE(conversationType, sessionType, 'private'),
-                        COALESCE(NULLIF(sessionName, ''), sessionId),
-                        bot_enabled,
-                        'default',
-                        COALESCE(updated_at, ?),
-                        COALESCE(updated_at, ?)
-                    FROM session_settings
-                ''', (migrated_at, migrated_at))
-                # SQLite does not allow DO UPDATE with INSERT...SELECT...FROM;
-                # refresh existing conversations so the latest legacy state wins.
-                cursor.execute('''
-                    UPDATE conversations
-                    SET
-                        botEnabled = COALESCE((SELECT s.bot_enabled FROM session_settings s
-                                              WHERE COALESCE(s.platform, 'qq') = conversations.platform
-                                                AND COALESCE(s.conversationId, s.sessionId) = conversations.conversationId
-                                                AND COALESCE(s.conversationType, s.sessionType, 'private') = conversations.conversationType),
-                                             conversations.botEnabled),
-                        displayName = COALESCE((SELECT COALESCE(NULLIF(s.sessionName, ''), s.sessionId) FROM session_settings s
-                                              WHERE COALESCE(s.platform, 'qq') = conversations.platform
-                                                AND COALESCE(s.conversationId, s.sessionId) = conversations.conversationId
-                                                AND COALESCE(s.conversationType, s.sessionType, 'private') = conversations.conversationType),
-                                             conversations.displayName),
-                        updatedAt = COALESCE((SELECT s.updated_at FROM session_settings s
-                                             WHERE COALESCE(s.platform, 'qq') = conversations.platform
-                                               AND COALESCE(s.conversationId, s.sessionId) = conversations.conversationId
-                                               AND COALESCE(s.conversationType, s.sessionType, 'private') = conversations.conversationType),
-                                             conversations.updatedAt)
-                    WHERE EXISTS (
-                        SELECT 1 FROM session_settings s
-                        WHERE COALESCE(s.platform, 'qq') = conversations.platform
-                          AND COALESCE(s.conversationId, s.sessionId) = conversations.conversationId
-                          AND COALESCE(s.conversationType, s.sessionType, 'private') = conversations.conversationType
-                    )
-                ''')
-                cursor.execute("DROP TABLE session_settings")
-                logger.info("已迁移并删除旧的 session_settings 表")
-        except BaseException:
-            cursor.execute("ROLLBACK TO SAVEPOINT session_settings_migration")
-            cursor.execute("RELEASE SAVEPOINT session_settings_migration")
-            raise
-        cursor.execute("RELEASE SAVEPOINT session_settings_migration")
+        self._migrate_legacy_session_settings(cursor)
 
         conn.commit()
 
@@ -939,6 +867,82 @@ class SQLiteDB:
             cursor.execute(CREATE_SOURCE_REVOCATIONS)
             cursor.execute(BACKFILL_SOURCE_REVOCATIONS)
         cursor.execute("UPDATE character_source_corpora SET index_status='completed' WHERE index_receipt_json IS NOT NULL AND index_status='pending'")
+
+    @staticmethod
+    def _migrate_legacy_session_settings(cursor):
+        # One-way compatibility migration: legacy session_settings is folded into
+        # conversations and then removed. Fresh databases never create this table.
+        cursor.execute("SAVEPOINT session_settings_migration")
+        try:
+            cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='session_settings'")
+            if cursor.fetchone():
+                # Older legacy tables may lack the columns introduced later.
+                cursor.execute("PRAGMA table_info(session_settings)")
+                legacy_cols = {row[1] for row in cursor.fetchall()}
+                if "platform" not in legacy_cols:
+                    cursor.execute("ALTER TABLE session_settings ADD COLUMN platform TEXT NOT NULL DEFAULT 'qq'")
+                if "conversationId" not in legacy_cols:
+                    cursor.execute("ALTER TABLE session_settings ADD COLUMN conversationId TEXT")
+                if "conversationType" not in legacy_cols:
+                    cursor.execute("ALTER TABLE session_settings ADD COLUMN conversationType TEXT NOT NULL DEFAULT 'private'")
+                    cursor.execute("UPDATE session_settings SET conversationType = sessionType")
+                if "sessionName" not in legacy_cols:
+                    cursor.execute("ALTER TABLE session_settings ADD COLUMN sessionName TEXT")
+                if "bot_enabled" not in legacy_cols:
+                    cursor.execute("ALTER TABLE session_settings ADD COLUMN bot_enabled INTEGER NOT NULL DEFAULT 1")
+                if "updated_at" not in legacy_cols:
+                    cursor.execute("ALTER TABLE session_settings ADD COLUMN updated_at TEXT")
+                migrated_at = datetime.now().isoformat()
+                cursor.execute('''
+                    INSERT OR IGNORE INTO conversations (
+                        platform, conversationId, conversationType, displayName,
+                        botEnabled, replyPolicy, createdAt, updatedAt
+                    )
+                    SELECT
+                        COALESCE(platform, 'qq'),
+                        COALESCE(conversationId, sessionId),
+                        COALESCE(conversationType, sessionType, 'private'),
+                        COALESCE(NULLIF(sessionName, ''), sessionId),
+                        bot_enabled,
+                        'default',
+                        COALESCE(updated_at, ?),
+                        COALESCE(updated_at, ?)
+                    FROM session_settings
+                ''', (migrated_at, migrated_at))
+                # SQLite does not allow DO UPDATE with INSERT...SELECT...FROM;
+                # refresh existing conversations so the latest legacy state wins.
+                cursor.execute('''
+                    UPDATE conversations
+                    SET
+                        botEnabled = COALESCE((SELECT s.bot_enabled FROM session_settings s
+                                              WHERE COALESCE(s.platform, 'qq') = conversations.platform
+                                                AND COALESCE(s.conversationId, s.sessionId) = conversations.conversationId
+                                                AND COALESCE(s.conversationType, s.sessionType, 'private') = conversations.conversationType),
+                                             conversations.botEnabled),
+                        displayName = COALESCE((SELECT COALESCE(NULLIF(s.sessionName, ''), s.sessionId) FROM session_settings s
+                                              WHERE COALESCE(s.platform, 'qq') = conversations.platform
+                                                AND COALESCE(s.conversationId, s.sessionId) = conversations.conversationId
+                                                AND COALESCE(s.conversationType, s.sessionType, 'private') = conversations.conversationType),
+                                             conversations.displayName),
+                        updatedAt = COALESCE((SELECT s.updated_at FROM session_settings s
+                                             WHERE COALESCE(s.platform, 'qq') = conversations.platform
+                                               AND COALESCE(s.conversationId, s.sessionId) = conversations.conversationId
+                                               AND COALESCE(s.conversationType, s.sessionType, 'private') = conversations.conversationType),
+                                             conversations.updatedAt)
+                    WHERE EXISTS (
+                        SELECT 1 FROM session_settings s
+                        WHERE COALESCE(s.platform, 'qq') = conversations.platform
+                          AND COALESCE(s.conversationId, s.sessionId) = conversations.conversationId
+                          AND COALESCE(s.conversationType, s.sessionType, 'private') = conversations.conversationType
+                    )
+                ''')
+                cursor.execute("DROP TABLE session_settings")
+                logger.info("已迁移并删除旧的 session_settings 表")
+        except BaseException:
+            cursor.execute("ROLLBACK TO SAVEPOINT session_settings_migration")
+            cursor.execute("RELEASE SAVEPOINT session_settings_migration")
+            raise
+        cursor.execute("RELEASE SAVEPOINT session_settings_migration")
 
     def _ensure_column(self, cursor, table: str, column: str, definition: str):
         cursor.execute(f"PRAGMA table_info({table})")
