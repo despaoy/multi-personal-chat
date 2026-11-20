@@ -208,7 +208,7 @@ class CharacterPublicationRepository:
     @staticmethod
     def _local_guard(params):
         return ('UPDATE character_library SET revision=revision WHERE id=:id AND '
-                '((:corpus IS NULL AND NOT EXISTS (SELECT 1 FROM character_source_corpora WHERE character_id=:id AND character_revision=:previous AND revoked=0)) '
+                '((CAST(:corpus AS TEXT) IS NULL AND NOT EXISTS (SELECT 1 FROM character_source_corpora WHERE character_id=:id AND character_revision=:previous AND revoked=0)) '
                 'OR :corpus=(SELECT id FROM character_source_corpora WHERE character_id=:id AND character_revision=:previous AND revoked=0 ORDER BY created_at DESC,id DESC LIMIT 1))', params, 1)
 
     def _source_baseline(self, current):

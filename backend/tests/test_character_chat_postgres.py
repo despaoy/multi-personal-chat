@@ -3,6 +3,7 @@
 import asyncio
 import importlib.util
 import os
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -24,6 +25,31 @@ def database():
     db = SyncPgAdapter(PgDatabase(os.environ["DATABASE_URL"]))
     yield db
     db.close()
+
+
+def test_postgres_legacy_copy_can_preview_and_confirm_an_author_update(database):
+    from db.legacy_character_publications import backfill_legacy_copy_baselines
+    from repositories.character_library import CharacterLibraryRepository
+
+    suffix = uuid.uuid4().hex
+    author, recipient = f'author-{suffix}', f'recipient-{suffix}'
+    library = CharacterLibraryRepository(database)
+    old = CharacterSettings(name='old', persona='x', greeting='x')
+    source = library.create(author, old)
+    copy = library.create(recipient, old)
+    database.execute_sql(
+        'UPDATE character_library SET source_character_id=:source,source_revision=1 WHERE id=:id',
+        {'source': source['id'], 'id': copy['id']},
+    )
+    backfill_legacy_copy_baselines(database.execute_sql)
+    library.update(author, source['id'], 1, CharacterSettings(name='new', persona='x', greeting='x'))
+    library.publish(author, source['id'], 2, True)
+
+    plan = library.source_update(recipient, copy['id'])
+    args = (recipient, copy['id'], 1, 2, plan['publication_id'], plan['local_corpus_id'], {})
+    preview = library.preview_source_update(*args)
+    assert preview['sources'] == []
+    assert library.import_source_update(*args, preview['preview_id'])['settings']['name'] == 'new'
 
 
 def test_postgres_chat_generation_enrichment_retry_and_erasure(database):

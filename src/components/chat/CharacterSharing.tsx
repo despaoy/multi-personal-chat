@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { api } from '@/lib/api';
+import { createClientId } from '@/lib/client-id';
 import { Button } from '@/components/ui/button';
 import type { CharacterLibraryRecord, CharacterOriginalSource, CharacterPublicationPreview, CharacterSourceEdition, CharacterSourceEditionSummary, SharedCharacterPublication } from '@/lib/api-contracts';
 
@@ -124,7 +125,7 @@ export function SharedCharacterPreview({ token, onCopied, disabled = false, acqu
     {error && <p role="alert" className="text-destructive">{error}</p>}
     <Button disabled={busy || disabled} onClick={() => void run(async () => {
       const result = await api.getSharedCharacter(token);
-      if (result.publication_id !== preview?.publication_id) request.current = crypto.randomUUID();
+      if (result.publication_id !== preview?.publication_id) request.current = createClientId();
       setPreview(result);
     })}>预览或刷新分享内容</Button>
     {preview && <>

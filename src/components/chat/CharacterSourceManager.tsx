@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api';
+import { createClientId } from '@/lib/client-id';
 import type { CharacterLibraryRecord, CharacterOriginalSource, CharacterSourceEditionSummary } from '@/lib/api-contracts';
 
 const processingLabels = { pending: '等待处理', submitted: '处理中', completed: '处理完成', failed: '处理失败' };
@@ -126,7 +127,7 @@ export function CharacterSourceManager({ character, disabled, draft, onDraftChan
           <Button type="button" variant="outline" onClick={() => setSources(previous => previous.filter((_, i) => i !== index))}>从草稿移除此篇</Button>
         </div>)}
         <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="outline" disabled={sources.length >= 100} onClick={() => setSources(previous => [...previous, { id: crypto.randomUUID(), title: '', content: '' }])}>添加一篇资料</Button>
+          <Button type="button" variant="outline" disabled={sources.length >= 100} onClick={() => setSources(previous => [...previous, { id: createClientId(), title: '', content: '' }])}>添加一篇资料</Button>
           <Button type="submit" disabled={!sources.length}>发布完整资料集为新版</Button>
         </div>
       </fieldset>

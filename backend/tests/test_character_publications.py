@@ -306,6 +306,43 @@ def test_migration_preserves_legacy_settings_only_shares_and_is_repeatable(tmp_p
     engine.dispose()
 
 
+def test_legacy_copy_can_import_author_update_after_reopening_database(tmp_path):
+    path = tmp_path / 'legacy-copy.db'
+    db = SQLiteDB(path)
+    try:
+        library = CharacterLibraryRepository(db)
+        sources = CharacterSourceRepository(db)
+        author = library.create('author', CharacterSettings(name='old', persona='x', greeting='x'))
+        recipient = library.create('recipient', CharacterSettings(name='old', persona='x', greeting='x'))
+        db.execute_sql(
+            'UPDATE character_library SET source_character_id=:author,source_revision=1 WHERE id=:copy',
+            {'author': author['id'], 'copy': recipient['id']},
+        )
+        sources.publish('recipient', recipient['id'], 1, [
+            {'id': 'local', 'title': 'Local', 'content': 'Keep this local addition'},
+        ])
+        library.update('author', author['id'], 1, CharacterSettings(name='new', persona='x', greeting='x'))
+        published = library.publish('author', author['id'], 2, True)
+        modern = library.copy_shared('modern', published['share_token'])
+        db.execute_sql('UPDATE character_library SET source_publication_id=NULL WHERE id=:id', {'id': modern['id']})
+    finally:
+        db.close_connection()
+
+    db = SQLiteDB(path)
+    try:
+        library = CharacterLibraryRepository(db)
+        plan = library.source_update('recipient', recipient['id'])
+        assert plan['baseline_publication_id'] == f"legacy-{author['id']}-1"
+        assert plan['source_merge']['status'] == 'ready'
+        args = ('recipient', recipient['id'], 1, 2, plan['publication_id'], plan['local_corpus_id'], {})
+        preview = library.preview_source_update(*args)
+        assert [source['id'] for source in preview['sources']] == ['local']
+        assert library.import_source_update(*args, preview['preview_id'])['settings']['name'] == 'new'
+        assert library.get('modern', modern['id'])['source_publication_id'] is None
+    finally:
+        db.close_connection()
+
+
 def test_editing_copied_settings_preserves_sources_without_mutating_old_session(env):
     library, sources, _, _ = env
     _, copied = copy(env)

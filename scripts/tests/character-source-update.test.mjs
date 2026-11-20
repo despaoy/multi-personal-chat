@@ -93,6 +93,35 @@ async function choices(renderer) {
 }
 async function unmount(renderer) { await act(async () => renderer.unmount()); }
 
+test('shared preview and copy work when only getRandomValues is available', async t => {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
+  Object.defineProperty(globalThis, 'crypto', {
+    configurable: true,
+    value: { getRandomValues: bytes => bytes.fill(42) },
+  });
+  t.after(() => Object.defineProperty(globalThis, 'crypto', previous));
+  const requests = [];
+  const SharedCharacterPreview = loader({
+    getSharedCharacter: async () => ({ publication_id: 'published', settings, sources: [] }),
+    copySharedCharacter: async (_token, _publication, request) => {
+      requests.push(request);
+      return character;
+    },
+  })('src/components/chat/CharacterSharing.tsx').SharedCharacterPreview;
+  let renderer;
+  await act(async () => {
+    renderer = create(React.createElement(SharedCharacterPreview, { token: 'token', onCopied: async () => {} }));
+  });
+  try {
+    await click(renderer, '预览或刷新分享内容');
+    await click(renderer, '预览或刷新分享内容');
+    await click(renderer, '确认复制此发布内容');
+    assert.deepEqual(requests, ['2a'.repeat(16)]);
+  } finally {
+    await unmount(renderer);
+  }
+});
+
 test('mixed conflict/deletion choices have no defaults; exact final result and one confirmation', async () => {
   const h = await panel(); await click(h.renderer, '检查并预览');
   assert.ok(button(h.renderer, '生成最终预览').props.disabled);

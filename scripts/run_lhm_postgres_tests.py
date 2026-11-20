@@ -24,10 +24,12 @@ MEMORY_DATABASES = {
 
 START = r'''
 import json, os, pathlib, socket, subprocess, tempfile
-base = pathlib.Path('/home/boot/lhm/multipersonal-deploy')
+lhm = pathlib.Path('/home/boot/lhm').resolve()
+base = (lhm / 'multipersonal-deploy').resolve()
+assert base != lhm and base.is_relative_to(lhm)
 base.mkdir(exist_ok=True)
 root = pathlib.Path(tempfile.mkdtemp(prefix='pg-foundation-', dir=base)).resolve()
-assert root.is_relative_to(pathlib.Path('/home/boot/lhm'))
+assert root.parent == base
 tools = pathlib.Path('/home/boot/lhm/multipersonal-deploy/tools/postgres-vector-14/usr/lib/postgresql/14/bin').resolve()
 assert tools.is_relative_to(pathlib.Path('/home/boot/lhm'))
 libraries = pathlib.Path('/home/boot/lhm/multipersonal-runtime/tools/pgsql/usr/lib/x86_64-linux-gnu').resolve()
@@ -132,7 +134,8 @@ def main():
                     thread.join()
         finally:
             source = "import os,pathlib,subprocess\ninfo=" + repr(instance) + "\n"
-            source += "root=pathlib.Path(info['root']).resolve()\nassert root.parent == pathlib.Path('/home/boot/lhm/multipersonal-deploy') and root.name.startswith('pg-foundation-')\n"
+            source += "lhm=pathlib.Path('/home/boot/lhm').resolve()\nbase=(lhm/'multipersonal-deploy').resolve()\n"
+            source += "root=pathlib.Path(info['root']).resolve()\nassert base != lhm and base.is_relative_to(lhm) and root.parent == base and root.name.startswith('pg-foundation-')\n"
             source += "subprocess.run([info['tools']+'/pg_ctl','-D',str(root/'data'),'-m','fast','-w','stop'],env=dict(os.environ,LD_LIBRARY_PATH=info['library']),check=True)\n"
             print(remote_python(ssh, source), flush=True)
         return result.returncode

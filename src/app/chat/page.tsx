@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { api } from '@/lib/api';
+import { createClientId } from '@/lib/client-id';
 import { GenerationDraft } from '@/components/chat/GenerationDraft';
 import type { CharacterChatGeneration } from '@/lib/api-contracts';
 import type { CharacterChatSession, CharacterChatSummary, CharacterChatTurn, CharacterLibraryRecord, SendCharacterChatMessage, ContinuationPreview, CharacterSharedMemory, CharacterChatEvidence } from '@/lib/api-contracts';
@@ -176,7 +177,7 @@ function ChatWorkspace() {
     if (!session || !draft.trim() || generation?.status === 'running' || (enrichmentPending && !editing)) return;
     const existing = pending.current;
     const body: SendCharacterChatMessage = existing?.sessionId === session.id && existing.body.message === draft && (existing.body.replace_turn_id || undefined) === editing
-      ? existing.body : { revision: session.revision, request_id: crypto.randomUUID(), message: draft, ...(editing ? { replace_turn_id: editing } : {}) };
+      ? existing.body : { revision: session.revision, request_id: createClientId(), message: draft, ...(editing ? { replace_turn_id: editing } : {}) };
     pending.current = { sessionId: session.id, body };
     setStreamRequest({ sessionId: session.id, requestId: body.request_id });
     try {

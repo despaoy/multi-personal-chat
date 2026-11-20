@@ -853,6 +853,9 @@ class SQLiteDB:
                        "WHERE c.share_token IS NOT NULL AND c.publication_id IS NULL")
         cursor.execute("UPDATE character_library SET publication_id='legacy-' || id || '-' || CAST(shared_revision AS TEXT) "
                        "WHERE share_token IS NOT NULL AND publication_id IS NULL")
+        from db.legacy_character_publications import backfill_legacy_copy_baselines
+
+        backfill_legacy_copy_baselines(cursor.execute)
         self._ensure_column(cursor, 'character_source_corpora', 'index_receipt_json', 'TEXT')
         self._ensure_column(cursor, 'character_source_corpora', 'index_status', "TEXT NOT NULL DEFAULT 'pending'")
         self._ensure_column(cursor, 'character_source_corpora', 'index_attempt', 'INTEGER NOT NULL DEFAULT 1')
