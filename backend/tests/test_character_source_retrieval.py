@@ -12,6 +12,7 @@ from db.errors import RevisionConflictError
 from inference.generation_request import GenerationRequest, generate_character_response
 from knowledge.character_source_ranking import rank_source_candidates, rerank_source_model
 from repositories.character_chat import CharacterChatRepository
+from repositories.character_chat_generation import CharacterChatGenerationRepository
 from repositories.character_library import CharacterNotFoundError
 from repositories.character_sources import CharacterSourceRepository
 from services.character_chat import CharacterChatService, prepare_request
@@ -121,19 +122,30 @@ def test_source_lookup_reaches_prompt_and_commits_only_live_authority(tmp_path, 
                 assert limit > 8
                 return [{**candidate, 'embedding_identity': identity, 'content': '索引里的伪造原文'}]
 
-        async def complete(request, _session, _request_id):
+        async def complete(request, _session, request_id, *, event_sink):
+            async def try_publishing_draft():
+                await event_sink({'type': 'draft_delta', 'text': '未验证的资料草稿'})
+                status = CharacterChatGenerationRepository(db).get('owner', session['id'], request_id)
+                assert status['status'] == 'running'
+                assert not status.get('draft_text')
+
             async def generate(**kwargs):
                 prompt = str(kwargs)
                 assert '小满在傍晚把信送到了灯塔。' in prompt
                 assert '索引里的伪造原文' not in prompt
+                await try_publishing_draft()
                 if revoke_during_reply:
                     sources.revoke('owner', corpus['id'])
+                    await try_publishing_draft()
                 namespace = re.search(r'\[\[cite:([0-9a-f]{12}):S1\]\]', prompt).group(1)
                 return '小满在傍晚把信送到了灯塔。' + f'[[cite:{namespace}:S1]]'
             result = await generate_character_response(request, generate)
             return CharacterChatCompletion(result.reply, 'controlled', evidence_snapshot(result))
 
-        service = CharacterChatService(db, complete, sources=partial(retrieve_source_context, database=db, index=Index(), provider=Provider()))
+        service = CharacterChatService(
+            db, complete, stream_events=True,
+            sources=partial(retrieve_source_context, database=db, index=Index(), provider=Provider()),
+        )
         call = service.generate('owner', session['id'], revision=1, request_id='source-test', message='原作里谁把信送到了灯塔？')
         if revoke_during_reply:
             with pytest.raises(CharacterNotFoundError):

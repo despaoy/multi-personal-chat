@@ -161,8 +161,14 @@ class CharacterChatService:
         request = prepare_request(session, turns, message, memories, proactive_messages=outreach)
         if self.sources:
             request = await self.sources(request, session)
+
+        # Evidence can be revoked while the provider is streaming. Release
+        # grounded text only through the final authority-checked save.
+        publish_draft = not request.retrieval.has_evidence
+
         async def event_sink(event):
-            await asyncio.to_thread(self.generations.publish, session, request_id, token, event)
+            if publish_draft:
+                await asyncio.to_thread(self.generations.publish, session, request_id, token, event)
 
         completion = await self.complete(
             request, session, request_id, **({"event_sink": event_sink} if self.stream_events else {})
