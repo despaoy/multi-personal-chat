@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from api.character_library import account, call
 from app.runtime import get_runtime_container
+from character.chat_relationship import RelationshipDimensions, RelationshipStage
 from db.errors import RevisionConflictError
 from db.schemas import MessageText
 from infra.environment import read_bool
@@ -80,8 +81,9 @@ class DeleteSessions(BaseModel):
 
 
 class RelationshipContent(Revision):
-    stage: Literal["stranger", "acquaintance", "familiar", "close"]
+    stage: RelationshipStage
     summary: str = Field(default="", max_length=2000)
+    dimensions: RelationshipDimensions | None = None
 
 
 class RelationshipDecision(Revision):
@@ -363,7 +365,7 @@ def retract_message(session_id: str, turn_id: str, body: Revision, owner=Depends
 
 @router.put("/{session_id}/relationship")
 def update_relationship(session_id: str, body: RelationshipContent, owner=Depends(account), repo=Depends(repository)):
-    return call(repo.update_relationship, owner, session_id, body.revision, body.stage, body.summary)
+    return call(repo.update_relationship, owner, session_id, body.revision, body.stage, body.summary, body.dimensions)
 
 
 @router.post("/{session_id}/relationship-proposal")

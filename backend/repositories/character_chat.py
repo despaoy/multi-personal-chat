@@ -611,7 +611,7 @@ class CharacterChatRepository:
         )
         return self.get(owner, session_id)
 
-    def update_relationship(self, owner, session_id, revision, stage, summary):
+    def update_relationship(self, owner, session_id, revision, stage, summary, dimensions=None):
         """Anchor an explicit relationship adjustment at the current conversation point."""
         if stage not in {"stranger", "acquaintance", "familiar", "close"} or len(summary) > 2000:
             raise ValueError("关系阶段或摘要无效")
@@ -619,11 +619,15 @@ class CharacterChatRepository:
         if session["revision"] != revision:
             raise RevisionConflictError()
         state = copy.deepcopy(session["state"])
+        choices = state["relationship"].get("dimensions", {})
+        if dimensions is not None:
+            choices = dimensions.apply_to(choices)
         state["relationship"] = {
             "stage": stage,
             "summary": summary.strip(),
             "origin": "user",
             "source_turn_id": turns[-1]["id"] if turns else None,
+            **({"dimensions": choices} if choices else {}),
         }
         state.pop("relationship_proposal", None)
         return self.save_relationship_state(session, turns, state)

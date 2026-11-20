@@ -911,8 +911,15 @@ def test_relationship_http_validation_and_ownership(repo):
     with TestClient(app) as client:
         assert client.put(url, json={"revision": 1, "stage": "invented"}).status_code == 422
         assert client.put(url, json={"revision": 1, "stage": "close", "summary": "x" * 2001}).status_code == 422
-        response = client.put(url, json={"revision": 1, "stage": "familiar", "summary": "测试记录"})
+        assert client.put(url, json={"revision": 1, "stage": "familiar", "dimensions": {"tone": "invented"}}).status_code == 422
+        response = client.put(url, json={"revision": 1, "stage": "familiar", "summary": "测试记录",
+                                         "dimensions": {"tone": "restrained", "initiative": "offer"}})
         assert response.status_code == 200 and response.json()["state"]["relationship"]["stage"] == "familiar"
+        assert response.json()["state"]["relationship"]["dimensions"] == {"tone": "restrained", "initiative": "offer"}
         assert client.put(url, json={"revision": 1, "stage": "close"}).status_code == 409
+        legacy = client.put(url, json={"revision": 2, "stage": "familiar", "summary": "旧客户端"}).json()
+        assert legacy["state"]["relationship"]["dimensions"] == {"tone": "restrained", "initiative": "offer"}
+        cleared = client.put(url, json={"revision": 3, "stage": "familiar", "dimensions": {"tone": None}}).json()
+        assert cleared["state"]["relationship"]["dimensions"] == {"initiative": "offer"}
         app.dependency_overrides[get_current_user] = lambda: {"user_id": "2"}
-        assert client.put(url, json={"revision": 2, "stage": "close"}).status_code == 404
+        assert client.put(url, json={"revision": 4, "stage": "close", "dimensions": {"initiative": "wait"}}).status_code == 404

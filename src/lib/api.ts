@@ -44,7 +44,7 @@ export type * from './api-contracts';
 
 const API_BASE_URL = '/api';
 
-import type { CharacterChatSession, CharacterChatSummary, CharacterChatTurn, CreateCharacterChat, SendCharacterChatMessage, CharacterLibraryRecord, CharacterPackage, CharacterSettings } from './api-contracts';
+import type { CharacterChatRelationshipDimensions, CharacterChatSession, CharacterChatSummary, CharacterChatTurn, CreateCharacterChat, SendCharacterChatMessage, CharacterLibraryRecord, CharacterPackage, CharacterSettings } from './api-contracts';
 
 export class ApiRequestError extends Error {
   constructor(public readonly status: number, public readonly detail: unknown) {
@@ -719,9 +719,12 @@ class ApiClient {
     return this.request<import('./api-contracts').ContinuationPreview>(`/character-chats/${encodeURIComponent(id)}/continuation-preview`);
   }
 
-  updateChatRelationship(id: string, revision: number, stage: CharacterChatSession['state']['relationship']['stage'], summary: string) {
+  updateChatRelationship(
+    id: string, revision: number, stage: CharacterChatSession['state']['relationship']['stage'],
+    summary: string, dimensions?: CharacterChatRelationshipDimensions,
+  ) {
     return this.request<CharacterChatSession>(`/character-chats/${encodeURIComponent(id)}/relationship`, {
-      method: 'PUT', body: JSON.stringify({ revision, stage, summary }),
+      method: 'PUT', body: JSON.stringify({ revision, stage, summary, dimensions }),
     });
   }
 

@@ -12,8 +12,18 @@ import { createClientId } from '@/lib/client-id';
 import { GenerationDraft } from '@/components/chat/GenerationDraft';
 import { ProactivePanel } from '@/components/chat/ProactivePanel';
 import { ProactiveInbox } from '@/components/chat/ProactiveInbox';
-import type { CharacterChatDeletionPreview, CharacterChatGeneration } from '@/lib/api-contracts';
+import type { CharacterChatDeletionPreview, CharacterChatGeneration, CharacterChatRelationshipDimensions } from '@/lib/api-contracts';
 import type { CharacterChatSession, CharacterChatSummary, CharacterChatTurn, CharacterLibraryRecord, SendCharacterChatMessage, ContinuationPreview, CharacterSharedMemory, CharacterChatEvidence } from '@/lib/api-contracts';
+
+const relationshipStages = { stranger: '初识', acquaintance: '认识', familiar: '熟悉', close: '亲近' };
+const relationshipTones = { restrained: '保持克制', playful: '可以轻松接梗' };
+const relationshipInitiatives = { wait: '跟随我的话题', offer: '适时追问或提议' };
+
+function describeRelationshipDimensions(dimensions?: CharacterChatRelationshipDimensions) {
+  const tone = dimensions?.tone ? relationshipTones[dimensions.tone] : '随人物和情境';
+  const initiative = dimensions?.initiative ? relationshipInitiatives[dimensions.initiative] : '随人物和情境';
+  return `交流语气：${tone}。聊天中的话题推进：${initiative}。`;
+}
 
 function focusTurn(turnId: string) {
   const element = document.getElementById(`turn-${turnId}`);
@@ -88,6 +98,7 @@ function ChatWorkspace() {
   const [memoryEditing, setMemoryEditing] = useState<string>();
   const [relationshipStage, setRelationshipStage] = useState<CharacterChatSession['state']['relationship']['stage']>('stranger');
   const [relationshipSummary, setRelationshipSummary] = useState('');
+  const [relationshipDimensions, setRelationshipDimensions] = useState<CharacterChatRelationshipDimensions>({});
   const pending = useRef<{ sessionId: string; body: SendCharacterChatMessage } | null>(null);
   const selectedCharacter = characters.find(item => item.id === characterId);
   const preview = previewResult?.source_session_id === source ? previewResult : undefined;
@@ -134,6 +145,7 @@ function ChatWorkspace() {
     setSessions(previous => previous.map(item => item.id === id ? { ...item, revision: response.session.revision } : item));
     setRelationshipStage(response.session.state.relationship.stage);
     setRelationshipSummary(response.session.state.relationship.summary || '');
+    setRelationshipDimensions(response.session.state.relationship.dimensions || {});
     setSourceExcerpt(undefined);
     setMemoryDraft('');
     setMemoryEditing(undefined);
@@ -456,6 +468,7 @@ function ChatWorkspace() {
             </div>)}
             {!Object.keys(preview.changes).length && <p className="my-2 text-sm">设定内容没有变化。</p>}
             <p className="text-sm">关系记录：{preview.relationship.summary || '暂无关系摘要'}</p>
+            {preview.relationship.dimensions && <p className="text-sm">{describeRelationshipDimensions(preview.relationship.dimensions)}</p>}
             <label className="my-2 flex items-start gap-2 text-sm"><input type="checkbox" disabled={busy} checked={resetRelationship} onChange={event => setResetRelationship(event.target.checked)} />重置关系状态</label>
             <p className="my-2 text-sm">选择要带入的记忆，可取消与新设定冲突的内容：</p>
             <ul className="space-y-2 text-sm">{preview.memories.map(memory => <li key={memory.id}>
@@ -514,13 +527,15 @@ function ChatWorkspace() {
             </details>)}
           </details>}
           <details className="rounded-lg border p-4">
-            <summary className="cursor-pointer">关系记录 · {{ stranger: '初识', acquaintance: '认识', familiar: '熟悉', close: '亲近' }[session.state.relationship.stage]}</summary>
+            <summary className="cursor-pointer">关系记录 · {relationshipStages[session.state.relationship.stage]}</summary>
             {session.state.relationship_processing === 'failed' && <p role="status" className="my-2 text-sm">本轮自动关系更新失败，已保留原关系和对话。</p>}
             {session.state.relationship_processing === 'disabled' && <p className="my-2 text-sm text-muted-foreground">服务端尚未启用自动关系更新，当前可手动调整。</p>}
             {session.state.relationship.evidence?.map((item, index) => <blockquote key={index} className="my-2 border-l-2 pl-3 text-sm">{item.role === 'user' ? '你' : '角色'}：{item.quote}</blockquote>)}
             {session.state.relationship_proposal && <div className="my-3 space-y-2 rounded-md border p-3">
               <p className="font-medium">关系变化建议 · 待你确认</p>
-              <p className="text-sm">已保留你手动设定的关系。建议调整为：{{ stranger: '初识', acquaintance: '认识', familiar: '熟悉', close: '亲近' }[session.state.relationship_proposal.stage]}</p>
+              <p className="text-sm">建议熟悉程度为{relationshipStages[session.state.relationship_proposal.stage]}。接受后才会生效。</p>
+              {(session.state.relationship.dimensions || session.state.relationship_proposal.dimensions) &&
+                <p className="text-sm">{describeRelationshipDimensions(session.state.relationship_proposal.dimensions)}</p>}
               <p className="whitespace-pre-wrap text-sm">{session.state.relationship_proposal.summary}</p>
               {session.state.relationship_proposal.evidence.map((item, index) => <blockquote key={index} className="border-l-2 pl-3 text-sm">{item.role === 'user' ? '你' : '角色'}：{item.quote}</blockquote>)}
               <div className="flex gap-2">{[true, false].map(accept => <Button key={String(accept)} disabled={busy} variant={accept ? 'default' : 'outline'} onClick={() => void run(async () => {
@@ -530,12 +545,30 @@ function ChatWorkspace() {
             </div>}
             <p className="my-3 text-sm text-muted-foreground">记录目前的相处状态与共同经历。调整绑定当前对话位置，撤回到此前会恢复当时的关系；已有分支保持独立。人物仍保有自己的立场。</p>
             <form className="space-y-2" onSubmit={event => { event.preventDefault(); void run(async () => {
-              await api.updateChatRelationship(session.id, session.revision, relationshipStage, relationshipSummary);
+              await api.updateChatRelationship(session.id, session.revision, relationshipStage, relationshipSummary, relationshipDimensions);
               await open(session.id); await refreshSessions(characterId);
             }); }}>
               <Label htmlFor="relationship-stage">熟悉程度</Label>
               <select id="relationship-stage" className="w-full rounded-md border bg-background p-2" disabled={busy} value={relationshipStage} onChange={event => setRelationshipStage(event.target.value as typeof relationshipStage)}>
-                <option value="stranger">初识</option><option value="acquaintance">认识</option><option value="familiar">熟悉</option><option value="close">亲近</option>
+                {Object.entries(relationshipStages).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+              <Label htmlFor="relationship-tone">交流语气</Label>
+              <select id="relationship-tone" className="w-full rounded-md border bg-background p-2" disabled={busy}
+                value={relationshipDimensions.tone ?? ''} onChange={event => {
+                  const tone = (event.target.value || null) as CharacterChatRelationshipDimensions['tone'];
+                  setRelationshipDimensions(previous => ({ ...previous, tone }));
+                }}>
+                <option value="">随人物和情境</option>
+                {Object.entries(relationshipTones).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+              <Label htmlFor="relationship-initiative">聊天中的话题推进</Label>
+              <select id="relationship-initiative" className="w-full rounded-md border bg-background p-2" disabled={busy}
+                value={relationshipDimensions.initiative ?? ''} onChange={event => {
+                  const initiative = (event.target.value || null) as CharacterChatRelationshipDimensions['initiative'];
+                  setRelationshipDimensions(previous => ({ ...previous, initiative }));
+                }}>
+                <option value="">随人物和情境</option>
+                {Object.entries(relationshipInitiatives).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
               </select>
               <Label htmlFor="relationship-summary">关系摘要</Label>
               <textarea id="relationship-summary" disabled={busy} maxLength={2000} rows={3} className="w-full rounded-md border bg-background p-2" value={relationshipSummary} onChange={event => setRelationshipSummary(event.target.value)} />

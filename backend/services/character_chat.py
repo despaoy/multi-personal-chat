@@ -8,6 +8,7 @@ import time
 from contextlib import nullcontext
 from dataclasses import replace
 
+from character.chat_relationship import relationship_dimension_guidance
 from character.decision_policy import relationship_stage_guidance
 from character.models import CompiledCharacterContext
 from db.errors import RevisionConflictError
@@ -39,6 +40,7 @@ def prepare_request(session, turns, message, retrieved_memories=None, *, proacti
     relationship = session["state"]["relationship"]
     persona += "\n按当前已生效的关系调整表达：" + relationship_stage_guidance(relationship.get("stage", "stranger"))
     persona += "。尊重用户此刻明确的边界，并保留人物的独立立场。"
+    persona += relationship_dimension_guidance(relationship)
     if session["mode"] == "branch":
         persona += "\n本轮处于假想分支，按用户明确给出的剧情假设推演，并保持未被修改的人物立场。"
     else:

@@ -7,10 +7,12 @@ from functools import partial
 
 import pytest
 
+from character.chat_relationship import RelationshipDimensions
 from character.library import CharacterSettings
 from character.memory_llm import MemoryLlmConfig
 from db.database import SQLiteDB
 from db.errors import RevisionConflictError
+from inference.generation_request import build_generation_request
 from repositories.character_chat import CharacterChatRepository
 from repositories.character_library import CharacterNotFoundError
 from services.character_chat import CharacterChatService, prepare_request
@@ -36,12 +38,20 @@ def test_relationship_guidance_uses_only_the_committed_stage(tmp_path):
         message = "又见面了。"
         initial = prepare_request(session, [], message)
         assert "礼貌而不假定熟悉" in initial.persona_prompt
-        familiar = repo.update_relationship("1", session["id"], 1, "familiar", "此前多次讨论修钟")
-        familiar["state"]["relationship_proposal"] = {"stage": "close", "summary": "待确认内容"}
+        familiar = repo.update_relationship(
+            "1", session["id"], 1, "familiar", "此前多次讨论修钟",
+            RelationshipDimensions(tone="restrained", initiative="offer"),
+        )
+        familiar["state"]["relationship_proposal"] = {
+            "stage": "close", "summary": "待确认内容", "dimensions": {"tone": "playful", "initiative": "wait"},
+        }
         prepared = prepare_request(familiar, [], message)
         assert "仅在相关时引用共同记忆" in prepared.persona_prompt
         assert "越过边界" in prepared.persona_prompt
         assert "关心不等于追问" not in prepared.persona_prompt
+        assert "避免主动打趣" in prepared.persona_prompt
+        assert "建议接续未聊完的话题" in prepared.persona_prompt
+        assert "可以接梗" not in prepared.persona_prompt
         assert "待确认内容" not in prepared.character_context.conversation_reference_context
     finally:
         db.close_connection()
@@ -61,6 +71,53 @@ def proposal(monkeypatch):
 
 def extractor(writer):
     return partial(enrich_relationship, config=MemoryLlmConfig(True, "https://test.invalid", "test"), completion=writer)
+
+
+def test_dimension_suggestion_needs_confirmation_even_without_manual_relationship(tmp_path, proposal):
+    db = SQLiteDB(tmp_path / "dimension-proposal.db")
+    try:
+        repo = CharacterChatRepository(db)
+        entry = repo.characters.create("1", CharacterSettings(name="迟禾", persona="谨慎", greeting="你好"))
+        session = repo.create("1", entry["id"], "关系确认")
+        proposal.pop("stage")
+        proposal.pop("summary")
+        proposal["dimensions"] = {"tone": "playful", "initiative": "wait"}
+        proposal["evidence"] = [
+            {"role": "user", "quote": "以后我们可以轻松接梗，也别另开话题"},
+            {"role": "assistant", "quote": "好，跟着你的话题聊"},
+        ]
+
+        async def complete(request, _session, _request_id):
+            assert "可以接梗或轻松打趣" not in request.persona_prompt
+            return "好，跟着你的话题聊", "test"
+
+        chat = CharacterChatService(db, complete, relationship=extractor(Completion(proposal)))
+        turn = asyncio.run(chat.generate(
+            "1", session["id"], revision=1, request_id="dimensions", message="以后我们可以轻松接梗，也别另开话题",
+        ))
+        after = repo.get("1", session["id"])
+        assert "dimensions" not in after["state"]["relationship"]
+        pending = after["state"]["relationship_proposal"]
+        assert pending["source_turn_id"] == turn["id"]
+        assert pending["stage"] == "stranger"
+        assert pending["dimensions"] == {"tone": "playful", "initiative": "wait"}
+        accepted = repo.resolve_relationship_proposal("1", session["id"], after["revision"], pending["id"], True)
+        prepared = prepare_request(accepted, repo.turns("1", session["id"]), "继续")
+        assert "可以接梗或轻松打趣" in prepared.persona_prompt
+        assert "不主动追问或另开话题" in prepared.persona_prompt
+        system = build_generation_request(prepared).messages[0]
+        assert system["role"] == "system" and "不主动追问或另开话题" in system["content"]
+        unchanged = asyncio.run(extractor(Completion(proposal))(
+            proposal["evidence"][0]["quote"], proposal["evidence"][1]["quote"], accepted, "repeated-dimensions",
+        ))
+        assert unchanged["relationship_processing"] == "completed" and "relationship_proposal" not in unchanged
+        branch = repo.create("1", entry["id"], "保留分支", source_session_id=session["id"],
+                             source_revision=accepted["revision"], source_turn_id=turn["id"])
+        rolled_back = repo.retract("1", session["id"], turn["id"], accepted["revision"])
+        assert "dimensions" not in rolled_back["state"]["relationship"]
+        assert branch["state"]["relationship"]["dimensions"] == pending["dimensions"]
+    finally:
+        db.close_connection()
 
 
 @pytest.mark.parametrize("fault", ["invented", "one_sided", "invalid", "low_confidence"])

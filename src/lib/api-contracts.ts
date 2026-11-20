@@ -189,6 +189,21 @@ export interface CharacterChatMemory {
   evidence?: string;
 }
 
+export interface CharacterChatRelationshipDimensions {
+  tone?: 'restrained' | 'playful' | null;
+  initiative?: 'wait' | 'offer' | null;
+}
+
+type CharacterChatRelationshipEvidence = { role: 'user' | 'assistant'; quote: string }[];
+
+interface CharacterChatRelationship {
+  stage: 'stranger' | 'acquaintance' | 'familiar' | 'close';
+  summary?: string;
+  origin?: string;
+  evidence?: CharacterChatRelationshipEvidence;
+  dimensions?: CharacterChatRelationshipDimensions;
+}
+
 export interface CharacterChatSession extends CharacterChatSummary {
   source_turn_id: string | null;
   source_corpus_id: string | null;
@@ -197,7 +212,15 @@ export interface CharacterChatSession extends CharacterChatSummary {
   character: CharacterLibraryRecord;
   hypothesis: string;
   baseline: { history: Array<{ id: string; session_id: string; message: string; reply: string; character_revision?: number; evidence?: CharacterChatEvidence }> };
-  state: { relationship: { stage: 'stranger' | 'acquaintance' | 'familiar' | 'close'; summary?: string; origin?: string; evidence?: { role: 'user' | 'assistant'; quote: string }[] }; relationship_proposal?: { id: string; stage: 'stranger' | 'acquaintance' | 'familiar' | 'close'; summary: string; evidence: { role: 'user' | 'assistant'; quote: string }[] }; memories: CharacterChatMemory[]; memory_processing?: 'pending' | 'disabled' | 'skipped' | 'completed' | 'failed'; relationship_processing?: 'pending' | 'disabled' | 'skipped' | 'completed' | 'failed'; summary_processing?: 'pending' | 'disabled' | 'skipped' | 'completed' | 'failed'; summaries?: Array<{ summary: string; source_request_id: string; evidence: Array<{ turn_id: string; role: 'user' | 'assistant'; quote: string }> }> };
+  state: {
+    relationship: CharacterChatRelationship;
+    relationship_proposal?: CharacterChatRelationship & { id: string; summary: string; evidence: CharacterChatRelationshipEvidence };
+    memories: CharacterChatMemory[];
+    memory_processing?: 'pending' | 'disabled' | 'skipped' | 'completed' | 'failed';
+    relationship_processing?: 'pending' | 'disabled' | 'skipped' | 'completed' | 'failed';
+    summary_processing?: 'pending' | 'disabled' | 'skipped' | 'completed' | 'failed';
+    summaries?: Array<{ summary: string; source_request_id: string; evidence: Array<{ turn_id: string; role: 'user' | 'assistant'; quote: string }> }>;
+  };
 }
 
 export interface CharacterChatGeneration {
