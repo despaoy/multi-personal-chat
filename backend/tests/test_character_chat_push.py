@@ -1,6 +1,7 @@
 """Outreach remains authoritative when browser notification delivery fails."""
 
 import base64
+from email.utils import formatdate
 from types import SimpleNamespace
 
 import pytest
@@ -66,6 +67,49 @@ def test_retry_never_duplicates_application_message(setup):
     message, = proactive.view("a", identity)["jobs"]
     assert message["status"] == "sent" and "PRIVATE TOPIC" in message["content"]
     assert len(proactive.inbox("a")) == 1
+
+
+@pytest.mark.parametrize(("retry_after", "retry_at"), [
+    ("120", 231),
+    (formatdate(241, usegmt=True), 241),
+    ("10", 171),
+    ("invalid", 171),
+    ("900", None),
+])
+def test_provider_retry_after_delays_only_browser_reminder(setup, monkeypatch, retry_after, retry_at):
+    outreach, push, session, _ = setup
+    identity = session["id"]
+    endpoint = "https://fcm.googleapis.com/fcm/send/fixture"
+    push.register("a", identity, endpoint, *device_keys())
+    outreach.schedule("a", identity, 1, "message", "event", "fixture", 101, now=100)
+    assert outreach.deliver_due(now=101) == 1
+    contact = WebPushConfig(encoded((1).to_bytes(32, "big")), "", "mailto:test@example.invalid")
+    requests_sent = []
+    now = 101
+
+    def capture(_client, _method, _url, **kwargs):
+        nonlocal now
+        requests_sent.append(kwargs["headers"]["Topic"])
+        if len(requests_sent) == 1:
+            now += 10
+        response = requests.Response()
+        response._content = b""
+        response.status_code = 429 if len(requests_sent) == 1 else 201
+        response.headers["Retry-After"] = retry_after
+        return response
+
+    monkeypatch.setattr(requests.Session, "request", capture)
+    monkeypatch.setattr(character_chat_push, "time", lambda: now)
+    push.deliver(contact)
+    if retry_at is None:
+        push.deliver(contact, now=400)
+        assert len(requests_sent) == 1
+    else:
+        push.deliver(contact, now=retry_at - 1)
+        assert len(requests_sent) == 1
+        push.deliver(contact, now=retry_at)
+        assert len(requests_sent) == 2 and requests_sent[0] == requests_sent[1]
+    assert [item["id"] for item in outreach.inbox("a")] == ["message"]
 
 
 @pytest.mark.parametrize("newer_attempt", [False, True])
@@ -212,7 +256,7 @@ def test_web_push_encrypts_generic_payload_and_disallows_redirects(monkeypatch):
         return SimpleNamespace(status_code=201, text="", headers={})
 
     monkeypatch.setattr(requests.Session, "request", capture)
-    assert config.send(endpoint, *device_keys(), tag) == 201
+    assert config.send(endpoint, *device_keys(), tag).status == 201
     assert calls == [endpoint]
     with _PushSession() as session, pytest.raises(ValueError):
         session.post("https://127.0.0.1/private")

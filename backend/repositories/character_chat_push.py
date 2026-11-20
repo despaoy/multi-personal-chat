@@ -9,11 +9,13 @@ from uuid import uuid4
 from db.errors import RevisionConflictError
 from repositories.character_chat_proactive import CharacterChatProactiveRepository, in_quiet_hours
 from repositories.character_library import CharacterNotFoundError
-from services.character_web_push import validate_endpoint, validate_keys
+from services.character_web_push import WebPushResult, validate_endpoint, validate_keys
 
 logger = logging.getLogger(__name__)
 _SEND_BATCH = 12
 _SCAN_PAGE = 48
+_REMINDER_LIFETIME_SECONDS = 300
+_RETRY_DELAY_SECONDS = 60
 _READY = (
     " FROM character_chat_push_subscriptions d "
     "JOIN character_chat_sessions s ON s.id=d.session_id "
@@ -75,7 +77,7 @@ class CharacterChatPushRepository:
 
     @staticmethod
     def _window(now):
-        return {"now": now, "recent": now - 300}
+        return {"now": now, "recent": now - _REMINDER_LIFETIME_SECONDS}
 
     def has_due(self, now):
         return bool(self.db.execute_sql("SELECT d.id" + _READY + " LIMIT 1", self._window(now)))
@@ -87,7 +89,7 @@ class CharacterChatPushRepository:
         pending = (row for row in self._ready_rows(clock()) if not in_quiet_hours(row, clock()))
         for row in islice(pending, _SEND_BATCH):
             try:
-                self._deliver_one(sender, row, clock())
+                self._deliver_one(sender, row, clock)
             except (RevisionConflictError, CharacterNotFoundError):
                 continue
             except Exception as exc:
@@ -110,8 +112,10 @@ class CharacterChatPushRepository:
             params.update(sent=last["sent_at"], device=last["id"], message=last["message_id"])
             after = " AND (j.sent_at,d.id,j.id)>(:sent,:device,:message)"
 
-    def _deliver_one(self, sender, row, now):
-        if in_quiet_hours(row, now) or row["sent_at"] < now - 300:
+    def _deliver_one(self, sender, row, clock):
+        now = clock()
+        expires_at = row["sent_at"] + _REMINDER_LIFETIME_SECONDS
+        if in_quiet_hours(row, now) or now > expires_at:
             return
         session = self.outreach.chats.get(row["owner_user_id"], row["session_id"])
         params = {**row, "now": now, "lease": now + 60, "token": uuid4().hex}
@@ -136,7 +140,10 @@ class CharacterChatPushRepository:
         if not current:
             return
         tag = sha256(f"{row['session_id']}\0{row['message_id']}".encode()).hexdigest()[:32]
-        status = sender.send(row["endpoint"], row["p256dh"], row["auth"], tag)
+        result = sender.send(row["endpoint"], row["p256dh"], row["auth"], tag)
+        if isinstance(result, int):
+            result = WebPushResult(result)
+        status = result.status
         if status in {404, 410}:
             self.db.revision_transaction([
                 # Serialize against registration and unregistration without
@@ -153,9 +160,11 @@ class CharacterChatPushRepository:
                 ("DELETE FROM character_chat_push_subscriptions WHERE id=:id AND session_id=:session_id", params, 1),
             ])
         else:
-            retry = status in {408, 429} or status >= 500
+            received_at = clock()
+            retry_at = max(received_at + _RETRY_DELAY_SECONDS, result.retry_deadline(received_at))
+            retry = (status in {408, 429} or status >= 500) and retry_at <= expires_at
             self.db.revision_transaction([
                 ("UPDATE character_chat_push_attempts SET terminal=:terminal,lease_until=:next "
                  "WHERE subscription_id=:id AND message_id=:message_id AND token=:token",
-                 {**params, "terminal": int(not retry), "next": now + 60}, None),
+                 {**params, "terminal": int(not retry), "next": retry_at if retry else received_at}, None),
             ])

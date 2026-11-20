@@ -5,6 +5,8 @@ import json
 import os
 import re
 from dataclasses import dataclass, field
+from datetime import UTC
+from email.utils import parsedate_to_datetime
 from urllib.parse import urlsplit
 
 import requests
@@ -37,6 +39,26 @@ def validate_keys(p256dh, auth):
 
 
 @dataclass(frozen=True)
+class WebPushResult:
+    status: int
+    retry_after: str | None = None
+
+    def retry_deadline(self, received_at: float) -> float:
+        value = (self.retry_after or "").strip()
+        if value.isascii() and value.isdecimal():
+            return received_at + float(value)
+        if value:
+            try:
+                retry_at = parsedate_to_datetime(value)
+                if retry_at.tzinfo is None:
+                    retry_at = retry_at.replace(tzinfo=UTC)
+                return retry_at.timestamp()
+            except (ValueError, OverflowError, OSError):
+                pass
+        return received_at
+
+
+@dataclass(frozen=True)
 class WebPushConfig:
     private_key: str = field(repr=False)
     public_key: str
@@ -54,7 +76,7 @@ class WebPushConfig:
         public = key.public_key().public_bytes(Encoding.X962, PublicFormat.UncompressedPoint)
         return cls(private, base64.urlsafe_b64encode(public).decode().rstrip("="), subject)
 
-    def send(self, endpoint, p256dh, auth, tag):
+    def send(self, endpoint, p256dh, auth, tag) -> WebPushResult:
         from pywebpush import WebPushException, webpush
 
         validate_endpoint(endpoint)
@@ -67,11 +89,13 @@ class WebPushConfig:
                     vapid_claims={"sub": self.subject}, requests_session=client,
                     headers={"Topic": tag}, ttl=0, timeout=5,
                 )
-                return response.status_code
             except WebPushException as exc:
-                return exc.response.status_code if exc.response is not None else 503
+                response = exc.response
             except requests.RequestException:
-                return 503
+                response = None
+        if response is None:
+            return WebPushResult(503)
+        return WebPushResult(response.status_code, response.headers.get("Retry-After"))
 
 
 class _PushSession(requests.Session):

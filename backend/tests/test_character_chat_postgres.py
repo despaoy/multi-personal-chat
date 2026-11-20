@@ -241,6 +241,7 @@ def test_postgres_push_result_cannot_delete_subscription_after_successful_retry(
 
     from repositories.character_chat_proactive import CharacterChatProactiveRepository
     from repositories.character_chat_push import CharacterChatPushRepository
+    from services.character_web_push import WebPushResult
 
     outreach = CharacterChatProactiveRepository(database)
     push = CharacterChatPushRepository(database)
@@ -254,16 +255,23 @@ def test_postgres_push_result_cannot_delete_subscription_after_successful_retry(
     outreach.schedule(owner, identity, 1, "push", "event", "fixture", now + 1, now=now)
     assert outreach.deliver_due(now=now + 1) == 1
 
+    class Limited:
+        def send(self, *_):
+            return WebPushResult(429, "120")
+
     class Accepted:
         def send(self, *_):
             return 201
 
     class Older:
         def send(self, *_):
-            push.deliver(Accepted(), now=now + 61)
+            push.deliver(Accepted(), now=now + 181)
             return 410
 
-    push.deliver(Older(), now=now + 1)
+    push.deliver(Limited(), now=now + 1)
+    assert not push.has_due(now + 120)
+    assert push.has_due(now + 121)
+    push.deliver(Older(), now=now + 121)
     assert push.registered(owner, identity) == [device]
     assert [item["id"] for item in outreach.inbox(owner)] == ["push"]
 
