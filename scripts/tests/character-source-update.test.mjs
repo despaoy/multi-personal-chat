@@ -93,6 +93,47 @@ async function choices(renderer) {
 }
 async function unmount(renderer) { await act(async () => renderer.unmount()); }
 
+test('session deletion previews related copies and submits only explicit selections', async () => {
+  const originalWindow = globalThis.window;
+  globalThis.window = { location: { search: '' } };
+  const root = { id: 'original', character_id: character.id, title: '原会话', revision: 3, mode: 'initial' };
+  const branch = { ...root, id: 'branch', title: '关联分支', revision: 6, mode: 'branch' };
+  const copy = { ...root, id: 'copy', character_id: 'other', title: '跨角色副本', revision: 2 };
+  const previews = [], deletions = [];
+  const load = loader({
+    listCharacterLibrary: async () => ({ characters: [character] }),
+    listCharacterChats: async () => ({ sessions: [root, branch] }),
+    listSharedChatMemories: async () => ({ memories: [] }),
+    previewCharacterChatDeletion: async selected => {
+      previews.push(selected);
+      return { selected: [root], related: [branch, copy] };
+    },
+    deleteCharacterChats: async selected => {
+      deletions.push(selected);
+      return { deleted_session_ids: selected.map(item => item.id) };
+    },
+  });
+  let renderer;
+  try {
+    await act(async () => { renderer = create(React.createElement(load('src/app/chat/page.tsx').default)); });
+    const check = async label => {
+      const item = renderer.root.findAllByType('label').find(node => text(node).includes(label));
+      assert.ok(item, label);
+      await act(async () => item.findByType('input').props.onChange({ target: { checked: true } }));
+    };
+    await check('原会话');
+    await click(renderer, '预览删除范围');
+    assert.deepEqual(previews, [[{ id: 'original', revision: 3 }]]);
+    assert.deepEqual(deletions, []);
+    await check('跨角色副本');
+    await click(renderer, '永久删除 2 个会话');
+    assert.deepEqual(deletions, [[{ id: 'original', revision: 3 }, { id: 'copy', revision: 2 }]]);
+  } finally {
+    if (renderer) await unmount(renderer);
+    globalThis.window = originalWindow;
+  }
+});
+
 test('shared preview and copy work when only getRandomValues is available', async t => {
   const previous = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
   Object.defineProperty(globalThis, 'crypto', {

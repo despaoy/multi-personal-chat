@@ -7,10 +7,10 @@ import { AuthGuard } from '@/components/layout/AuthGuard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { api } from '@/lib/api';
+import { api, ApiRequestError } from '@/lib/api';
 import { createClientId } from '@/lib/client-id';
 import { GenerationDraft } from '@/components/chat/GenerationDraft';
-import type { CharacterChatGeneration } from '@/lib/api-contracts';
+import type { CharacterChatDeletionPreview, CharacterChatGeneration } from '@/lib/api-contracts';
 import type { CharacterChatSession, CharacterChatSummary, CharacterChatTurn, CharacterLibraryRecord, SendCharacterChatMessage, ContinuationPreview, CharacterSharedMemory, CharacterChatEvidence } from '@/lib/api-contracts';
 
 function AnswerSources({ evidence }: { evidence?: CharacterChatEvidence }) {
@@ -43,6 +43,8 @@ function ChatWorkspace() {
   const [sessionOffset, setSessionOffset] = useState(0);
   const [moreSessions, setMoreSessions] = useState(false);
   const [deleteSelection, setDeleteSelection] = useState<string[]>([]);
+  const [deletionPreview, setDeletionPreview] = useState<CharacterChatDeletionPreview>();
+  const [relatedDeletionIds, setRelatedDeletionIds] = useState<string[]>([]);
   const [sourceExcerpt, setSourceExcerpt] = useState<{ message: string; reply: string; title: string }>();
   const [session, setSession] = useState<CharacterChatSession>();
   const [turns, setTurns] = useState<CharacterChatTurn[]>([]);
@@ -125,6 +127,8 @@ function ChatWorkspace() {
     const version = ++loadVersion.current;
     setSessions([]);
     setDeleteSelection([]);
+    setDeletionPreview(undefined);
+    setRelatedDeletionIds([]);
     setSessionOffset(0); setMoreSessions(false); setSourceExcerpt(undefined);
     setSelectedShared([]);
     setSession(undefined);
@@ -153,6 +157,40 @@ function ChatWorkspace() {
     try { await operation(); }
     catch (error) { setError(error instanceof Error ? error.message : String(error)); }
     finally { setBusy(false); }
+  }
+
+  function clearDeletionPreview() {
+    setDeletionPreview(undefined);
+    setRelatedDeletionIds([]);
+  }
+
+  async function reviewDeletion() {
+    clearDeletionPreview();
+    const selected = sessions.filter(item => deleteSelection.includes(item.id));
+    try {
+      setDeletionPreview(await api.previewCharacterChatDeletion(selected.map(({ id, revision }) => ({ id, revision }))));
+    } catch (error) {
+      if (error instanceof ApiRequestError && [404, 409].includes(error.status)) await refreshSessions(characterId);
+      throw error;
+    }
+  }
+
+  async function confirmDeletion() {
+    if (!deletionPreview) return;
+    const selected = [...deletionPreview.selected, ...deletionPreview.related.filter(item => relatedDeletionIds.includes(item.id))];
+    try {
+      const result = await api.deleteCharacterChats(selected.map(({ id, revision }) => ({ id, revision })));
+      setDeleteSelection([]); setSource(''); setSourceExcerpt(undefined);
+      if (session && result.deleted_session_ids.includes(session.id)) {
+        setSession(undefined); setTurns([]); setNewSession(true); setDraft(''); setEditing(undefined); setBranchTurn(undefined); pending.current = null;
+      }
+      await refreshSessions(characterId); await refreshShared();
+    } catch (error) {
+      if (error instanceof ApiRequestError && [404, 409].includes(error.status)) await refreshSessions(characterId);
+      throw error;
+    } finally {
+      clearDeletionPreview();
+    }
   }
 
   async function open(id: string) {
@@ -271,25 +309,41 @@ function ChatWorkspace() {
         </nav>
         {sessions.length > 0 && <details className="rounded-lg border p-3">
           <summary className="cursor-pointer text-sm">彻底删除会话</summary>
-          <p className="my-2 text-xs text-muted-foreground">删除勾选会话的全部消息（含编辑、撤回的旧内容）、关系、记忆和对外共享的记忆入口，无法恢复。未勾选的分支、延续会话和已复制记忆保留；如需删除这些副本，请切换到相应角色一并选择。角色设定保留。</p>
+          <p className="my-2 text-xs text-muted-foreground">删除所选会话的消息、关系、记忆和共享入口。你可以先查看关联分支和副本，再决定删除范围。</p>
           {sessions.map(item => <label key={item.id} className="my-2 flex items-start gap-2 text-sm">
-            <input type="checkbox" disabled={busy} checked={deleteSelection.includes(item.id)} onChange={event => setDeleteSelection(previous => event.target.checked ? [...previous, item.id] : previous.filter(id => id !== item.id))} />
+            <input type="checkbox" disabled={busy} checked={deleteSelection.includes(item.id)} onChange={event => {
+              clearDeletionPreview();
+              const checked = event.target.checked;
+              setDeleteSelection(previous => checked ? [...previous, item.id] : previous.filter(id => id !== item.id));
+            }} />
             <span>{item.title} · {item.mode === 'branch' ? '分支' : item.mode === 'continuation' ? '延续' : '初识'}</span>
           </label>)}
           {moreSessions && <p className="text-xs">更多会话可通过上方“加载更多会话”展开。</p>}
-          <Button variant="destructive" disabled={busy || !deleteSelection.length || deleteSelection.length > 100} onClick={() => {
-            const selected = sessions.filter(item => deleteSelection.includes(item.id));
-            if (!window.confirm(`永久删除以下 ${selected.length} 个会话？此操作无法撤销。\n${selected.map(item => item.title).join('\n')}\n未选中的副本仍会保留。`)) return;
-            void run(async () => {
-              const result = await api.deleteCharacterChats(selected.map(item => ({ id: item.id, revision: item.revision })));
-              setDeleteSelection([]); setSource(''); setSourceExcerpt(undefined);
-              if (session && result.deleted_session_ids.includes(session.id)) {
-                setSession(undefined); setTurns([]); setNewSession(true); setDraft(''); setEditing(undefined); setBranchTurn(undefined); pending.current = null;
-              }
-              await refreshSessions(characterId); await refreshShared();
-            });
-          }}>删除所选（{deleteSelection.length}）</Button>
+          <Button variant="outline" disabled={busy || !deleteSelection.length || deleteSelection.length > 100} onClick={() => void run(reviewDeletion)}>
+            预览删除范围（{deleteSelection.length}）
+          </Button>
           {deleteSelection.length > 100 && <p className="text-xs">每次最多删除 100 个会话。</p>}
+          {deletionPreview && <section aria-label="删除范围" className="mt-3 space-y-2 rounded border p-3 text-sm">
+            <p>已选：{deletionPreview.selected.map(item => item.title).join('、')}</p>
+            {deletionPreview.related.length > 0 ? <fieldset disabled={busy} className="space-y-1">
+              <legend>关联会话，可选择一并删除</legend>
+              {deletionPreview.related.map(item => <label key={item.id} className="flex items-start gap-2">
+                <input type="checkbox" checked={relatedDeletionIds.includes(item.id)} onChange={event => {
+                  const checked = event.target.checked;
+                  setRelatedDeletionIds(previous => checked ? [...previous, item.id] : previous.filter(id => id !== item.id));
+                }} />
+                <span>{item.title} · {item.mode === 'branch' ? '分支' : item.mode === 'continuation' ? '延续' : '记忆副本'}{item.character_id !== characterId && ' · 其他角色'}</span>
+              </label>)}
+            </fieldset> : <p>未发现关联分支或会话副本。</p>}
+            <p>只删除本次勾选的会话，包括其中已撤回和替换的内容。未选的副本仍保留。</p>
+            {deletionPreview.selected.length + relatedDeletionIds.length > 100 && <p>每次最多删除 100 个会话。</p>}
+            <div className="flex flex-wrap gap-2">
+              <Button variant="destructive" disabled={busy || deletionPreview.selected.length + relatedDeletionIds.length > 100} onClick={() => void run(confirmDeletion)}>
+                永久删除 {deletionPreview.selected.length + relatedDeletionIds.length} 个会话
+              </Button>
+              <Button variant="ghost" disabled={busy} onClick={clearDeletionPreview}>取消</Button>
+            </div>
+          </section>}
         </details>}
       </aside>
       <section className="min-w-0 space-y-4">

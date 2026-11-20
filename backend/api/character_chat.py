@@ -165,6 +165,14 @@ def retry_enrichment(session_id: str, body: Revision, owner=Depends(account), re
     return call(CharacterChatEnrichmentRepository(repo.database).retry, owner, session_id, body.revision)
 
 
+@router.post("/delete-preview")
+def preview_deletion(body: DeleteSessions, owner=Depends(account), repo=Depends(repository)):
+    try:
+        return call(repo.preview_deletion, owner, [item.model_dump() for item in body.sessions])
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
 @router.post("/delete-selected")
 def delete_selected(body: DeleteSessions, owner=Depends(account), repo=Depends(repository)):
     try:

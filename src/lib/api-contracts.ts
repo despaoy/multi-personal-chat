@@ -106,6 +106,13 @@ export interface CharacterChatSummary {
   updated_at: string;
 }
 
+type DeletionSession = Pick<CharacterChatSummary, 'id' | 'character_id' | 'title' | 'revision' | 'mode'>;
+
+export interface CharacterChatDeletionPreview {
+  selected: DeletionSession[];
+  related: DeletionSession[];
+}
+
 export interface CharacterChatEvidence {
   sources?: Array<{ id: string; title: string; excerpt: string; truncated: boolean; line_start?: number | null; line_end?: number | null }>;
   retrieval_status?: string;

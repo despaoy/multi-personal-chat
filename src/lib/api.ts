@@ -637,6 +637,12 @@ class ApiClient {
     return this.request<CharacterLibraryRecord>(`/character-library/${encodeURIComponent(id)}`);
   }
 
+  previewCharacterChatDeletion(sessions: { id: string; revision: number }[]) {
+    return this.request<import('./api-contracts').CharacterChatDeletionPreview>('/character-chats/delete-preview', {
+      method: 'POST', body: JSON.stringify({ sessions }),
+    });
+  }
+
   deleteCharacterChats(sessions: { id: string; revision: number }[]) {
     return this.request<{ deleted_session_ids: string[] }>('/character-chats/delete-selected', {
       method: 'POST', body: JSON.stringify({ sessions }),

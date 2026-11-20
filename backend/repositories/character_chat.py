@@ -3,6 +3,7 @@
 import copy
 import json
 import uuid
+from collections import defaultdict, deque
 from datetime import datetime, timezone
 
 from db.errors import RevisionConflictError
@@ -61,13 +62,63 @@ class CharacterChatRepository:
         result["evidence"] = json.loads(result.pop("payload_json", None) or "{}")
         return result
 
-    def delete_sessions(self, owner, selections):
-        """Erase exactly the selected snapshots, including inactive replacement history."""
+    @staticmethod
+    def _deletion_ids(selections):
         if not selections or len(selections) > 100:
             raise ValueError("请选择 1 至 100 个会话")
         ids = [item["id"] for item in selections]
         if len(set(ids)) != len(ids):
             raise ValueError("会话不能重复选择")
+        return ids
+
+    def preview_deletion(self, owner, selections):
+        """Return account-owned session metadata and links, without transcript contents."""
+        ids = self._deletion_ids(selections)
+        rows = self.database.execute_sql(
+            "SELECT id,character_id,title,revision,mode,source_session_id,baseline_json,state_json "
+            "FROM character_chat_sessions WHERE owner_user_id=:owner ORDER BY updated_at DESC,id",
+            {"owner": owner},
+        )
+        by_id = {row["id"]: row for row in rows}
+        for selection in selections:
+            row = by_id.get(selection["id"])
+            if row is None:
+                raise CharacterNotFoundError("会话不存在")
+            if row["revision"] != selection["revision"]:
+                raise RevisionConflictError()
+
+        children = defaultdict(set)
+        for row in rows:
+            baseline = json.loads(row["baseline_json"])
+            history = baseline.get("history", [])
+            parents = {row["source_session_id"], *(turn.get("session_id") for turn in history)}
+            states = [json.loads(row["state_json"]), baseline.get("state", {})]
+            states.extend(turn.get("state_after", {}) for turn in history)
+            for state in states:
+                for memory in state.get("memories", []):
+                    if memory.get("shared_memory_id"):
+                        parents.update((memory.get("shared_from_session_id"), memory.get("source_session_id")))
+            for parent in parents - {None, row["id"]}:
+                children[parent].add(row["id"])
+
+        related = set(ids)
+        queue = deque(ids)
+        while queue:
+            for child in children[queue.popleft()] - related:
+                related.add(child)
+                queue.append(child)
+
+        def summary(row):
+            return {key: row[key] for key in ("id", "character_id", "title", "revision", "mode")}
+
+        return {
+            "selected": [summary(by_id[session_id]) for session_id in ids],
+            "related": [summary(row) for row in rows if row["id"] in related and row["id"] not in ids],
+        }
+
+    def delete_sessions(self, owner, selections):
+        """Erase exactly the selected snapshots, including inactive replacement history."""
+        ids = self._deletion_ids(selections)
         statements = []
         # Lock all selected rows in stable order before deleting their dependent data.
         # Creation/branching locks the same source row; stale in-flight writers cannot revive it.
@@ -290,6 +341,7 @@ class CharacterChatRepository:
                         "id": uuid.uuid4().hex,
                         "origin": "shared",
                         "shared_memory_id": shared_id,
+                        "shared_from_session_id": shared_source["id"],
                         "status": "pending" if collision else "confirmed",
                     }
                 )

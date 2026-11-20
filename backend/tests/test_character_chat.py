@@ -179,6 +179,49 @@ def test_delete_selected_http_ownership_and_atomic_conflicts(repo):
         assert client.post("/api/character-chats/delete-selected", json={"sessions": selections}).status_code == 200
 
 
+def test_deletion_preview_finds_transitive_branches_and_unshared_cross_character_copies(repo):
+    entry = character(repo)
+    other_entry = repo.characters.create("1", CharacterSettings(name="朋友", persona="热情", greeting="你好"))
+    source = repo.create("1", entry["id"], "来源")
+    source = repo.manage_memory("1", source["id"], 1, content="只供验证的私密记忆")
+    source, first = turn(repo, source, text="只供验证的私密原话")
+    source = repo.share_memory("1", source["id"], source["state"]["memories"][0]["id"], source["revision"])
+    shared_id = repo.shared_memories("1")[0]["id"]
+    copied = repo.create("1", other_entry["id"], "其他角色副本", shared_memory_ids=[shared_id])
+    repo.unshare_memory("1", shared_id)
+    continuation = repo.create("1", entry["id"], "延续", source_session_id=source["id"],
+                               source_revision=source["revision"])
+    nested = repo.create("1", entry["id"], "分支", source_session_id=continuation["id"],
+                         source_revision=continuation["revision"], source_turn_id=first["id"])
+    unrelated = repo.create("1", entry["id"], "独立会话")
+    other_account_entry = repo.characters.create("2", CharacterSettings(name="其他账号", persona="谨慎", greeting="你好"))
+    other_account = repo.create("2", other_account_entry["id"], "其他账号会话")
+
+    app = FastAPI()
+    app.include_router(router)
+    app.dependency_overrides[get_current_user] = lambda: {"user_id": "1"}
+    app.dependency_overrides[repository] = lambda: repo
+    picks = [{"id": source["id"], "revision": source["revision"]}]
+    with TestClient(app) as client:
+        url = "/api/character-chats/delete-preview"
+        response = client.post(url, json={"sessions": picks})
+        assert response.status_code == 200
+        result = response.json()
+        assert [item["id"] for item in result["selected"]] == [source["id"]]
+        assert {item["id"] for item in result["related"]} == {continuation["id"], nested["id"], copied["id"]}
+        assert all(set(item) == {"id", "character_id", "title", "revision", "mode"}
+                   for item in result["selected"] + result["related"])
+        assert "只供验证" not in response.text
+        assert client.post(url, json={"sessions": [{"id": source["id"], "revision": 1}]}).status_code == 409
+        assert client.post(url, json={"sessions": [{"id": other_account["id"], "revision": 1}]}).status_code == 404
+        assert client.post(url, json={"sessions": picks * 2}).status_code == 422
+        assert len(repo.list("1")) == 5
+
+        copied_pick = {key: copied[key] for key in ("id", "revision")}
+        assert client.post("/api/character-chats/delete-selected", json={"sessions": [*picks, copied_pick]}).status_code == 200
+        assert {item["id"] for item in repo.list("1")} == {unrelated["id"], continuation["id"], nested["id"]}
+
+
 def turn(repo, session, text="你好", state=None):
     result = repo.commit_turn(session, str(session["revision"]), text, "收到", "controlled-test", state=state)
     return repo.get("1", session["id"]), result
