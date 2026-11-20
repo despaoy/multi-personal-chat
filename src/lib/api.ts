@@ -105,7 +105,7 @@ export interface Message {
 }
 
 /** 消息列表分页响应 */
-export interface MessagesResponse {
+interface MessagesResponse {
   messages: Message[];
   total: number;
   total_all: number;
@@ -135,7 +135,7 @@ export interface SessionSummary {
 }
 
 /** 会话列表响应 */
-export interface SessionsResponse {
+interface SessionsResponse {
   sessions: SessionSummary[];
 }
 
@@ -153,19 +153,19 @@ export interface LoraModel {
 }
 
 /** LoRA 模型列表响应 */
-export interface LorasResponse {
+interface LorasResponse {
   loras: LoraModel[];
   total: number;
 }
 
 /** 健康检查响应 */
-export interface HealthResponse {
+interface HealthResponse {
   status: 'healthy' | 'unhealthy';
   timestamp: string;
 }
 
 /** 消息生成请求参数 */
-export interface GenerateRequest {
+interface GenerateRequest {
   characterId?: string;
   branchId?: string;
   platform?: string;
@@ -197,7 +197,7 @@ export interface ActivityData {
 }
 
 /** 活动趋势响应 - 24小时内的消息与回复趋势 */
-export interface ActivityResponse {
+interface ActivityResponse {
   activity: ActivityData[];
 }
 
@@ -209,7 +209,7 @@ export interface ServiceStatus {
 }
 
 /** 服务状态列表响应 */
-export interface ServicesResponse {
+interface ServicesResponse {
   services: ServiceStatus[];
 }
 
@@ -225,7 +225,7 @@ export interface Dataset {
 }
 
 /** 数据集列表响应 */
-export interface DatasetsResponse {
+interface DatasetsResponse {
   success: boolean;
   datasets: Dataset[];
 }
@@ -243,7 +243,7 @@ export interface TrainingTask {
 }
 
 /** 训练任务列表响应 */
-export interface TrainingTasksResponse {
+interface TrainingTasksResponse {
   success: boolean;
   tasks: TrainingTask[];
 }
@@ -284,7 +284,7 @@ export interface DialogueConversation {
 }
 
 /** 对话生成响应 */
-export interface DialogueGenerateResponse {
+interface DialogueGenerateResponse {
   success: boolean;
   dialogues: DialogueConversation[];
   total: number;
@@ -386,10 +386,10 @@ export interface KnowledgeSearchResult {
 }
 
 /** @deprecated 使用 KnowledgeRetrievalMode。保留该类型用于兼容旧 API 客户端。 */
-export type KnowledgeSearchType = "rag_pipeline" | "empty";
+type KnowledgeSearchType = "rag_pipeline" | "empty";
 
 /** 稳定的知识检索模式。 */
-export type KnowledgeRetrievalMode = "evidence" | "empty";
+type KnowledgeRetrievalMode = "evidence" | "empty";
 
 /** 知识库统计数据 */
 export interface KnowledgeStats {
@@ -399,7 +399,7 @@ export interface KnowledgeStats {
 }
 
 /** 知识库文档列表响应 */
-export interface KnowledgeDocumentsResponse {
+interface KnowledgeDocumentsResponse {
   success: boolean;
   documents: KnowledgeDocument[];
   stats: KnowledgeStats;
@@ -440,7 +440,7 @@ export interface KnowledgeSearchRequest {
 }
 
 /** 知识库搜索响应 */
-export interface KnowledgeSearchResponse {
+interface KnowledgeSearchResponse {
   success: boolean;
   query: string;
   results: KnowledgeSearchResult[];
@@ -451,7 +451,7 @@ export interface KnowledgeSearchResponse {
 }
 
 /** 知识库统计响应 */
-export interface KnowledgeStatsResponse {
+interface KnowledgeStatsResponse {
   success: boolean;
   stats: KnowledgeStats;
 }
@@ -485,12 +485,12 @@ export interface LoginRequest {
 }
 
 /** 配置获取响应 */
-export interface ConfigResponse {
+interface ConfigResponse {
   config: SystemConfig;
 }
 
 /** 配置更新响应 */
-export interface ConfigUpdateResponse {
+interface ConfigUpdateResponse {
   success: boolean;
   message: string;
   config: SystemConfig;
@@ -507,7 +507,7 @@ export interface AvailableModel {
 }
 
 /** 模型列表响应 */
-export interface ModelsResponse {
+interface ModelsResponse {
   success: boolean;
   models: AvailableModel[];
 }
@@ -524,7 +524,7 @@ export interface SavedDialogueItem {
 }
 
 /** 已保存对话完整数据 */
-export interface SavedDialogueFull {
+interface SavedDialogueFull {
   success: boolean;
   id: number;
   name: string;
