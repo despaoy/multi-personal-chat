@@ -510,4 +510,10 @@ GitHub Actions 后端流程使用 PostgreSQL 17 和 pgvector 0.8.7 的官方镜�
 
 LHM 隔离 PostgreSQL 14 使用普通账号完成迁移 041 并通过同组 30 项测试，包含 pgvector 版本和实际余弦排序检查。CI 的 YAML、Bash 及嵌入 Python 通过本地语法检查。73 项前端测试、ESLint、Next.js 生产构建、仓库完整性和发布文件检查通过。Windows 模块回归有 312 项通过、18 项按环境跳过。真实 Chrome 使用生产构建复验角色分享、会话中断恢复、记忆隔离、资料迁移及模拟通知。GitHub Actions 上的 PostgreSQL 17 运行仍待验证。
 
-Windows 全量后端用 UTF-8 跑完后有 11,394 项通过、59 项跳过、22 项失败和 71 项错误。补齐预设安装、提醒改期的账号权限断言，以及 Flash 默认值、环境配置和持久化覆盖的优先级断言。另修正记忆撤销夹具的时钟精度及 Windows 加密启动夹具的内部套接字与换行假设。相关 59 项定向复验通过。缺少 PostgreSQL 测试库的记忆边界在 LHM 补跑，合计 261 项通过。Windows 全量仍有符号链接和临时 Git 库权限、未生成的旧索引，以及打开索引时的 Windows 原子替换问题待复验。
+Windows 全量后端用 UTF-8 跑完后有 11,394 项通过、59 项跳过、22 项失败和 71 项错误。补齐预设安装、提醒改期的账号权限断言，以及 Flash 默认值、环境配置和持久化覆盖的优先级断言。另修正记忆撤销夹具的时钟精度及 Windows 加密启动夹具的内部套接字与换行假设。相关 59 项定向复验通过。缺少 PostgreSQL 测试库的记忆边界在 LHM 补跑，合计 261 项通过。Windows 全量仍有符号链接和临时 Git 库权限、未生成的旧索引待复验。
+
+## Windows 向量索引并发发布
+
+读者用允许替换的文件句柄读取同一份 FAISS、元数据和 BM25 快照。Windows 常规原子替换受打开句柄阻挡时，采用文件系统支持的 POSIX 重命名语义。已打开的读者继续读取原版本，随后打开的读者看到新版。候选文件仍先校验并同步到磁盘，发布失败时保留旧版。Linux 沿用原有原子替换和目录同步。[Windows 文件共享](https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-createfilew) [重命名语义](https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/ns-ntifs-_file_rename_information)
+
+Windows 快照模块 26 项定向测试通过。扩大到角色资料来源检索、知识库跨进程读取和向量发布的 138 项回归通过。覆盖旧读者尚未读完时打开新版、校验失败、写入或同步失败和旧索引兼容边界。并发替换已在本机文件系统验收，其他 Windows 文件系统待实际验证。

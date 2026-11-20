@@ -71,7 +71,7 @@ def test_file_sync_failure_keeps_previous_complete_snapshot(vector, monkeypatch,
     assert not list(vector.db_path.glob(".snapshot-*"))
 
 
-@pytest.mark.parametrize("stage", ["_write_faiss", "_write_pickle", "replace"])
+@pytest.mark.parametrize("stage", ["_write_faiss", "_write_pickle", "_replace_snapshot"])
 def test_failed_publication_retains_previous_snapshot(vector, monkeypatch, stage):
     vector._save_index()
     before = digest(vector.snapshot_path)
@@ -82,7 +82,7 @@ def test_failed_publication_retains_previous_snapshot(vector, monkeypatch, stage
     def failure(*args, **kwargs):
         raise OSError("targeted disk failure")
 
-    monkeypatch.setattr(store.os if stage == "replace" else store, stage, failure)
+    monkeypatch.setattr(store, stage, failure)
     with pytest.raises(OSError):
         vector._save_index()
     assert vector._dirty and digest(vector.snapshot_path) == before
@@ -152,9 +152,10 @@ def test_reader_pins_old_descriptor_across_new_publication(vector, monkeypatch):
     def observed(archive, name, *args, **kwargs):
         nonlocal switched
         result = original(archive, name, *args, **kwargs)
-        if str(archive.filename) == str(vector.snapshot_path) and name == "faiss_index.bin" and not switched:
+        if archive.mode == "r" and name == "faiss_index.bin" and not switched:
             switched = True
             vector._save_index()
+            assert reopen(vector).metadata == vector.metadata
         return result
 
     monkeypatch.setattr(zipfile.ZipFile, "open", observed)
