@@ -277,6 +277,7 @@ def test_mutating_routes_default_to_admin_authorization():
         ("POST", "/api/character-chats/delete-preview"),
         ("PUT", "/api/character-chats/{session_id}/proactive"),
         ("GET", "/api/character-chats/{session_id}/proactive/candidates"),
+        ("GET", "/api/character-chats/{session_id}/proactive/fiction"),
         ("POST", "/api/character-chats/{session_id}/proactive/jobs"),
         ("POST", "/api/character-chats/{session_id}/browser-push"),
         ("DELETE", "/api/character-chats/{session_id}/browser-push/{subscription_id}"),

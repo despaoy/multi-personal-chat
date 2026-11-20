@@ -116,6 +116,28 @@ class CharacterChatProactiveRepository:
             {"owner": owner},
         )
 
+    def fiction_history(self, owner, session_id, before=None, limit=20):
+        session = self.chats.get(owner, session_id)
+        if session["mode"] == "branch":
+            return {"entries": [], "next_before": None}
+        params = {"session": session_id, "limit": limit + 1}
+        scope = "WHERE session_id=:session AND status='sent' AND kind='fiction'"
+        boundary = ""
+        if before is not None:
+            cursor = self.db.execute_sql(
+                "SELECT sent_at FROM character_chat_proactive_jobs " + scope + " AND id=:before",
+                {**params, "before": before},
+            )
+            if not cursor:
+                raise CharacterNotFoundError("剧情记录已变更，请重新载入")
+            params.update(before=before, time=cursor[0]["sent_at"])
+            boundary = " AND (sent_at<:time OR (sent_at=:time AND id<:before))"
+        rows = self.db.execute_sql(
+            "SELECT id,content,sent_at FROM character_chat_proactive_jobs " + scope + boundary
+            + " ORDER BY sent_at DESC,id DESC LIMIT :limit", params,
+        )
+        return {"entries": rows[:limit], "next_before": rows[limit - 1]["id"] if len(rows) > limit else None}
+
     def set_policy(self, owner, session_id, revision, *, inactivity_hours=None, now=None, **settings):
         session = self.chats.get(owner, session_id)
         if session["mode"] == "branch":

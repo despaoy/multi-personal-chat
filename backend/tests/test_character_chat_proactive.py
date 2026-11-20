@@ -104,6 +104,40 @@ def test_edit_cancels_sourced_pending_job(proactive):
     assert repo.view(owner, identity)["jobs"] == []
 
 
+def test_fiction_history_is_scoped_paginated_and_preserved_after_revocation(proactive):
+    repo, session = proactive
+    owner, identity = "owner", session["id"]
+    settings = policy(quiet_start=None, quiet_end=None)
+    repo.set_policy(owner, identity, 0, **settings)
+    scheduled = [
+        ("one", "fiction", "初雪"),
+        ("event", "event", "面试"),
+        ("two", "fiction", "雨声"),
+        ("pending", "fiction", "晴天"),
+    ]
+    for number, (request_id, kind, topic) in enumerate(scheduled):
+        repo.schedule(owner, identity, 1, request_id, kind, topic, 101 + number * 86400, now=100)
+    for number in range(3):
+        assert repo.deliver_due(now=101 + number * 86400) == 1
+    repo.set_policy(owner, identity, 1, **{**settings, "enabled": False})
+    app = FastAPI()
+    app.include_router(router)
+    app.dependency_overrides[get_current_user] = lambda: {"user_id": owner}
+    app.dependency_overrides[repository] = lambda: repo.chats
+    path = f"/api/character-chats/{identity}/proactive/fiction"
+    with TestClient(app) as client:
+        first = client.get(path, params={"limit": 1}).json()
+        assert first["next_before"] == "two"
+        assert first["entries"][0]["id"] == "two"
+        assert "雨声" in first["entries"][0]["content"]
+        second = client.get(path, params={"before": first["next_before"]}).json()
+        assert [entry["id"] for entry in second["entries"]] == ["one"]
+        assert second["next_before"] is None
+        assert client.get(path, params={"before": "event"}).status_code == 404
+        owner = "other"
+        assert client.get(path).status_code == 404
+
+
 def test_app_delivery_respects_quiet_hours_frequency_and_is_replay_safe(proactive):
     repo, session = proactive
     identity = session["id"]

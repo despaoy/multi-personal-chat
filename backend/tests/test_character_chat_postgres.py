@@ -49,6 +49,15 @@ def test_postgres_proactive_delivery_respects_session_consent_and_is_idempotent(
     assert repo.deliver_due(now=due - 1) == 0
     assert repo.deliver_due(now=due) == 1
     assert repo.inbox(owner)[0]["kind"] == "inactivity"
+    for number in (1, 2):
+        send_at = due + number * 86400
+        repo.schedule(owner, identity, 2, f"fiction-{number}", "fiction", f"scene-{number}", send_at, now=due)
+        assert repo.deliver_due(now=send_at) == 1
+    page = repo.fiction_history(owner, identity, limit=1)
+    assert page["next_before"] == "fiction-2"
+    earlier = repo.fiction_history(owner, identity, before=page["next_before"], limit=1)
+    assert [entry["id"] for entry in earlier["entries"]] == ["fiction-1"]
+    assert earlier["next_before"] is None
     session = repo.chats.get(owner, identity)
     repo.chats.delete_sessions(owner, [{"id": identity, "revision": session["revision"]}])
     assert repo.inbox(owner) == []

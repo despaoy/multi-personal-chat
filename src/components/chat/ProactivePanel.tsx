@@ -5,7 +5,9 @@ import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
 import { createClientId } from '@/lib/client-id';
 import { BrowserPushControl } from './BrowserPushControl';
-import type { CharacterProactivePolicy, CharacterProactiveState, ProactiveCandidate, ProactiveTopicKind } from '@/lib/api-contracts';
+import type {
+  CharacterFictionHistory, CharacterProactivePolicy, CharacterProactiveState, ProactiveCandidate, ProactiveTopicKind,
+} from '@/lib/api-contracts';
 
 function timeLabel(minutes: number | null) {
   return minutes === null ? '' : [Math.floor(minutes / 60), minutes % 60].map(part => String(part).padStart(2, '0')).join(':');
@@ -32,6 +34,7 @@ export function ProactivePanel({ sessionId }: { sessionId: string }) {
   const [time, setTime] = useState('');
   const [candidates, setCandidates] = useState<ProactiveCandidate[]>();
   const [source, setSource] = useState<ProactiveCandidate>();
+  const [fiction, setFiction] = useState<CharacterFictionHistory>();
   const flight = useRef(false);
   const readGeneration = useRef(0);
   const retry = useRef<{ key: string; id: string } | null>(null);
@@ -84,10 +87,30 @@ export function ProactivePanel({ sessionId }: { sessionId: string }) {
         <time className="text-muted-foreground">{new Date((job.sent_at ?? job.due_at) * 1000).toLocaleString()}</time>
       </li>)}</ul>
     </div>}
+    {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+    <details className="space-y-2 rounded-lg border p-4">
+      <summary className="cursor-pointer">虚构日常剧情记录</summary>
+      <Button type="button" variant="outline" disabled={busy} onClick={() => void run(async () => {
+        setFiction(await api.getCharacterFictionHistory(sessionId));
+      })}>{fiction ? '刷新剧情记录' : '载入剧情记录'}</Button>
+      {fiction?.entries.length === 0 && <p className="text-sm text-muted-foreground">暂无已送达的虚构日常。</p>}
+      {!!fiction?.entries.length && <ol className="space-y-2 text-sm">{fiction.entries.map(entry => <li key={entry.id}
+        className="rounded border p-2">
+        <p>{entry.content}</p>
+        <time className="text-muted-foreground">{new Date(entry.sent_at * 1000).toLocaleString()}</time>
+      </li>)}</ol>}
+      {fiction?.next_before && <Button type="button" variant="ghost" disabled={busy} onClick={() => {
+        const before = fiction.next_before;
+        if (!before) return;
+        void run(async () => {
+          const result = await api.getCharacterFictionHistory(sessionId, before);
+          setFiction({ entries: [...fiction.entries, ...result.entries], next_before: result.next_before });
+        });
+      }}>加载更早记录</Button>}
+    </details>
     <details className="space-y-3 rounded-lg border p-4">
     <summary className="cursor-pointer">主动联系与消息</summary>
     <BrowserPushControl sessionId={sessionId} authorized={Boolean(view?.policy.enabled)} />
-    {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     {draft && <form className="space-y-2" onSubmit={event => {
       event.preventDefault();
       void run(async () => {

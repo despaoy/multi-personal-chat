@@ -87,6 +87,33 @@ test('conversation candidates only schedule after an explicit confirmation', asy
   }
 });
 
+test('fiction history opens and loads older entries while outreach is off', async () => {
+  const reads = [];
+  const policy = { revision: 2, enabled: false, cadence_hours: 48, timezone: 'UTC', quiet_start: null, quiet_end: null, inactivity_hours: null };
+  const load = loader({
+    getCharacterProactive: async () => ({ available: true, policy, jobs: [] }),
+    getCharacterFictionHistory: async (id, before) => {
+      reads.push({ id, before });
+      return before
+        ? { entries: [{ id: 'old', content: '较早的剧情', sent_at: 100 }], next_before: null }
+        : { entries: [{ id: 'current', content: '最近的剧情', sent_at: 200 }], next_before: 'current' };
+    },
+  });
+  let renderer;
+  try {
+    const { ProactivePanel } = load('src/components/chat/ProactivePanel.tsx');
+    await act(async () => { renderer = create(React.createElement(ProactivePanel, { sessionId: 'session' })); });
+    await click(renderer, '载入剧情记录');
+    await click(renderer, '加载更早记录');
+    assert.deepEqual(reads, [{ id: 'session', before: undefined }, { id: 'session', before: 'current' }]);
+    assert.ok(text(renderer.root.findByType('ol')).includes('最近的剧情'));
+    assert.ok(text(renderer.root.findByType('ol')).includes('较早的剧情'));
+    assert.equal(buttons(renderer).some(item => text(item).includes('加载更早记录')), false);
+  } finally {
+    if (renderer) await act(async () => renderer.unmount());
+  }
+});
+
 function loader(api) {
   const cache = new Map();
   function load(file) {

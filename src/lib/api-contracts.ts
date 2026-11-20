@@ -132,6 +132,11 @@ export interface ProactiveCandidate {
   suggested_at: number | null;
 }
 
+export interface CharacterFictionHistory {
+  entries: { id: string; content: string; sent_at: number }[];
+  next_before: string | null;
+}
+
 export interface CharacterProactiveState {
   available: boolean;
   policy: CharacterProactivePolicy;

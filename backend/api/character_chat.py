@@ -244,6 +244,12 @@ def proactive_candidates(session_id: str, owner=Depends(account), repo=Depends(r
     return {"candidates": call(CharacterChatProactiveRepository(repo.database).candidates, owner, session_id)}
 
 
+@router.get("/{session_id}/proactive/fiction")
+def proactive_fiction(session_id: str, before: Annotated[str | None, Query(min_length=1, max_length=100)] = None,
+                      limit: Annotated[int, Query(ge=1, le=50)] = 20, owner=Depends(account), repo=Depends(repository)):
+    return call(CharacterChatProactiveRepository(repo.database).fiction_history, owner, session_id, before, limit)
+
+
 def push_configuration():
     try:
         return WebPushConfig.from_env()

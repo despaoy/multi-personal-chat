@@ -653,6 +653,13 @@ class ApiClient {
     );
   }
 
+  getCharacterFictionHistory(id: string, before?: string) {
+    const query = before ? `?before=${encodeURIComponent(before)}` : '';
+    return this.request<import('./api-contracts').CharacterFictionHistory>(
+      `/character-chats/${encodeURIComponent(id)}/proactive/fiction${query}`,
+    );
+  }
+
   getCharacterProactiveInbox() {
     return this.request<{ messages: import('./api-contracts').ProactiveInboxMessage[] }>('/character-chats/proactive-inbox');
   }
