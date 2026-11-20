@@ -198,6 +198,30 @@ def test_user_change_invalidates_running_generation(setup):
     assert repo.get("1", session["id"])["state"]["relationship"]["summary"] == "手动更正"
 
 
+def test_retract_allows_generation_without_waiting_for_stale_lease(setup):
+    _, repo, session, jobs = setup
+    owner, identity = "1", session["id"]
+    first_turn = repo.commit_turn(session, "first", "已经保存", "好", "test")
+    old = repo.get(owner, identity)
+    stale_token = jobs.claim(old, "in-flight", "撤回前的新消息")
+    jobs.publish(old, "in-flight", stale_token, {"type": "draft_delta", "text": "旧草稿"})
+    with pytest.raises(RevisionConflictError):
+        jobs.claim(old, "duplicate", "同修订不能并发")
+
+    current = repo.retract(owner, identity, first_turn["id"], old["revision"])
+    assert jobs.pending(owner, identity) is None
+    stale = jobs.get(owner, identity, "in-flight")
+    assert stale["status"] == "superseded" and "draft_text" not in stale
+
+    fresh_token = jobs.claim(current, "fresh", "撤回后继续")
+    with pytest.raises(RevisionConflictError):
+        jobs.publish(old, "in-flight", stale_token, {"type": "draft_delta", "text": "迟到的旧草稿"})
+    with pytest.raises(RevisionConflictError):
+        repo.commit_turn(old, "in-flight", "撤回前的新消息", "迟到的回复", "test", generation_token=stale_token)
+    fresh = repo.commit_turn(current, "fresh", "撤回后继续", "新的回复", "test", generation_token=fresh_token)
+    assert [turn["id"] for turn in repo.turns(owner, identity)] == [fresh["id"]]
+
+
 def test_pending_request_recovery_is_owner_and_revision_scoped(setup):
     _, repo, session, jobs = setup
     assert jobs.pending("1", session["id"]) is None
@@ -215,6 +239,29 @@ def test_pending_request_recovery_is_owner_and_revision_scoped(setup):
     assert jobs.pending("1", session["id"]) is None
     stale = jobs.get("1", session["id"], "request")
     assert stale["status"] == "superseded" and "body" not in stale
+
+
+def test_sqlite_startup_restores_revision_for_existing_generation(tmp_path):
+    path = tmp_path / "legacy-generation.sqlite"
+    db = SQLiteDB(path)
+    try:
+        repo = CharacterChatRepository(db)
+        role = repo.characters.create("1", CharacterSettings(name="fixture", persona="test", greeting="hi"))
+        session = repo.create("1", role["id"], "first")
+        jobs = CharacterChatGenerationRepository(db)
+        jobs.claim(session, "legacy", "等待重启后恢复")
+        db.execute_sql("ALTER TABLE character_chat_generations DROP COLUMN request_revision")
+    finally:
+        db.close_connection()
+
+    db = SQLiteDB(path)
+    try:
+        jobs = CharacterChatGenerationRepository(db)
+        assert jobs.pending("1", session["id"])["body"]["message"] == "等待重启后恢复"
+        with pytest.raises(RevisionConflictError):
+            jobs.claim(session, "duplicate", "当前修订已有生成")
+    finally:
+        db.close_connection()
 
 
 def test_enrichment_dispatch_is_atomic_with_reply_and_removed_with_session(setup):
@@ -302,6 +349,53 @@ def test_background_enrichment_cannot_overwrite_later_user_actions(setup, change
         assert repo.get("1", session["id"])["revision"] == 3
     elif change != "delete":
         assert repo.get("1", session["id"])["state"]["memories"] == []
+
+
+@pytest.mark.parametrize("interrupted", ["memory", "relationship", "summary", None])
+def test_background_enrichment_stops_before_next_stage_after_user_changes(setup, interrupted, monkeypatch):
+    from services.character_chat_enrichment import process_enrichment
+
+    db, repo, session, _ = setup
+    turn = repo.commit_turn(session, "request", "喜欢茶", "知道了", "test", enqueue_enrichment=True)
+    identity = session["id"]
+    calls = []
+
+    def unused_history(*args):
+        pytest.fail("Enrichment must reuse the revision-checked history snapshot")
+
+    monkeypatch.setattr(CharacterChatRepository, "turns", unused_history)
+
+    async def stage(name, current):
+        calls.append(name)
+        if name == interrupted:
+            if name == "memory":
+                await asyncio.to_thread(repo.update_relationship, "1", identity, 2, "close", "手动设定")
+            elif name == "relationship":
+                await asyncio.to_thread(repo.retract, "1", identity, turn["id"], 2)
+            else:
+                await asyncio.to_thread(repo.delete_sessions, "1", [{"id": identity, "revision": 2}])
+        return current["state"]
+
+    async def memory(message, current, request_id):
+        return await stage("memory", current)
+
+    async def relationship(message, reply, current, request_id):
+        return await stage("relationship", current)
+
+    async def summary(current, history, request_id):
+        assert [entry["id"] for entry in history] == [turn["id"]]
+        return await stage("summary", current)
+
+    outcome = asyncio.run(process_enrichment(
+        turn["id"], database=db, expected_revision=2, enrich=memory, relationship=relationship,
+        summary=summary, embeddings=lambda _: calls.append("embeddings"),
+    ))
+    stages = ["memory", "relationship", "summary", "embeddings"]
+    if interrupted:
+        assert outcome == "superseded"
+        assert calls == stages[:stages.index(interrupted) + 1]
+    else:
+        assert outcome == "completed" and calls == stages
 
 
 def test_draft_is_fenced_resettable_and_never_a_saved_turn(setup):

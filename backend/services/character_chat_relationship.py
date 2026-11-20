@@ -10,6 +10,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from character.chat_relationship import RelationshipDimensions, RelationshipStage
 from character.memory_extractor import memory_write_allowed
 from character.memory_llm import MemoryLlmConfig, OpenAICompatibleMemoryCompletion
 from inference.context_budget import CONTEXT_SAFETY_MARGIN_TOKENS, estimated_tokens
@@ -28,10 +29,11 @@ class Evidence(BaseModel):
 class RelationshipProposal(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     action: Literal["keep", "update"]
-    stage: Literal["stranger", "acquaintance", "familiar", "close"] | None = None
+    stage: RelationshipStage | None = None
     summary: str = Field(default="", max_length=2000)
     confidence: float = Field(default=0, ge=0, le=1)
     evidence: list[Evidence] = Field(default_factory=list, max_length=8)
+    dimensions: RelationshipDimensions | None = None
 
 
 INSTRUCTION = """判断角色与用户的相处关系是否在本轮发生有证据的变化，只输出 JSON。
@@ -42,6 +44,9 @@ INSTRUCTION = """判断角色与用户的相处关系是否在本轮发生有证
 stranger=初识，acquaintance=认识，familiar=熟悉，close=亲近；允许关系疏远，不强制递增。
 摘要保留仍有效的旧经历，只补充本轮已发生的相处事实，不将假设、期望或角色示范当成真实经历。
 假想分支仅描述该分支内部关系，不影响其他会话。
+可选 dimensions 仅作为待用户确认的建议：tone 取 restrained（克制）或 playful（可轻松接梗），
+initiative 取 wait（跟随用户话题）或 offer（适时提议）。只在用户明确表达持续偏好、角色当轮明确回应时建议相应字段。
+仅建议维度变化时可省略 stage 和 summary，未提到的维度保留。initiative 只作用于当前聊天，不表示同意离线联系。
 更新格式：{"action":"update","stage":"acquaintance","summary":"关系摘要","confidence":0.95,
 "evidence":[{"role":"user","quote":"本轮用户原话"},{"role":"assistant","quote":"本轮角色原话"}]}。
 更新必须同时引用本轮双方的连续原文；把握不足时保持原状。"""
@@ -101,7 +106,14 @@ async def enrich_relationship(message, reply, session, request_id, *, database=N
             raw = await writer.complete(messages)
         proposal = RelationshipProposal.model_validate_json(raw)
         if proposal.action == "update" and proposal.confidence >= max(0.85, config.confidence_threshold):
-            if proposal.stage is None or not proposal.summary.strip():
+            current = state["relationship"]
+            choices = current.get("dimensions", {})
+            proposed_choices = proposal.dimensions.apply_to(choices) if proposal.dimensions else choices
+            changes_dimensions = proposed_choices != choices
+            if not changes_dimensions and (proposal.stage is None or not proposal.summary.strip()):
+                if proposal.dimensions and proposal.stage is None and not proposal.summary.strip():
+                    state["relationship_processing"] = "completed"
+                    return state
                 raise ValueError("Relationship update is incomplete")
             originals = {"user": message, "assistant": reply}
             if {item.role for item in proposal.evidence} != set(originals):
@@ -109,17 +121,18 @@ async def enrich_relationship(message, reply, session, request_id, *, database=N
             if any(not item.quote.strip() or item.quote not in originals[item.role] for item in proposal.evidence):
                 raise ValueError("Relationship evidence is not present in the current turn")
             relationship = {
-                "stage": proposal.stage,
-                "summary": proposal.summary.strip(),
+                "stage": proposal.stage or current["stage"],
+                "summary": proposal.summary.strip() or current.get("summary", ""),
                 "origin": "conversation",
                 "evidence": [item.model_dump() for item in proposal.evidence],
                 "source_session_id": session["id"],
                 "source_request_id": request_id,
                 "source_turn_id": None,
+                **({"dimensions": proposed_choices} if proposed_choices else {}),
             }
-            if state["relationship"].get("origin") == "user":
+            if changes_dimensions or current.get("origin") == "user":
                 state["relationship_proposal"] = {"id": request_id, **relationship}
-            else:
+            elif "relationship_proposal" not in state:
                 state["relationship"] = relationship
         state["relationship_processing"] = "completed"
     except Exception as exc:

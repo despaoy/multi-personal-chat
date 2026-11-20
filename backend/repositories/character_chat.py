@@ -3,8 +3,19 @@
 import copy
 import json
 import uuid
+from collections import defaultdict, deque
 from datetime import datetime, timezone
 
+from db.character_chat_erasure import ERASURE_TABLE, SESSION_ROWS
+from db.character_chat_history import (
+    HISTORY_NODES,
+    HISTORY_PATH,
+    ORPHANED_HISTORY_NODE,
+    READ_PATH,
+    create_path,
+    materialize_baseline,
+    stored_baseline,
+)
 from db.errors import RevisionConflictError
 from repositories.character_library import CharacterLibraryRepository, CharacterNotFoundError
 
@@ -30,7 +41,12 @@ class CharacterChatRepository:
         if not rows:
             raise CharacterNotFoundError("会话不存在")
         row = dict(rows[0])
-        row["baseline"] = json.loads(row.pop("baseline_json"))
+        baseline = json.loads(row.pop("baseline_json"))
+        path = (
+            self.database.execute_sql(READ_PATH, {"session": session_id, "owner": owner})
+            if baseline["history_states"] else []
+        )
+        row["baseline"] = materialize_baseline(baseline, path)
         row["network_policy"] = row["baseline"].get("network_policy", "cloud_allowed")
         row["source_corpus_id"] = row["baseline"].get("source_corpus_id")
         row["state"] = json.loads(row.pop("state_json"))
@@ -48,10 +64,15 @@ class CharacterChatRepository:
 
     def turns(self, owner, session_id):
         self.get(owner, session_id)
+        return self._active_turns(owner, session_id)
+
+    def _active_turns(self, owner, session_id):
         rows = self.database.execute_sql(
-            "SELECT t.*,e.payload_json FROM character_chat_turns t LEFT JOIN character_chat_evidence e ON e.turn_id=t.id "
-            "WHERE t.session_id=:id AND t.active=1 ORDER BY t.position",
-            {"id": session_id},
+            "SELECT t.*,e.payload_json FROM character_chat_turns t "
+            "JOIN character_chat_sessions s ON s.id=t.session_id "
+            "LEFT JOIN character_chat_evidence e ON e.turn_id=t.id "
+            "WHERE t.session_id=:id AND s.owner_user_id=:owner AND t.active=1 ORDER BY t.position",
+            {"id": session_id, "owner": owner},
         )
         return [self.decode_turn(row) for row in rows]
 
@@ -61,13 +82,72 @@ class CharacterChatRepository:
         result["evidence"] = json.loads(result.pop("payload_json", None) or "{}")
         return result
 
-    def delete_sessions(self, owner, selections):
-        """Erase exactly the selected snapshots, including inactive replacement history."""
+    @staticmethod
+    def _deletion_ids(selections):
         if not selections or len(selections) > 100:
             raise ValueError("请选择 1 至 100 个会话")
         ids = [item["id"] for item in selections]
         if len(set(ids)) != len(ids):
             raise ValueError("会话不能重复选择")
+        return ids
+
+    def preview_deletion(self, owner, selections):
+        """Return account-owned session metadata and links, without transcript contents."""
+        ids = self._deletion_ids(selections)
+        rows = self.database.execute_sql(
+            "SELECT id,character_id,title,revision,mode,source_session_id,baseline_json,state_json "
+            "FROM character_chat_sessions WHERE owner_user_id=:owner ORDER BY updated_at DESC,id",
+            {"owner": owner},
+        )
+        by_id = {row["id"]: row for row in rows}
+        for selection in selections:
+            row = by_id.get(selection["id"])
+            if row is None:
+                raise CharacterNotFoundError("会话不存在")
+            if row["revision"] != selection["revision"]:
+                raise RevisionConflictError()
+
+        origins = defaultdict(set)
+        for row in self.database.execute_sql(
+            f"SELECT DISTINCT p.session_id,n.origin_session_id FROM {HISTORY_PATH} p JOIN {HISTORY_NODES} n "
+            "ON n.owner_user_id=p.owner_user_id AND n.node_key=p.node_key "
+            "WHERE p.owner_user_id=:owner AND n.origin_session_id IS NOT NULL",
+            {"owner": owner},
+        ):
+            origins[row["session_id"]].add(row["origin_session_id"])
+        children = defaultdict(set)
+        for row in rows:
+            baseline = json.loads(row["baseline_json"])
+            parents = {row["source_session_id"], *origins[row["id"]]}
+            for ancestry in baseline.get("shared_memory_lineage", {}).values():
+                parents.update(ancestry)
+            states = [json.loads(row["state_json"]), baseline.get("state", {})]
+            states.extend(step.get("state_after", {}) for step in baseline["history_states"])
+            for state in states:
+                for memory in state.get("memories", []):
+                    if memory.get("shared_memory_id"):
+                        parents.update((memory.get("shared_from_session_id"), memory.get("source_session_id")))
+            for parent in parents - {None, row["id"]}:
+                children[parent].add(row["id"])
+
+        related = set(ids)
+        queue = deque(ids)
+        while queue:
+            for child in children[queue.popleft()] - related:
+                related.add(child)
+                queue.append(child)
+
+        def summary(row):
+            return {key: row[key] for key in ("id", "character_id", "title", "revision", "mode")}
+
+        return {
+            "selected": [summary(by_id[session_id]) for session_id in ids],
+            "related": [summary(row) for row in rows if row["id"] in related and row["id"] not in ids],
+        }
+
+    def delete_sessions(self, owner, selections):
+        """Erase exactly the selected snapshots, including inactive replacement history."""
+        ids = self._deletion_ids(selections)
         statements = []
         # Lock all selected rows in stable order before deleting their dependent data.
         # Creation/branching locks the same source row; stale in-flight writers cannot revive it.
@@ -81,41 +161,71 @@ class CharacterChatRepository:
                     1,
                 )
             )
+        path_params = {f"session_{index}": session_id for index, session_id in enumerate(ids)}
+        placeholders = ",".join(f":{name}" for name in path_params)
+        nodes = self.database.execute_sql(
+            f"SELECT DISTINCT node_key FROM {HISTORY_PATH} "
+            f"WHERE owner_user_id=:owner AND session_id IN ({placeholders}) ORDER BY node_key",
+            {**path_params, "owner": owner},
+        )
+        node_params = [{"owner": owner, "node": row["node_key"]} for row in nodes]
+        # A path creation holds the same node locks until its references have committed.
+        statements.extend(
+            (f"UPDATE {HISTORY_NODES} SET node_key=node_key WHERE owner_user_id=:owner AND node_key=:node", params, 1)
+            for params in node_params
+        )
         for session_id in sorted(ids):
             params = {"id": session_id}
+            statements.extend((
+                (f"INSERT INTO {ERASURE_TABLE} (session_id) VALUES (:id) ON CONFLICT (session_id) DO NOTHING", params, None),
+                ("DELETE FROM character_chat_evidence WHERE turn_id IN "
+                 "(SELECT id FROM character_chat_turns WHERE session_id=:id)", params, None),
+            ))
             statements.extend(
-                [
-                    (
-                        "DELETE FROM character_chat_evidence WHERE turn_id IN "
-                        "(SELECT id FROM character_chat_turns WHERE session_id=:id)",
-                        params,
-                        None,
-                    ),
-                    ("DELETE FROM character_shared_memories WHERE source_session_id=:id", params, None),
-                    ("DELETE FROM character_chat_generations WHERE session_id=:id", params, None),
-                    ("DELETE FROM character_chat_enrichment_jobs WHERE session_id=:id", params, None),
-                    ("DELETE FROM character_chat_memory_vectors WHERE session_id=:id", params, None),
-                    ("DELETE FROM character_chat_turns WHERE session_id=:id", params, None),
-                    ("DELETE FROM character_chat_sessions WHERE id=:id", params, 1),
-                ]
+                (f"DELETE FROM {table} WHERE {column}=:id", params, 1 if table == "character_chat_sessions" else None)
+                for table, column in SESSION_ROWS
             )
+        statements.extend(
+            (f"DELETE FROM {HISTORY_NODES} WHERE owner_user_id=:owner AND node_key=:node AND {ORPHANED_HISTORY_NODE}",
+             params, None)
+            for params in node_params
+        )
         self.database.revision_transaction(statements)
         return {"deleted_session_ids": ids}
 
     def snapshot(self, owner, session_id):
         session = self.get(owner, session_id)
-        turns = self.turns(owner, session_id)
-        if self.get(owner, session_id)["revision"] != session["revision"]:
+        turns = self._active_turns(owner, session_id)
+        rows = self.database.execute_sql(
+            "SELECT revision FROM character_chat_sessions WHERE id=:id AND owner_user_id=:owner",
+            {"id": session_id, "owner": owner},
+        )
+        if not rows:
+            raise CharacterNotFoundError("会话不存在")
+        if rows[0]["revision"] != session["revision"]:
             raise RevisionConflictError()
         return session, turns
 
     def continuation_preview(self, owner, session_id):
+        from repositories.character_sources import CharacterSourceRepository
+
         source = self.get(owner, session_id)
         latest = self.characters.get(owner, source["character_id"])
+        sources = CharacterSourceRepository(self.database)
+        bound_corpus = source["source_corpus_id"]
+        editions = sources.list(
+            owner, source["character_id"], latest["settings_revision"], 1,
+        )
         return {
+            "source_session_id": session_id,
             "source_revision": source["revision"],
             "character_revision": latest["settings_revision"],
             "previous_character_revision": source["character_revision"],
+            "source_corpus_id": bound_corpus,
+            "source_corpus_available": bool(bound_corpus) and sources.has_edition(
+                owner, source["character_id"], source["character_revision"], bound_corpus,
+            ),
+            "latest_source_corpus": editions[0] if editions else None,
             "changes": {
                 key: {"previous": source["character"]["settings"][key], "next": value}
                 for key, value in latest["settings"].items()
@@ -143,6 +253,7 @@ class CharacterChatRepository:
         shared_memory_ids=None,
         network_policy=None,
         source_corpus_id=None,
+        without_original_sources=False,
     ):
         if network_policy not in {None, "cloud_allowed", "local_only"}:
             raise ValueError("无效的模型网络策略")
@@ -263,6 +374,13 @@ class CharacterChatRepository:
                 )
             )
         session_id, now = uuid.uuid4().hex, timestamp()
+        shared_lineage = {}
+        if source_session_id:
+            retained_ids = {memory.get("id") for memory in state["memories"] if isinstance(memory, dict)}
+            shared_lineage = {
+                identity: ancestry for identity, ancestry in source["baseline"].get("shared_memory_lineage", {}).items()
+                if baseline["history"] or identity in retained_ids
+            }
         if shared_memory_ids:
             if mode != "initial":
                 raise ValueError("共享记忆仅在初识新会话中显式带入")
@@ -283,13 +401,18 @@ class CharacterChatRepository:
                 # Share the chosen fact, not an entire source utterance containing other facts.
                 memory.pop("evidence", None)
                 memory.pop("source_request_id", None)
+                memory_id = uuid.uuid4().hex
+                ancestry = set(shared_source["baseline"].get("shared_memory_lineage", {}).get(rows[0]["source_memory_id"], ()))
+                ancestry.update((memory.get("source_session_id"), memory.get("shared_from_session_id"), shared_source["id"]))
+                shared_lineage[memory_id] = sorted(ancestry - {None})
                 collision = any(item.get("memory_key") == memory.get("memory_key") for item in state["memories"])
                 state["memories"].append(
                     {
                         **memory,
-                        "id": uuid.uuid4().hex,
+                        "id": memory_id,
                         "origin": "shared",
                         "shared_memory_id": shared_id,
+                        "shared_from_session_id": shared_source["id"],
                         "status": "pending" if collision else "confirmed",
                     }
                 )
@@ -301,11 +424,18 @@ class CharacterChatRepository:
                     )
                 )
             baseline["state"] = state
+        if shared_lineage:
+            # Provenance belongs to the snapshot, so scrubbing the copied memory
+            # does not conceal a conversation that may have used it.
+            baseline["shared_memory_lineage"] = shared_lineage
         baseline["network_policy"] = network_policy or "cloud_allowed"
         from repositories.character_sources import CharacterSourceRepository
 
         source_repo = CharacterSourceRepository(self.database)
-        if mode == 'branch':
+        if without_original_sources:
+            if mode != 'continuation' or source_corpus_id is not None:
+                raise ValueError('仅可为延续会话选择不使用原作资料，且不能同时指定资料版本')
+        elif mode == 'branch':
             inherited_corpus = selected.get('source_corpus_id')
             if source_corpus_id is not None and source_corpus_id != inherited_corpus:
                 raise ValueError('分支必须使用起点的资料版本')
@@ -316,12 +446,18 @@ class CharacterChatRepository:
             editions = source_repo.list(owner, character_id, character['settings_revision'], 1)
             source_corpus_id = editions[0]['id'] if editions else None
         if source_corpus_id:
-            corpus = source_repo.get(owner, source_corpus_id)
-            if corpus['character_id'] != character_id or corpus['character_revision'] != character['settings_revision']:
-                raise ValueError('资料版本不属于当前角色设定版本')
+            if mode != 'branch':
+                corpus = source_repo.get(owner, source_corpus_id)
+                if corpus['character_id'] != character_id or corpus['character_revision'] != character['settings_revision']:
+                    raise ValueError('资料版本不属于当前角色设定版本')
+            # A historical branch preserves the edition's identity even after
+            # retrieval is revoked. It does not read the edition's source text.
+            active_only = '' if mode == 'branch' else ' AND revoked=0'
             statements.append((
-                'UPDATE character_source_corpora SET revoked=revoked WHERE id=:corpus AND owner_user_id=:owner AND revoked=0',
-                {'corpus': source_corpus_id, 'owner': owner}, 1,
+                'UPDATE character_source_corpora SET revoked=revoked WHERE id=:corpus AND owner_user_id=:owner '
+                'AND character_id=:character AND character_revision=:revision' + active_only,
+                {'corpus': source_corpus_id, 'owner': owner, 'character': character_id,
+                 'revision': character['settings_revision']}, 1,
             ))
         baseline['source_corpus_id'] = source_corpus_id
         params = {
@@ -334,7 +470,7 @@ class CharacterChatRepository:
             "source": source_session_id,
             "turn": source_turn_id,
             "hypothesis": hypothesis,
-            "baseline": json.dumps(baseline, ensure_ascii=False),
+            "baseline": stored_baseline(baseline),
             "state": json.dumps(state, ensure_ascii=False),
             "now": now,
         }
@@ -347,6 +483,7 @@ class CharacterChatRepository:
                 1,
             )
         )
+        statements.extend(create_path(owner, session_id, baseline["history"]))
         self.database.revision_transaction(statements)
         return self.get(owner, session_id)
 
@@ -415,7 +552,7 @@ class CharacterChatRepository:
             ))
         if replace_turn_id:
             selected = self.selected_turn(owner, session_id, replace_turn_id)
-            statements.append(self.deactivate_after(session_id, selected["position"]))
+            statements.extend(self.deactivate_after(session_id, selected["position"]))
         position = self.database.execute_sql(
             "SELECT COALESCE(MAX(position),0)+1 AS next_position FROM character_chat_turns WHERE session_id=:id",
             {"id": session_id},
@@ -455,6 +592,12 @@ class CharacterChatRepository:
                 "VALUES (:turn,:session,:revision,'pending',:now)",
                 {"turn": turn_id, "session": session_id, "revision": session["revision"] + 1, "now": timestamp()}, 1,
             ))
+        statements.append((
+            "UPDATE character_chat_proactive_policies SET inactivity_turn_id=:turn,"
+            "inactivity_due_at=CAST(:now_epoch AS DOUBLE PRECISION)+inactivity_hours*3600 "
+            "WHERE session_id=:session AND enabled=1 AND inactivity_hours IS NOT NULL",
+            {"turn": turn_id, "now_epoch": datetime.fromisoformat(params["now"]).timestamp(), "session": session_id}, None,
+        ))
         self.database.revision_transaction(statements)
         return self.prior(owner, session_id, request_id)
 
@@ -466,10 +609,14 @@ class CharacterChatRepository:
 
     @staticmethod
     def deactivate_after(session_id, position):
+        params = {"id": session_id, "position": position}
         return (
-            "UPDATE character_chat_turns SET active=0 WHERE session_id=:id AND position>=:position AND active=1",
-            {"id": session_id, "position": position},
-            None,
+            ("UPDATE character_chat_proactive_jobs SET status='cancelled',topic='',content=NULL "
+             "WHERE session_id=:id AND status IN ('pending','sent') AND source_turn_id IN ("
+             "SELECT id FROM character_chat_turns WHERE session_id=:id AND position>=:position AND active=1)",
+             params, None),
+            ("UPDATE character_chat_turns SET active=0 WHERE session_id=:id AND position>=:position AND active=1",
+             params, None),
         )
 
     def before_turn(self, owner, session_id, turn_id):
@@ -488,13 +635,15 @@ class CharacterChatRepository:
         self.database.revision_transaction(
             [
                 self.cas(session, state),
-                self.deactivate_after(session_id, selected["position"]),
+                *self.deactivate_after(session_id, selected["position"]),
+                ("UPDATE character_chat_proactive_policies SET inactivity_due_at=NULL,inactivity_turn_id=NULL "
+                 "WHERE session_id=:session AND inactivity_due_at IS NOT NULL", {"session": session_id}, None),
                 *self.revoke_changed_shares(session_id, state),
             ]
         )
         return self.get(owner, session_id)
 
-    def update_relationship(self, owner, session_id, revision, stage, summary):
+    def update_relationship(self, owner, session_id, revision, stage, summary, dimensions=None):
         """Anchor an explicit relationship adjustment at the current conversation point."""
         if stage not in {"stranger", "acquaintance", "familiar", "close"} or len(summary) > 2000:
             raise ValueError("关系阶段或摘要无效")
@@ -502,11 +651,15 @@ class CharacterChatRepository:
         if session["revision"] != revision:
             raise RevisionConflictError()
         state = copy.deepcopy(session["state"])
+        choices = state["relationship"].get("dimensions", {})
+        if dimensions is not None:
+            choices = dimensions.apply_to(choices)
         state["relationship"] = {
             "stage": stage,
             "summary": summary.strip(),
             "origin": "user",
             "source_turn_id": turns[-1]["id"] if turns else None,
+            **({"dimensions": choices} if choices else {}),
         }
         state.pop("relationship_proposal", None)
         return self.save_relationship_state(session, turns, state)
@@ -541,7 +694,7 @@ class CharacterChatRepository:
             statements.append(
                 (
                     "UPDATE character_chat_sessions SET baseline_json=:baseline WHERE id=:id",
-                    {"id": session_id, "baseline": json.dumps(baseline, ensure_ascii=False)},
+                    {"id": session_id, "baseline": stored_baseline(baseline)},
                     1,
                 )
             )
@@ -602,7 +755,7 @@ class CharacterChatRepository:
                 if item.get("id") != memory_id:
                     items.append(item)
                 elif content is not None:
-                    items.append({**item, "content": content, "status": "confirmed", "updated_at": now})
+                    items.append({**item, "content": content, "status": "confirmed", "origin": "user", "updated_at": now})
             if adding and anchor:
                 items.append(
                     {
@@ -629,7 +782,7 @@ class CharacterChatRepository:
         statements.append(
             (
                 "UPDATE character_chat_sessions SET baseline_json=:baseline WHERE id=:id",
-                {"id": session_id, "baseline": json.dumps(baseline, ensure_ascii=False)},
+                {"id": session_id, "baseline": stored_baseline(baseline)},
                 1,
             )
         )

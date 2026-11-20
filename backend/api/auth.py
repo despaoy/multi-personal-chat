@@ -7,8 +7,8 @@ from fastapi import APIRouter, HTTPException, Depends, Response, Request
 
 from db.schemas import RegisterRequest, LoginRequest
 from db.errors import RegistrationClosedError
-from app.config import create_access_token
-from app.dependencies import get_current_user, get_request_database
+from app.config import create_access_token, verify_token
+from app.dependencies import get_current_user, get_request_database, get_request_token
 from infra.auth_work import run_auth_database
 from infra.token_revocation import revoke_token
 from infra.environment import read_positive_int, read_positive_float
@@ -202,16 +202,30 @@ async def login(
 
 
 @router.post("/api/auth/logout")
-async def logout(request: Request, response: Response):
-    """用户登出 - 清除 Cookie + Token 黑名单吊销"""
-    # 从 Cookie 或 Authorization 头提取 token 并加入黑名单
-    token = request.cookies.get("access_token", "")
-    if not token:
-        auth_header = request.headers.get("Authorization", "")
-        if auth_header.startswith("Bearer "):
-            token = auth_header[7:]
+async def logout(request: Request, response: Response, database=Depends(get_request_database)):
+    """Revoke this login in the application database and clear the cookie."""
+    token = get_request_token(request)
     if token:
-        revoke_token(token)
+        try:
+            payload = verify_token(token)
+        except HTTPException as exc:
+            if exc.status_code != 401:
+                raise
+        else:
+            jti = payload.get("jti")
+            expires_at = payload.get("exp")
+            if jti and expires_at is not None:
+                try:
+                    await _run_database_work(revoke_token, database, jti, int(expires_at))
+                except HTTPException:
+                    raise
+                except Exception as exc:
+                    increment("auth_token_revocation_write_unavailable")
+                    raise HTTPException(
+                        status_code=503,
+                        detail="Authentication service is unavailable; retry later",
+                        headers={"Retry-After": "1"},
+                    ) from exc
     response.delete_cookie(key="access_token", path="/")
     return {"success": True}
 

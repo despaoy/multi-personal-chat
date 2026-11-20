@@ -3,9 +3,10 @@
 import asyncio
 import copy
 import logging
+import re
 import uuid
 
-from character.memory_extractor import memory_write_allowed
+from character.memory_extractor import extract_memories, memory_write_allowed
 from character.memory_llm import (
     MemoryLlmConfig,
     MemoryScopeAuthorization,
@@ -17,6 +18,11 @@ from repositories.character_chat import timestamp
 from services.character_chat_policy import is_local_only, local_endpoint_allowed
 
 logger = logging.getLogger(__name__)
+
+_EXPLICIT_HABIT = re.compile(
+    r"(?:(?:请)?记住[，,：:\s]*)?(?P<claim>我(?:平时|通常|一向)(?:不)?"
+    r"(?P<action>喝|吃|用|买|选)(?P<subject>[\w]{1,20}))[。.!！]?"
+)
 
 
 async def enrich_state(message, session, request_id, *, database=None, config=None, completion=None):
@@ -86,31 +92,49 @@ async def enrich_state(message, session, request_id, *, database=None, config=No
             confidence_threshold=config.confidence_threshold,
             scope_authorization=authorization,
         )
+        assertions = extract_memories(message)
+        habit = _EXPLICIT_HABIT.fullmatch(message.strip())
         for proposal in proposals:
             memory = proposal.memory
             # Erasure is handled by the explicit user-facing memory controls.
             if memory is None or proposal.operation in {"NOOP", "ERASE", "RETRACT"}:
                 continue
-            same_key = [item for item in state["memories"] if item.get("memory_key") == memory.memory_key]
-            if any(item["content"] == memory.content for item in same_key):
+            key, content = memory.memory_key, memory.content
+            unqualified = not proposal.qualifiers and not proposal.valid_from and not proposal.valid_to
+            preference = next(
+                (assertion for assertion in assertions
+                 if assertion.memory_key == key and assertion.polarity == proposal.fact_kind
+                 and not assertion.qualifiers and assertion.evidence in proposal.evidence),
+                None,
+            )
+            verified_habit = (
+                habit is not None and proposal.fact_kind == "other_user_fact" and unqualified
+                and key in {"fact_" + habit["subject"], f"fact_habit_{habit['action']}_{habit['subject']}"}
+                and habit["claim"] in proposal.evidence
+            )
+            if verified_habit:
+                key = f"fact_habit_{habit['action']}_{habit['subject']}"
+                content = "用户" + habit["claim"].removeprefix("我")
+            elif preference and unqualified and proposal.operation == "ADD":
+                # Store the corroborated fact, without model-added wording.
+                content = preference.content
+            same_key = [item for item in state["memories"] if item.get("memory_key") == key]
+            if any(item["content"] == content for item in same_key):
                 continue
             confirmed = (
-                proposal.operation == "ADD"
-                and proposal.fact_kind in {"like", "dislike"}
+                proposal.operation == "ADD" and unqualified
+                and (preference is not None or verified_habit)
                 and not same_key
                 and not any(not item.get("memory_key") for item in state["memories"])
-                and not proposal.qualifiers
-                and not proposal.valid_from
-                and not proposal.valid_to
             )
             now = timestamp()
             state["memories"].append(
                 {
                     "id": uuid.uuid4().hex,
-                    "content": memory.content,
+                    "content": content,
                     "status": "confirmed" if confirmed else "pending",
                     "origin": "conversation",
-                    "memory_key": memory.memory_key,
+                    "memory_key": key,
                     "memory_type": memory.memory_type,
                     "evidence": proposal.evidence,
                     "confidence": proposal.confidence,

@@ -2,14 +2,25 @@
 
 from db.database import SQLiteDB
 from inference.generation_options import read_generation_options
+from inference.model_manager import OpenAICompatProvider
 
 
-def test_new_database_defaults_to_flash_and_preserves_existing_selection(tmp_path):
+def test_new_database_defaults_to_flash_and_preserves_existing_selection(tmp_path, monkeypatch):
+    monkeypatch.delenv("OPENAI_COMPAT_MODEL", raising=False)
+    monkeypatch.delenv("OPENAI_COMPAT_BASE_URL", raising=False)
     path = tmp_path / "settings.db"
     db = SQLiteDB(path)
     try:
         assert db.config["modelProvider"] == "openai_compat"
-        assert db.config["openaiCompatModel"] == "deepseek-flash"
+        assert db.config["openaiCompatModel"] == ""
+        provider = OpenAICompatProvider(database=db)
+        assert provider.model == "deepseek-flash"
+        assert provider.base_url == "https://api.deepseek.com"
+        monkeypatch.setenv("OPENAI_COMPAT_MODEL", "environment-model")
+        monkeypatch.setenv("OPENAI_COMPAT_BASE_URL", "https://provider.example.invalid/v1")
+        provider = OpenAICompatProvider(database=db)
+        assert provider.model == "environment-model"
+        assert provider.base_url == "https://provider.example.invalid/v1"
         assert float(db.config["topP"]) == 1.0
         assert not db.config["openaiCompatApiKey"]
         db.update_config({"modelProvider": "vllm", "openaiCompatModel": "explicit-model"})
@@ -19,6 +30,7 @@ def test_new_database_defaults_to_flash_and_preserves_existing_selection(tmp_pat
     try:
         assert db.config["modelProvider"] == "vllm"
         assert db.config["openaiCompatModel"] == "explicit-model"
+        assert OpenAICompatProvider(database=db).model == "explicit-model"
     finally:
         db.close_connection()
 

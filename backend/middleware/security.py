@@ -545,6 +545,10 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         if request.method == "OPTIONS":
             return await call_next(request)
 
+        # Logout verifies its own token and permits repeated revocation.
+        if request.method == "POST" and path == "/api/auth/logout":
+            return await call_next(request)
+
         # 公开只读端点放行（无需认证）
         PUBLIC_GET_PATHS = {"/health", "/ready"}
         # AstrBot has independent token/signature authentication in its route.
@@ -564,18 +568,9 @@ class SecurityMiddleware(BaseHTTPMiddleware):
 
         # 读取认证凭证
         api_key = request.headers.get("X-API-Key", "")
-        auth_header = request.headers.get("Authorization", "")
+        from app.dependencies import get_request_token, require_active_token
 
-        # 从 Cookie 中提取 token（httpOnly Cookie 认证）
-        # 使用 Starlette 内置 API 自动处理 URL 解码
-        cookie_token = request.cookies.get("access_token", "")
-
-        bearer_token = ""
-        if auth_header.startswith("Bearer "):
-            bearer_token = auth_header[7:]
-        elif cookie_token:
-            # Cookie 中的 token 作为 Bearer token
-            bearer_token = cookie_token
+        bearer_token = get_request_token(request)
 
         # 优先尝试 JWT 验证（前端主要使用 JWT）
         if bearer_token:
@@ -583,27 +578,22 @@ class SecurityMiddleware(BaseHTTPMiddleware):
                 from app.config import verify_token
 
                 payload = verify_token(bearer_token)
-                # C-S2 fix: 原先中间件解码 JWT 后直接放行，不检查 Token 黑名单。
-                # 导致未使用 Depends(get_current_user) 的路由（如 /api/stats、
-                # /api/model/status）在 Token 注销后仍可访问 24 小时。
-                # 现在在中间件层统一检查黑名单，所有路由都受益。
-                from infra.token_revocation import is_token_revoked
-                if is_token_revoked(payload.get("jti", "")):
-                    return JSONResponse(
-                        status_code=401,
-                        content={"detail": "Token 已注销，请重新登录"},
-                        headers={"WWW-Authenticate": "Bearer"},
-                    )
-                request.state.user = payload["sub"]
-                request.state.auth_type = "jwt"
-                request.state.jwt_payload = payload
             except HTTPException as exc:
                 if exc.status_code != 401:
                     raise
                 logger.debug("JWT 验证失败: %s", exc.detail)
-
-            # JWT 验证成功，放行请求（call_next 的异常不应被认证逻辑捕获）
-            if hasattr(request.state, "jwt_payload") and request.state.jwt_payload:
+            else:
+                try:
+                    await require_active_token(request, payload)
+                except HTTPException as exc:
+                    return JSONResponse(
+                        status_code=exc.status_code,
+                        content={"detail": exc.detail},
+                        headers=exc.headers,
+                    )
+                request.state.user = payload["sub"]
+                request.state.auth_type = "jwt"
+                request.state.jwt_payload = payload
                 return await call_next(request)
 
         # 尝试 API Key 匹配。环境变量 Key 作为固定 api_user；SQLite

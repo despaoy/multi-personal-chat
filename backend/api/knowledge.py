@@ -30,6 +30,13 @@ from infra.bounded_executor import BlockingWorkTimeout
 from infra.db_executor import run_db
 from infra.input_validator import KNOWLEDGE_DOCUMENT_SCHEMA, InputValidator
 from knowledge.index_lifecycle import get_knowledge_index
+from knowledge.source_storage import (
+    KnowledgeSourceStorage,
+    LocalKnowledgeSourceStorage,
+    SourceBoundaryError,
+    SourceEntry,
+    source_key,
+)
 from knowledge.text_decode import KnowledgeTextEncoding, decode_knowledge_text
 
 logger = logging.getLogger(__name__)
@@ -409,38 +416,38 @@ KNOWLEDGE_BASES_DIR = Path(__file__).parent.parent / "knowledge_bases"
 SUPPORTED_EXTENSIONS = {".txt", ".md", ".json", ".csv", ".html", ".xml"}
 
 
-def _knowledge_source_path(path: Path) -> Path:
-    resolved = path.resolve()
-    if not resolved.is_relative_to(KNOWLEDGE_BASES_DIR.resolve()):
-        raise HTTPException(status_code=400, detail="来源路径超出知识库目录范围")
-    return resolved
+def get_knowledge_source_storage() -> KnowledgeSourceStorage:
+    return LocalKnowledgeSourceStorage(KNOWLEDGE_BASES_DIR)
 
 
-def _scan_directory(directory: Path, ancestors: frozenset[Path] = frozenset()) -> dict:
+def _scan_directory(
+    storage: KnowledgeSourceStorage,
+    directory: PurePosixPath,
+    entry: SourceEntry,
+    ancestors: frozenset[str],
+) -> dict:
     """扫描目录结构，返回树形结构"""
-    resolved = _knowledge_source_path(directory)
-    if resolved in ancestors:
-        raise HTTPException(status_code=400, detail="知识库来源目录存在循环链接")
-    ancestors = ancestors | {resolved}
+    if entry.identity in ancestors:
+        raise SourceBoundaryError("知识库来源目录存在循环链接")
+    ancestors = ancestors | {entry.identity}
     result = {"name": directory.name, "type": "folder", "children": [], "fileCount": 0, "totalSize": 0}
-    if not directory.exists():
-        return result
-    for item in sorted(directory.iterdir()):
+    for item in sorted(storage.children(directory)):
         if item.name.startswith(".") or item.name == "__pycache__":
             continue
-        if item.is_dir():
-            sub = _scan_directory(item, ancestors)
+        child = storage.info(item)
+        if child is None:
+            continue
+        if child.directory:
+            sub = _scan_directory(storage, item, child, ancestors)
             result["children"].append(sub)
             result["fileCount"] += sub["fileCount"]
             result["totalSize"] += sub["totalSize"]
-        elif item.is_file() and item.suffix.lower() in SUPPORTED_EXTENSIONS:
-            _knowledge_source_path(item)
-            file_size = item.stat().st_size
+        elif item.suffix.lower() in SUPPORTED_EXTENSIONS:
             result["children"].append(
-                {"name": item.name, "type": "file", "size": file_size, "extension": item.suffix.lower()}
+                {"name": item.name, "type": "file", "size": child.size, "extension": item.suffix.lower()}
             )
             result["fileCount"] += 1
-            result["totalSize"] += file_size
+            result["totalSize"] += child.size
     return result
 
 
@@ -450,14 +457,15 @@ def _scan_knowledge_dirs() -> dict:
     扫描 backend/knowledge_bases/ 下的所有子目录，
     每个顶层子目录被视为一个知识库候选项。
     """
-    if not KNOWLEDGE_BASES_DIR.exists():
+    storage = get_knowledge_source_storage()
+    root = PurePosixPath()
+    root_entry = storage.info(root)
+    if root_entry is None:
         return {"success": True, "directories": [], "message": "知识库目录不存在"}
     directories = []
-    for item in sorted(KNOWLEDGE_BASES_DIR.iterdir()):
-        if not item.is_dir() or item.name.startswith("."):
-            continue
-        tree = _scan_directory(item)
-        directories.append(tree)
+    for item in sorted(storage.children(root)):
+        if not item.name.startswith(".") and (entry := storage.info(item)) and entry.directory:
+            directories.append(_scan_directory(storage, item, entry, frozenset({root_entry.identity})))
     return {"success": True, "directories": directories}
 
 
@@ -469,6 +477,8 @@ async def scan_knowledge_dirs(request: Request, current_user: dict = Depends(get
         if executor is None:
             raise RuntimeError("Knowledge scan executor is not initialized")
         return await executor.run(_scan_knowledge_dirs)
+    except SourceBoundaryError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except HTTPException:
         raise
     except Exception as exc:
@@ -496,14 +506,59 @@ async def import_scanned_directory(
     """
     db = database
     index_lifecycle = get_knowledge_index(database)
-    target_dir = _knowledge_source_path(KNOWLEDGE_BASES_DIR / directory_name)
-    if not target_dir.exists() or not target_dir.is_dir():
+    storage = get_knowledge_source_storage()
+    try:
+        target_dir = source_key(directory_name)
+        target = await asyncio.to_thread(storage.info, target_dir)
+    except SourceBoundaryError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if target is None or not target.directory:
         raise HTTPException(status_code=404, detail=f"目录不存在: {directory_name}")
     created_folders = {}
     created_docs = 0
     errors = []
     unconfirmed = False
     kb = None
+
+    async def entries(directory):
+        for key in sorted(await asyncio.to_thread(storage.children, directory)):
+            try:
+                entry = await asyncio.to_thread(storage.info, key)
+            except SourceBoundaryError as exc:
+                errors.append(_knowledge_import_error(key.name, exc))
+                continue
+            if entry is not None:
+                yield key, entry
+
+    async def save_document(key, category, folder_id):
+        nonlocal created_docs
+        if key.suffix.lower() not in SUPPORTED_EXTENSIONS:
+            return
+        try:
+            file_bytes = await asyncio.to_thread(storage.read_bytes, key)
+            content = decode_knowledge_text(file_bytes, text_encoding)
+            if not content.strip():
+                return
+            from knowledge.text_splitter import simple_text_split
+
+            document_data = {
+                "title": key.stem,
+                "content": content,
+                "category": category,
+                "knowledge_base_id": kb_id,
+                "folder_id": folder_id,
+                "sourceType": "file",
+                "fileType": key.suffix.lstrip("."),
+                "fileSize": len(file_bytes),
+            }
+            await run_db(db.save_knowledge_document, document_data, chunks=simple_text_split(content))
+            created_docs += 1
+            await run_db(index_lifecycle._invalidate_local_knowledge_index)
+        except BlockingWorkTimeout:
+            raise
+        except Exception as exc:
+            errors.append(_knowledge_import_error(key.name, exc))
+
     try:
         if kb_id:
             kb = await run_db(db.get_knowledge_base, kb_id)
@@ -517,13 +572,12 @@ async def import_scanned_directory(
                 if not kb:
                     raise HTTPException(status_code=500, detail="无法创建或找到知识库")
         kb_id = kb["id"]
-        for sub_dir in sorted(target_dir.iterdir()):
-            if sub_dir.name.startswith(".") or not sub_dir.is_dir():
+        root_files = []
+        async for sub_dir, entry in entries(target_dir):
+            if not entry.directory:
+                root_files.append(sub_dir)
                 continue
-            try:
-                _knowledge_source_path(sub_dir)
-            except HTTPException as exc:
-                errors.append(_knowledge_import_error(sub_dir.name, exc))
+            if sub_dir.name.startswith("."):
                 continue
             folder_name = sub_dir.name
             folder = await run_db(db.create_knowledge_folder, kb_id, folder_name)
@@ -536,67 +590,11 @@ async def import_scanned_directory(
                 errors.append(f"无法创建文件夹: {folder_name}")
                 continue
             folder_id = created_folders[folder_name]
-            for file_path in sorted(sub_dir.iterdir()):
-                if not file_path.is_file() or file_path.suffix.lower() not in SUPPORTED_EXTENSIONS:
-                    continue
-                try:
-                    _knowledge_source_path(file_path)
-                    file_bytes = await asyncio.to_thread(file_path.read_bytes)
-                    content = decode_knowledge_text(file_bytes, text_encoding)
-                    if not content.strip():
-                        continue
-                    doc_title = file_path.stem
-                    file_size = len(file_bytes)
-                    document_data = {
-                        "title": doc_title,
-                        "content": content,
-                        "category": folder_name,
-                        "knowledge_base_id": kb_id,
-                        "folder_id": folder_id,
-                        "sourceType": "file",
-                        "fileType": file_path.suffix.lstrip("."),
-                        "fileSize": file_size,
-                    }
-                    from knowledge.text_splitter import simple_text_split
-
-                    chunks = simple_text_split(content)
-                    await run_db(db.save_knowledge_document, document_data, chunks=chunks)
-                    created_docs += 1
-                    await run_db(index_lifecycle._invalidate_local_knowledge_index)
-                except BlockingWorkTimeout:
-                    raise
-                except Exception as exc:
-                    errors.append(_knowledge_import_error(file_path.name, exc))
-        for file_path in sorted(target_dir.iterdir()):
-            if not file_path.is_file() or file_path.suffix.lower() not in SUPPORTED_EXTENSIONS:
-                continue
-            try:
-                _knowledge_source_path(file_path)
-                file_bytes = await asyncio.to_thread(file_path.read_bytes)
-                content = decode_knowledge_text(file_bytes, text_encoding)
-                if not content.strip():
-                    continue
-                doc_title = file_path.stem
-                document_data = {
-                    "title": doc_title,
-                    "content": content,
-                    "category": "未分类",
-                    "knowledge_base_id": kb_id,
-                    "folder_id": None,
-                    "sourceType": "file",
-                    "fileType": file_path.suffix.lstrip("."),
-                    "fileSize": len(file_bytes),
-                }
-                from knowledge.text_splitter import simple_text_split
-
-                chunks = simple_text_split(content)
-                await run_db(db.save_knowledge_document, document_data, chunks=chunks)
-                created_docs += 1
-                await run_db(index_lifecycle._invalidate_local_knowledge_index)
-            except BlockingWorkTimeout:
-                raise
-            except Exception as exc:
-                errors.append(_knowledge_import_error(file_path.name, exc))
+            async for key, child in entries(sub_dir):
+                if not child.directory:
+                    await save_document(key, folder_name, folder_id)
+        for key in root_files:
+            await save_document(key, "未分类", None)
     except BlockingWorkTimeout:
         unconfirmed = True
         errors.append("导入操作超时，结果未确认，请刷新核对后再决定是否重试。")

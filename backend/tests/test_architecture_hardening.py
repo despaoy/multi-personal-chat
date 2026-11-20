@@ -113,10 +113,6 @@ async def test_get_current_admin_allows_admin_role(monkeypatch):
     database = SimpleNamespace(get_user_by_username=None)
     request = _FakeRequest(payload, database)
 
-    # 绕过 token 黑名单检查
-    monkeypatch.setattr(
-        "infra.token_revocation.is_token_revoked", lambda jti: False, raising=False
-    )
     # DB 复核仍返回 admin
     monkeypatch.setattr(
         database, "get_user_by_username",
@@ -141,9 +137,6 @@ async def test_get_current_admin_rejects_non_admin_role(monkeypatch):
     request = _FakeRequest(payload, database)
 
     monkeypatch.setattr(
-        "infra.token_revocation.is_token_revoked", lambda jti: False, raising=False
-    )
-    monkeypatch.setattr(
         database, "get_user_by_username",
         lambda username: {"id": 2, "username": username, "role": "user"},
         raising=False,
@@ -164,9 +157,6 @@ async def test_get_current_admin_rejects_when_db_unreachable(monkeypatch):
     database = SimpleNamespace(get_user_by_username=None)
     request = _FakeRequest(payload, database)
 
-    monkeypatch.setattr(
-        "infra.token_revocation.is_token_revoked", lambda jti: False, raising=False
-    )
 
     def _raise(_username):
         raise RuntimeError("DB connection lost")
@@ -181,13 +171,10 @@ async def test_get_current_admin_rejects_when_db_unreachable(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_get_current_user_returns_role_from_payload(monkeypatch):
+async def test_get_current_user_returns_role_from_payload():
     """get_current_user 应返回 JWT payload 中的 role，缺失时默认 user"""
     from app import dependencies
 
-    monkeypatch.setattr(
-        "infra.token_revocation.is_token_revoked", lambda jti: False, raising=False
-    )
 
     # 1. payload 含 role
     payload = {"sub": "u1", "user_id": 1, "role": "admin", "jti": "jti-1"}
@@ -263,15 +250,26 @@ def test_mutating_routes_default_to_admin_authorization():
         ("POST", "/api/character-library"),
         ("POST", "/api/character-library/import"),
         ("POST", "/api/character-library/import-preview"),
+        ("POST", "/api/character-library/presets/{preset_key}"),
         ("POST", "/api/character-library/shared/{token}/copy"),
         ("PUT", "/api/character-library/{character_id}"),
+        ("POST", "/api/character-library/{character_id}/sharing-preview"),
         ("PUT", "/api/character-library/{character_id}/sharing"),
+        ("POST", "/api/character-library/{character_id}/source-update/preview"),
         ("POST", "/api/character-library/{character_id}/source-update"),
         ("POST", "/api/character-chats"),
         ("DELETE", "/api/character-chats/shared-memories/{shared_id}"),
         ("POST", "/api/character-chats/{session_id}/memories/{memory_id}/share"),
         ("POST", "/api/character-chats/{session_id}/enrichment/retry"),
         ("POST", "/api/character-chats/delete-selected"),
+        ("POST", "/api/character-chats/delete-preview"),
+        ("PUT", "/api/character-chats/{session_id}/proactive"),
+        ("GET", "/api/character-chats/{session_id}/proactive/candidates"),
+        ("GET", "/api/character-chats/{session_id}/proactive/fiction"),
+        ("POST", "/api/character-chats/{session_id}/proactive/jobs"),
+        ("PATCH", "/api/character-chats/{session_id}/proactive/jobs/{job_id}"),
+        ("POST", "/api/character-chats/{session_id}/browser-push"),
+        ("DELETE", "/api/character-chats/{session_id}/browser-push/{subscription_id}"),
         ("POST", "/api/character-chats/{session_id}/messages"),
         ("POST", "/api/character-chats/{session_id}/messages/{turn_id}/retract"),
         ("PUT", "/api/character-chats/{session_id}/relationship"),

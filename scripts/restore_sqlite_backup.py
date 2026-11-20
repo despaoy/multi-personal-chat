@@ -10,8 +10,37 @@ import shutil
 import sqlite3
 import sys
 import uuid
-from datetime import datetime, timezone
+from contextlib import closing
+from datetime import UTC, datetime
 from pathlib import Path
+from time import time
+
+if not __package__:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from backend.db.auth_revocation_schema import (
+    CREATE_TOKEN_REVOCATION_EXPIRY_INDEX,
+    CREATE_TOKEN_REVOCATIONS,
+    LIVE_TOKEN_REVOCATIONS,
+    MERGE_TOKEN_REVOCATION,
+    PURGE_EXPIRED_TOKEN_REVOCATIONS,
+    TOKEN_REVOCATIONS,
+)
+from backend.db.character_chat_erasure import ERASURE_TABLE, SESSION_ROWS
+from backend.db.character_chat_history import (
+    HISTORY_NODES,
+    HISTORY_PATH,
+    ORPHANED_HISTORY_NODE,
+)
+from backend.db.character_sharing_restore import reset_restored_sharing
+from backend.db.character_source_schema import (
+    BACKFILL_SOURCE_REVOCATIONS,
+    CREATE_SOURCE_REVOCATIONS,
+    INSERT_SOURCE_REVOCATION,
+    REPLAY_SOURCE_REVOCATIONS,
+    REVOKED_SOURCE_IDS,
+    SOURCE_REVOCATIONS,
+)
 
 
 def _validate_sqlite(path: Path) -> None:
@@ -24,12 +53,109 @@ def _validate_sqlite(path: Path) -> None:
         raise RuntimeError(f"SQLite integrity_check failed: {row!r}")
 
 
-def restore_sqlite_backup(backup_path: Path, database_path: Path) -> Path | None:
+def _table_names(connection):
+    return {name for (name,) in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+
+
+def _read_restore_records(path: Path, now: int, *, required=False):
+    erasures, revocations, token_revocations = set(), set(), []
+    with closing(sqlite3.connect(path.as_uri() + "?mode=ro", uri=True)) as connection:
+        tables = _table_names(connection)
+        if ERASURE_TABLE in tables:
+            erasures.update(identity for (identity,) in connection.execute(f"SELECT session_id FROM {ERASURE_TABLE}"))
+        elif required:
+            raise ValueError("The supplied recovery database has no chat erasure table")
+        if SOURCE_REVOCATIONS in tables:
+            revocations.update(identity for (identity,) in connection.execute(f"SELECT corpus_id FROM {SOURCE_REVOCATIONS}"))
+        if "character_source_corpora" in tables:
+            revocations.update(identity for (identity,) in connection.execute(REVOKED_SOURCE_IDS))
+        if TOKEN_REVOCATIONS in tables:
+            token_revocations = [
+                {"jti": jti, "expires_at": expires_at}
+                for jti, expires_at in connection.execute(LIVE_TOKEN_REVOCATIONS, {"now": now})
+            ]
+    return erasures, revocations, token_revocations
+
+
+def _prepare_restored_state(candidate: Path, receipts, revocations, token_revocations, now: int):
+    with closing(sqlite3.connect(candidate)) as connection, connection:
+        tables = _table_names(connection)
+        has_erasure = bool(receipts) or (ERASURE_TABLE in tables and bool(
+            connection.execute(f"SELECT 1 FROM {ERASURE_TABLE} LIMIT 1").fetchone()
+        ))
+        has_outreach = "character_chat_proactive_policies" in tables
+        has_push = "character_chat_push_subscriptions" in tables
+        has_sharing = "character_library" in tables
+        has_memory_shares = "character_shared_memories" in tables
+        has_catalog = "character_source_corpora" in tables
+        has_token_revocations = TOKEN_REVOCATIONS in tables or bool(token_revocations)
+        if not any((
+            has_erasure, has_outreach, has_push, has_sharing, has_memory_shares, has_catalog, revocations,
+            has_token_revocations,
+        )):
+            return False
+        connection.execute("PRAGMA foreign_keys=ON")
+        connection.execute("PRAGMA secure_delete=ON")
+        if has_token_revocations:
+            connection.execute(CREATE_TOKEN_REVOCATIONS)
+            connection.execute(CREATE_TOKEN_REVOCATION_EXPIRY_INDEX)
+            connection.execute(PURGE_EXPIRED_TOKEN_REVOCATIONS, {"now": now})
+            connection.executemany(MERGE_TOKEN_REVOCATION, token_revocations)
+        if has_erasure:
+            connection.execute(f"CREATE TABLE IF NOT EXISTS {ERASURE_TABLE} (session_id TEXT PRIMARY KEY NOT NULL)")
+            connection.executemany(f"INSERT OR IGNORE INTO {ERASURE_TABLE} (session_id) VALUES (?)",
+                                   ((session_id,) for session_id in receipts))
+            erased = f"SELECT session_id FROM {ERASURE_TABLE}"
+            if {"character_chat_turns", "character_chat_evidence"} <= tables:
+                connection.execute("DELETE FROM character_chat_evidence WHERE turn_id IN "
+                                   f"(SELECT id FROM character_chat_turns WHERE session_id IN ({erased}))")
+            for table, column in SESSION_ROWS:
+                if table in tables:
+                    connection.execute(f"DELETE FROM {table} WHERE {column} IN ({erased})")
+            if {HISTORY_NODES, HISTORY_PATH} <= tables:
+                connection.execute(f"DELETE FROM {HISTORY_NODES} WHERE {ORPHANED_HISTORY_NODE}")
+        if has_catalog or revocations:
+            connection.execute(CREATE_SOURCE_REVOCATIONS)
+            connection.executemany(INSERT_SOURCE_REVOCATION, ({"id": identity} for identity in revocations))
+            if has_catalog:
+                connection.execute(BACKFILL_SOURCE_REVOCATIONS)
+                connection.execute(REPLAY_SOURCE_REVOCATIONS)
+        if has_outreach:
+            # An older snapshot cannot speak for a user's current consent.
+            columns = {row[1] for row in connection.execute("PRAGMA table_info(character_chat_proactive_policies)")}
+            idle_reset = ",inactivity_due_at=NULL,inactivity_turn_id=NULL" if "inactivity_due_at" in columns else ""
+            connection.execute(
+                "UPDATE character_chat_proactive_policies SET enabled=0,revision=revision+1" + idle_reset
+            )
+        if "character_chat_proactive_jobs" in tables:
+            connection.execute("UPDATE character_chat_proactive_jobs SET status='cancelled',topic='' WHERE status='pending'")
+        if "character_chat_push_attempts" in tables:
+            connection.execute("DELETE FROM character_chat_push_attempts")
+        if "character_chat_push_subscriptions" in tables:
+            connection.execute("DELETE FROM character_chat_push_subscriptions")
+        if has_memory_shares:
+            connection.execute("DELETE FROM character_shared_memories")
+        if has_sharing:
+            columns = {row[1] for row in connection.execute("PRAGMA table_info(character_library)")}
+            if "sharing_epoch" not in columns:
+                connection.execute("ALTER TABLE character_library ADD COLUMN sharing_epoch BIGINT NOT NULL DEFAULT 0")
+            connection.execute(*reset_restored_sharing(has_publication_id="publication_id" in columns))
+    return True
+
+
+def restore_sqlite_backup(
+    backup_path: Path, database_path: Path, *, deletion_records_from: Path | None = None,
+) -> Path | None:
     """Validate, safety-copy, and atomically install one SQLite backup."""
     backup = backup_path.expanduser().resolve()
     database = database_path.expanduser().resolve()
     if not backup.is_file():
         raise FileNotFoundError(f"Backup does not exist: {backup}")
+    # Replacing a SQLite main file while its old WAL still has frames can
+    # replay unrelated pages, including pages excluded from the candidate.
+    wal = database.with_name(database.name + "-wal")
+    if wal.exists() and wal.stat().st_size:
+        raise RuntimeError("The target database has uncheckpointed WAL data. Checkpoint it with all writers stopped.")
 
     database.parent.mkdir(parents=True, exist_ok=True)
     temporary = database.with_name(f".{database.name}.restore-{uuid.uuid4().hex}.tmp")
@@ -40,9 +166,22 @@ def restore_sqlite_backup(backup_path: Path, database_path: Path) -> Path | None
             target.flush()
             os.fsync(target.fileno())
         _validate_sqlite(temporary)
+        now = int(time())
+        receipts, revocations, token_revocations = (
+            _read_restore_records(database, now) if database.exists() else (set(), set(), [])
+        )
+        if deletion_records_from is not None:
+            additional_receipts, additional_revocations, additional_token_revocations = _read_restore_records(
+                deletion_records_from.expanduser().resolve(), now, required=True,
+            )
+            receipts.update(additional_receipts)
+            revocations.update(additional_revocations)
+            token_revocations.extend(additional_token_revocations)
+        if _prepare_restored_state(temporary, receipts, revocations, token_revocations, now):
+            _validate_sqlite(temporary)
 
         if database.exists():
-            timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+            timestamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
             safety_copy = database.with_name(
                 f"{database.stem}.safety-{timestamp}{database.suffix}"
             )
@@ -58,6 +197,10 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--backup", required=True, type=Path)
     parser.add_argument("--database", required=True, type=Path)
+    parser.add_argument(
+        "--deletion-records-from", type=Path,
+        help="Additional SQLite database with newer chat erasures, source and login revocations.",
+    )
     parser.add_argument(
         "--confirm-backend-stopped",
         action="store_true",
@@ -75,8 +218,8 @@ def main() -> int:
         )
         return 2
     try:
-        safety_copy = restore_sqlite_backup(args.backup, args.database)
-    except Exception as exc:
+        safety_copy = restore_sqlite_backup(args.backup, args.database, deletion_records_from=args.deletion_records_from)
+    except (OSError, EOFError, sqlite3.Error, RuntimeError, ValueError) as exc:
         print(f"Restore failed: {exc}", file=sys.stderr)
         return 1
 

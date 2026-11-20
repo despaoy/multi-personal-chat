@@ -49,6 +49,13 @@ _STAGE_AVOID = {
     "close": "避免以亲近为由施压或要求用户陪伴",
 }
 
+
+def relationship_stage_guidance(stage: str) -> str:
+    """Describe what the established familiarity stage changes in a reply."""
+    stage = stage if stage in _STAGE_TONE else "stranger"
+    return "；".join((_STAGE_TONE[stage], _STAGE_ACTION[stage], _STAGE_AVOID[stage]))
+
+
 _BASE_PLANS: dict[SituationType, DecisionPlan] = {
     SITUATION_SAFETY: DecisionPlan(
         intent="优先保障用户安全",

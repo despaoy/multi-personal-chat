@@ -1,7 +1,6 @@
 """Account-scoped immutable character versions and explicit sharing snapshots."""
 
 import json
-import secrets
 import uuid
 from datetime import datetime, timezone
 
@@ -11,6 +10,10 @@ from db.errors import RevisionConflictError
 
 class CharacterNotFoundError(LookupError):
     pass
+
+
+class SourceMergeBlockedError(ValueError):
+    """The source update requires an explicit resolution that this API cannot express."""
 
 
 class CharacterLibraryRepository:
@@ -44,30 +47,44 @@ class CharacterLibraryRepository:
         result["settings"] = CharacterSettings.model_validate(json.loads(result.pop("settings_json"))).model_dump()
         return result
 
-    def create(self, owner: str, settings: CharacterSettings, *, source=None):
+    def create(self, owner: str, settings: CharacterSettings):
         character_id = uuid.uuid4().hex
+        self.database.revision_transaction(self.creation_statements(owner, settings, character_id))
+        return self.get(owner, character_id)
+
+    def import_package(self, owner: str, settings: CharacterSettings, request_id: str | None):
+        if request_id is None:
+            return self.create(owner, settings)
+        identity = json.dumps([owner, request_id], ensure_ascii=False)
+        character_id = uuid.uuid5(uuid.NAMESPACE_URL, f"urn:multipersonal:character-import:{identity}").hex
+        try:
+            self.database.revision_transaction(self.creation_statements(owner, settings, character_id))
+        except RevisionConflictError:
+            original = self.get(owner, character_id, 1)
+            if original["settings"] != settings.model_dump():
+                raise
+        return self.get(owner, character_id)
+
+    def creation_statements(self, owner, settings, character_id):
         timestamp = datetime.now(timezone.utc).isoformat()
         params = {
             "id": character_id,
             "owner": owner,
             "now": timestamp,
-            "source": source["id"] if source else None,
-            "source_revision": source["settings_revision"] if source else None,
+            "source": None,
+            "source_revision": None,
             "settings": settings.model_dump_json(),
             "revision": 1,
         }
-        self.database.revision_transaction(
-            [
-                (
-                    "INSERT INTO character_library (id,owner_user_id,revision,source_character_id,source_revision,created_at,updated_at) "
-                    "VALUES (:id,:owner,1,:source,:source_revision,:now,:now)",
-                    params,
-                    1,
-                ),
-                self._insert_version(params),
-            ]
-        )
-        return self.get(owner, character_id)
+        return [
+            (
+                "INSERT INTO character_library (id,owner_user_id,revision,source_character_id,source_revision,created_at,updated_at) "
+                "VALUES (:id,:owner,1,:source,:source_revision,:now,:now) ON CONFLICT (id) DO NOTHING",
+                params,
+                1,
+            ),
+            self._insert_version(params),
+        ]
 
     @staticmethod
     def _insert_version(params):
@@ -79,7 +96,8 @@ class CharacterLibraryRepository:
         )
 
     def update(self, owner: str, character_id: str, revision: int, settings: CharacterSettings):
-        self.get(owner, character_id)
+        current = self.get(owner, character_id)
+        sources = self.publications().carry_local_sources(owner, current, revision + 1)
         params = {
             "id": character_id,
             "owner": owner,
@@ -97,105 +115,35 @@ class CharacterLibraryRepository:
                     1,
                 ),
                 self._insert_version(params),
-            ]
+            ] + sources
         )
         return self.get(owner, character_id, revision + 1)
 
-    def publish(self, owner: str, character_id: str, revision: int, enabled: bool):
-        current = self.get(owner, character_id)
-        token = (current["share_token"] or secrets.token_urlsafe(32)) if enabled else None
-        self.database.revision_transaction(
-            [
-                (
-                    "UPDATE character_library SET share_token=:token,shared_revision=:published "
-                    "WHERE id=:id AND owner_user_id=:owner AND revision=:revision",
-                    {
-                        "token": token,
-                        "published": revision if enabled else None,
-                        "id": character_id,
-                        "owner": owner,
-                        "revision": revision,
-                    },
-                    1,
-                ),
-            ]
-        )
-        return {"share_token": token, "shared_revision": revision if enabled else None}
+    def publications(self):
+        from repositories.character_publications import CharacterPublicationRepository
+        return CharacterPublicationRepository(self)
 
-    def shared(self, token: str):
-        rows = self.database.execute_sql(
-            "SELECT c.id,v.revision AS settings_revision,v.settings_json FROM character_library c "
-            "JOIN character_library_versions v ON v.character_id=c.id AND v.revision=c.shared_revision "
-            "WHERE c.share_token=:token",
-            {"token": token},
-        )
-        if not rows:
-            raise CharacterNotFoundError("分享不存在或已关闭")
-        return self._record(rows[0])
+    def publish_preview(self, owner, character_id, revision, corpus_id=None, source_ids=None):
+        return self.publications().preview(owner, character_id, revision, corpus_id, source_ids)
 
-    def copy_shared(self, owner: str, token: str):
-        source = self.shared(token)
-        return self.create(owner, CharacterSettings.model_validate(source["settings"]), source=source)
+    def publish(self, owner, character_id, revision, enabled, corpus_id=None, source_ids=None,
+                preview_id=None, previous_publication_id=None):
+        return self.publications().publish(owner, character_id, revision, enabled, corpus_id, source_ids,
+                                           preview_id, previous_publication_id)
 
-    def source_update(self, owner: str, character_id: str):
-        current = self.get(owner, character_id)
-        rows = self.database.execute_sql(
-            "SELECT c.id,v.revision AS settings_revision,v.settings_json FROM character_library c "
-            "JOIN character_library_versions v ON v.character_id=c.id AND v.revision=c.shared_revision "
-            "WHERE c.id=:source AND c.share_token IS NOT NULL",
-            {"source": current["source_character_id"]},
-        )
-        if not rows:
-            return {"available": False, "revision": current["revision"], "source_revision": None, "changes": {}}
-        source = self._record(rows[0])
-        return {
-            "available": source["settings_revision"] > (current["source_revision"] or 0),
-            "revision": current["revision"],
-            "source_revision": source["settings_revision"],
-            "changes": {
-                key: {"current": current["settings"][key], "incoming": value}
-                for key, value in source["settings"].items()
-                if value != current["settings"][key]
-            },
-        }
+    def shared(self, token):
+        return self.publications().shared(token)
 
-    def import_source_update(self, owner: str, character_id: str, revision: int, source_revision: int):
-        current = self.get(owner, character_id)
-        preview = self.source_update(owner, character_id)
-        if (
-            current["revision"] != revision
-            or preview["revision"] != revision
-            or not preview["available"]
-            or preview["source_revision"] != source_revision
-        ):
-            raise RevisionConflictError()
-        settings = {**current["settings"], **{key: value["incoming"] for key, value in preview["changes"].items()}}
-        params = {
-            "id": character_id,
-            "owner": owner,
-            "previous": revision,
-            "revision": revision + 1,
-            "source": current["source_character_id"],
-            "source_revision": source_revision,
-            "settings": CharacterSettings.model_validate(settings).model_dump_json(),
-            "now": datetime.now(timezone.utc).isoformat(),
-        }
-        self.database.revision_transaction(
-            [
-                # Serialize against publication/revocation; never import an unseen update.
-                (
-                    "UPDATE character_library SET revision=revision WHERE id=:source "
-                    "AND shared_revision=:source_revision AND share_token IS NOT NULL",
-                    params,
-                    1,
-                ),
-                (
-                    "UPDATE character_library SET revision=:revision,source_revision=:source_revision,updated_at=:now "
-                    "WHERE id=:id AND owner_user_id=:owner AND revision=:previous",
-                    params,
-                    1,
-                ),
-                self._insert_version(params),
-            ]
-        )
-        return self.get(owner, character_id, revision + 1)
+    def copy_shared(self, owner, token, publication_id=None, request_id=None):
+        return self.publications().copy(owner, token, publication_id, request_id)
+
+    def source_update(self, owner, character_id):
+        return self.publications().source_update(owner, character_id)
+
+    def preview_source_update(self, owner, character_id, revision, source_revision, publication_id, local_corpus_id, choices):
+        return self.publications().preview_update(owner, character_id, revision, source_revision, publication_id, local_corpus_id, choices)
+
+    def import_source_update(self, owner, character_id, revision, source_revision, publication_id=None, local_corpus_id=None,
+                             choices=None, preview_id=None):
+        return self.publications().import_update(owner, character_id, revision, source_revision, publication_id, local_corpus_id,
+                                                 choices, preview_id)

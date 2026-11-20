@@ -10,6 +10,7 @@ from typing import Dict, Optional
 
 from cache.ttl_value_cache import BoundedTTLCache
 from db import memory_source
+from db.auth_revocation_schema import CREATE_TOKEN_REVOCATION_EXPIRY_INDEX, CREATE_TOKEN_REVOCATIONS
 from db.conversation_indexes import SOURCE_INDEX_STATEMENTS
 from db.errors import RegistrationClosedError
 from db.lora_metadata import read_lora_metadata
@@ -325,6 +326,9 @@ class SQLiteDB:
         # C-S1 fix: 新增 role 列支持 RBAC。默认 'user'，首个用户自动升级为 'admin'。
         # 使用 _ensure_column 做幂等迁移，已有数据库升级时自动添加该列。
         self._ensure_column(cursor, 'users', 'role', 'TEXT NOT NULL DEFAULT \'user\'')
+
+        cursor.execute(CREATE_TOKEN_REVOCATIONS)
+        cursor.execute(CREATE_TOKEN_REVOCATION_EXPIRY_INDEX)
 
         # 创建 API Key 表（统一访问控制，SQLite 与 PostgreSQL 共用主库）
         cursor.execute('''
@@ -837,17 +841,80 @@ class SQLiteDB:
         # use the same character version constraints.
         from sqlalchemy.dialects.sqlite import dialect
         from sqlalchemy.schema import CreateIndex, CreateTable
-        from db.models import CharacterLibraryEntry, CharacterLibraryVersion, CharacterChatSession, CharacterChatTurn, CharacterSharedMemory, CharacterChatEvidence, CharacterChatGeneration, CharacterChatEnrichmentJob, CharacterChatMemoryVector, CharacterSourceCorpus
+        from db.character_chat_history import HISTORY_PATH, migrate_baselines
+        from db.models import CharacterChatHistoryNode, CharacterChatHistoryStep
+        from db.models import CharacterLibraryEntry, CharacterLibraryVersion, CharacterChatSession, CharacterChatTurn, CharacterSharedMemory, CharacterChatEvidence, CharacterChatGeneration, CharacterChatEnrichmentJob, CharacterChatMemoryVector, CharacterSourceCorpus, CharacterPublication, CharacterPublicationCopy, CharacterSourceUpdateReceipt
 
-        for model in (CharacterLibraryEntry, CharacterLibraryVersion, CharacterChatSession, CharacterChatTurn, CharacterSharedMemory, CharacterChatEvidence, CharacterChatGeneration, CharacterChatEnrichmentJob, CharacterChatMemoryVector, CharacterSourceCorpus):
+        for model in (CharacterLibraryEntry, CharacterLibraryVersion, CharacterChatSession, CharacterChatTurn, CharacterSharedMemory, CharacterChatEvidence, CharacterChatGeneration, CharacterChatEnrichmentJob, CharacterChatMemoryVector, CharacterSourceCorpus, CharacterPublication, CharacterPublicationCopy, CharacterSourceUpdateReceipt):
             table = model.__table__
             cursor.execute(str(CreateTable(table, if_not_exists=True).compile(dialect=dialect())))
             for index in table.indexes:
                 cursor.execute(str(CreateIndex(index, if_not_exists=True).compile(dialect=dialect())))
 
+        if not conn.in_transaction:
+            cursor.execute("BEGIN IMMEDIATE")
+        needs_history_migration = cursor.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=:name", {"name": HISTORY_PATH},
+        ).fetchone() is None
+        if needs_history_migration:
+            for model in (CharacterChatHistoryNode, CharacterChatHistoryStep):
+                table = model.__table__
+                cursor.execute(str(CreateTable(table).compile(dialect=dialect())))
+                for index in table.indexes:
+                    cursor.execute(str(CreateIndex(index).compile(dialect=dialect())))
+            migrate_baselines(cursor.execute)
+
+        if self._ensure_column(cursor, 'character_chat_generations', 'request_revision', 'INTEGER NOT NULL DEFAULT 0'):
+            cursor.execute(
+                "UPDATE character_chat_generations SET request_revision=CASE WHEN json_valid(payload_json) "
+                "THEN COALESCE(CAST(json_extract(payload_json,'$[0]') AS INTEGER),0) ELSE 0 END"
+            )
+        self._ensure_column(cursor, 'character_library', 'publication_id', 'TEXT')
+        self._ensure_column(cursor, 'character_library', 'sharing_epoch', 'BIGINT NOT NULL DEFAULT 0')
+        self._ensure_column(cursor, 'character_library', 'source_publication_id', 'TEXT')
+        cursor.execute("INSERT OR IGNORE INTO character_publications (id,character_id,character_revision,settings_json,sources_json,created_at) "
+                       "SELECT 'legacy-' || c.id || '-' || CAST(c.shared_revision AS TEXT),c.id,c.shared_revision,v.settings_json,'[]',c.updated_at "
+                       "FROM character_library c JOIN character_library_versions v ON v.character_id=c.id AND v.revision=c.shared_revision "
+                       "WHERE c.share_token IS NOT NULL AND c.publication_id IS NULL")
+        cursor.execute("UPDATE character_library SET publication_id='legacy-' || id || '-' || CAST(shared_revision AS TEXT) "
+                       "WHERE share_token IS NOT NULL AND publication_id IS NULL")
+        from db.legacy_character_publications import backfill_legacy_copy_baselines
+
+        backfill_legacy_copy_baselines(cursor.execute)
+        from db.models import CharacterChatErasureReceipt, CharacterChatProactiveJob, CharacterChatProactivePolicy
+        from db.character_push_schema import PUSH_SCHEMA_034
+
+        for model in (CharacterChatErasureReceipt, CharacterChatProactivePolicy, CharacterChatProactiveJob):
+            table = model.__table__
+            cursor.execute(str(CreateTable(table, if_not_exists=True).compile(dialect=dialect())))
+            if model is CharacterChatProactivePolicy:
+                for column, sql_type in (
+                    ("inactivity_hours", "INTEGER"), ("inactivity_due_at", "REAL"),
+                    ("inactivity_turn_id", "TEXT"), ("inactivity_last_sent_turn_id", "TEXT"),
+                ):
+                    self._ensure_column(cursor, table.name, column, sql_type)
+            if model is CharacterChatProactiveJob:
+                self._ensure_column(cursor, table.name, "source_turn_id", "TEXT")
+                self._ensure_column(cursor, table.name, "event_key", "TEXT")
+            for index in table.indexes:
+                cursor.execute(str(CreateIndex(index, if_not_exists=True).compile(dialect=dialect())))
+        for statement in PUSH_SCHEMA_034:
+            cursor.execute(statement)
         self._ensure_column(cursor, 'character_source_corpora', 'index_receipt_json', 'TEXT')
         self._ensure_column(cursor, 'character_source_corpora', 'index_status', "TEXT NOT NULL DEFAULT 'pending'")
         self._ensure_column(cursor, 'character_source_corpora', 'index_attempt', 'INTEGER NOT NULL DEFAULT 1')
+        self._ensure_column(cursor, 'character_source_corpora', 'edition_number', 'INTEGER NOT NULL DEFAULT 0')
+        from db.character_source_schema import (
+            BACKFILL_SOURCE_REVOCATIONS,
+            CREATE_SOURCE_REVOCATIONS,
+            SOURCE_EDITION_INDEX,
+            SOURCE_REVOCATIONS,
+        )
+
+        cursor.execute(SOURCE_EDITION_INDEX)
+        if not cursor.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (SOURCE_REVOCATIONS,)).fetchone():
+            cursor.execute(CREATE_SOURCE_REVOCATIONS)
+            cursor.execute(BACKFILL_SOURCE_REVOCATIONS)
         cursor.execute("UPDATE character_source_corpora SET index_status='completed' WHERE index_receipt_json IS NOT NULL AND index_status='pending'")
         cursor.execute('SELECT COUNT(*) FROM loras')
         if cursor.fetchone()[0] == 0:
@@ -871,6 +938,8 @@ class SQLiteDB:
         columns = {row[1] for row in cursor.fetchall()}
         if column not in columns:
             cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+            return True
+        return False
 
     @staticmethod
     def _create_character_memories_table(cursor, table_name: str = "character_memories") -> None:
@@ -1184,9 +1253,10 @@ class SQLiteDB:
             "astrbotWechatPersonalAdapter": "gewechat",
             "astrbotWechatPersonalEndpoint": "",
             "astrbotWechatPersonalNotes": "",
-            "openaiCompatBaseUrl": "https://api.deepseek.com",
+            # An empty override keeps the runtime environment authoritative until an administrator saves settings.
+            "openaiCompatBaseUrl": "",
             "openaiCompatApiKey": "",
-            "openaiCompatModel": "deepseek-flash"
+            "openaiCompatModel": ""
         }
 
         for key, value in default_config.items():

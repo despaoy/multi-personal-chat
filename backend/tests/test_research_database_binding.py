@@ -94,11 +94,11 @@ async def test_two_applications_keep_complete_research_workflows_in_their_own_st
 
 
 @pytest.mark.parametrize('operation', ['read', 'insert'])
-async def test_bound_store_failure_never_uses_global_store(stores, monkeypatch, operation):
+async def test_bound_store_failure_never_uses_global_store(stores, monkeypatch, operation, business_sql_fault):
     database = stores.databases[0]
     method = 'execute_sql' if operation == 'read' else 'execute_sql_insert'
     writer = Mock(side_effect=OSError('synthetic-bound-store-down'))
-    monkeypatch.setattr(database, method, writer)
+    monkeypatch.setattr(database, method, business_sql_fault(database, method, writer))
     async with client(database) as api:
         response = await api.get('/api/preferences/') if operation == 'read' else await api.post(
             '/api/retrieval-eval/questions', json=dict(id='new', question=prompt('new'), expected_doc_ids=['42']))
@@ -169,7 +169,7 @@ async def test_preference_write_failure_keeps_cause_without_logging_content(stor
 
 
 @pytest.mark.parametrize('operation', ['list', 'create', 'update', 'delete', 'export', 'sample'])
-async def test_preference_store_fault_uses_shared_handler_and_recovers(stores, monkeypatch, caplog, operation):
+async def test_preference_store_fault_uses_shared_handler_and_recovers(stores, monkeypatch, caplog, operation, business_sql_fault):
     import sqlite3
     from unittest.mock import AsyncMock
 
@@ -208,7 +208,7 @@ async def test_preference_store_fault_uses_shared_handler_and_recovers(stores, m
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='https://isolated',
         headers={'Authorization': 'Bearer ' + create_access_token('synthetic-owner', 1, 'admin')}) as api:
         with monkeypatch.context() as patch:
-            patch.setattr(database, method, fail)
+            patch.setattr(database, method, business_sql_fault(database, method, fail))
             failed = await api.request(verb, url, json=body)
             assert failed.status_code == 500 and failed.json()['success'] is False
             assert failed.json()['error'] == 'database_error'

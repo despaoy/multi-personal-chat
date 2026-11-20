@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { api, type GenerateResponse } from '@/lib/api';
+import { createClientId } from '@/lib/client-id';
 
 type Branch = { id: string; character_id: string; title: string; initial_hypothesis: string; status: string; revision: number };
 type Assertion = { id: string; subject: string; predicate: string; object: string; assertion_kind: string; status: string; source_type: string };
@@ -107,7 +108,7 @@ function Workspace() {
     if (!text.trim() || busy || loading) return;
     setBusy(true); setError('');
     const key = JSON.stringify([selected, character, text]);
-    if (retry.current?.key !== key) retry.current = { key, trace: crypto.randomUUID() };
+    if (retry.current?.key !== key) retry.current = { key, trace: createClientId() };
     try {
       const response = selected
         ? await api.generateReply({ message: text, branchId: selected, platform: 'web', traceId: retry.current.trace })

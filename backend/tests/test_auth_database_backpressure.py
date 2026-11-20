@@ -74,7 +74,6 @@ async def test_admin_database_check_uses_application_runtime_container(monkeypat
         headers={},
         cookies={},
     )
-    monkeypatch.setattr("infra.token_revocation.is_token_revoked", lambda _jti: False)
 
     monkeypatch.setattr(
         adapter.db,
@@ -121,7 +120,6 @@ async def test_admin_database_backpressure_returns_retryable_503(
         headers={},
         cookies={},
     )
-    monkeypatch.setattr("infra.token_revocation.is_token_revoked", lambda _jti: False)
     monkeypatch.setattr(dependencies, "run_auth_database", fail)
 
     with pytest.raises(HTTPException) as raised:
@@ -132,7 +130,7 @@ async def test_admin_database_backpressure_returns_retryable_503(
 
 
 @pytest.mark.asyncio
-async def test_admin_database_check_does_not_run_on_event_loop(monkeypatch):
+async def test_admin_database_check_does_not_run_on_event_loop():
     from app import dependencies
 
     event_loop_thread = threading.get_ident()
@@ -157,7 +155,6 @@ async def test_admin_database_check_does_not_run_on_event_loop(monkeypatch):
         headers={},
         cookies={},
     )
-    monkeypatch.setattr("infra.token_revocation.is_token_revoked", lambda _jti: False)
 
     result = await dependencies.get_current_admin(request)
 

@@ -87,8 +87,11 @@ def compute_model_fingerprint(model_path: str) -> str:
     digest = hashlib.sha256(ENCODING_CONTRACT.encode())
     root = Path(model_path)
     suffixes = {".json", ".safetensors", ".bin", ".model", ".txt", ".vocab"}
-    files = sorted(p for p in root.rglob("*") if p.is_file() and p.suffix in suffixes
-                   and not any(part.startswith(".") for part in p.relative_to(root).parts))
+    files = sorted(
+        p
+        for p in root.rglob("*")
+        if p.is_file() and p.suffix in suffixes and not any(part.startswith(".") for part in p.relative_to(root).parts)
+    )
     if not files:
         raise EmbeddingModelError("Embedding fingerprint requires local model files")
     for path in files:

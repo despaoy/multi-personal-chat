@@ -236,6 +236,29 @@ def test_database_startup_probe_uses_adapter_contract():
     assert database.initialized is True
     assert database.queries == ["SELECT 1"]
 
+
+def test_startup_schema_gate_requires_exact_migration_heads():
+    from alembic.script import ScriptDirectory
+    from sqlalchemy import create_engine, text
+
+    from db import schema_readiness
+
+    migration_dir = Path(schema_readiness.__file__).resolve().parents[1] / "alembic"
+    heads = ScriptDirectory(str(migration_dir)).get_heads()
+    with create_engine("sqlite://").begin() as connection:
+        with pytest.raises(RuntimeError, match="schema does not match"):
+            schema_readiness.require_current_migrations(connection)
+        connection.execute(text("CREATE TABLE alembic_version (version_num VARCHAR(32) NOT NULL PRIMARY KEY)"))
+        connection.execute(text("INSERT INTO alembic_version (version_num) VALUES ('fixture_old')"))
+        with pytest.raises(RuntimeError, match="schema does not match"):
+            schema_readiness.require_current_migrations(connection)
+        connection.execute(text("DELETE FROM alembic_version"))
+        connection.execute(text("INSERT INTO alembic_version (version_num) VALUES (:head)"), [{"head": head} for head in heads])
+        schema_readiness.require_current_migrations(connection)
+        connection.execute(text("INSERT INTO alembic_version (version_num) VALUES ('fixture_future')"))
+        with pytest.raises(RuntimeError, match="schema does not match"):
+            schema_readiness.require_current_migrations(connection)
+
 def test_lora_served_name_mapping_can_be_configured(monkeypatch):
     from inference.lora_utils import resolve_lora_served_name
 

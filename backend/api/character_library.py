@@ -1,13 +1,16 @@
 """Authenticated, account-owned character editing and portable sharing."""
 
+from typing import Annotated, Literal
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.dependencies import get_current_user
 from app.runtime import get_runtime_container
+from character import kamimaho_preset
 from character.library import CharacterPackage, CharacterSettings
 from db.errors import RevisionConflictError
-from repositories.character_library import CharacterLibraryRepository, CharacterNotFoundError
+from repositories.character_library import CharacterLibraryRepository, CharacterNotFoundError, SourceMergeBlockedError
 from repositories.character_sources import CharacterSourceRepository, OriginalSource
 
 router = APIRouter(prefix="/api/character-library", tags=["character-library"])
@@ -30,16 +33,59 @@ class UpdateCharacter(BaseModel):
     settings: CharacterSettings
 
 
-class PublishCharacter(BaseModel):
+class CharacterImport(CharacterPackage):
+    request_id: str | None = Field(default=None, min_length=1, max_length=100)
+
+
+class PublicationSelection(BaseModel):
     model_config = ConfigDict(extra="forbid")
     revision: int = Field(ge=1)
+    corpus_id: str | None = Field(default=None, min_length=1, max_length=100)
+    source_ids: list[str] = Field(default_factory=list, max_length=100)
+
+
+class PublishCharacter(PublicationSelection):
     enabled: bool
+    preview_id: str | None = Field(default=None, min_length=1, max_length=100)
+    previous_publication_id: str | None = Field(default=None, min_length=1, max_length=100)
+
+    @model_validator(mode='after')
+    def require_preview(self):
+        if self.enabled and self.preview_id is None:
+            raise ValueError('请先预览分享内容')
+        return self
 
 
-class ImportSourceUpdate(BaseModel):
+class CopyPublication(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    publication_id: str = Field(min_length=1, max_length=150)
+    request_id: str = Field(min_length=1, max_length=100)
+
+
+class SourceUpdateIdentity(BaseModel):
     model_config = ConfigDict(extra="forbid")
     revision: int = Field(ge=1)
     source_revision: int = Field(ge=1)
+    publication_id: str = Field(min_length=1, max_length=150)
+    local_corpus_id: str | None = Field(min_length=1, max_length=100)
+
+
+SourceChoices = dict[Annotated[str, Field(min_length=1, max_length=100, pattern=r'^[a-zA-Z0-9_-]+$')], Literal['local', 'author']]
+
+
+class FinalSourceUpdatePreview(SourceUpdateIdentity):
+    choices: SourceChoices = Field(max_length=100)
+
+
+class ImportSourceUpdate(SourceUpdateIdentity):
+    choices: SourceChoices | None = Field(default=None, max_length=100)
+    preview_id: str | None = Field(default=None, pattern=r'^[a-f0-9]{64}$')
+
+    @model_validator(mode='after')
+    def require_final_preview(self):
+        if (self.choices is None) != (self.preview_id is None):
+            raise ValueError('逐篇选择与最终预览编号必须一起提交')
+        return self
 
 
 class PublishOriginalSources(BaseModel):
@@ -106,6 +152,8 @@ def call(operation, *args):
         return operation(*args)
     except CharacterNotFoundError as exc:
         raise HTTPException(404, str(exc)) from exc
+    except SourceMergeBlockedError as exc:
+        raise HTTPException(409, str(exc)) from exc
     except RevisionConflictError as exc:
         raise HTTPException(409, "角色已被修改，请刷新后重试") from exc
 
@@ -123,8 +171,15 @@ def create_character(body: CharacterSettings, owner=Depends(account), repo=Depen
 
 
 @router.post("/import", status_code=201)
-def import_character(body: CharacterPackage, owner=Depends(account), repo=Depends(repository)):
-    return repo.create(owner, body.settings)
+def import_character(body: CharacterImport, owner=Depends(account), repo=Depends(repository)):
+    return call(repo.import_package, owner, body.settings, body.request_id)
+
+
+@router.post("/presets/{preset_key}", status_code=201)
+def install_preset(preset_key: str, owner=Depends(account), repo=Depends(original_sources)):
+    if preset_key != kamimaho_preset.PRESET_KEY:
+        raise HTTPException(404, "预设角色不存在")
+    return source_call(repo.install_preset, owner, preset_key, kamimaho_preset.SETTINGS, kamimaho_preset.SOURCES)
 
 
 @router.post('/import-preview')
@@ -139,8 +194,8 @@ def shared_character(token: str, owner=Depends(account), repo=Depends(repository
 
 
 @router.post("/shared/{token}/copy", status_code=201)
-def copy_character(token: str, owner=Depends(account), repo=Depends(repository)):
-    return call(repo.copy_shared, owner, token)
+def copy_character(token: str, body: CopyPublication, owner=Depends(account), repo=Depends(repository)):
+    return call(repo.copy_shared, owner, token, body.publication_id, body.request_id)
 
 
 @router.get("/{character_id}")
@@ -155,9 +210,15 @@ def update_character(character_id: str, body: UpdateCharacter, owner=Depends(acc
     return call(repo.update, owner, character_id, body.revision, body.settings)
 
 
+@router.post("/{character_id}/sharing-preview")
+def preview_sharing(character_id: str, body: PublicationSelection, owner=Depends(account), repo=Depends(repository)):
+    return source_call(repo.publish_preview, owner, character_id, body.revision, body.corpus_id, body.source_ids)
+
+
 @router.put("/{character_id}/sharing")
 def publish_character(character_id: str, body: PublishCharacter, owner=Depends(account), repo=Depends(repository)):
-    return call(repo.publish, owner, character_id, body.revision, body.enabled)
+    return source_call(repo.publish, owner, character_id, body.revision, body.enabled, body.corpus_id, body.source_ids,
+                       body.preview_id, body.previous_publication_id)
 
 
 @router.get("/{character_id}/export")
@@ -171,6 +232,13 @@ def source_update(character_id: str, owner=Depends(account), repo=Depends(reposi
     return call(repo.source_update, owner, character_id)
 
 
+@router.post("/{character_id}/source-update/preview")
+def preview_source_update(character_id: str, body: FinalSourceUpdatePreview, owner=Depends(account), repo=Depends(repository)):
+    return source_call(repo.preview_source_update, owner, character_id, body.revision, body.source_revision,
+                       body.publication_id, body.local_corpus_id, body.choices)
+
+
 @router.post("/{character_id}/source-update")
 def import_source_update(character_id: str, body: ImportSourceUpdate, owner=Depends(account), repo=Depends(repository)):
-    return call(repo.import_source_update, owner, character_id, body.revision, body.source_revision)
+    return source_call(repo.import_source_update, owner, character_id, body.revision, body.source_revision,
+                       body.publication_id, body.local_corpus_id, body.choices, body.preview_id)

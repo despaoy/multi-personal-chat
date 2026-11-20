@@ -25,6 +25,8 @@ export interface CharacterLibraryRecord {
   settings: CharacterSettings;
   share_token: string | null;
   shared_revision: number | null;
+  publication_id: string | null;
+  source_publication_id: string | null;
   source_character_id: string | null;
   source_revision: number | null;
   created_at: string;
@@ -41,6 +43,55 @@ export interface CharacterSourceUpdate {
   revision: number;
   source_revision: number | null;
   changes: Record<string, { current: unknown; incoming: unknown }>;
+  publication_id: string | null;
+  local_corpus_id: string | null;
+  sources: CharacterOriginalSource[];
+  current_sources: CharacterOriginalSource[];
+  incoming_sources: CharacterOriginalSource[];
+  baseline_publication_id: string | null;
+  source_merge: CharacterSourceMerge;
+}
+
+export type SourceChoices = Record<string, 'local' | 'author'>;
+export interface CharacterSourceMerge {
+  status: 'ready' | 'conflict' | 'blocked';
+  reason: string | null;
+  actions: Array<{ id: string; action: string }>;
+  conflicts: Array<{ id: string; kind: string }>;
+  merged_sources: CharacterOriginalSource[];
+  resolved_conflicts?: Array<{ id: string; kind: string; choice: 'local' | 'author' }>;
+}
+export interface SourceUpdateRequest {
+  revision: number;
+  source_revision: number;
+  publication_id: string;
+  local_corpus_id: string | null;
+  choices: SourceChoices;
+}
+export interface FinalSourceUpdatePreview extends SourceUpdateRequest {
+  preview_id: string;
+  baseline_publication_id: string;
+  settings: CharacterSettings;
+  sources: CharacterOriginalSource[];
+  source_merge: CharacterSourceMerge;
+}
+
+export interface CharacterPublicationPreview {
+  character_id: string;
+  revision: number;
+  corpus_id: string | null;
+  settings: CharacterSettings;
+  sources: CharacterOriginalSource[];
+  preview_id: string;
+  previous_publication_id: string | null;
+}
+
+export interface SharedCharacterPublication {
+  id: string;
+  settings_revision: number;
+  publication_id: string;
+  settings: CharacterSettings;
+  sources: CharacterOriginalSource[];
 }
 
 export interface CharacterChatSummary {
@@ -53,6 +104,60 @@ export interface CharacterChatSummary {
   source_session_id: string | null;
   created_at: string;
   updated_at: string;
+}
+
+type DeletionSession = Pick<CharacterChatSummary, 'id' | 'character_id' | 'title' | 'revision' | 'mode'>;
+
+export interface CharacterChatDeletionPreview {
+  selected: DeletionSession[];
+  related: DeletionSession[];
+}
+
+export interface CharacterProactivePolicy {
+  revision: number;
+  enabled: boolean;
+  cadence_hours: number;
+  timezone: string;
+  quiet_start: number | null;
+  quiet_end: number | null;
+  inactivity_hours: number | null;
+}
+
+export type ProactiveTopicKind = 'follow_up' | 'event' | 'fiction';
+
+export interface ProactiveCandidate {
+  source_turn_id: string;
+  kind: 'follow_up' | 'event';
+  topic: string;
+  suggested_at: number | null;
+}
+
+export interface CharacterFictionHistory {
+  entries: { id: string; content: string; sent_at: number }[];
+  next_before: string | null;
+}
+
+export interface CharacterProactiveState {
+  available: boolean;
+  policy: CharacterProactivePolicy;
+  jobs: {
+    id: string;
+    kind: ProactiveTopicKind | 'inactivity';
+    topic: string;
+    due_at: number;
+    sent_at: number | null;
+    content: string | null;
+    status: 'pending' | 'sent';
+  }[];
+}
+
+export interface ProactiveInboxMessage {
+  session_id: string;
+  character_id: string;
+  title: string;
+  id: string;
+  content: string;
+  sent_at: number;
 }
 
 export interface CharacterChatEvidence {
@@ -84,14 +189,38 @@ export interface CharacterChatMemory {
   evidence?: string;
 }
 
+export interface CharacterChatRelationshipDimensions {
+  tone?: 'restrained' | 'playful' | null;
+  initiative?: 'wait' | 'offer' | null;
+}
+
+type CharacterChatRelationshipEvidence = { role: 'user' | 'assistant'; quote: string }[];
+
+interface CharacterChatRelationship {
+  stage: 'stranger' | 'acquaintance' | 'familiar' | 'close';
+  summary?: string;
+  origin?: string;
+  evidence?: CharacterChatRelationshipEvidence;
+  dimensions?: CharacterChatRelationshipDimensions;
+}
+
 export interface CharacterChatSession extends CharacterChatSummary {
+  source_turn_id: string | null;
   source_corpus_id: string | null;
   network_policy: 'cloud_allowed' | 'local_only';
   // Derived summaries remain inspectable alongside their quoted source turns.
   character: CharacterLibraryRecord;
   hypothesis: string;
   baseline: { history: Array<{ id: string; session_id: string; message: string; reply: string; character_revision?: number; evidence?: CharacterChatEvidence }> };
-  state: { relationship: { stage: 'stranger' | 'acquaintance' | 'familiar' | 'close'; summary?: string; origin?: string; evidence?: { role: 'user' | 'assistant'; quote: string }[] }; relationship_proposal?: { id: string; stage: 'stranger' | 'acquaintance' | 'familiar' | 'close'; summary: string; evidence: { role: 'user' | 'assistant'; quote: string }[] }; memories: CharacterChatMemory[]; memory_processing?: 'pending' | 'disabled' | 'skipped' | 'completed' | 'failed'; relationship_processing?: 'pending' | 'disabled' | 'skipped' | 'completed' | 'failed'; summary_processing?: 'pending' | 'disabled' | 'skipped' | 'completed' | 'failed'; summaries?: Array<{ summary: string; source_request_id: string; evidence: Array<{ turn_id: string; role: 'user' | 'assistant'; quote: string }> }> };
+  state: {
+    relationship: CharacterChatRelationship;
+    relationship_proposal?: CharacterChatRelationship & { id: string; summary: string; evidence: CharacterChatRelationshipEvidence };
+    memories: CharacterChatMemory[];
+    memory_processing?: 'pending' | 'disabled' | 'skipped' | 'completed' | 'failed';
+    relationship_processing?: 'pending' | 'disabled' | 'skipped' | 'completed' | 'failed';
+    summary_processing?: 'pending' | 'disabled' | 'skipped' | 'completed' | 'failed';
+    summaries?: Array<{ summary: string; source_request_id: string; evidence: Array<{ turn_id: string; role: 'user' | 'assistant'; quote: string }> }>;
+  };
 }
 
 export interface CharacterChatGeneration {
@@ -106,6 +235,7 @@ export interface CharacterChatGeneration {
 
 export interface CreateCharacterChat {
   source_corpus_id?: string;
+  without_original_sources?: boolean;
   network_policy?: 'cloud_allowed' | 'local_only';
   character_id: string;
   title: string;
@@ -148,6 +278,10 @@ export interface CharacterSourceEdition extends CharacterSourceEditionSummary {
 }
 
 export interface ContinuationPreview {
+  source_session_id: string;
+  source_corpus_id: string | null;
+  source_corpus_available: boolean;
+  latest_source_corpus: CharacterSourceEditionSummary | null;
   source_revision: number;
   character_revision: number;
   previous_character_revision: number;

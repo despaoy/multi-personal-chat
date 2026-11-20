@@ -9,12 +9,13 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from api.character_library import repository, router
+from api.character_library import original_sources, repository, router
 from app.dependencies import get_current_user
 from character.library import CharacterSettings
 from db.database import SQLiteDB
 from db.errors import RevisionConflictError
 from repositories.character_library import CharacterLibraryRepository, CharacterNotFoundError
+from repositories.character_sources import CharacterSourceRepository
 
 
 @pytest.fixture
@@ -46,6 +47,66 @@ def test_import_preview_validates_without_persisting_and_rejects_private_fields(
         assert repo.list('other-owner') == []
         exported = client.get(f"/api/character-library/{imported.json()['id']}/export")
         assert exported.json() == preview.json()
+
+
+def test_confirmed_import_can_retry_without_recreating_or_overwriting_a_role(repo):
+    app = FastAPI()
+    app.include_router(router)
+    owner = "import-owner"
+    app.dependency_overrides[get_current_user] = lambda: {"user_id": owner}
+    app.dependency_overrides[repository] = lambda: repo
+    path = "/api/character-library/import"
+    package = {"settings": settings("文件角色").model_dump(), "request_id": "confirm-one"}
+    with TestClient(app) as client:
+        with ThreadPoolExecutor(2) as pool:
+            results = list(pool.map(lambda _: client.post(path, json=package), range(2)))
+        assert [item.status_code for item in results] == [201, 201]
+        imported, replay = [item.json() for item in results]
+        assert imported["id"] == replay["id"] and len(repo.list(owner)) == 1
+        character_id = imported["id"]
+        updated = repo.update(owner, character_id, 1, settings("编辑后"))
+        assert client.post(path, json=package).json() == updated
+        mismatch = {**package, "settings": settings("另一个文件").model_dump()}
+        assert client.post(path, json=mismatch).status_code == 409
+        assert len(repo.list(owner)) == 1
+        intentional_copy = client.post(path, json={**package, "request_id": "confirm-two"})
+        assert intentional_copy.status_code == 201 and intentional_copy.json()["id"] != character_id
+        owner = "other-owner"
+        foreign = client.post(path, json=package)
+        assert foreign.status_code == 201 and foreign.json()["id"] != character_id
+        assert client.get("/api/character-library/" + character_id).status_code == 404
+
+
+def test_preset_installation_is_independent_repeatable_and_scope_checked(repo):
+    sources = CharacterSourceRepository(repo.database)
+    app = FastAPI()
+    app.include_router(router)
+    app.dependency_overrides[get_current_user] = lambda: {"user_id": "first"}
+    app.dependency_overrides[original_sources] = lambda: sources
+    url = "/api/character-library/presets/kamimaho-kisaki"
+    with TestClient(app) as client, ThreadPoolExecutor(2) as pool:
+        responses = list(pool.map(lambda _: client.post(url), range(2)))
+        assert all(response.status_code == 201 for response in responses)
+        first, duplicate = [response.json() for response in responses]
+        assert first["settings"]["name"] == "月社妃"
+        assert first["id"] == duplicate["id"] and len(repo.list("first")) == 1
+        edition, = sources.list("first", first["id"], 1)
+        assert edition["index_status"] == "pending" and first["share_token"] is None
+        corpus = sources.get("first", edition["id"])
+        assert "学校用月社" in corpus["sources"][1]["content"]
+        assert "https://kagura.rdy.jp/kamimaho/qa_old02.html" in corpus["sources"][1]["content"]
+        repo.update("first", first["id"], 1, settings("自己的版本"))
+        sources.revoke("first", edition["id"])
+        reinstalled = client.post(url).json()
+        assert reinstalled["settings"]["name"] == "自己的版本"
+        assert sources.list("first", first["id"], 1) == []
+        app.dependency_overrides[get_current_user] = lambda: {"user_id": "second"}
+        second = client.post(url).json()
+        assert second["id"] != first["id"] and second["settings"]["name"] == "月社妃"
+        with pytest.raises(CharacterNotFoundError):
+            sources.list("second", first["id"], 1)
+        app.dependency_overrides[get_current_user] = lambda: {"user_id": "second", "auth_type": "api_key"}
+        assert client.post(url).status_code == 403
 
 
 def test_versions_and_stale_updates(repo):
@@ -106,11 +167,13 @@ def test_source_update_http_contract(repo):
     app.dependency_overrides[repository] = lambda: repo
     url = f"/api/character-library/{copied['id']}/source-update"
     with TestClient(app) as client:
-        assert client.get(url).json()["available"]
-        assert client.post(url, json={"revision": 1, "source_revision": 3}).status_code == 409
-        imported = client.post(url, json={"revision": 1, "source_revision": 2})
+        preview = client.get(url).json()
+        assert preview["available"]
+        confirmation = {"publication_id": preview["publication_id"], "local_corpus_id": preview["local_corpus_id"]}
+        assert client.post(url, json={"revision": 1, "source_revision": 3, **confirmation}).status_code == 409
+        imported = client.post(url, json={"revision": 1, "source_revision": 2, **confirmation})
         assert imported.status_code == 200 and imported.json()["revision"] == 2
-        assert client.post(url, json={"revision": 1, "source_revision": 2}).status_code == 409
+        assert client.post(url, json={"revision": 1, "source_revision": 2, **confirmation}).json()["revision"] == 2
         app.dependency_overrides[get_current_user] = lambda: {"user_id": "3"}
         assert client.get(url).status_code == 404
 
@@ -233,3 +296,43 @@ def test_api_ownership_validation_export_and_conflict(repo):
         assert client.put(url, json=body).status_code == 404
         app.dependency_overrides[get_current_user] = lambda: {"user_id": None, "auth_type": "api_key"}
         assert client.get("/api/character-library").status_code == 403
+
+
+@pytest.mark.parametrize("change", ["revoke", "republish", "rotate_token"])
+def test_copy_rechecks_publication_in_creation_transaction(repo, monkeypatch, change):
+    original = repo.create("author", settings())
+    token = repo.publish("author", original["id"], 1, True)["share_token"]
+    read_shared = repo.shared
+
+    def change_after_read(value):
+        snapshot = read_shared(value)
+        if change == "republish":
+            repo.update("author", original["id"], 1, settings("new publication"))
+            repo.publish("author", original["id"], 2, True)
+        else:
+            repo.publish("author", original["id"], 1, False)
+            if change == "rotate_token":
+                repo.publish("author", original["id"], 1, True)
+        return snapshot
+
+    monkeypatch.setattr(repo, "shared", change_after_read)
+    with pytest.raises(RevisionConflictError):
+        repo.copy_shared("recipient", token)
+    assert repo.list("recipient") == []
+    assert len(repo.database.execute_sql("SELECT * FROM character_library_versions")) == (2 if change == "republish" else 1)
+
+
+def test_private_draft_does_not_invalidate_published_copy(repo, monkeypatch):
+    original = repo.create("author", settings())
+    token = repo.publish("author", original["id"], 1, True)["share_token"]
+    read_shared = repo.shared
+
+    def edit_after_read(value):
+        snapshot = read_shared(value)
+        repo.update("author", original["id"], 1, settings("private draft"))
+        return snapshot
+
+    monkeypatch.setattr(repo, "shared", edit_after_read)
+    copied = repo.copy_shared("recipient", token)
+    assert copied["settings"] == settings().model_dump()
+    assert copied["source_revision"] == 1

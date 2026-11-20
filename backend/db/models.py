@@ -17,6 +17,7 @@ from sqlalchemy import (
     Text,
     Float,
     ForeignKey,
+    ForeignKeyConstraint,
     UniqueConstraint,
     CheckConstraint,
     Index,
@@ -24,6 +25,10 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import UserDefinedType
+
+from db.auth_revocation_schema import TOKEN_REVOCATION_EXPIRY_INDEX, TOKEN_REVOCATIONS
+from db.character_chat_history import HISTORY_NODES, HISTORY_OWNER_INDEX, HISTORY_PATH
+from db.character_source_schema import SOURCE_REVOCATIONS
 
 
 class Base(DeclarativeBase):
@@ -45,9 +50,43 @@ class CharacterLibraryEntry(Base):
     source_revision: Mapped[Optional[int]] = mapped_column(Integer)
     share_token: Mapped[Optional[str]] = mapped_column(Text, unique=True)
     shared_revision: Mapped[Optional[int]] = mapped_column(Integer)
+    publication_id: Mapped[str | None] = mapped_column(Text)
+    sharing_epoch: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default=text("0"))
+    source_publication_id: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[str] = mapped_column(Text, nullable=False)
     updated_at: Mapped[str] = mapped_column(Text, nullable=False)
     __table_args__ = (CheckConstraint("revision >= 1", name="ck_character_library_revision"),)
+
+
+class CharacterPublication(Base):
+    """Frozen public settings and an explicitly selected source subset."""
+    __tablename__ = "character_publications"
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    character_id: Mapped[str] = mapped_column(Text, nullable=False)
+    character_revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    corpus_id: Mapped[str | None] = mapped_column(Text)
+    settings_json: Mapped[str] = mapped_column(Text, nullable=False)
+    sources_json: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class CharacterPublicationCopy(Base):
+    """A client retry returns its existing independent copy."""
+    __tablename__ = "character_publication_copies"
+    owner_user_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    request_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    publication_id: Mapped[str] = mapped_column(Text, nullable=False)
+    character_id: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class CharacterSourceUpdateReceipt(Base):
+    """Only successful, exact preview confirmations receive a durable receipt."""
+    __tablename__ = "character_source_update_receipts"
+    owner_user_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    character_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    preview_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    request_json: Mapped[str] = mapped_column(Text, nullable=False)
+    result_revision: Mapped[int] = mapped_column(Integer, nullable=False)
 
 
 class CharacterLibraryVersion(Base):
@@ -71,11 +110,18 @@ class CharacterSourceCorpus(Base):
     owner_user_id: Mapped[str] = mapped_column(Text, nullable=False)
     character_id: Mapped[str] = mapped_column(Text, ForeignKey("character_library.id", ondelete="CASCADE"), nullable=False)
     character_revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    edition_number: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     content_digest: Mapped[str] = mapped_column(Text, nullable=False)
     sources_json: Mapped[str] = mapped_column(Text, nullable=False)
     revoked: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[str] = mapped_column(Text, nullable=False)
     __table_args__ = (Index("ix_character_source_scope", "owner_user_id", "character_id", "character_revision"),)
+
+
+class CharacterSourceRevocationReceipt(Base):
+    """A revoked edition ID survives restores even if that edition is absent."""
+    __tablename__ = SOURCE_REVOCATIONS
+    corpus_id: Mapped[str] = mapped_column(Text, primary_key=True)
 
 
 class CharacterChatSession(Base):
@@ -96,9 +142,79 @@ class CharacterChatSession(Base):
     created_at: Mapped[str] = mapped_column(Text, nullable=False)
     updated_at: Mapped[str] = mapped_column(Text, nullable=False)
     __table_args__ = (
+        Index(HISTORY_OWNER_INDEX, "id", "owner_user_id", unique=True),
         CheckConstraint("revision >= 1", name="ck_character_chat_revision"),
         CheckConstraint("mode IN ('initial','continuation','branch')", name="ck_character_chat_mode"),
     )
+
+
+class CharacterChatHistoryNode(Base):
+    __tablename__ = HISTORY_NODES
+    owner_user_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    node_key: Mapped[str] = mapped_column(Text, primary_key=True)
+    origin_session_id: Mapped[str | None] = mapped_column(Text)
+    payload_json: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+class CharacterChatHistoryStep(Base):
+    __tablename__ = HISTORY_PATH
+    session_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    position: Mapped[int] = mapped_column(Integer, primary_key=True)
+    owner_user_id: Mapped[str] = mapped_column(Text, nullable=False)
+    node_key: Mapped[str] = mapped_column(Text, nullable=False)
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ("session_id", "owner_user_id"), ("character_chat_sessions.id", "character_chat_sessions.owner_user_id"),
+        ),
+        ForeignKeyConstraint(
+            ("owner_user_id", "node_key"), (f"{HISTORY_NODES}.owner_user_id", f"{HISTORY_NODES}.node_key"),
+        ),
+        Index("ix_character_chat_path_node", "owner_user_id", "node_key"),
+    )
+
+
+class CharacterChatProactivePolicy(Base):
+    __tablename__ = "character_chat_proactive_policies"
+    session_id: Mapped[str] = mapped_column(Text, ForeignKey("character_chat_sessions.id"), primary_key=True)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    enabled: Mapped[int] = mapped_column(Integer, nullable=False)
+    cadence_hours: Mapped[int] = mapped_column(Integer, nullable=False)
+    timezone: Mapped[str] = mapped_column(Text, nullable=False)
+    quiet_start: Mapped[Optional[int]] = mapped_column(Integer)
+    quiet_end: Mapped[Optional[int]] = mapped_column(Integer)
+    last_sent_at: Mapped[Optional[float]] = mapped_column(Float)
+    inactivity_hours: Mapped[Optional[int]] = mapped_column(Integer)
+    inactivity_due_at: Mapped[Optional[float]] = mapped_column(Float)
+    inactivity_turn_id: Mapped[Optional[str]] = mapped_column(Text)
+    inactivity_last_sent_turn_id: Mapped[Optional[str]] = mapped_column(Text)
+    __table_args__ = (Index("ix_chat_proactive_inactive_due", "enabled", "inactivity_due_at"),)
+
+
+class CharacterChatProactiveJob(Base):
+    __tablename__ = "character_chat_proactive_jobs"
+    event_key: Mapped[str | None] = mapped_column(Text)
+    session_id: Mapped[str] = mapped_column(Text, ForeignKey("character_chat_sessions.id"), primary_key=True)
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    policy_revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    topic: Mapped[str] = mapped_column(Text, nullable=False)
+    due_at: Mapped[float] = mapped_column(Float, nullable=False)
+    next_attempt_at: Mapped[float] = mapped_column(Float, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    sent_at: Mapped[Optional[float]] = mapped_column(Float)
+    content: Mapped[Optional[str]] = mapped_column(Text)
+    source_turn_id: Mapped[Optional[str]] = mapped_column(Text)
+    __table_args__ = (
+        Index("ix_chat_proactive_jobs_ready", "status", "next_attempt_at", "session_id"),
+        Index("ix_chat_proactive_inbox", "session_id", "status", "sent_at"),
+        Index("ix_chat_proactive_source", "session_id", "source_turn_id"),
+    )
+
+
+class CharacterChatErasureReceipt(Base):
+    """Content-free record of a permanently erased session."""
+    __tablename__ = "character_chat_erasure_receipts"
+    session_id: Mapped[str] = mapped_column(Text, primary_key=True)
 
 
 class CharacterSharedMemory(Base):
@@ -119,6 +235,7 @@ class CharacterChatGeneration(Base):
     session_id: Mapped[str] = mapped_column(Text, ForeignKey("character_chat_sessions.id"), primary_key=True)
     request_id: Mapped[str] = mapped_column(Text, primary_key=True)
     payload_json: Mapped[str] = mapped_column(Text, nullable=False)
+    request_revision: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
     status: Mapped[str] = mapped_column(Text, nullable=False)
     lease_token: Mapped[str] = mapped_column(Text, nullable=False)
     lease_until: Mapped[float] = mapped_column(Float, nullable=False)
@@ -202,6 +319,13 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[str] = mapped_column(Text, nullable=False)
     role: Mapped[str] = mapped_column(Text, nullable=False, server_default="user")
+
+
+class AuthTokenRevocation(Base):
+    __tablename__ = TOKEN_REVOCATIONS
+    jti: Mapped[str] = mapped_column(Text, primary_key=True)
+    expires_at: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    __table_args__ = (Index(TOKEN_REVOCATION_EXPIRY_INDEX, "expires_at"),)
 
 
 # ============================================

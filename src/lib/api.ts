@@ -44,10 +44,14 @@ export type * from './api-contracts';
 
 const API_BASE_URL = '/api';
 
-import type { CharacterChatSession, CharacterChatSummary, CharacterChatTurn, CreateCharacterChat, SendCharacterChatMessage, CharacterLibraryRecord, CharacterPackage, CharacterSettings } from './api-contracts';
+import type { CharacterChatRelationshipDimensions, CharacterChatSession, CharacterChatSummary, CharacterChatTurn, CreateCharacterChat, SendCharacterChatMessage, CharacterLibraryRecord, CharacterPackage, CharacterSettings } from './api-contracts';
 
 export class ApiRequestError extends Error {
-  constructor(public readonly status: number, public readonly detail: unknown) {
+  constructor(
+    public readonly status: number,
+    public readonly detail: unknown,
+    public readonly retryAfterSeconds?: number,
+  ) {
     const message = detail && typeof detail === 'object' && 'message' in detail
       ? detail.message
       : detail;
@@ -637,6 +641,72 @@ class ApiClient {
     return this.request<CharacterLibraryRecord>(`/character-library/${encodeURIComponent(id)}`);
   }
 
+  previewCharacterChatDeletion(sessions: { id: string; revision: number }[]) {
+    return this.request<import('./api-contracts').CharacterChatDeletionPreview>('/character-chats/delete-preview', {
+      method: 'POST', body: JSON.stringify({ sessions }),
+    });
+  }
+
+  getCharacterProactive(id: string) {
+    return this.request<import('./api-contracts').CharacterProactiveState>(`/character-chats/${encodeURIComponent(id)}/proactive`);
+  }
+
+  getCharacterProactiveCandidates(id: string) {
+    return this.request<{ candidates: import('./api-contracts').ProactiveCandidate[] }>(
+      `/character-chats/${encodeURIComponent(id)}/proactive/candidates`,
+    );
+  }
+
+  getCharacterFictionHistory(id: string, before?: string) {
+    const query = before ? `?before=${encodeURIComponent(before)}` : '';
+    return this.request<import('./api-contracts').CharacterFictionHistory>(
+      `/character-chats/${encodeURIComponent(id)}/proactive/fiction${query}`,
+    );
+  }
+
+  getCharacterProactiveInbox() {
+    return this.request<{ messages: import('./api-contracts').ProactiveInboxMessage[] }>('/character-chats/proactive-inbox');
+  }
+
+  getCharacterBrowserPush(id: string) {
+    return this.request<{ public_key: string | null; subscription_ids: string[] }>(
+      `/character-chats/${encodeURIComponent(id)}/browser-push`,
+    );
+  }
+
+  registerCharacterBrowserPush(id: string, subscription: { endpoint: string; p256dh: string; auth: string }) {
+    return this.request<{ id: string }>(`/character-chats/${encodeURIComponent(id)}/browser-push`, {
+      method: 'POST', body: JSON.stringify(subscription),
+    });
+  }
+
+  removeCharacterBrowserPush(id: string, subscriptionId: string) {
+    return this.request(`/character-chats/${encodeURIComponent(id)}/browser-push/${encodeURIComponent(subscriptionId)}`, { method: 'DELETE' });
+  }
+
+  saveCharacterProactive(id: string, policy: import('./api-contracts').CharacterProactivePolicy) {
+    return this.request<import('./api-contracts').CharacterProactivePolicy>(`/character-chats/${encodeURIComponent(id)}/proactive`, {
+      method: 'PUT', body: JSON.stringify(policy),
+    });
+  }
+
+  scheduleCharacterProactive(id: string, job: {
+    revision: number; request_id: string; kind: import('./api-contracts').ProactiveTopicKind; topic: string; due_at: number;
+    source_turn_id?: string;
+  }) {
+    return this.request(`/character-chats/${encodeURIComponent(id)}/proactive/jobs`, {
+      method: 'POST', body: JSON.stringify(job),
+    });
+  }
+
+  changeCharacterProactiveSchedule(id: string, jobId: string, expectedDueAt: number, dueAt: number | null) {
+    return this.request<{ status: 'pending' | 'cancelled' }>(
+      `/character-chats/${encodeURIComponent(id)}/proactive/jobs/${encodeURIComponent(jobId)}`, {
+        method: 'PATCH', body: JSON.stringify({ expected_due_at: expectedDueAt, due_at: dueAt }),
+      },
+    );
+  }
+
   deleteCharacterChats(sessions: { id: string; revision: number }[]) {
     return this.request<{ deleted_session_ids: string[] }>('/character-chats/delete-selected', {
       method: 'POST', body: JSON.stringify({ sessions }),
@@ -661,9 +731,12 @@ class ApiClient {
     return this.request<import('./api-contracts').ContinuationPreview>(`/character-chats/${encodeURIComponent(id)}/continuation-preview`);
   }
 
-  updateChatRelationship(id: string, revision: number, stage: CharacterChatSession['state']['relationship']['stage'], summary: string) {
+  updateChatRelationship(
+    id: string, revision: number, stage: CharacterChatSession['state']['relationship']['stage'],
+    summary: string, dimensions?: CharacterChatRelationshipDimensions,
+  ) {
     return this.request<CharacterChatSession>(`/character-chats/${encodeURIComponent(id)}/relationship`, {
-      method: 'PUT', body: JSON.stringify({ revision, stage, summary }),
+      method: 'PUT', body: JSON.stringify({ revision, stage, summary, dimensions }),
     });
   }
 
@@ -714,9 +787,22 @@ class ApiClient {
     return this.request<import('./api-contracts').CharacterSourceUpdate>(`/character-library/${encodeURIComponent(id)}/source-update`);
   }
 
-  importCharacterSourceUpdate(id: string, revision: number, sourceRevision: number) {
+  importCharacterSourceUpdate(id: string, revision: number, sourceRevision: number, publicationId: string, localCorpusId: string | null) {
     return this.request<CharacterLibraryRecord>(`/character-library/${encodeURIComponent(id)}/source-update`, {
-      method: 'POST', body: JSON.stringify({ revision, source_revision: sourceRevision }),
+      method: 'POST', body: JSON.stringify({ revision, source_revision: sourceRevision, publication_id: publicationId, local_corpus_id: localCorpusId }),
+    });
+  }
+
+  previewCharacterSourceUpdate(id: string, request: import('./api-contracts').SourceUpdateRequest) {
+    return this.request<import('./api-contracts').FinalSourceUpdatePreview>(`/character-library/${encodeURIComponent(id)}/source-update/preview`, {
+      method: 'POST', body: JSON.stringify(request),
+    });
+  }
+
+  confirmCharacterSourceUpdate(id: string, preview: import('./api-contracts').FinalSourceUpdatePreview) {
+    const { revision, source_revision, publication_id, local_corpus_id, choices, preview_id } = preview;
+    return this.request<CharacterLibraryRecord>(`/character-library/${encodeURIComponent(id)}/source-update`, {
+      method: 'POST', body: JSON.stringify({ revision, source_revision, publication_id, local_corpus_id, choices, preview_id }),
     });
   }
 
@@ -731,8 +817,12 @@ class ApiClient {
     });
   }
 
-  importLibraryCharacter(value: unknown) {
+  importLibraryCharacter(value: CharacterPackage & { request_id?: string }) {
     return this.request<CharacterLibraryRecord>('/character-library/import', { method: 'POST', body: JSON.stringify(value) });
+  }
+
+  installLibraryPreset(presetKey: string) {
+    return this.request<CharacterLibraryRecord>(`/character-library/presets/${encodeURIComponent(presetKey)}`, { method: 'POST' });
   }
 
   previewLibraryCharacterImport(value: unknown) {
@@ -743,14 +833,28 @@ class ApiClient {
     return this.request<CharacterPackage>(`/character-library/${id}/export`);
   }
 
-  publishLibraryCharacter(current: CharacterLibraryRecord, enabled: boolean) {
-    return this.request<{ share_token: string | null; shared_revision: number | null }>(`/character-library/${current.id}/sharing`, {
-      method: 'PUT', body: JSON.stringify({ revision: current.revision, enabled }),
+  previewCharacterPublication(current: CharacterLibraryRecord, corpusId: string | null, sourceIds: string[]) {
+    return this.request<import('./api-contracts').CharacterPublicationPreview>(`/character-library/${current.id}/sharing-preview`, {
+      method: 'POST', body: JSON.stringify({ revision: current.revision, corpus_id: corpusId, source_ids: sourceIds }),
     });
   }
 
-  copySharedCharacter(token: string) {
-    return this.request<CharacterLibraryRecord>(`/character-library/shared/${encodeURIComponent(token)}/copy`, { method: 'POST' });
+  publishLibraryCharacter(current: CharacterLibraryRecord, enabled: boolean, preview?: import('./api-contracts').CharacterPublicationPreview) {
+    return this.request<{ share_token: string | null; shared_revision: number | null; publication_id: string | null }>(`/character-library/${current.id}/sharing`, {
+      method: 'PUT', body: JSON.stringify({ revision: current.revision, enabled,
+        ...(preview ? { corpus_id: preview.corpus_id, source_ids: preview.sources.map(source => source.id),
+          preview_id: preview.preview_id, previous_publication_id: preview.previous_publication_id } : {}) }),
+    });
+  }
+
+  getSharedCharacter(token: string) {
+    return this.request<import('./api-contracts').SharedCharacterPublication>(`/character-library/shared/${encodeURIComponent(token)}`);
+  }
+
+  copySharedCharacter(token: string, publicationId: string, requestId: string) {
+    return this.request<CharacterLibraryRecord>(`/character-library/shared/${encodeURIComponent(token)}/copy`, {
+      method: 'POST', body: JSON.stringify({ publication_id: publicationId, request_id: requestId }),
+    });
   }
 
   /**
@@ -795,7 +899,9 @@ class ApiClient {
       } catch {
         detail = response.statusText;
       }
-      throw new ApiRequestError(response.status, detail);
+      const retryAfter = Number(response.headers.get('Retry-After'));
+      const validDelay = response.status === 429 && Number.isSafeInteger(retryAfter) && retryAfter > 0;
+      throw new ApiRequestError(response.status, detail, validDelay ? retryAfter : undefined);
     }
 
     // 204 No Content

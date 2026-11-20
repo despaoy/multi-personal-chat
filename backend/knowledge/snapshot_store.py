@@ -16,6 +16,15 @@ import faiss
 
 from knowledge.retrieval_core.embedding import ENCODING_CONTRACT
 
+if os.name == "nt":
+    from knowledge._windows_snapshot import open_snapshot as _open_snapshot
+    from knowledge._windows_snapshot import replace_snapshot as _replace_snapshot
+else:
+    _replace_snapshot = os.replace
+
+    def _open_snapshot(path):
+        return path.open("rb")
+
 SNAPSHOT_NAME = "index_snapshot.zip"
 MEMBERS = ("faiss_index.bin", "metadata.pkl", "bm25_state.pkl")
 
@@ -114,7 +123,7 @@ def save_snapshot(root, index, metadata, bm25, dimension, id_converter):
                 archive.write(folder / name, arcname=name)
             archive.writestr("manifest.json", json.dumps(manifest, sort_keys=True))
         _sync_file(candidate)
-        os.replace(candidate, root / SNAPSHOT_NAME)
+        _replace_snapshot(candidate, root / SNAPSHOT_NAME)
         if os.name == "posix":
             descriptor = os.open(root, os.O_RDONLY | os.O_DIRECTORY)
             try:
@@ -126,7 +135,11 @@ def save_snapshot(root, index, metadata, bm25, dimension, id_converter):
 def load_snapshot(root, dimension, id_converter):
     root = Path(root)
     # One open descriptor pins all members even if a writer replaces the path.
-    with zipfile.ZipFile(root / SNAPSHOT_NAME, "r") as archive, _workspace(root) as folder:
+    with (
+        _open_snapshot(root / SNAPSHOT_NAME) as snapshot,
+        zipfile.ZipFile(snapshot) as archive,
+        _workspace(root) as folder,
+    ):
         names = archive.namelist()
         if len(names) != 4 or set(names) != {*MEMBERS, "manifest.json"}:
             raise ValueError("Invalid snapshot members")

@@ -7,10 +7,41 @@ import { AuthGuard } from '@/components/layout/AuthGuard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { api } from '@/lib/api';
+import { api, ApiRequestError } from '@/lib/api';
+import { createClientId } from '@/lib/client-id';
 import { GenerationDraft } from '@/components/chat/GenerationDraft';
-import type { CharacterChatGeneration } from '@/lib/api-contracts';
+import { ProactivePanel } from '@/components/chat/ProactivePanel';
+import { ProactiveInbox } from '@/components/chat/ProactiveInbox';
+import type { CharacterChatDeletionPreview, CharacterChatGeneration, CharacterChatRelationshipDimensions } from '@/lib/api-contracts';
 import type { CharacterChatSession, CharacterChatSummary, CharacterChatTurn, CharacterLibraryRecord, SendCharacterChatMessage, ContinuationPreview, CharacterSharedMemory, CharacterChatEvidence } from '@/lib/api-contracts';
+
+const relationshipStages = { stranger: '初识', acquaintance: '认识', familiar: '熟悉', close: '亲近' };
+const relationshipTones = { restrained: '保持克制', playful: '可以轻松接梗' };
+const relationshipInitiatives = { wait: '跟随我的话题', offer: '适时追问或提议' };
+
+function rememberChatLocation(characterId: string, sessionId?: string) {
+  const url = new URL(window.location.href);
+  if (url.pathname !== '/chat') return;
+  url.searchParams.set('character', characterId);
+  if (sessionId) url.searchParams.set('session', sessionId);
+  else url.searchParams.delete('session');
+  if (url.href !== window.location.href) window.history.replaceState(null, '', url);
+}
+
+function describeRelationshipDimensions(dimensions?: CharacterChatRelationshipDimensions) {
+  const tone = dimensions?.tone ? relationshipTones[dimensions.tone] : '随人物和情境';
+  const initiative = dimensions?.initiative ? relationshipInitiatives[dimensions.initiative] : '随人物和情境';
+  return `交流语气：${tone}。聊天中的话题推进：${initiative}。`;
+}
+
+function focusTurn(turnId: string) {
+  const element = document.getElementById(`turn-${turnId}`);
+  if (!element) return;
+  const details = element.closest('details');
+  if (details) details.open = true;
+  element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  element.focus({ preventScroll: true });
+}
 
 function AnswerSources({ evidence }: { evidence?: CharacterChatEvidence }) {
   if (!evidence) return null;
@@ -42,7 +73,11 @@ function ChatWorkspace() {
   const [sessionOffset, setSessionOffset] = useState(0);
   const [moreSessions, setMoreSessions] = useState(false);
   const [deleteSelection, setDeleteSelection] = useState<string[]>([]);
+  const [deletionPreview, setDeletionPreview] = useState<CharacterChatDeletionPreview>();
+  const [relatedDeletionIds, setRelatedDeletionIds] = useState<string[]>([]);
+  const [deletedInboxSessions, setDeletedInboxSessions] = useState<ReadonlySet<string>>(() => new Set());
   const [sourceExcerpt, setSourceExcerpt] = useState<{ message: string; reply: string; title: string }>();
+  const [branchOrigin, setBranchOrigin] = useState<string>();
   const [session, setSession] = useState<CharacterChatSession>();
   const [turns, setTurns] = useState<CharacterChatTurn[]>([]);
   const [generation, setGeneration] = useState<CharacterChatGeneration | null>(null);
@@ -52,7 +87,8 @@ function ChatWorkspace() {
   const [source, setSource] = useState('');
   const [title, setTitle] = useState('新的相遇');
   const [acceptChange, setAcceptChange] = useState(false);
-  const [preview, setPreview] = useState<ContinuationPreview>();
+  const [previewResult, setPreview] = useState<ContinuationPreview>();
+  const [sourceSelection, setSourceSelection] = useState<'default' | 'latest' | 'none'>('default');
   const [excludedMemories, setExcludedMemories] = useState<string[]>([]);
   const [resetRelationship, setResetRelationship] = useState(false);
   const [inheritHistory, setInheritHistory] = useState(true);
@@ -71,11 +107,16 @@ function ChatWorkspace() {
   const [memoryEditing, setMemoryEditing] = useState<string>();
   const [relationshipStage, setRelationshipStage] = useState<CharacterChatSession['state']['relationship']['stage']>('stranger');
   const [relationshipSummary, setRelationshipSummary] = useState('');
+  const [relationshipDimensions, setRelationshipDimensions] = useState<CharacterChatRelationshipDimensions>({});
   const pending = useRef<{ sessionId: string; body: SendCharacterChatMessage } | null>(null);
   const selectedCharacter = characters.find(item => item.id === characterId);
-  const sourceSession = sessions.find(item => item.id === source);
+  const preview = previewResult?.source_session_id === source ? previewResult : undefined;
   const settingsChanged = Boolean(preview && preview.previous_character_revision !== preview.character_revision);
+  const latestEdition = preview?.latest_source_corpus;
+  const sourceRevoked = Boolean(preview?.source_corpus_id && preview.source_corpus_available === false);
+  const needsSourceChoice = sourceRevoked && sourceSelection === 'default';
   const loadVersion = useRef(0);
+  const requestedSession = useRef<{ characterId: string; sessionId: string } | null>(null);
 
   const refreshShared = useCallback(async () => {
     const result = await api.listSharedChatMemories();
@@ -87,6 +128,7 @@ function ChatWorkspace() {
   useEffect(() => {
     let active = true;
     setPreview(undefined);
+    setSourceSelection('default');
     setSelectedShared([]);
     setAcceptChange(false);
     setExcludedMemories([]);
@@ -103,10 +145,38 @@ function ChatWorkspace() {
     setSessionOffset(response.sessions.length); setMoreSessions(response.sessions.length === 100);
   }, []);
 
+  const open = useCallback(async (id: string, initial?: { version: number; characterId: string }) => {
+    const response = await api.getCharacterChat(id);
+    if (initial && initial.version !== loadVersion.current) return response;
+    if (initial && response.session.character_id !== initial.characterId) throw new Error('会话不属于所选角色');
+    rememberChatLocation(response.session.character_id, response.session.id);
+    setSession(response.session);
+    setGeneration(response.generation);
+    setEnrichmentPending(response.enrichment_pending);
+    setEnrichmentRetryable(response.enrichment_retryable);
+    setSessions(previous => previous.map(item => item.id === id ? { ...item, revision: response.session.revision } : item));
+    setRelationshipStage(response.session.state.relationship.stage);
+    setRelationshipSummary(response.session.state.relationship.summary || '');
+    setRelationshipDimensions(response.session.state.relationship.dimensions || {});
+    setSourceExcerpt(undefined);
+    setMemoryDraft('');
+    setMemoryEditing(undefined);
+    setTurns(response.turns);
+    setNewSession(false);
+    setBranchTurn(undefined);
+    return response;
+  }, []);
+
+  useEffect(() => {
+    if (branchOrigin) focusTurn(branchOrigin);
+  }, [branchOrigin]);
+
   useEffect(() => {
     let active = true;
     api.listCharacterLibrary().then(async response => {
-      const requested = new URLSearchParams(window.location.search).get('character');
+      const query = new URLSearchParams(window.location.search);
+      const requested = query.get('character');
+      const sessionId = query.get('session');
       let requestedCharacter: CharacterLibraryRecord | undefined;
       if (requested && !response.characters.some(item => item.id === requested)) {
         try { requestedCharacter = await api.getLibraryCharacter(requested); }
@@ -115,6 +185,7 @@ function ChatWorkspace() {
       if (!active) return;
       setCharacters(requestedCharacter ? [requestedCharacter, ...response.characters] : response.characters);
       setCharacterOffset(response.characters.length); setMoreCharacters(response.characters.length === 100);
+      if (requested && sessionId) requestedSession.current = { characterId: requested, sessionId };
       setCharacterId(requestedCharacter?.id || response.characters.find(item => item.id === requested)?.id || response.characters[0]?.id || '');
     }).catch(error => { if (active) setError(String(error)); });
     return () => { active = false; };
@@ -124,6 +195,8 @@ function ChatWorkspace() {
     const version = ++loadVersion.current;
     setSessions([]);
     setDeleteSelection([]);
+    setDeletionPreview(undefined);
+    setRelatedDeletionIds([]);
     setSessionOffset(0); setMoreSessions(false); setSourceExcerpt(undefined);
     setSelectedShared([]);
     setSession(undefined);
@@ -139,44 +212,90 @@ function ChatWorkspace() {
     setBranchTurn(undefined);
     pending.current = null;
     if (!characterId) return;
-    api.listCharacterChats(characterId).then(response => {
+    const initial = requestedSession.current;
+    requestedSession.current = null;
+    api.listCharacterChats(characterId).then(async response => {
       if (version === loadVersion.current) {
         setSessions(response.sessions); setSessionOffset(response.sessions.length); setMoreSessions(response.sessions.length === 100);
+        if (initial?.characterId === characterId) await open(initial.sessionId, { version, characterId });
       }
     }).catch(error => { if (version === loadVersion.current) setError(String(error)); });
-  }, [characterId]);
+  }, [characterId, open]);
 
   async function run(operation: () => Promise<void>) {
     setBusy(true);
     setError('');
     try { await operation(); }
-    catch (error) { setError(error instanceof Error ? error.message : String(error)); }
+    catch (error) {
+      setError(error instanceof ApiRequestError && error.retryAfterSeconds
+        ? `请求过于频繁，请等待约 ${error.retryAfterSeconds} 秒后再试。`
+        : error instanceof Error ? error.message : String(error));
+    }
     finally { setBusy(false); }
   }
 
-  async function open(id: string) {
-    const response = await api.getCharacterChat(id);
-    setSession(response.session);
-    setGeneration(response.generation);
-    setEnrichmentPending(response.enrichment_pending);
-    setEnrichmentRetryable(response.enrichment_retryable);
-    setSessions(previous => previous.map(item => item.id === id ? { ...item, revision: response.session.revision } : item));
-    setRelationshipStage(response.session.state.relationship.stage);
-    setRelationshipSummary(response.session.state.relationship.summary || '');
-    setSourceExcerpt(undefined);
-    setMemoryDraft('');
-    setMemoryEditing(undefined);
-    setTurns(response.turns);
-    setNewSession(false);
-    setBranchTurn(undefined);
-    return response;
+  function clearDeletionPreview() {
+    setDeletionPreview(undefined);
+    setRelatedDeletionIds([]);
+  }
+
+  async function reviewDeletion() {
+    clearDeletionPreview();
+    const selected = sessions.filter(item => deleteSelection.includes(item.id));
+    try {
+      setDeletionPreview(await api.previewCharacterChatDeletion(selected.map(({ id, revision }) => ({ id, revision }))));
+    } catch (error) {
+      if (error instanceof ApiRequestError && [404, 409].includes(error.status)) await refreshSessions(characterId);
+      throw error;
+    }
+  }
+
+  async function confirmDeletion() {
+    if (!deletionPreview) return;
+    const selected = [...deletionPreview.selected, ...deletionPreview.related.filter(item => relatedDeletionIds.includes(item.id))];
+    try {
+      const result = await api.deleteCharacterChats(selected.map(({ id, revision }) => ({ id, revision })));
+      setDeletedInboxSessions(previous => new Set([...previous, ...result.deleted_session_ids]));
+      setDeleteSelection([]); setSource(''); setSourceExcerpt(undefined);
+      if (session && result.deleted_session_ids.includes(session.id)) {
+        rememberChatLocation(characterId);
+        setSession(undefined); setTurns([]); setNewSession(true); setDraft(''); setEditing(undefined); setBranchTurn(undefined); pending.current = null;
+      }
+      await refreshSessions(characterId); await refreshShared();
+    } catch (error) {
+      if (error instanceof ApiRequestError && [404, 409].includes(error.status)) await refreshSessions(characterId);
+      throw error;
+    } finally {
+      clearDeletionPreview();
+    }
+  }
+
+  async function returnToBranchSource(branch: CharacterChatSession) {
+    if (!branch.source_session_id) return;
+    setBranchOrigin(undefined);
+    try {
+      const parent = await open(branch.source_session_id);
+      setDraft(''); setEditing(undefined); pending.current = null;
+      if (branch.source_turn_id) {
+        if ([...parent.turns, ...parent.session.baseline.history].some(turn => turn.id === branch.source_turn_id)) {
+          setBranchOrigin(branch.source_turn_id);
+        } else {
+          setError('来源消息已撤回或被替换，已打开来源会话。');
+        }
+      }
+    } catch (error) {
+      if (error instanceof ApiRequestError && error.status === 404) {
+        throw new Error('来源会话已删除或不可访问，当前分支仍可继续。');
+      }
+      throw error;
+    }
   }
 
   async function send() {
     if (!session || !draft.trim() || generation?.status === 'running' || (enrichmentPending && !editing)) return;
     const existing = pending.current;
     const body: SendCharacterChatMessage = existing?.sessionId === session.id && existing.body.message === draft && (existing.body.replace_turn_id || undefined) === editing
-      ? existing.body : { revision: session.revision, request_id: crypto.randomUUID(), message: draft, ...(editing ? { replace_turn_id: editing } : {}) };
+      ? existing.body : { revision: session.revision, request_id: createClientId(), message: draft, ...(editing ? { replace_turn_id: editing } : {}) };
     pending.current = { sessionId: session.id, body };
     setStreamRequest({ sessionId: session.id, requestId: body.request_id });
     try {
@@ -186,6 +305,7 @@ function ChatWorkspace() {
       pending.current = null;
       await open(session.id);
       await refreshSessions(characterId);
+      if (body.replace_turn_id) await refreshShared();
     } catch (error) {
       // A timeout may follow a committed response. Read back before offering a retry.
       try {
@@ -194,6 +314,7 @@ function ChatWorkspace() {
           pending.current = null;
           setDraft('');
           setEditing(undefined);
+          if (body.replace_turn_id) await refreshShared();
           return;
         }
         if (response.session.revision !== body.revision) pending.current = null;
@@ -241,10 +362,15 @@ function ChatWorkspace() {
       <Button asChild variant="outline"><Link href="/character-library">管理角色</Link></Button>
     </div>
     {error && <p role="alert" className="rounded-lg border border-destructive p-3 text-destructive">{error}</p>}
+    <ProactiveInbox hiddenSessions={deletedInboxSessions} />
     <div className="grid gap-5 md:grid-cols-[240px_1fr]">
       <aside className="space-y-3">
         <Label htmlFor="chat-character">角色</Label>
-        <select id="chat-character" disabled={busy} className="w-full rounded-md border bg-background p-2" value={characterId} onChange={event => setCharacterId(event.target.value)}>
+        <select id="chat-character" disabled={busy} className="w-full rounded-md border bg-background p-2" value={characterId} onChange={event => {
+          const nextCharacter = event.target.value;
+          rememberChatLocation(nextCharacter);
+          setCharacterId(nextCharacter);
+        }}>
           <option value="" disabled>选择角色</option>
           {characters.map(character => <option key={character.id} value={character.id}>{character.settings.name}</option>)}
         </select>
@@ -254,7 +380,10 @@ function ChatWorkspace() {
           setCharacterOffset(previous => previous + response.characters.length); setMoreCharacters(response.characters.length === 100);
         })}>加载更多角色</Button>}
         {!characters.length && <p className="text-sm text-muted-foreground">先在“我的角色”中创建或导入角色。</p>}
-        <Button disabled={busy || !characterId} className="w-full" onClick={() => { setNewSession(true); setSource(''); setAcceptChange(false); setSelectedShared([]); }}>新会话</Button>
+        <Button disabled={busy || !characterId} className="w-full" onClick={() => {
+          rememberChatLocation(characterId);
+          setNewSession(true); setSource(''); setAcceptChange(false); setSelectedShared([]);
+        }}>新会话</Button>
         <nav aria-label="会话列表" className="space-y-2">
           {sessions.map(item => <button key={item.id} disabled={busy} onClick={() => void run(async () => {
             await open(item.id); setDraft(''); setEditing(undefined); pending.current = null;
@@ -270,36 +399,54 @@ function ChatWorkspace() {
         </nav>
         {sessions.length > 0 && <details className="rounded-lg border p-3">
           <summary className="cursor-pointer text-sm">彻底删除会话</summary>
-          <p className="my-2 text-xs text-muted-foreground">删除勾选会话的全部消息（含编辑、撤回的旧内容）、关系、记忆和对外共享的记忆入口，无法恢复。未勾选的分支、延续会话和已复制记忆保留；如需删除这些副本，请切换到相应角色一并选择。角色设定保留。</p>
+          <p className="my-2 text-xs text-muted-foreground">删除所选会话的消息、关系、记忆和共享入口。你可以先查看关联分支和副本，再决定删除范围。</p>
           {sessions.map(item => <label key={item.id} className="my-2 flex items-start gap-2 text-sm">
-            <input type="checkbox" disabled={busy} checked={deleteSelection.includes(item.id)} onChange={event => setDeleteSelection(previous => event.target.checked ? [...previous, item.id] : previous.filter(id => id !== item.id))} />
+            <input type="checkbox" disabled={busy} checked={deleteSelection.includes(item.id)} onChange={event => {
+              clearDeletionPreview();
+              const checked = event.target.checked;
+              setDeleteSelection(previous => checked ? [...previous, item.id] : previous.filter(id => id !== item.id));
+            }} />
             <span>{item.title} · {item.mode === 'branch' ? '分支' : item.mode === 'continuation' ? '延续' : '初识'}</span>
           </label>)}
           {moreSessions && <p className="text-xs">更多会话可通过上方“加载更多会话”展开。</p>}
-          <Button variant="destructive" disabled={busy || !deleteSelection.length || deleteSelection.length > 100} onClick={() => {
-            const selected = sessions.filter(item => deleteSelection.includes(item.id));
-            if (!window.confirm(`永久删除以下 ${selected.length} 个会话？此操作无法撤销。\n${selected.map(item => item.title).join('\n')}\n未选中的副本仍会保留。`)) return;
-            void run(async () => {
-              const result = await api.deleteCharacterChats(selected.map(item => ({ id: item.id, revision: item.revision })));
-              setDeleteSelection([]); setSource(''); setSourceExcerpt(undefined);
-              if (session && result.deleted_session_ids.includes(session.id)) {
-                setSession(undefined); setTurns([]); setNewSession(true); setDraft(''); setEditing(undefined); setBranchTurn(undefined); pending.current = null;
-              }
-              await refreshSessions(characterId); await refreshShared();
-            });
-          }}>删除所选（{deleteSelection.length}）</Button>
+          <Button variant="outline" disabled={busy || !deleteSelection.length || deleteSelection.length > 100} onClick={() => void run(reviewDeletion)}>
+            预览删除范围（{deleteSelection.length}）
+          </Button>
           {deleteSelection.length > 100 && <p className="text-xs">每次最多删除 100 个会话。</p>}
+          {deletionPreview && <section aria-label="删除范围" className="mt-3 space-y-2 rounded border p-3 text-sm">
+            <p>已选：{deletionPreview.selected.map(item => item.title).join('、')}</p>
+            {deletionPreview.related.length > 0 ? <fieldset disabled={busy} className="space-y-1">
+              <legend>关联会话，可选择一并删除</legend>
+              {deletionPreview.related.map(item => <label key={item.id} className="flex items-start gap-2">
+                <input type="checkbox" checked={relatedDeletionIds.includes(item.id)} onChange={event => {
+                  const checked = event.target.checked;
+                  setRelatedDeletionIds(previous => checked ? [...previous, item.id] : previous.filter(id => id !== item.id));
+                }} />
+                <span>{item.title} · {item.mode === 'branch' ? '分支' : item.mode === 'continuation' ? '延续' : '记忆副本'}{item.character_id !== characterId && ' · 其他角色'}</span>
+              </label>)}
+            </fieldset> : <p>未发现关联分支或会话副本。</p>}
+            <p>只删除本次勾选的会话，包括其中已撤回和替换的内容。未选的副本仍保留。</p>
+            {deletionPreview.selected.length + relatedDeletionIds.length > 100 && <p>每次最多删除 100 个会话。</p>}
+            <div className="flex flex-wrap gap-2">
+              <Button variant="destructive" disabled={busy || deletionPreview.selected.length + relatedDeletionIds.length > 100} onClick={() => void run(confirmDeletion)}>
+                永久删除 {deletionPreview.selected.length + relatedDeletionIds.length} 个会话
+              </Button>
+              <Button variant="ghost" disabled={busy} onClick={clearDeletionPreview}>取消</Button>
+            </div>
+          </section>}
         </details>}
       </aside>
       <section className="min-w-0 space-y-4">
         {newSession ? <form className="space-y-4 rounded-xl border p-5" onSubmit={event => { event.preventDefault(); void run(async () => {
           if (!selectedCharacter) return;
-          if (sourceSession && !preview) return;
+          if ((source && !preview) || needsSourceChoice) return;
           const created = await api.createCharacterChat({ character_id: characterId, title,
             ...(localOnly ? { network_policy: 'local_only' as const } : {}),
             expected_character_revision: preview?.character_revision ?? selectedCharacter.revision,
-            ...(!sourceSession ? { shared_memory_ids: selectedShared } : {}),
-            ...(sourceSession && preview ? { source_session_id: sourceSession.id, source_revision: preview.source_revision, accept_settings_change: acceptChange,
+            ...(!source ? { shared_memory_ids: selectedShared } : {}),
+            ...(preview && sourceSelection === 'none' ? { without_original_sources: true }
+              : latestEdition && (sourceSelection === 'latest' || settingsChanged) ? { source_corpus_id: latestEdition.id } : {}),
+            ...(preview ? { source_session_id: preview.source_session_id, source_revision: preview.source_revision, accept_settings_change: acceptChange,
               excluded_memory_ids: excludedMemories, reset_relationship: resetRelationship, inherit_history: inheritHistory } : {}) });
           await refreshSessions(characterId); await open(created.id); setDraft(''); setEditing(undefined); pending.current = null;
         }); }}>
@@ -327,9 +474,29 @@ function ChatWorkspace() {
             })}>加载更多共享记忆</Button>}
           </details>}
           {source && <Button type="button" variant="outline" disabled={busy} onClick={() => void run(async () => {
-            setAcceptChange(false); setPreview(undefined); setExcludedMemories([]); setResetRelationship(false); setInheritHistory(true);
+            setAcceptChange(false); setPreview(undefined); setSourceSelection('default'); setExcludedMemories([]); setResetRelationship(false); setInheritHistory(true);
             setPreview(await api.getContinuationPreview(source));
           })}>刷新继承预览</Button>}
+          {sourceRevoked && <fieldset className="space-y-2 rounded-lg border p-3 text-sm" disabled={busy}>
+            <legend>原会话绑定的资料版本已撤销</legend>
+            <p>请选择新会话使用的资料。原会话中已保存的出处仍可查看。</p>
+            {latestEdition && <label className="flex items-start gap-2">
+              <input type="radio" name="continuation-sources" checked={sourceSelection === 'latest'} onChange={() => setSourceSelection('latest')} />
+              在新会话中使用最新资料版本
+              {latestEdition.index_status !== 'completed' && '（索引尚未就绪）'}
+            </label>}
+            <label className="flex items-start gap-2">
+              <input type="radio" name="continuation-sources" checked={sourceSelection === 'none'} onChange={() => setSourceSelection('none')} />
+              不使用原作资料
+            </label>
+          </fieldset>}
+          {!sourceRevoked && preview && latestEdition && preview.source_corpus_id !== latestEdition.id && <div className="space-y-2 rounded-lg border p-3 text-sm">
+            {settingsChanged ? <p>延续到新角色设定时，将使用与它对应的资料版本。</p> : <label className="flex items-start gap-2">
+              <input type="checkbox" checked={sourceSelection === 'latest'} disabled={busy} onChange={event => setSourceSelection(event.target.checked ? 'latest' : 'default')} />
+              在新会话中使用最新资料版本
+            </label>}
+            <p>资料发布于 {new Date(latestEdition.created_at).toLocaleString()}。{latestEdition.index_status === 'completed' ? '索引已就绪。' : '索引尚未就绪，暂时无法核对原文。'}原会话继续使用原来的版本。</p>
+          </div>}
           {preview && <details className="rounded-lg border p-3" open={settingsChanged}>
             <summary className="cursor-pointer">查看设定差异与将继承的记忆</summary>
             {Object.entries(preview.changes).map(([field, change]) => <div key={field} className="my-3 space-y-1">
@@ -339,6 +506,7 @@ function ChatWorkspace() {
             </div>)}
             {!Object.keys(preview.changes).length && <p className="my-2 text-sm">设定内容没有变化。</p>}
             <p className="text-sm">关系记录：{preview.relationship.summary || '暂无关系摘要'}</p>
+            {preview.relationship.dimensions && <p className="text-sm">{describeRelationshipDimensions(preview.relationship.dimensions)}</p>}
             <label className="my-2 flex items-start gap-2 text-sm"><input type="checkbox" disabled={busy} checked={resetRelationship} onChange={event => setResetRelationship(event.target.checked)} />重置关系状态</label>
             <p className="my-2 text-sm">选择要带入的记忆，可取消与新设定冲突的内容：</p>
             <ul className="space-y-2 text-sm">{preview.memories.map(memory => <li key={memory.id}>
@@ -351,14 +519,22 @@ function ChatWorkspace() {
             <input type="checkbox" checked={acceptChange} disabled={busy} onChange={event => setAcceptChange(event.target.checked)} />
             角色设定从版本 {preview?.previous_character_revision} 更新为 {preview?.character_revision}。确认使用所展示的新设定，并按上方选择继承关系、记忆与对话。
           </label>}
-          <Button disabled={busy || !characterId || (Boolean(source) && !preview) || (settingsChanged && !acceptChange)}>开始聊天</Button>
+          <Button disabled={busy || !characterId || (Boolean(source) && !preview) || needsSourceChoice || (settingsChanged && !acceptChange)}>开始聊天</Button>
         </form> : session && <>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-lg font-medium">{session.title}</h2>
             <p className="text-sm text-muted-foreground">{session.network_policy === 'local_only' ? '仅使用本地模型 · 未配置本地辅助模型时，记忆、关系和摘要需手动管理' : '允许使用已配置的云端模型'}</p>
             <Button disabled={busy} variant="outline" onClick={() => void run(async () => { await open(session.id); await refreshSessions(characterId); })}>刷新会话</Button>
+            {session.mode === 'branch' && session.source_turn_id && <Button disabled={busy} variant="outline"
+              onClick={() => { if (session.source_turn_id) focusTurn(session.source_turn_id); }}>查看分支起点</Button>}
+            {session.mode === 'branch' && session.source_session_id && <Button disabled={busy} variant="outline"
+              onClick={() => void run(() => returnToBranchSource(session))}>返回来源会话</Button>}
+            {session.mode !== 'branch' && <Button disabled={busy} variant="outline" onClick={() => {
+              setSource(session.id); setAcceptChange(false); setSourceSelection('default'); setNewSession(true);
+            }}>延续此会话</Button>}
           </div>
           {session.hypothesis && <p className="rounded-lg bg-muted p-3">剧情假设：{session.hypothesis}</p>}
+          {session.mode !== 'branch' && <ProactivePanel key={session.id} sessionId={session.id} />}
           {watchedRequest && <GenerationDraft key={`${session.id}:${watchedRequest}`} sessionId={session.id} requestId={watchedRequest} />}
           {enrichmentPending && <p role="status" className="rounded-lg border p-3 text-sm">回复已保存，正在整理记忆、关系和对话摘要。你可以先输入下一条，整理结束后即可发送。</p>}
           {enrichmentRetryable && <div role="status" className="space-y-2 rounded-lg border p-3 text-sm">
@@ -389,13 +565,15 @@ function ChatWorkspace() {
             </details>)}
           </details>}
           <details className="rounded-lg border p-4">
-            <summary className="cursor-pointer">关系记录 · {{ stranger: '初识', acquaintance: '认识', familiar: '熟悉', close: '亲近' }[session.state.relationship.stage]}</summary>
+            <summary className="cursor-pointer">关系记录 · {relationshipStages[session.state.relationship.stage]}</summary>
             {session.state.relationship_processing === 'failed' && <p role="status" className="my-2 text-sm">本轮自动关系更新失败，已保留原关系和对话。</p>}
             {session.state.relationship_processing === 'disabled' && <p className="my-2 text-sm text-muted-foreground">服务端尚未启用自动关系更新，当前可手动调整。</p>}
             {session.state.relationship.evidence?.map((item, index) => <blockquote key={index} className="my-2 border-l-2 pl-3 text-sm">{item.role === 'user' ? '你' : '角色'}：{item.quote}</blockquote>)}
             {session.state.relationship_proposal && <div className="my-3 space-y-2 rounded-md border p-3">
               <p className="font-medium">关系变化建议 · 待你确认</p>
-              <p className="text-sm">已保留你手动设定的关系。建议调整为：{{ stranger: '初识', acquaintance: '认识', familiar: '熟悉', close: '亲近' }[session.state.relationship_proposal.stage]}</p>
+              <p className="text-sm">建议熟悉程度为{relationshipStages[session.state.relationship_proposal.stage]}。接受后才会生效。</p>
+              {(session.state.relationship.dimensions || session.state.relationship_proposal.dimensions) &&
+                <p className="text-sm">{describeRelationshipDimensions(session.state.relationship_proposal.dimensions)}</p>}
               <p className="whitespace-pre-wrap text-sm">{session.state.relationship_proposal.summary}</p>
               {session.state.relationship_proposal.evidence.map((item, index) => <blockquote key={index} className="border-l-2 pl-3 text-sm">{item.role === 'user' ? '你' : '角色'}：{item.quote}</blockquote>)}
               <div className="flex gap-2">{[true, false].map(accept => <Button key={String(accept)} disabled={busy} variant={accept ? 'default' : 'outline'} onClick={() => void run(async () => {
@@ -405,12 +583,30 @@ function ChatWorkspace() {
             </div>}
             <p className="my-3 text-sm text-muted-foreground">记录目前的相处状态与共同经历。调整绑定当前对话位置，撤回到此前会恢复当时的关系；已有分支保持独立。人物仍保有自己的立场。</p>
             <form className="space-y-2" onSubmit={event => { event.preventDefault(); void run(async () => {
-              await api.updateChatRelationship(session.id, session.revision, relationshipStage, relationshipSummary);
+              await api.updateChatRelationship(session.id, session.revision, relationshipStage, relationshipSummary, relationshipDimensions);
               await open(session.id); await refreshSessions(characterId);
             }); }}>
               <Label htmlFor="relationship-stage">熟悉程度</Label>
               <select id="relationship-stage" className="w-full rounded-md border bg-background p-2" disabled={busy} value={relationshipStage} onChange={event => setRelationshipStage(event.target.value as typeof relationshipStage)}>
-                <option value="stranger">初识</option><option value="acquaintance">认识</option><option value="familiar">熟悉</option><option value="close">亲近</option>
+                {Object.entries(relationshipStages).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+              <Label htmlFor="relationship-tone">交流语气</Label>
+              <select id="relationship-tone" className="w-full rounded-md border bg-background p-2" disabled={busy}
+                value={relationshipDimensions.tone ?? ''} onChange={event => {
+                  const tone = (event.target.value || null) as CharacterChatRelationshipDimensions['tone'];
+                  setRelationshipDimensions(previous => ({ ...previous, tone }));
+                }}>
+                <option value="">随人物和情境</option>
+                {Object.entries(relationshipTones).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+              <Label htmlFor="relationship-initiative">聊天中的话题推进</Label>
+              <select id="relationship-initiative" className="w-full rounded-md border bg-background p-2" disabled={busy}
+                value={relationshipDimensions.initiative ?? ''} onChange={event => {
+                  const initiative = (event.target.value || null) as CharacterChatRelationshipDimensions['initiative'];
+                  setRelationshipDimensions(previous => ({ ...previous, initiative }));
+                }}>
+                <option value="">随人物和情境</option>
+                {Object.entries(relationshipInitiatives).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
               </select>
               <Label htmlFor="relationship-summary">关系摘要</Label>
               <textarea id="relationship-summary" disabled={busy} maxLength={2000} rows={3} className="w-full rounded-md border bg-background p-2" value={relationshipSummary} onChange={event => setRelationshipSummary(event.target.value)} />
@@ -429,11 +625,7 @@ function ChatWorkspace() {
                 {memory.source_turn_id && <Button variant="link" size="sm" disabled={busy} onClick={() => void run(async () => {
                   const local = [...turns, ...session.baseline.history].find(turn => turn.id === memory.source_turn_id);
                   if (local) {
-                    const element = document.getElementById(`turn-${local.id}`);
-                    const details = element?.closest('details');
-                    if (details) details.open = true;
-                    element?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    element?.focus({ preventScroll: true });
+                    focusTurn(local.id);
                     return;
                   }
                   const response = await api.getCharacterChat(memory.source_session_id);
@@ -444,7 +636,7 @@ function ChatWorkspace() {
                 {memory.evidence && <details className="text-sm"><summary className="cursor-pointer">查看来源原文</summary><p className="whitespace-pre-wrap">{memory.evidence}</p></details>}
                 {memory.status === 'pending' && <Button variant="outline" size="sm" disabled={busy} onClick={() => {
                   if (!window.confirm('确认这条记忆？同一事项的旧记忆会由本条替换。')) return;
-                  void run(async () => { await api.saveCharacterChatMemory(session.id, session.revision, memory.content.replace(/^待确认：/, ''), memory.id); await open(session.id); await refreshSessions(characterId); });
+                  void run(async () => { await api.saveCharacterChatMemory(session.id, session.revision, memory.content.replace(/^待确认：/, ''), memory.id); await open(session.id); await refreshSessions(characterId); await refreshShared(); });
                 }}>确认记忆</Button>}
                 <Button variant="ghost" size="sm" disabled={busy} onClick={() => { setMemoryEditing(memory.id); setMemoryDraft(memory.content); }}>纠正</Button>
                 {session.mode !== 'branch' && memory.status === 'confirmed' && <Button variant="ghost" size="sm" disabled={busy} onClick={() => {
@@ -453,13 +645,14 @@ function ChatWorkspace() {
                 }}>共享给其他角色</Button>}
                 <Button variant="ghost" size="sm" disabled={busy} onClick={() => {
                   if (!window.confirm('从当前会话及其状态快照中删除这条记忆？已有分支不受影响。')) return;
-                  void run(async () => { await api.deleteCharacterChatMemory(session.id, session.revision, memory.id); await open(session.id); await refreshSessions(characterId); });
+                  void run(async () => { await api.deleteCharacterChatMemory(session.id, session.revision, memory.id); await open(session.id); await refreshSessions(characterId); await refreshShared(); });
                 }}>删除</Button>
               </li>)}
             </ul>
             <form className="mt-3 space-y-2" onSubmit={event => { event.preventDefault(); void run(async () => {
               await api.saveCharacterChatMemory(session.id, session.revision, memoryDraft, memoryEditing);
               await open(session.id); await refreshSessions(characterId);
+              if (memoryEditing) await refreshShared();
             }); }}>
               <Label htmlFor="memory-content">{memoryEditing ? '纠正记忆内容' : '添加会话记忆'}</Label>
               <textarea id="memory-content" required maxLength={2000} disabled={busy} rows={2} className="w-full rounded-md border bg-background p-2" value={memoryDraft} onChange={event => setMemoryDraft(event.target.value)} />
@@ -477,7 +670,8 @@ function ChatWorkspace() {
             <p className="whitespace-pre-wrap rounded-lg bg-muted p-4">{session.character.settings.greeting}</p>
             {session.baseline.history.length > 0 && <details className="rounded-lg border p-3"><summary className="cursor-pointer">继承的对话经历</summary>
               {session.baseline.history.map((turn, index) => <div key={`${turn.id}-${index}`} id={`turn-${turn.id}`} tabIndex={-1} className="mt-3 space-y-2 whitespace-pre-wrap text-sm focus:outline focus:outline-2 focus:outline-ring">
-                <p>你：{turn.message}</p><p>{session.character.settings.name}：{turn.reply}</p>
+                <p>你：{turn.message}</p><p>{turn.character_revision !== undefined && turn.character_revision !== session.character_revision
+                  ? `角色（旧设定版本 ${turn.character_revision}）` : session.character.settings.name}：{turn.reply}</p>
                 <AnswerSources evidence={turn.evidence} />
                 {turn.character_revision !== undefined && <Button variant="ghost" size="sm" disabled={busy} onClick={() => { setBranchTurn(turn.id); setHypothesis(''); }}>从这里创建分支</Button>}
               </div>)}
@@ -490,7 +684,11 @@ function ChatWorkspace() {
                 <Button variant="ghost" size="sm" disabled={busy} onClick={() => { setEditing(turn.id); setDraft(turn.message); pending.current = null; }}>编辑</Button>
                 <Button variant="ghost" size="sm" disabled={busy} onClick={() => {
                   if (!window.confirm('撤回这条消息和后续对话？相关关系和记忆将回到此前状态。')) return;
-                  void run(async () => { await api.retractCharacterChat(session.id, turn.id, session.revision); await open(session.id); await refreshSessions(characterId); setEditing(undefined); setDraft(''); pending.current = null; });
+                  void run(async () => {
+                    await api.retractCharacterChat(session.id, turn.id, session.revision);
+                    await open(session.id); await refreshSessions(characterId); await refreshShared();
+                    setEditing(undefined); setDraft(''); pending.current = null;
+                  });
                 }}>从此处撤回</Button>
                 <Button variant="ghost" size="sm" disabled={busy} onClick={() => { setBranchTurn(turn.id); setHypothesis(''); }}>创建分支</Button>
               </div>

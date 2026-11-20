@@ -12,7 +12,7 @@ from db.database import SQLiteDB
 from repositories.character_chat import CharacterChatRepository
 from services.character_chat import prepare_request
 from services.character_chat_enrichment import process_enrichment
-from services.character_chat_summary import enrich_summary, valid_summaries
+from services.character_chat_summary import enrich_summary, summaries_for_prompt, valid_summaries
 
 
 @pytest.fixture
@@ -62,6 +62,8 @@ def test_summary_activity_compacts_context_and_rewind_removes_summary(conversati
     request = prepare_request(current, turns, "继续")
     assert len(request.history) == 13  # Greeting plus six uncompressed recent turns.
     assert "尚未实施" in request.character_context.conversation_reference_context
+    assert turns[0]["id"] not in request.character_context.conversation_reference_context
+    assert "fingerprint" not in request.character_context.conversation_reference_context
     branch = repo.create("1", session["character_id"], "早期分支", source_session_id=session["id"],
                          source_revision=current["revision"], source_turn_id=turns[4]["id"], hypothesis="另一走向")
     assert not branch["state"].get("summaries")
@@ -76,6 +78,57 @@ def test_invalid_evidence_does_not_create_summary(conversation):
     _, _, session, turns = conversation
     state = asyncio.run(summarizer(Writer(turns[0], invalid=True))(session, turns, "summary"))
     assert state["summary_processing"] == "failed" and not state.get("summaries")
+
+
+def test_summary_prompt_keeps_relevant_quotes_without_storage_metadata():
+    evidence = [
+        {"role": "user", "quote": "桌上的纸袋是空的。"},
+        {"role": "assistant", "quote": "知道了，我会等。"},
+        {"role": "user", "quote": "借书卡是灰色的。"},
+        {"role": "assistant", "quote": "借书卡颜色已更正。"},
+    ]
+    stored = {"summary": "整理旧书与杂物。", "source_session_id": "private-lineage",
+              "evidence": [{**item, "turn_id": str(index)} for index, item in enumerate(evidence)]}
+    assert summaries_for_prompt([stored], "我说借书卡是什么颜色？") == [
+        {"summary": stored["summary"], "evidence": evidence[2:]},
+    ]
+    assert len(stored["evidence"]) == 4
+
+
+def test_two_summary_segments_restore_only_the_retained_checkpoint(conversation):
+    db, repo, original, _ = conversation
+    session = repo.create("1", original["character_id"], "跨段回退")
+    turns = []
+
+    async def keep(*args):
+        return args[-2]["state"]
+
+    for index in range(19):
+        message = "这一轮不要保存，也不要记住。" if index == 6 else f"用户原话 {index}"
+        checkpoint = index in {11, 18}
+        turn = repo.commit_turn(session, str(index), message, f"角色回复 {index}", "test", enqueue_enrichment=checkpoint)
+        turns.append(turn)
+        session = repo.get("1", session["id"])
+        if checkpoint:
+            writer = Writer(turns[0 if index == 11 else 7])
+            result = asyncio.run(process_enrichment(
+                turn["id"], database=db, enrich=keep, relationship=keep,
+                summary=summarizer(writer), expected_revision=session["revision"],
+            ))
+            assert result == "completed" and writer.calls == 1
+            session = repo.get("1", session["id"])
+
+    first, second = session["state"]["summaries"]
+    assert [source["turn_id"] for source in first["sources"]] == [turn["id"] for turn in turns[:6]]
+    assert [source["turn_id"] for source in second["sources"]] == [turn["id"] for turn in turns[7:13]]
+    branch = repo.create("1", session["character_id"], "未来保留分支", source_session_id=session["id"],
+                         source_revision=session["revision"], source_turn_id=turns[-1]["id"])
+    rolled = repo.retract("1", session["id"], turns[12]["id"], session["revision"])
+    assert rolled["state"]["summaries"] == [first]
+    request = prepare_request(rolled, repo.turns("1", session["id"]), "回忆以前")
+    summaries = json.loads(request.character_context.conversation_reference_context)["conversation_summaries"]
+    assert len(summaries) == 1
+    assert repo.get("1", branch["id"])["state"]["summaries"] == [first, second]
 
 
 def test_summary_sources_must_still_exist_and_match(conversation):

@@ -76,6 +76,7 @@ asyncpg>=0.30.0,<1.0           # PostgreSQL 异步驱动（可选）
 # HTTP 客户端
 httpx>=0.28.0,<1.0
 requests>=2.32.0,<3.0
+pywebpush>=2.0.3,<3.0
 beautifulsoup4>=4.12.0,<5.0
 
 # 工具库
@@ -98,6 +99,8 @@ rank-bm25>=0.2.2,<1.0           # BM25关键词检索（RAG混合搜索，会自
 # Redis 缓存（可选，未配置时后端自动降级为数据库直连）
 redis>=5.2.0,<9.0
 hiredis>=3.1.0,<4.0             # 可选，redis-py 会自动启用 C 加速解析器
+
+tzdata>=2025.1  # time-zone rules on installations without a system IANA database
 
 # Test runner
 pytest>=8.4.0,<10.0

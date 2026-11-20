@@ -36,7 +36,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:17
+        image: pgvector/pgvector:0.8.7-pg17-bookworm
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: ci-admin-only
@@ -153,6 +153,7 @@ jobs:
           import asyncpg
 
           databases = {
+              "CHARACTER_CHAT_PG_URL": "character_chat_ci",
               "STAGE31_FEEDBACK_PG_URL": "stage3_stage31_feedback_guards",
               "STAGE34_DELIVERY_PG_URL": "stage3_stage34_delivery_guards",
               "STAGE35_ADDRESS_PG_URL": "stage3_stage35_address_guards",
@@ -176,6 +177,18 @@ jobs:
               finally:
                   await connection.close()
 
+              # pgvector installation requires the administrator. Run all
+              # application migrations and integration tests as the fixture role.
+              for database in sorted(set(databases.values())):
+                  connection = await asyncpg.connect(
+                      host="127.0.0.1", port=25433, database=database,
+                      user="postgres", password="ci-admin-only",
+                  )
+                  try:
+                      await connection.execute("CREATE EXTENSION IF NOT EXISTS vector")
+                  finally:
+                      await connection.close()
+
           asyncio.run(provision())
           with open(os.environ["GITHUB_ENV"], "a", encoding="utf-8") as stream:
               for variable, database in databases.items():
@@ -184,6 +197,16 @@ jobs:
                       f"{database}?port=25433\n"
                   )
           PY
+      - name: Run character chat PostgreSQL integration tests
+        env:
+          DATABASE_URL: ${{ env.CHARACTER_CHAT_PG_URL }}
+          ALEMBIC_DATABASE_URL: ${{ env.CHARACTER_CHAT_PG_URL }}
+          RUN_CHARACTER_PG_INTEGRATION: "1"
+          RUN_PGVECTOR_INTEGRATION: "1"
+        run: |
+          python -m alembic upgrade head
+          python -m pytest tests/test_character_chat_postgres.py tests/test_character_sources.py tests/test_pgvector_runtime.py -q \
+            --basetemp="$RUNNER_TEMP/character-chat-postgres-pytest"
       - name: Run tests
         run: |
           set -o pipefail

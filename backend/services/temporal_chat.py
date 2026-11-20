@@ -55,7 +55,7 @@ async def dispatch_enrichment(database, client, task_queue):
     for job in jobs:
         turn_id = job["turn_id"]
         revision = job["expected_revision"]
-        if await asyncio.to_thread(repo.load, turn_id, revision) is None:
+        if not await asyncio.to_thread(repo.keep_active, turn_id, revision):
             continue
         # Covers the crash window after Temporal accepts but before DB acknowledgement.
         with suppress(WorkflowAlreadyStartedError):

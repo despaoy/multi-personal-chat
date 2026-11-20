@@ -1,0 +1,103 @@
+"""Extract reviewable outreach candidates from a user's own words."""
+
+import re
+from datetime import date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
+
+_SENTENCE = re.compile(r"[^\n。！？!?；;]+")
+_FOLLOW_UP = re.compile(r"(?:下次|改天|回头|有空|以后)(?:我们|再|继续){0,3}(?:聊|说|讨论)")
+_EVENT = re.compile(r"面试|考试|答辩|复试|体检|比赛|演讲")
+_CANCEL_OR_HYPOTHETICAL = re.compile(r"取消|推迟|改期|不确定|不一定|还没定|假如|如果|假设|虚构|剧本|不是我|不用问|别问|不要提|不想聊")
+_PAST = re.compile(r"昨天|前天|上(?:周|星期|礼拜)|去年|前年|结束了|考完了|面完了|已经")
+_EVENT_INTENT = re.compile(
+    r"我(?:要|准备|得|将|会|有|预约)|有(?:一场|个)?(?:面试|考试|答辩|复试|体检|比赛|演讲)|下(?:周|星期|礼拜)|下个月"
+)
+_DATE_HINT = re.compile(
+    r"(?<!\d)(?P<year>\d{4})[-年](?P<month>\d{1,2})[-月](?P<day>\d{1,2})(?:日|号)?(?!\d)"
+    r"|(?<![\d/-])(?P<month_only>\d{1,2})月(?P<day_only>\d{1,2})[日号](?!\d)"
+    r"|(?<!\d)\d{1,2}[日号](?!\d)"
+    r"|(?P<week>下下|本|这|下)?(?:周|星期|礼拜)(?P<weekday>[一二三四五六日天])"
+    r"|(?P<relative>大后天|后天|明天|今天)"
+)
+_ANOTHER_DAY = re.compile(r"\s*(?:到|至|、|和|或|以及|[-~—–～])\s*(?:\d|[一二三四五六日天])")
+_DAY_OFFSET = {"今天": 0, "明天": 1, "后天": 2, "大后天": 3}
+_WEEK_OFFSET = {"本": 0, "这": 0, "下": 7, "下下": 14}
+_WEEKDAYS = {day: position for position, day in enumerate("一二三四五六日")}
+_WEEKDAYS["天"] = _WEEKDAYS["日"]
+
+
+def _event_day(quote, created_at, timezone):
+    local = datetime.fromisoformat(created_at).astimezone(ZoneInfo(timezone))
+    hints = list(_DATE_HINT.finditer(quote))
+    if len(hints) != 1:
+        return None
+    hint = hints[0]
+    if _ANOTHER_DAY.match(quote, hint.end()):
+        return None
+    try:
+        if hint["year"]:
+            day = date(int(hint["year"]), int(hint["month"]), int(hint["day"]))
+        elif hint["month_only"] and not re.search(r"明年|后年", quote):
+            day = date(local.year, int(hint["month_only"]), int(hint["day_only"]))
+        elif hint["week"]:
+            offset = _WEEK_OFFSET[hint["week"]] + _WEEKDAYS[hint["weekday"]] - local.weekday()
+            day = local.date() + timedelta(days=offset)
+        elif hint["relative"]:
+            day = local.date() + timedelta(days=_DAY_OFFSET[hint["relative"]])
+        else:
+            return None
+        if day < local.date():
+            return None
+        return day
+    except (ValueError, OverflowError):
+        return None
+
+
+def _event_key(events, day):
+    return f"{next(iter(events))}:{day.isoformat()}" if day is not None and len(events) == 1 else None
+
+
+def dated_event_key(quote, created_at, timezone):
+    """Recover the same identity from a saved source quote on older jobs."""
+    return _event_key(set(_EVENT.findall(quote)), _event_day(quote, created_at, timezone))
+
+
+def outreach_candidates(turns, timezone, now):
+    """Read newest-first active user turns. Dates only prefill a user-confirmed draft."""
+    candidates = []
+    seen_events = set()
+    seen_dated = set()
+    seen_undated = set()
+    seen_topics = set()
+    for turn in turns:
+        for sentence in reversed(_SENTENCE.findall(turn["message"])):
+            quote = sentence.strip()
+            events = set(_EVENT.findall(quote))
+            excluded = bool(_CANCEL_OR_HYPOTHETICAL.search(quote))
+            kind, suggested_at, event_key = None, None, None
+            if events:
+                day = _event_day(quote, turn["created_at"], timezone)
+                if day is None:
+                    unseen = events - seen_events
+                    seen_undated.update(events)
+                else:
+                    unseen = {event for event in events - seen_undated if (event, day) not in seen_dated}
+                    seen_dated.update((event, day) for event in events)
+                seen_events.update(events)
+                if not excluded and unseen and not _PAST.search(quote) and (
+                    _DATE_HINT.search(quote) or _EVENT_INTENT.search(quote)
+                ):
+                    kind = "event"
+                    event_key = _event_key(events, day)
+                    if day is not None and day < date.max:
+                        next_day = datetime.combine(day + timedelta(days=1), time(9), ZoneInfo(timezone)).timestamp()
+                        if now < next_day <= now + 366 * 86400:
+                            suggested_at = next_day
+            elif not excluded and _FOLLOW_UP.search(quote):
+                kind = "follow_up"
+            if kind is None or not 4 <= len(quote) <= 300 or (kind, quote) in seen_topics:
+                continue
+            seen_topics.add((kind, quote))
+            candidates.append({"source_turn_id": turn["id"], "kind": kind, "topic": quote,
+                               "suggested_at": suggested_at, "event_key": event_key})
+    return candidates

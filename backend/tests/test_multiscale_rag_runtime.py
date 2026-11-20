@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-import hashlib
+import os
 from typing import TYPE_CHECKING
 
 import numpy as np
 import pytest
+from multiscale_test_support import FakeQueryEmbeddingProvider
 
 from knowledge.multiscale_rag.runtime import MultiScaleRagRuntime
 from knowledge.multiscale_rag.service import RETRIEVAL_TYPES
@@ -19,22 +20,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
 
-class FakeQueryEmbeddingProvider:
-    dimension = 384
-    model_id = "paraphrase-multilingual-MiniLM-L12-v2"
-    encoding_contract = "complete-token-windows-weighted-v1"
-
-    def __init__(self) -> None:
-        self._model = object()
-
-    def embed_query(self, query: str) -> np.ndarray:
-        digest = hashlib.sha256(query.encode("utf-8")).digest()
-        raw = np.resize(np.frombuffer(digest, dtype=np.uint8).astype(np.float32), self.dimension)
-        norm = np.linalg.norm(raw)
-        return raw / norm if norm else raw
-
-
-def test_runtime_loads_all_four_scales_and_returns_bundle(monkeypatch):
+def test_runtime_retrieves_from_generated_character_corpus(monkeypatch):
     from knowledge.multiscale_rag.vector_runtime import LocalMeanPoolingEmbeddingProvider
 
     # Preserve the real provider/model identity required by these artifacts;
@@ -44,6 +30,13 @@ def test_runtime_loads_all_four_scales_and_returns_bundle(monkeypatch):
     monkeypatch.setattr("knowledge.multiscale_rag.runtime.LocalMeanPoolingEmbeddingProvider", lambda **_kwargs: provider)
     monkeypatch.setenv("CHARACTER_RAG_RERANKER_ENABLED", "false")
     runtime = MultiScaleRagRuntime()
+    if (
+        not runtime.index_root.exists()
+        and os.environ.get("CI") != "true"
+        and not os.environ.get("CHARACTER_RAG_INDEX_ROOT", "").strip()
+        and not os.environ.get("MULTISCALE_RAG_INDEX_ROOT", "").strip()
+    ):
+        pytest.skip("Build the tracked character corpus to run this integration test")
 
     assert runtime.is_available() is True
     stats = runtime.stats()
@@ -67,13 +60,21 @@ def test_runtime_loads_all_four_scales_and_returns_bundle(monkeypatch):
     assert isinstance(bundle["abstained"], bool)
 
 
-def test_runtime_passes_cloud_budget_to_loaded_retriever():
-    runtime = MultiScaleRagRuntime(context_max_chars=16384)
-    runtime._provider = FakeQueryEmbeddingProvider()
+def test_runtime_loads_all_scales_and_passes_cloud_budget(synthetic_multiscale_index):
+    runtime = MultiScaleRagRuntime(index_root=synthetic_multiscale_index, context_max_chars=16384)
     assert runtime.is_available()
-    assert runtime._service.context_max_chars == 16384
-    bundle = runtime.retrieve_with_citations('妃和琉璃是什么关系？', top_k=3)
-    assert bundle['context_budget']['max_chars'] == 16384
+    stats = runtime.stats()
+    assert stats["documents"] == 6
+    assert stats["document_type_counts"] == dict.fromkeys(
+        ("fact", "relation", "event", "scene", "story", "evidence"), 1
+    )
+    bundle = runtime.retrieve_with_citations("妃和琉璃是什么关系？", top_k=3)
+    assert bundle["results"]
+    assert bundle["domains"] == ["tsukiyashiro_kisaki"]
+    assert bundle["query_analysis"]["candidate_types"] == sorted(RETRIEVAL_TYPES)
+    assert bundle["context_trust"] == "untrusted_retrieved_evidence"
+    assert isinstance(bundle["abstained"], bool)
+    assert bundle["context_budget"]["max_chars"] == 16384
     assert MultiScaleRagRuntime().context_max_chars == 6000
 
 

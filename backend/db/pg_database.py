@@ -12,13 +12,14 @@ from datetime import datetime
 from functools import partial
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from db.training_tasks import training_config_json, training_config_update, training_task_record
 from cache.ttl_value_cache import BoundedTTLCache
 from db import memory_source
+from db.character_chat_history import CREATE_HISTORY_OWNER_INDEX, HISTORY_PATH, migrate_baselines
 from db.conversation_indexes import SOURCE_INDEX_STATEMENTS
 from db.errors import RegistrationClosedError
 from db.memory_claim_guard import (
@@ -86,10 +87,11 @@ def _row_to_dict(row) -> dict:
 class PgDatabase:
     """PostgreSQL 异步数据库类 - 与 SQLiteDB 相同接口的异步版本"""
 
-    def __init__(self, database_url: Optional[str] = None):
+    def __init__(self, database_url: Optional[str] = None, *, require_migrations: bool = False):
         self.database_url = resolve_runtime_database_url(database_url or None)
         if not self.database_url:
             raise ValueError("DATABASE_URL or PG_PASSWORD is required when USE_POSTGRESQL=true")
+        self._require_migrations = require_migrations
         self.engine = create_async_engine(
             self.database_url,
             echo=False,
@@ -113,8 +115,21 @@ class PgDatabase:
         if self._initialized:
             return
         async with self.engine.begin() as conn:
+            if self._require_migrations:
+                from db.schema_readiness import require_current_migrations
+
+                await conn.run_sync(require_current_migrations)
             await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+            needs_history_migration = False
+            if not self._require_migrations:
+                needs_history_migration = await conn.run_sync(lambda db: not inspect(db).has_table(HISTORY_PATH))
+                if needs_history_migration and await conn.run_sync(
+                    lambda db: inspect(db).has_table("character_chat_sessions")
+                ):
+                    await conn.execute(text(CREATE_HISTORY_OWNER_INDEX))
             await conn.run_sync(metadata.create_all)
+            if needs_history_migration:
+                await conn.run_sync(lambda db: migrate_baselines(lambda sql, params: db.execute(text(sql), params)))
             await self._ensure_column(conn, "memory_sources", "body_digest", "TEXT")
             await self._ensure_column(conn, "messages", "platform", "TEXT NOT NULL DEFAULT 'qq'")
             await self._ensure_column(conn, "messages", "adapter", "TEXT NOT NULL DEFAULT 'nonebot'")
@@ -2675,7 +2690,7 @@ class PgDatabase:
 # ============================================
 # 全局单例
 # ============================================
-pg_db = PgDatabase()
+pg_db = PgDatabase(require_migrations=os.getenv("ENVIRONMENT", "").strip().lower() == "production")
 
 
 # ============================================

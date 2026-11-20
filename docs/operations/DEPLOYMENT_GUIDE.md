@@ -57,6 +57,8 @@ chmod 600 backend/.env
 - `VLLM_LORA_ROOT="$MULTIPERSONAL_LAB_ROOT"/runtime/loras`
 - `EMBEDDING_MODEL_PATH="$MULTIPERSONAL_LAB_ROOT"/runtime/models/paraphrase-multilingual-MiniLM-L12-v2`
 - `RERANKER_MODEL_PATH="$MULTIPERSONAL_LAB_ROOT"/runtime/models/bge-reranker-v2-m3`
+- `RERANKER_DEVICE=auto` 默认按可用设备选择。需要把重排留在 CPU 时设为 `cpu`，也可显式指定 `cuda:0` 等设备。
+- 原作资料启用模型重排时，每个 API 进程最多同时执行两次。`CHARACTER_SOURCE_RERANK_TIMEOUT_SECONDS` 默认 25 秒，限制这一轮等待模型重排的时间。名额已满或超时时，按已核实原文的字面覆盖率排序并继续回复。
 - `CHARACTER_RAG_INDEX_ROOT="$MULTIPERSONAL_LAB_ROOT"/runtime/rag/character_knowledge_index_v3`
 - `CHARACTER_RAG_ABSTAIN_THRESHOLD=0.25`
 
@@ -66,13 +68,15 @@ Next.js 本地启动如需覆盖 `BACKEND_URL`，写入仓库根目录 `.env.loc
 
 `deploy/scripts/start_all.sh docker` 使用 Compose 的 `up --wait --wait-timeout 300` 等待实际服务的健康检查，要求支持该选项的 Docker Compose v2。服务失败或超时会以非零状态退出，不再依赖手写容器名清单，也不会将未就绪报告为启动成功。
 
+生产 PostgreSQL 首次启动或版本升级时，先按[启动顺序](#6-启动顺序)完成数据库迁移，再执行一键启动。
+
 ```bash
 cd "$MULTIPERSONAL_LAB_ROOT/multi-personal-chat"
 cp .env.example deploy/.env
 chmod 600 deploy/.env
 ```
 
-Compose 只从 `deploy/.env` 做变量插值。复制后至少设置：
+从 `deploy/` 运行 Compose 时，`deploy/.env` 提供插值默认值，shell 中已导出的同名变量优先。复制后至少设置：[Compose 环境变量优先级](https://docs.docker.com/compose/how-tos/environment-variables/variable-interpolation/#ways-to-set-variables-with-interpolation)
 
 - `ENVIRONMENT=production`
 - `PG_PASSWORD=<强随机密码>`
@@ -87,6 +91,16 @@ Compose 只从 `deploy/.env` 做变量插值。复制后至少设置：
 模型文件放在 `deploy/data/models/Qwen3-8B-Instruct-AWQ`；不要把宿主机模型路径误写成容器内路径。
 
 生产或公开网络禁止空 token、默认 JWT 密钥和宽泛 CORS。
+
+#### Compose 使用云端模型
+
+从 `deploy/` 运行时，将 `OPENAI_COMPAT_BASE_URL`、`OPENAI_COMPAT_MODEL`、`OPENAI_COMPAT_API_KEY` 配置在受保护的 Compose 环境中。先完成 PostgreSQL 迁移，再叠加云端配置启动。云端配置需要 Compose v2.24.4 或更新版本。[Compose 文件合并规则](https://docs.docker.com/reference/compose-file/merge/#replace-value)
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.cloud.yml up -d --wait
+```
+
+此配置默认启动 PostgreSQL、Redis、API、网页和 Nginx，不调度 vLLM。需要聊天 worker 时，以同一组配置叠加 `--profile character-chat`，按[启动顺序](#6-启动顺序)设置 Temporal。API 与 worker 使用同一云端接入配置。该环境没有本地生成模型时，本地限定会话会提示缺少本地模型，保留其网络限制。已运行环境切换模型应另行安排停机和验证。
 
 ### 4.3 角色知识索引
 
@@ -109,6 +123,10 @@ python backend/scripts/build_character_rag_index.py \
 `vectors.npy` 和 `manifest.json`。索引缺失时后端仍可启动，但需要该索引的
 角色作品检索会明确失败；聊天检索接口返回 503，不会自动改查通用知识库或改用其他提供方。
 
+### 4.4 文件来源
+
+管理端扫描和导入使用同一个只读文件来源接口，默认读取 `backend/knowledge_bases/`。接口只接收相对键，提供条目元数据、直接子项和文件内容，后续可接入 S3 兼容对象存储。部署当前版本只需准备本地目录。导入后的正文、分块和版本继续由数据库管理，备份文件继续走独立的备份流程。
+
 ## 5. 验证源码
 
 ```bash
@@ -121,11 +139,11 @@ pnpm build
 
 ## 6. 启动顺序
 
-1. PostgreSQL/Redis（如启用）。
-2. vLLM。
-3. FastAPI。
-4. Next.js。
-5. AstrBot。
+1. PostgreSQL 和 Redis（按部署选择）。使用角色聊天的后台功能时，准备可达的 Temporal 服务。使用原作资料检索时，准备可达的 OpenSearch 服务。
+2. 启动 vLLM，或配置已授权的云端模型。
+3. 升级 PostgreSQL，启动 FastAPI。
+4. 按需启动独立的角色聊天 worker。
+5. 启动 Next.js，按需接入 AstrBot。
 
 vLLM 示例：
 
@@ -143,15 +161,55 @@ CUDA_VISIBLE_DEVICES=0 vllm serve \
   --max-lora-rank 64
 ```
 
-后端：
+后端。PostgreSQL 部署先备份数据库，将与运行时一致的 `DATABASE_URL` 或 `PG_*` 注入迁移进程，并为 API 和 worker 设置 `USE_POSTGRESQL=true`。目标 PostgreSQL 需安装 pgvector，由数据库管理员预先启用 `vector` 扩展，或让迁移账号启用扩展。
 
 ```bash
 cd "$MULTIPERSONAL_LAB_ROOT/multi-personal-chat/backend"
 python -m alembic upgrade head
+python -m alembic current
 python run.py --host 127.0.0.1 --port 8000 --workers 1
 ```
 
-SQLite 和 PostgreSQL 模式均要求 `BACKEND_WORKERS=1`。会话锁和 nonce 等状态仍包含进程内实现，切换数据库或启用 Redis 不会自动解除该限制。当前迁移 head 为 `008_integration_receipts`；升级前备份数据库，并同时更新 AstrBot 插件和后端。
+角色聊天分支的迁移 head 为 `042_auth_token_revocations`。迁移 037 将继承历史的正文与出处转为账号内共享节点，迁移 042 持久化登录吊销。SQLite 本地运行由后端启动时完成相应升级。升级前先备份，并停止旧版 API 和聊天 worker。两种数据库都采用 `BACKEND_WORKERS=1`，因为部分会话锁和 nonce 使用进程内状态。旧 AstrBot 部署仍需让插件和后端使用兼容版本。
+
+生产 PostgreSQL 的 API 和聊天 worker 启动前会检查数据库的 Alembic 版本。未迁移、落后或超前的数据库会拒绝启动。标准 Docker Compose 在首次启动或版本升级时，可在备份后从 `deploy/` 使用当前版本的后端镜像运行迁移：
+
+```bash
+docker compose up -d --wait postgres
+docker compose build backend
+docker compose run --rm --no-deps backend python -m alembic upgrade head
+docker compose run --rm --no-deps backend python -m alembic current
+```
+
+迁移成功后再按正常流程启动应用。运行迁移的容器使用与 API 相同的 PostgreSQL 配置。
+
+独立角色聊天 worker 在同一代码版本和后端目录运行，与 API 指向同一个数据库：
+
+```bash
+python -m workflows.run_chat_worker
+```
+
+- Worker 通过 `TEMPORAL_ADDRESS`、`TEMPORAL_NAMESPACE` 和 `TEMPORAL_CHAT_TASK_QUEUE` 连接 Temporal，可按部署配置 TLS 和 API key。
+- API 开启 `CHARACTER_CHAT_BACKGROUND_ENABLED` 后，正式回复会生成记忆、关系及摘要的后台处理任务。准备好 worker 后再开启。私人记忆向量、摘要和模型分别配置。
+- 原作资料索引由 worker 的 `CHARACTER_SOURCE_INDEXING_ENABLED` 开启。API 和 worker 使用相同的 `CHARACTER_SEARCH_URL`、`CHARACTER_SEARCH_INDEX` 和本地嵌入模型配置。OpenSearch 认证配置可以在两端分别注入。
+- 应用内主动联系由 worker 的 `CHARACTER_CHAT_PROACTIVE_ENABLED` 开启，实际发送仍需要会话授权。浏览器提醒还需向 API 和 worker 注入同一套 VAPID 配置，并通过浏览器的安全上下文访问网页。配置格式见 [浏览器提醒交付记录](../development/MODULE_DELIVERY.md#浏览器提醒)。
+- 虚构日常由聊天 worker 使用后端模型配置生成。独立启动时为 worker 配置所选模型和后端运行环境，沿用会话的本地模型限制。生成超时或模型不可用时，应用内记录采用带虚构标识的模板。
+
+标准 Docker Compose 可使用 `character-chat` profile 启动同版本的聊天 worker，也可使用上面的独立进程。两种方式均连接到已就绪的 Temporal。资料功能还需运行可从 API 和 worker 访问的 OpenSearch。
+
+- 使用 Compose 时，将配置注入 `deploy/` 下的 Compose 环境。设置容器可到达的 `TEMPORAL_ADDRESS` 与 `CHARACTER_SEARCH_URL`，并按需提供认证。只有服务与容器在同一网络时才使用对应服务名。容器的 `127.0.0.1` 指向容器自身。
+- 资料查询与索引分别由 `CHARACTER_CHAT_SOURCES_ENABLED` 和 `CHARACTER_SOURCE_INDEXING_ENABLED` 启用。模型目录位于 Compose 的 `deploy/data/models/`，容器内以只读方式挂载到 `/app/models`。默认使用 CPU，也可以在容器可用的设备范围内显式配置。
+- 本地限定会话默认可访问 Compose 内的 vLLM。自托管 OpenSearch 或其他本地模型端点需要将其 origin 显式加入 `LOCAL_MODEL_ALLOWED_ORIGINS`，例如 `http://search.lan:9200`。
+- 在 LHM 使用 Compose 前，应确认容器运行时的镜像、卷和日志目录都在 `/home/boot/lhm/` 下。预先核对模型目录与符号链接的实际目标。
+
+迁移成功后，启用可选 worker：
+
+```bash
+docker compose --profile character-chat up -d --build --wait
+docker compose --profile character-chat logs --tail 80 chat-worker
+```
+
+在 Temporal 核对对应任务队列已有聊天 worker，再用测试会话验证后台处理或索引更新。旧版 15G Compose 可继续配合独立启动的 worker 使用。
 
 前端：
 
@@ -225,3 +283,29 @@ python scripts/restore_sqlite_backup.py \
 ```
 
 脚本先解压到数据库同目录的临时文件，执行 `PRAGMA integrity_check`，再保留旧数据库的 `*.safety-<UTC时间>.db` 副本并原子替换。恢复成功并完成业务核验前不要删除安全副本。
+
+恢复旧备份时，脚本会合并目标数据库已保存的会话删除回执，先从待恢复文件清除对应会话及附属记录，再替换目标文件。回执只保存会话 ID。目标库丢失时，可用 `--deletion-records-from /path/to/newer.sqlite` 提供一份较新的数据库快照。应保留含最新回执的快照；缺少回执的历史删除无法从旧备份中推断。未被勾选删除的独立分支与副本仍会保留。
+
+恢复也会合并原作资料撤销回执。回执只存资料版本 ID，即使恢复后的库中没有对应版本，也会保留以供以后恢复时核对。已撤销版本不会回到资料列表、索引任务或检索结果。已保存的出处快照仍随历史回答恢复。目标库丢失时，同一 `--deletion-records-from` 选项可提供较新的撤销记录。
+
+恢复会从备份、当前数据库和 `--deletion-records-from` 提供的快照合并未过期的登录吊销。记录仅包含凭据 ID 和到期时间。如果较新的登录吊销已经丢失，恢复后启用服务前更换 JWT 签名密钥，原有登录需要重新认证。
+
+离线恢复会关闭备份中的主动联系授权，并取消尚未发送的安排。已送达的应用内消息继续作为正式记录，用户可以在恢复后重新授权。
+
+离线恢复也会关闭备份中的角色分享链接，使恢复前的发布预览失效。角色设定、已发布快照和接收方已经创建的独立副本随备份恢复。作者可以重新预览并发布新链接。
+
+SQLite 和 PostgreSQL 的离线恢复都会清除跨角色记忆共享授权。来源会话保存的记忆和接收会话已导入的副本随备份恢复。需要让新会话带入该记忆时，用户须在来源会话重新共享。
+
+如检测到目标 SQLite 文件存在未检查点的 WAL，脚本会中止。需先确保所有写入方停止，再让 SQLite 完成检查点后重试。
+
+## 10. PostgreSQL 备份与离线恢复
+
+定期使用 `pg_dump --format=custom` 生成备份。恢复时保留原数据库与备份，停止 API、聊天 worker 和其他写入方。在独立且名称不同的数据库中用 `pg_restore --exit-on-error` 导入备份，再运行项目的 Alembic 迁移到当前版本。这些操作沿用上面的 PostgreSQL 连接配置，迁移进程连接恢复副本。
+
+通过受保护的环境配置设置 `RESTORE_STAGED_DATABASE_URL` 和 `RESTORE_RECEIPT_DATABASE_URL`。前者指向迁移后的恢复副本，后者指向原数据库或含最新回执的独立数据库。回执连接需要读取会话删除、原作资料撤销和登录吊销表。迁移 040 之前的回执源可以提供资料目录中版本 ID 与撤销状态的列级读取权限。两个数据库需来自同一原服务，回执源应包含直到所有写入方停止时的删除和撤销。如果较新的登录吊销已经丢失，在恢复服务前更换 JWT 签名密钥。
+
+```bash
+python scripts/prepare_postgres_restore.py --confirm-writers-stopped
+```
+
+脚本在同一事务内合并回执、删除恢复出来的已擦除会话及附属记录，并清理无人引用的历史节点。仍有路径引用的节点、未选中的分支和已送达的应用内消息保留。恢复副本上的主动联系授权关闭，未发送任务取消，浏览器需要重新授权。角色分享链接关闭，旧发布预览失效，作者可以重新预览并发布新链接。若遇到表锁或数据约束错误，事务整体回滚。先核对恢复副本中的删除和保留样本、启动检查及登录，再切换 API 和 worker 的数据库连接。保留原库供回退。

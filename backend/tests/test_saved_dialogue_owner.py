@@ -134,12 +134,13 @@ async def test_two_applications_save_read_export_and_delete_only_their_own_dialo
 
 
 @pytest.mark.parametrize("operation", ["list", "save", "get", "delete", "remove", "dataset"])
-async def test_selected_store_failure_reaches_shared_handler_without_success(stores, monkeypatch, operation):
+async def test_selected_store_failure_reaches_shared_handler_without_success(stores, monkeypatch, operation, business_sql_fault):
     database = stores.databases[0]
     item = f"/api/training/saved-dialogues/{seed(database)}"
     failure = OSError("synthetic-private-selected-store-failure")
     operation_mock = Mock(side_effect=failure)
-    monkeypatch.setattr(database, "execute_sql_insert" if operation == "save" else "execute_sql", operation_mock)
+    method = "execute_sql_insert" if operation == "save" else "execute_sql"
+    monkeypatch.setattr(database, method, business_sql_fault(database, method, operation_mock))
     api, errors = client(database)
     requests = {
         "list": ("GET", "/api/training/saved-dialogues"),

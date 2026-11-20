@@ -171,6 +171,8 @@ class GenerationRequest:
     memory_write_enabled: bool | None = None
     # 可选的角色上下文：None 时生成行为与旧链路完全一致。
     character_context: CompiledCharacterContext | None = None
+    creator_examples: tuple[Mapping[str, str], ...] = ()
+    creator_reference: str = ""
     # Optional deterministic output contract. It may trigger at most one
     # regeneration and never feeds the failed reply back to the model.
     reply_guard: ReplyGuard | None = None
@@ -402,7 +404,12 @@ def build_generation_request(request: GenerationRequest) -> GenerationPlan:
         if request.retrieval.public_task_query != request.message:
             raise ValueError("Curated task review discarded the original message")
     request = admit_deferred_sources(request, _build_generation_request_core)
-    return _build_generation_request_core(request)
+    plan = _build_generation_request_core(request)
+    if request.creator_examples or request.creator_reference:
+        from inference.creator_context import add_creator_context
+
+        plan = add_creator_context(request, plan)
+    return plan
 
 
 def _build_generation_request_core(request: GenerationRequest) -> GenerationPlan:

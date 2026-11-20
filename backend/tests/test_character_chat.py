@@ -1,6 +1,10 @@
 """Versioned conversation mechanics through real storage and HTTP contracts."""
 
 import asyncio
+import json
+import sqlite3
+from contextlib import closing
+from dataclasses import replace
 
 import pytest
 from fastapi import FastAPI
@@ -12,9 +16,12 @@ from app.runtime import RuntimeContainer
 from character.library import CharacterSettings
 from db.database import SQLiteDB
 from db.errors import RevisionConflictError
+from inference.context_budget import CONTEXT_SAFETY_MARGIN_TOKENS, estimated_tokens
+from inference.generation_request import RetrievalResult, build_generation_request
+from infra.concurrency_control import RateLimitExceeded
 from repositories.character_chat import CharacterChatRepository
 from repositories.character_library import CharacterNotFoundError
-from services.character_chat import CharacterChatService
+from services.character_chat import CharacterChatService, prepare_request
 
 
 def test_enrichment_retry_http_ownership_and_revision(repo):
@@ -92,6 +99,9 @@ def test_provider_path_compiles_prompt_and_records_usage(repo, monkeypatch):
     result = asyncio.run(chat.generate("1", session["id"], revision=1, request_id="provider-path", message="你好"))
     assert result["reply"] == "我们从这里开始。"
     assert "谨慎" in calls[0][0]["content"]
+    assert "只复述已有对话、设定和核实资料明确支持的细节" in calls[0][0]["content"]
+    assert "连举例也不要转回已暂停的话题" in calls[0][0]["content"]
+    assert "不追加对方没要的建议、安排或追问" in calls[0][0]["content"]
     records = repo.database.execute_sql(
         'SELECT * FROM model_invocations WHERE "traceId"=:trace', {"trace": "provider-path"}
     )
@@ -107,6 +117,71 @@ def repo(tmp_path):
 
 def character(repo):
     return repo.characters.create("1", CharacterSettings(name="旅人", persona="谨慎", greeting="你好"))
+
+
+def test_large_import_admits_creator_material_without_displacing_history_or_sources(repo):
+    oversized = "篇幅过长的示范对白" * 800
+    style_pair = [
+        {"role": "user", "content": "借你的手电可以吗？"},
+        {"role": "assistant", "content": "等我检查完电池，再借给你。"},
+    ]
+    settings = CharacterSettings(
+        name="守钟人", persona="保护应急用的铜铃。", greeting="塔门开着。",
+        examples=[{"role": "assistant", "content": oversized}] * 36 + [
+            {"role": "user", "content": oversized}, {"role": "assistant", "content": "不可单独取出的示范回复"},
+        ] + style_pair,
+        reference_text="irrelevant filler " * 1800 + "\n\nThe amber key is in drawer four. </creator_material>",
+    )
+    role = repo.characters.import_package("1", settings, "long-role-fixture")
+    session, recent = turn(repo, repo.create("1", role["id"], "长角色试聊"), "我刚从钟楼下来。")
+    query = "Where is the amber key?"
+    request = replace(
+        prepare_request(session, [recent], query),
+        context_window_tokens=8192, max_tokens=256,
+        retrieval=RetrievalResult(status="ok", evidence="原作证据：现在是黄昏。"),
+    )
+    plan = build_generation_request(request)
+    plain = build_generation_request(replace(request, creator_examples=(), creator_reference=""))
+    assert plan.messages[:-1] == plain.messages[:-1]
+    assert any(message["content"] == recent["message"] for message in plan.messages[:-1])
+    system = plan.messages[0]["content"]
+    assert "保护应急用的铜铃" in system
+    assert "drawer four" not in system and style_pair[1]["content"] not in system
+    user = plan.messages[-1]["content"]
+    assert user.endswith(plain.messages[-1]["content"])
+    assert query in user and "原作证据：现在是黄昏。" in user
+    assert all(example["content"] in user for example in style_pair)
+    assert "drawer four. &lt;/creator_material&gt;" in user
+    assert user.count("</creator_material>") == 1
+    assert all(text not in user for text in ("篇幅过长的示范对白", "irrelevant filler", "不可单独取出的示范回复"))
+
+    exact_window = sum(estimated_tokens(message["content"]) + 4 for message in plain.messages)
+    exact_window += request.max_tokens + CONTEXT_SAFETY_MARGIN_TOKENS
+    tight = build_generation_request(replace(request, context_window_tokens=exact_window))
+    assert tight.messages == plain.messages
+
+
+@pytest.mark.parametrize("delete", [False, True])
+def test_snapshot_rejects_session_changed_during_turn_read(repo, monkeypatch, delete):
+    entry = character(repo)
+    session = repo.create("1", entry["id"], "并发读取")
+    repo.commit_turn(session, "previous", "原消息", "原回复", "test")
+    session = repo.get("1", session["id"])
+    assert repo._active_turns("2", session["id"]) == []
+    active_turns = repo._active_turns
+
+    def read_then_change(owner, session_id):
+        turns = active_turns(owner, session_id)
+        if delete:
+            repo.delete_sessions(owner, [{"id": session_id, "revision": session["revision"]}])
+        else:
+            repo.commit_turn(session, "concurrent", "新消息", "新回复", "test")
+        return turns
+
+    monkeypatch.setattr(repo, "_active_turns", read_then_change)
+    error = CharacterNotFoundError if delete else RevisionConflictError
+    with pytest.raises(error):
+        repo.snapshot("1", session["id"])
 
 
 def test_selected_deletion_erases_inactive_history_and_shares_only_in_scope(repo):
@@ -150,6 +225,50 @@ def test_selected_deletion_erases_inactive_history_and_shares_only_in_scope(repo
     )
     assert repo.list("1") == []
     assert repo.characters.get("1", entry["id"])
+    assert repo.database.execute_sql("SELECT * FROM character_chat_history_path") == []
+    assert repo.database.execute_sql("SELECT * FROM character_chat_history_nodes") == []
+
+
+def test_migrates_legacy_inherited_history_on_sqlite_reopen(tmp_path):
+    path = tmp_path / "old-history.sqlite"
+    db = SQLiteDB(path)
+    try:
+        repo = CharacterChatRepository(db)
+        entry = character(repo)
+        source = repo.create("1", entry["id"], "来源")
+        source, first = turn(repo, source, "第一条")
+        source, second = turn(repo, source, "第二条")
+        branch = repo.create("1", entry["id"], "旧分支", source_session_id=source["id"],
+                             source_revision=source["revision"], source_turn_id=second["id"])
+        baseline = branch["baseline"]
+        baseline["history"][0].pop("state_after")
+        baseline["history"][0].pop("character_revision")
+        baseline["history"][1]["evidence"] = {"sources": [{"title": "旧出处", "excerpt": "旧出处正文"}]}
+        source_baseline = source["baseline"]
+        with closing(sqlite3.connect(path)) as connection, connection:
+            connection.executemany("UPDATE character_chat_sessions SET baseline_json=? WHERE id=?", [
+                (json.dumps(baseline, ensure_ascii=False), branch["id"]),
+                (json.dumps(source_baseline, ensure_ascii=False), source["id"]),
+            ])
+            connection.execute("DROP TABLE character_chat_history_path")
+            connection.execute("DROP TABLE character_chat_history_nodes")
+    finally:
+        db.close_connection()
+
+    for _ in range(2):
+        db = SQLiteDB(path)
+        try:
+            repo = CharacterChatRepository(db)
+            assert repo.get("1", branch["id"])["baseline"] == baseline
+            assert repo.get("1", source["id"])["baseline"] == source_baseline
+            rows = db.execute_sql("SELECT baseline_json FROM character_chat_sessions WHERE id=:id", {"id": branch["id"]})
+            assert "旧出处正文" not in rows[0]["baseline_json"]
+            assert len(db.execute_sql("SELECT * FROM character_chat_history_path")) == 2
+            with pytest.raises(ValueError, match="未保存逐轮状态"):
+                repo.create("1", entry["id"], "缺少旧状态", source_session_id=branch["id"],
+                            source_revision=branch["revision"], source_turn_id=first["id"])
+        finally:
+            db.close_connection()
 
 
 def test_delete_selected_http_ownership_and_atomic_conflicts(repo):
@@ -177,6 +296,85 @@ def test_delete_selected_http_ownership_and_atomic_conflicts(repo):
         app.dependency_overrides[get_current_user] = lambda: {"user_id": "1"}
         selections[1]["revision"] = 1
         assert client.post("/api/character-chats/delete-selected", json={"sessions": selections}).status_code == 200
+
+
+def test_deletion_preview_finds_transitive_branches_and_unshared_cross_character_copies(repo):
+    entry = character(repo)
+    other_entry = repo.characters.create("1", CharacterSettings(name="朋友", persona="热情", greeting="你好"))
+    source = repo.create("1", entry["id"], "来源")
+    source = repo.manage_memory("1", source["id"], 1, content="只供验证的私密记忆")
+    source, first = turn(repo, source, text="只供验证的私密原话")
+    source = repo.share_memory("1", source["id"], source["state"]["memories"][0]["id"], source["revision"])
+    shared_id = repo.shared_memories("1")[0]["id"]
+    copied = repo.create("1", other_entry["id"], "其他角色副本", shared_memory_ids=[shared_id])
+    repo.unshare_memory("1", shared_id)
+    continuation = repo.create("1", entry["id"], "延续", source_session_id=source["id"],
+                               source_revision=source["revision"])
+    nested = repo.create("1", entry["id"], "分支", source_session_id=continuation["id"],
+                         source_revision=continuation["revision"], source_turn_id=first["id"])
+    unrelated = repo.create("1", entry["id"], "独立会话")
+    other_account_entry = repo.characters.create("2", CharacterSettings(name="其他账号", persona="谨慎", greeting="你好"))
+    other_account = repo.create("2", other_account_entry["id"], "其他账号会话")
+
+    app = FastAPI()
+    app.include_router(router)
+    app.dependency_overrides[get_current_user] = lambda: {"user_id": "1"}
+    app.dependency_overrides[repository] = lambda: repo
+    picks = [{"id": source["id"], "revision": source["revision"]}]
+    with TestClient(app) as client:
+        url = "/api/character-chats/delete-preview"
+        response = client.post(url, json={"sessions": picks})
+        assert response.status_code == 200
+        result = response.json()
+        assert [item["id"] for item in result["selected"]] == [source["id"]]
+        assert {item["id"] for item in result["related"]} == {continuation["id"], nested["id"], copied["id"]}
+        assert all(set(item) == {"id", "character_id", "title", "revision", "mode"}
+                   for item in result["selected"] + result["related"])
+        assert "只供验证" not in response.text
+        assert client.post(url, json={"sessions": [{"id": source["id"], "revision": 1}]}).status_code == 409
+        assert client.post(url, json={"sessions": [{"id": other_account["id"], "revision": 1}]}).status_code == 404
+        assert client.post(url, json={"sessions": picks * 2}).status_code == 422
+        assert len(repo.list("1")) == 5
+
+        copied_pick = {key: copied[key] for key in ("id", "revision")}
+        assert client.post("/api/character-chats/delete-selected", json={"sessions": [*picks, copied_pick]}).status_code == 200
+        assert {item["id"] for item in repo.list("1")} == {unrelated["id"], continuation["id"], nested["id"]}
+
+
+def test_deletion_preview_keeps_provenance_across_removed_intermediate_copies(repo):
+    owner = "1"
+    characters = [
+        repo.characters.create(owner, CharacterSettings(name=name, persona="谨慎", greeting="你好"))
+        for name in ("原角色", "第一位接收者", "第二位接收者", "第三位接收者")
+    ]
+    origin = repo.create(owner, characters[0]["id"], "原始记忆")
+    origin = repo.manage_memory(owner, origin["id"], origin["revision"], content="喜欢白茶")
+
+    def copy_from(source, destination):
+        source = repo.share_memory(owner, source["id"], source["state"]["memories"][0]["id"], source["revision"])
+        shared = next(item for item in repo.shared_memories(owner) if item["source_session_id"] == source["id"])
+        return repo.create(owner, destination["id"], destination["settings"]["name"], shared_memory_ids=[shared["id"]])
+
+    first = copy_from(origin, characters[1])
+    intermediate = copy_from(first, characters[2])
+    last = copy_from(intermediate, characters[3])
+    intermediate = repo.get(owner, intermediate["id"])
+    repo.delete_sessions(owner, [{"id": intermediate["id"], "revision": intermediate["revision"]}])
+    first = repo.get(owner, first["id"])
+    selected = [{"id": first["id"], "revision": first["revision"]}]
+    assert [item["id"] for item in repo.preview_deletion(owner, selected)["related"]] == [last["id"]]
+    prompt = build_generation_request(prepare_request(last, [], "聊聊白茶")).messages
+    assert all(first["id"] not in message["content"] for message in prompt)
+
+    last, _ = turn(repo, last, text="聊过白茶")
+    last = repo.manage_memory(owner, last["id"], last["revision"], memory_id=last["state"]["memories"][0]["id"])
+    assert last["state"]["memories"] == []
+    assert [item["id"] for item in repo.preview_deletion(owner, selected)["related"]] == [last["id"]]
+    source = {"source_session_id": last["id"], "source_revision": last["revision"]}
+    continued = repo.create(owner, last["character_id"], "保留聊天记录", **source)
+    repo.create(owner, last["character_id"], "省略聊天记录", inherit_history=False, **source)
+    repo.delete_sessions(owner, [{"id": last["id"], "revision": last["revision"]}])
+    assert [item["id"] for item in repo.preview_deletion(owner, selected)["related"]] == [continued["id"]]
 
 
 def turn(repo, session, text="你好", state=None):
@@ -284,9 +482,14 @@ def test_generation_edits_idempotency_and_inflight_conflict(repo):
 
 
 def test_http_session_generation_and_scope(repo):
+    from services.character_chat_policy import LocalOnlyPolicyError
+
     class Runtime:
+        limited = True
+
         async def check_rate_limits(self, *args):
-            pass
+            if self.limited:
+                raise RateLimitExceeded("sender", 1.2)
 
         def priority_for(self, *args):
             return 1
@@ -295,14 +498,15 @@ def test_http_session_generation_and_scope(repo):
             return await factory()
 
     async def complete(request, session, request_id):
+        if session["network_policy"] == "local_only":
+            raise LocalOnlyPolicyError()
         assert "谨慎" in request.persona_prompt
         return "你好，旅行者。", "controlled-test"
 
     app = FastAPI()
     app.include_router(router)
-    app.state.runtime_container = RuntimeContainer(
-        db=repo.database, is_pg_mode=lambda: False, inference_runtime=Runtime()
-    )
+    runtime = Runtime()
+    app.state.runtime_container = RuntimeContainer(db=repo.database, is_pg_mode=lambda: False, inference_runtime=runtime)
     app.dependency_overrides[get_current_user] = lambda: {"user_id": "1"}
     app.dependency_overrides[repository] = lambda: repo
     app.dependency_overrides[service] = lambda: CharacterChatService(repo.database, complete)
@@ -312,7 +516,12 @@ def test_http_session_generation_and_scope(repo):
         assert response.status_code == 201
         session = response.json()
         url = "/api/character-chats/" + session["id"]
-        reply = client.post(url + "/messages", json={"revision": 1, "request_id": "test", "message": "你好"})
+        body = {"revision": 1, "request_id": "test", "message": "你好"}
+        limited = client.post(url + "/messages", json=body)
+        assert limited.status_code == 429 and limited.headers["Retry-After"] == "2"
+        assert client.get(url + "/generations/test").status_code == 404
+        runtime.limited = False
+        reply = client.post(url + "/messages", json=body)
         assert reply.status_code == 200, reply.text
         assert reply.json()["reply"] == "你好，旅行者。"
         assert len(client.get(url).json()["turns"]) == 1
@@ -321,6 +530,14 @@ def test_http_session_generation_and_scope(repo):
         memory_id = added.json()["state"]["memories"][0]["id"]
         assert client.put(url + "/memories/" + memory_id, json={"revision": 2, "content": "咖啡"}).status_code == 409
         assert client.post(url + "/memories", json={"revision": 3, "content": "  "}).status_code == 422
+        local = client.post("/api/character-chats", json={
+            "character_id": entry["id"], "title": "仅本地会话", "network_policy": "local_only",
+        })
+        assert local.status_code == 201
+        local_path = f"/api/character-chats/{local.json()['id']}"
+        blocked = client.post(local_path + "/messages", json=body)
+        assert blocked.status_code == 422 and "仅允许本地模型" in blocked.json()["detail"]
+        assert client.get(local_path).json()["turns"] == []
         app.dependency_overrides[get_current_user] = lambda: {"user_id": "2"}
         assert client.get(url).status_code == 404
         assert client.request("DELETE", url + "/memories/" + memory_id, json={"revision": 3}).status_code == 404
@@ -415,6 +632,11 @@ def test_branch_from_inherited_point_preserves_original_version_and_state(repo):
     assert branch["character_revision"] == 1
     assert branch["state"]["memories"][0]["content"] == "喜欢咖啡"
     assert [item["id"] for item in branch["baseline"]["history"]] == [first["id"]]
+    path_nodes = repo.database.execute_sql(
+        "SELECT session_id,node_key FROM character_chat_history_path WHERE position=0"
+    )
+    assert {row["session_id"] for row in path_nodes} == {continuation["id"], branch["id"]}
+    assert len({row["node_key"] for row in path_nodes}) == 1
     branch, local = turn(repo, branch, "避雨")
     nested = repo.create(
         "1",
@@ -527,6 +749,82 @@ def test_continuation_choices_isolate_memory_relationship_and_raw_history(repo):
         repo.create("1", entry["id"], "初识不能调整继承", reset_relationship=True)
 
 
+def test_versioned_continuation_places_new_greeting_after_marked_old_dialogue(repo):
+    from services.character_chat import prepare_request
+
+    entry = character(repo)
+    source = repo.create("1", entry["id"], "旧版")
+    source, first = turn(repo, source, "当时从东门进馆")
+    repo.characters.update("1", entry["id"], 1, CharacterSettings(
+        name="旅人", persona="现在走北门", greeting="请走北门。",
+    ))
+    continued = repo.create("1", entry["id"], "新版", source_session_id=source["id"],
+                            source_revision=source["revision"], accept_settings_change=True,
+                            expected_character_revision=2)
+    original = prepare_request(source, [first], "现在呢？")
+    assert [item["content"] for item in original.history] == ["你好", first["message"], first["reply"]]
+    prepared = prepare_request(continued, [], "以前和现在各从哪里进馆？")
+    assert prepared.history == [
+        {"role": "user", "content": "【旧设定版本 1 时】" + first["message"]},
+        {"role": "assistant", "content": "【旧设定版本 1 时】" + first["reply"]},
+        {"role": "assistant", "content": "请走北门。"},
+    ]
+    assert "现在走北门" in prepared.persona_prompt and "不要把当前设定写回过去" in prepared.persona_prompt
+    continued, current = turn(repo, continued, "去北门")
+    with_new_turn = prepare_request(continued, [current], "我们刚才去哪？")
+    assert with_new_turn.history[:-2] == prepared.history
+    assert with_new_turn.history[-2]["content"] == "去北门"
+    assert continued["baseline"]["history"][0]["message"] == first["message"]
+
+
+@pytest.mark.parametrize(
+    ("message", "evidence", "kind", "status"),
+    [
+        ("今天不想喝咖啡", "今天不想喝咖啡", "dislike", "pending"),
+        ("我好像喜欢咖啡", "喜欢咖啡", "like", "pending"),
+        ("假设我喜欢咖啡", "我喜欢咖啡", "like", "pending"),
+        ("我喜欢咖啡吗？", "我喜欢咖啡", "like", "pending"),
+        ("我喜欢咖啡", "我喜欢咖啡", "like", "confirmed"),
+        ("记住，我平时不喝咖啡", "我平时不喝咖啡", "other_user_fact", "confirmed"),
+    ],
+)
+def test_web_memory_auto_confirmation_requires_user_assertion(repo, message, evidence, kind, status):
+    import json
+
+    from character.memory_llm import MemoryLlmConfig
+    from services.character_chat import prepare_request
+    from services.character_chat_memory import enrich_state
+
+    operation = "ADD"
+
+    class Writer:
+        async def complete(self, messages):
+            return json.dumps({"memories": [{
+                "operation": operation, "kind": kind, "value": "咖啡", "evidence": evidence,
+                "confidence": 0.99, "attributed_to": "user",
+            }]})
+
+    entry = character(repo)
+    session = repo.create("1", entry["id"], "偏好边界")
+    config = MemoryLlmConfig(enabled=True, base_url="https://test.invalid", model="test")
+    state = asyncio.run(enrich_state(message, session, "memory", config=config, completion=Writer()))
+    assert state["memory_processing"] == "completed"
+    candidate, = state["memories"]
+    assert candidate["status"] == status
+    assert candidate["evidence"] == evidence
+    context = prepare_request({**session, "state": state}, [], "我们继续聊").character_context
+    assert ("咖啡" in context.conversation_reference_context) == (status == "confirmed")
+    if kind == "other_user_fact":
+        assert candidate["content"] == "用户平时不喝咖啡"
+        evidence, operation = "我平时喝咖啡", "PENDING"
+        updated = asyncio.run(enrich_state(
+            evidence, {**session, "state": state}, "change", config=config, completion=Writer(),
+        ))
+        first, pending = updated["memories"]
+        assert first == candidate
+        assert pending["status"] == "pending" and pending["memory_key"] == candidate["memory_key"]
+
+
 def test_semantic_memory_is_committed_with_turn_and_conflicts_need_confirmation(repo):
     import json
     from functools import partial
@@ -571,8 +869,15 @@ def test_semantic_memory_is_committed_with_turn_and_conflicts_need_confirmation(
         saved = repo.get("1", session["id"])
         assert [item["status"] for item in saved["state"]["memories"]] == ["confirmed", "pending"]
         candidate = saved["state"]["memories"][-1]
-        saved = repo.manage_memory("1", session["id"], 3, memory_id=candidate["id"], content=candidate["content"])
+        saved = repo.manage_memory("1", session["id"], 3, memory_id=candidate["id"], content="用户偏好清淡饮料")
         assert len(saved["state"]["memories"]) == 1
+        corrected = saved["state"]["memories"][0]
+        assert corrected["origin"] == "user" and corrected["evidence"] == candidate["evidence"]
+        from services.character_chat import prepare_request
+
+        prompt_context = prepare_request(saved, [], "喝什么？").character_context.conversation_reference_context
+        assert "用户偏好清淡饮料" in prompt_context
+        assert candidate["evidence"] not in prompt_context
         saved = repo.retract("1", session["id"], second["id"], saved["revision"])
         assert saved["state"]["memories"][0]["id"] == memory["id"]
         repo.retract("1", session["id"], first["id"], saved["revision"])
@@ -737,8 +1042,15 @@ def test_relationship_http_validation_and_ownership(repo):
     with TestClient(app) as client:
         assert client.put(url, json={"revision": 1, "stage": "invented"}).status_code == 422
         assert client.put(url, json={"revision": 1, "stage": "close", "summary": "x" * 2001}).status_code == 422
-        response = client.put(url, json={"revision": 1, "stage": "familiar", "summary": "测试记录"})
+        assert client.put(url, json={"revision": 1, "stage": "familiar", "dimensions": {"tone": "invented"}}).status_code == 422
+        response = client.put(url, json={"revision": 1, "stage": "familiar", "summary": "测试记录",
+                                         "dimensions": {"tone": "restrained", "initiative": "offer"}})
         assert response.status_code == 200 and response.json()["state"]["relationship"]["stage"] == "familiar"
+        assert response.json()["state"]["relationship"]["dimensions"] == {"tone": "restrained", "initiative": "offer"}
         assert client.put(url, json={"revision": 1, "stage": "close"}).status_code == 409
+        legacy = client.put(url, json={"revision": 2, "stage": "familiar", "summary": "旧客户端"}).json()
+        assert legacy["state"]["relationship"]["dimensions"] == {"tone": "restrained", "initiative": "offer"}
+        cleared = client.put(url, json={"revision": 3, "stage": "familiar", "dimensions": {"tone": None}}).json()
+        assert cleared["state"]["relationship"]["dimensions"] == {"initiative": "offer"}
         app.dependency_overrides[get_current_user] = lambda: {"user_id": "2"}
-        assert client.put(url, json={"revision": 2, "stage": "close"}).status_code == 404
+        assert client.put(url, json={"revision": 4, "stage": "close", "dimensions": {"initiative": "wait"}}).status_code == 404

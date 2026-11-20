@@ -166,7 +166,8 @@ def exercise(db):
         target = claim(s)
         db.erase_character_memories(**s, memory_id=target['id'])
         writer = db.add_or_update_character_memory if legacy else db.append_character_memory_claim
-        for extra in ({},) if legacy else ({}, dict(observed_at=datetime.now(timezone.utc).isoformat())):
+        after_erasure = (datetime.now(timezone.utc) + timedelta(seconds=1)).isoformat()
+        for extra in ({},) if legacy else ({}, dict(observed_at=after_erasure)):
             try:
                 writer(**s, memory_type='user_fact', memory_key='retry', content='cannot restore',
                        source_message_id='same-id', **extra)

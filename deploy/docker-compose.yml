@@ -71,7 +71,7 @@ services:
       - internal
 
   # FastAPI Backend
-  backend:
+  backend: &backend-service
     build:
       context: ../backend
       dockerfile: Dockerfile
@@ -85,7 +85,7 @@ services:
         condition: service_healthy
       vllm:
         condition: service_healthy
-    environment:
+    environment: &backend-environment
       USE_POSTGRESQL: "true"
       PG_HOST: postgres
       PG_PORT: "5432"
@@ -99,6 +99,7 @@ services:
       VLLM_BASE_URLS: http://vllm:8001
       VLLM_SERVED_MODEL_NAME: qwen3-8b-instruct-awq
       VLLM_MAX_MODEL_LEN: "${VLLM_MAX_MODEL_LEN:-24576}"
+      LOCAL_MODEL_ALLOWED_ORIGINS: "http://vllm:8001,${LOCAL_MODEL_ALLOWED_ORIGINS:-}"
       # Both roots map ./data/loras below, but each value is in its own
       # container namespace. The backend translates adapter names to /loras
       # before asking vLLM to load them.
@@ -106,6 +107,29 @@ services:
       LORA_PATH: /app/loras
       CHARACTER_RAG_INDEX_ROOT: /app/character_knowledge_index
       CHARACTER_RAG_ABSTAIN_THRESHOLD: "${CHARACTER_RAG_ABSTAIN_THRESHOLD:-0.25}"
+      CHARACTER_CHAT_BACKGROUND_ENABLED: "${CHARACTER_CHAT_BACKGROUND_ENABLED:-false}"
+      CHARACTER_CHAT_PROACTIVE_ENABLED: "${CHARACTER_CHAT_PROACTIVE_ENABLED:-false}"
+      CHARACTER_CHAT_VECTORS_ENABLED: "${CHARACTER_CHAT_VECTORS_ENABLED:-false}"
+      CHARACTER_CHAT_SOURCES_ENABLED: "${CHARACTER_CHAT_SOURCES_ENABLED:-false}"
+      CHARACTER_SOURCE_INDEXING_ENABLED: "${CHARACTER_SOURCE_INDEXING_ENABLED:-false}"
+      CHARACTER_SEARCH_URL: "${CHARACTER_SEARCH_URL:-}"
+      CHARACTER_SEARCH_INDEX: "${CHARACTER_SEARCH_INDEX:-character-sources-v1}"
+      CHARACTER_SEARCH_USERNAME: "${CHARACTER_SEARCH_USERNAME:-}"
+      CHARACTER_SEARCH_PASSWORD: "${CHARACTER_SEARCH_PASSWORD:-}"
+      EMBEDDING_MODEL_PATH: "${EMBEDDING_MODEL_PATH:-/app/models/paraphrase-multilingual-MiniLM-L12-v2}"
+      EMBEDDING_DEVICE: "${EMBEDDING_DEVICE:-cpu}"
+      RERANKER_ENABLED: "${RERANKER_ENABLED:-false}"
+      RERANKER_MODEL_PATH: "${RERANKER_MODEL_PATH:-/app/models/bge-reranker-v2-m3}"
+      RERANKER_DEVICE: "${RERANKER_DEVICE:-cpu}"
+      CHARACTER_SOURCE_RERANK_TIMEOUT_SECONDS: "${CHARACTER_SOURCE_RERANK_TIMEOUT_SECONDS:-25}"
+      SUMMARY_LLM_ENABLED: "${SUMMARY_LLM_ENABLED:-false}"
+      RELATIONSHIP_LLM_ENABLED: "${RELATIONSHIP_LLM_ENABLED:-false}"
+      MEMORY_LLM_ENABLED: "${MEMORY_LLM_ENABLED:-false}"
+      MEMORY_LLM_BASE_URL: "${MEMORY_LLM_BASE_URL:-}"
+      MEMORY_LLM_MODEL: "${MEMORY_LLM_MODEL:-}"
+      MEMORY_LLM_API_KEY: "${MEMORY_LLM_API_KEY:-}"
+      CHARACTER_WEB_PUSH_PRIVATE_KEY: "${CHARACTER_WEB_PUSH_PRIVATE_KEY:-}"
+      CHARACTER_WEB_PUSH_SUBJECT: "${CHARACTER_WEB_PUSH_SUBJECT:-}"
       ENVIRONMENT: ${ENVIRONMENT:-production}
       ASTRBOT_INTEGRATION_TOKEN: ${ASTRBOT_INTEGRATION_TOKEN:?set ASTRBOT_INTEGRATION_TOKEN}
       MULTIPERSONAL_BACKEND_URL: http://backend:8000
@@ -135,6 +159,7 @@ services:
       CLAW_CODE_EXECUTION_ENABLED: "false"
     volumes:
       - backend_data:/app/data
+      - ./data/models:/app/models:ro
       - ./data/knowledge_bases:/app/knowledge_bases
       - ../backend/data/knowledge/tsukiyashiro_kisaki/character_knowledge_index_v3:/app/character_knowledge_index:ro
       # Shared with vllm:/loras above; the target paths intentionally differ.
@@ -147,6 +172,24 @@ services:
       start_period: 150s
     networks:
       - internal
+
+  chat-worker:
+    <<: *backend-service
+    profiles: [character-chat]
+    init: true
+    command: ["python", "-m", "workflows.run_chat_worker"]
+    environment:
+      <<: *backend-environment
+      TEMPORAL_ADDRESS: "${TEMPORAL_ADDRESS:-temporal:7233}"
+      TEMPORAL_NAMESPACE: "${TEMPORAL_NAMESPACE:-default}"
+      TEMPORAL_CHAT_TASK_QUEUE: "${TEMPORAL_CHAT_TASK_QUEUE:-character-chat-enrichment}"
+      TEMPORAL_TLS: "${TEMPORAL_TLS:-false}"
+      TEMPORAL_API_KEY: "${TEMPORAL_API_KEY:-}"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      disable: true
 
   # Next.js Frontend
   frontend:

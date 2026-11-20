@@ -1,0 +1,620 @@
+import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { resolve, dirname } from 'node:path';
+import test from 'node:test';
+import { runInNewContext } from 'node:vm';
+import ts from 'typescript';
+
+// Real React hooks/components, controlled HTTP. Optional isolated renderer installation
+// keeps production dependencies unchanged (see CHARACTER_SOURCE_UPDATE_UI.md).
+const testRequire = createRequire(process.env.CHARACTER_UI_TEST_MODULES || import.meta.url);
+const React = testRequire('react');
+const { create, act } = testRequire('react-test-renderer');
+globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+const root = resolve(import.meta.dirname, '../..');
+test('the reminder worker shows generic text and only opens the inbox', async () => {
+  const listeners = {};
+  const notifications = [];
+  const destinations = [];
+  const self = {
+    addEventListener: (type, handler) => { listeners[type] = handler; },
+    registration: { showNotification: async (title, options) => notifications.push({ title, ...options }) },
+    clients: { openWindow: async url => destinations.push(url) },
+    location: { origin: 'https://chat.example.invalid' },
+  };
+  runInNewContext(readFileSync(resolve(root, 'public/character-push-worker.js'), 'utf8'), { self, URL });
+  const pending = [];
+  const waitUntil = promise => pending.push(promise);
+  const tag = 'a'.repeat(32);
+  listeners.push({ data: { json: () => ({ tag: 'invalid' }) }, waitUntil });
+  listeners.push({ data: { json: () => ({ tag, body: 'private', url: 'https://wrong.example.invalid' }) }, waitUntil });
+  await Promise.all(pending);
+  assert.deepEqual(notifications, [{
+    title: '有一条角色消息', body: '打开应用查看消息。', tag: 'character-' + tag, renotify: false,
+  }]);
+  let closed = 0;
+  const click = tag => listeners.notificationclick({ notification: { tag, close: () => closed++ }, waitUntil });
+  click('other-app');
+  click(notifications[0].tag);
+  await Promise.all(pending);
+  assert.equal(closed, 1);
+  assert.deepEqual(destinations, ['https://chat.example.invalid/chat']);
+});
+
+const doc = (id, content = id) => ({ id, title: id, content });
+const settings = { name: '旅人', persona: '人物', greeting: '你好', scenario: '', relationships: '', examples: [], reference_text: '' };
+const character = { id: 'copy', revision: 1, settings_revision: 1, settings, source_character_id: 'author', source_revision: 1 };
+const basePlan = () => ({ available: true, revision: 1, source_revision: 2, publication_id: 'pub2', local_corpus_id: 'local1',
+  baseline_publication_id: 'pub1', changes: {}, current_sources: [doc('a', '本地'), doc('b', '本地b')],
+  incoming_sources: [doc('a', '作者')], sources: [doc('a', '作者')], source_merge: { status: 'conflict', reason: 'explicit_resolution_required',
+    actions: [], conflicts: [{ id: 'a', kind: 'both_modified' }, { id: 'b', kind: 'local_modify_author_delete' }], merged_sources: [] } });
+const text = value => typeof value === 'string' ? value : Array.isArray(value) ? value.map(text).join('') : value?.children ? text(value.children) : '';
+const buttons = renderer => renderer.root.findAllByType('button');
+const button = (renderer, label) => {
+  const found = buttons(renderer).find(b => text(b).includes(label));
+  assert.ok(found, `button missing: ${label}`); return found;
+};
+const click = async (renderer, label) => { const b = button(renderer, label); assert.ok(!b.props.disabled, `${label} disabled`); await act(async () => b.props.onClick?.()); };
+const change = async (node, value) => act(async () => node.props.onChange({ target: { value } }));
+test('conversation candidates only schedule after an explicit confirmation', async () => {
+  const start = Math.floor(Date.now() / 60_000) * 60;
+  const candidate = { source_turn_id: 'source', topic: '明天我有面试', kind: 'event', suggested_at: start + 86400 };
+  const policy = { revision: 1, enabled: true, cadence_hours: 48, timezone: 'UTC', quiet_start: null, quiet_end: null, inactivity_hours: null };
+  const jobs = [];
+  const load = loader({
+    getCharacterProactive: async () => ({ available: true, policy, jobs: [] }),
+    getCharacterProactiveCandidates: async () => ({ candidates: [candidate] }),
+    scheduleCharacterProactive: async (id, job) => jobs.push({ id, ...job }),
+  });
+  let renderer;
+  try {
+    const { ProactivePanel } = load('src/components/chat/ProactivePanel.tsx');
+    await act(async () => { renderer = create(React.createElement(ProactivePanel, { sessionId: 'session' })); });
+    await click(renderer, '从最近对话查找候选');
+    await click(renderer, '使用这句话');
+    assert.equal(jobs.length, 0);
+    const topic = renderer.root.findAllByType('input').find(input => input.props.readOnly);
+    assert.equal(topic.props.value, candidate.topic);
+    const form = renderer.root.findAllByType('form').find(item => text(item).includes('安排应用内消息'));
+    await act(async () => form.props.onSubmit({ preventDefault() {} }));
+    assert.equal(jobs.length, 1);
+    assert.equal(jobs[0].source_turn_id, 'source');
+    assert.equal(jobs[0].due_at, candidate.suggested_at);
+    assert.equal(jobs[0].topic, candidate.topic);
+  } finally {
+    if (renderer) await act(async () => renderer.unmount());
+  }
+});
+
+test('fiction history opens and loads older entries while outreach is off', async () => {
+  const reads = [];
+  const policy = { revision: 2, enabled: false, cadence_hours: 48, timezone: 'UTC', quiet_start: null, quiet_end: null, inactivity_hours: null };
+  const load = loader({
+    getCharacterProactive: async () => ({ available: true, policy, jobs: [] }),
+    getCharacterFictionHistory: async (id, before) => {
+      reads.push({ id, before });
+      return before
+        ? { entries: [{ id: 'old', content: '较早的剧情', sent_at: 100 }], next_before: null }
+        : { entries: [{ id: 'current', content: '最近的剧情', sent_at: 200 }], next_before: 'current' };
+    },
+  });
+  let renderer;
+  try {
+    const { ProactivePanel } = load('src/components/chat/ProactivePanel.tsx');
+    await act(async () => { renderer = create(React.createElement(ProactivePanel, { sessionId: 'session' })); });
+    await click(renderer, '载入剧情记录');
+    await click(renderer, '加载更早记录');
+    assert.deepEqual(reads, [{ id: 'session', before: undefined }, { id: 'session', before: 'current' }]);
+    assert.ok(text(renderer.root.findByType('ol')).includes('最近的剧情'));
+    assert.ok(text(renderer.root.findByType('ol')).includes('较早的剧情'));
+    assert.equal(buttons(renderer).some(item => text(item).includes('加载更早记录')), false);
+  } finally {
+    if (renderer) await act(async () => renderer.unmount());
+  }
+});
+
+function loader(api) {
+  const cache = new Map();
+  function load(file) {
+    const path = resolve(root, file);
+    if (cache.has(path)) return cache.get(path);
+    const source = readFileSync(path, 'utf8');
+    const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true } }).outputText;
+    const loadedModule = { exports: {} }; cache.set(path, loadedModule.exports);
+    const req = id => {
+      if (id === 'react' || id === 'react/jsx-runtime') return testRequire(id);
+      if (id === '@/lib/api' && api) return {
+        api: {
+          getCharacterProactiveInbox: async () => ({ messages: [] }),
+          getCharacterBrowserPush: async () => ({ public_key: null, subscription_ids: [] }),
+          ...api,
+        }, ApiRequestError: ErrorClass,
+      };
+      if (id.startsWith('@/components/ui/')) {
+        const tag = id.endsWith('button') ? 'button' : id.endsWith('input') ? 'input' : 'label';
+        const name = tag[0].toUpperCase() + tag.slice(1);
+        return { [name]: props => { const hostProps = { ...props }; delete hostProps.asChild; return React.createElement(tag, hostProps); } };
+      }
+      if (id === 'next/link') return { __esModule: true, default: props => React.createElement('a', props) };
+      if (id.includes('/layout/')) return { AppLayout: ({ children }) => children, AuthGuard: ({ children }) => children };
+      const location = id.startsWith('@/') ? resolve(root, 'src', id.slice(2)) : resolve(dirname(path), id);
+      for (const suffix of ['.tsx', '.ts']) {
+        try { return load(location + suffix); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+      }
+      throw new Error(`Unexpected require ${id}`);
+    };
+    new Function('require', 'module', 'exports', compiled)(req, loadedModule, loadedModule.exports);
+    cache.set(path, loadedModule.exports); return loadedModule.exports;
+  }
+  return load;
+}
+class ErrorClass extends Error { constructor(status) { super(`HTTP ${status}`); this.status = status; } }
+function harness(overrides = {}) {
+  const calls = { get: 0, preview: [], confirm: [], save: 0, publish: 0 };
+  const api = {
+    getCharacterSourceUpdate: async () => { calls.get++; return structuredClone(basePlan()); },
+    previewCharacterSourceUpdate: async (_id, request) => {
+      calls.preview.push(structuredClone(request));
+      return { ...request, preview_id: 'exact', baseline_publication_id: 'pub1', settings, sources: [doc('a', '本地')],
+        source_merge: { status: 'ready', actions: [], conflicts: [], resolved_conflicts: [{ id: 'a', choice: 'local' }, { id: 'b', choice: 'author' }] } };
+    },
+    confirmCharacterSourceUpdate: async (_id, preview) => { calls.confirm.push(preview); return { ...character, revision: 2 }; },
+    listCharacterLibrary: async () => ({ characters: [character] }),
+    listCharacterSources: async () => ({ corpora: [{ id: 'edition', created_at: '2026-11-19', index_status: 'completed', index_attempt: 1 }] }),
+    getCharacterSources: async () => ({ sources: [doc('a')] }),
+    publishCharacterSources: async () => { calls.publish++; return { id: 'new', index_status: 'completed', created_at: '2026-11-19' }; },
+    saveLibraryCharacter: async () => { calls.save++; return { ...character, revision: 2 }; },
+    ...overrides,
+  };
+  return { api, calls, load: loader(api) };
+}
+async function panel(h = harness()) {
+  let locked = false, begins = 0, imported = 0;
+  const Component = h.load('src/components/chat/CharacterSourceUpdatePanel.tsx').CharacterSourceUpdatePanel;
+  let renderer;
+  await act(async () => { renderer = create(React.createElement(Component, { character, disabled: false,
+    begin: () => { begins++; if (locked) return false; locked = true; return true; }, end: () => { locked = false; },
+    onImported: async () => { imported++; } })); });
+  return { ...h, renderer, locked: () => locked, begins: () => begins, imported: () => imported };
+}
+async function choices(renderer) {
+  const radios = renderer.root.findAllByType('input').filter(n => n.props.type === 'radio');
+  assert.equal(radios.length, 4);
+  await act(async () => radios[0].props.onChange());
+  await act(async () => radios[3].props.onChange());
+}
+async function unmount(renderer) { await act(async () => renderer.unmount()); }
+
+test('continuation binds a new source edition only after user selection', async () => {
+  const originalWindow = globalThis.window;
+  globalThis.window = { location: { search: '' } };
+  const source = { id: 'old', character_id: character.id, title: '旧会话', revision: 3, mode: 'initial' };
+  const result = {
+    id: 'new-session', character, baseline: { history: [] },
+    state: { relationship: { stage: 'stranger' }, memories: [] },
+  };
+  const submissions = [];
+  const load = loader({
+    listCharacterLibrary: async () => ({ characters: [character] }),
+    listCharacterChats: async () => ({ sessions: [source] }),
+    listSharedChatMemories: async () => ({ memories: [] }),
+    getContinuationPreview: async () => ({
+      source_session_id: source.id, source_revision: source.revision, character_revision: 1, previous_character_revision: 1,
+      source_corpus_id: 'old-source', latest_source_corpus: { id: 'new-source', index_status: 'completed', created_at: '2026-11-19' },
+      changes: {}, relationship: { stage: 'stranger' }, memories: [],
+    }),
+    createCharacterChat: async body => {
+      submissions.push(body);
+      return submissions.length === 1 ? Promise.reject(new Error('模拟刷新前的失败')) : result;
+    },
+    getCharacterChat: async () => ({ session: result, turns: [] }),
+    getCharacterProactive: async () => ({
+      available: true, policy: { revision: 0, enabled: false, cadence_hours: 48, timezone: 'UTC', quiet_start: 1320, quiet_end: 480 },
+      jobs: [],
+    }),
+  });
+  let renderer;
+  try {
+    await act(async () => { renderer = create(React.createElement(load('src/app/chat/page.tsx').default)); });
+    await change(renderer.root.findByProps({ id: 'chat-source' }), source.id);
+    const submit = () => act(async () => renderer.root.findByType('form').props.onSubmit({ preventDefault() {} }));
+    await submit();
+    assert.equal(submissions[0].source_session_id, 'old');
+    assert.equal(submissions[0].source_corpus_id, undefined);
+    const option = renderer.root.findAllByType('label').find(node => text(node).includes('在新会话中使用最新资料版本'));
+    assert.ok(option);
+    assert.equal(option.findByType('input').props.checked, false);
+    await act(async () => option.findByType('input').props.onChange({ target: { checked: true } }));
+    await submit();
+    assert.equal(submissions[1].source_corpus_id, 'new-source');
+  } finally {
+    if (renderer) await unmount(renderer);
+    globalThis.window = originalWindow;
+  }
+});
+
+test('viewing a delivered character message does not request notification permission', async () => {
+  const policy = { revision: 2, enabled: false, cadence_hours: 48, timezone: 'UTC', quiet_start: 1320, quiet_end: 480 };
+  const load = loader({
+    getCharacterProactive: async id => {
+      assert.equal(id, 'session-id');
+      return { available: true, policy, jobs: [{
+        id: 'message', status: 'sent', content: '如果愿意，继续上次的话题。', sent_at: 100, due_at: 99,
+      }] };
+    },
+  });
+  let renderer;
+  const original = globalThis.Notification;
+  globalThis.Notification = { requestPermission: () => assert.fail('Opening a chat must not ask for browser permissions') };
+  try {
+    const { ProactivePanel } = load('src/components/chat/ProactivePanel.tsx');
+    await act(async () => { renderer = create(React.createElement(ProactivePanel, { sessionId: 'session-id' })); });
+    assert.ok(renderer.root.findAllByType('p').some(node => text(node) === '如果愿意，继续上次的话题。'));
+    assert.equal(renderer.root.findAllByType('form').length, 1);
+  } finally {
+    if (renderer) await unmount(renderer);
+    if (original === undefined) delete globalThis.Notification;
+    else globalThis.Notification = original;
+  }
+});
+
+test('push control requests permission only after a click and supports disabling', async () => {
+  const saved = new Map();
+  const originals = Object.getOwnPropertyDescriptors(globalThis);
+  const requests = [];
+  let focus;
+  let subscription = null;
+  const device = {
+    endpoint: 'https://fcm.googleapis.com/test-device',
+    options: { applicationServerKey: Uint8Array.of(1).buffer },
+    toJSON() { return { endpoint: this.endpoint, keys: { p256dh: 'public', auth: 'auth' } }; },
+  };
+  const id = createHash('sha256').update('session\0' + device.endpoint).digest('hex');
+  const registration = { pushManager: {
+    getSubscription: async () => subscription,
+    subscribe: async () => { subscription = device; return subscription; },
+  } };
+  const setGlobal = (name, value) => Object.defineProperty(globalThis, name, { configurable: true, value });
+  setGlobal('window', { isSecureContext: true, PushManager: class {}, Notification: {},
+    addEventListener: (_, callback) => { focus = callback; }, removeEventListener: () => { focus = undefined; } });
+  setGlobal('localStorage', { getItem: key => saved.get(key), setItem: (key, value) => saved.set(key, value),
+    removeItem: key => saved.delete(key) });
+  setGlobal('Notification', { permission: 'default', requestPermission: async () => {
+    requests.push('permission'); Notification.permission = 'granted'; return 'granted';
+  } });
+  setGlobal('navigator', { serviceWorker: {
+    register: async route => { assert.equal(route, '/character-push-worker.js'); },
+    getRegistration: async () => registration,
+    ready: Promise.resolve(registration),
+  } });
+  const load = loader({
+    getCharacterBrowserPush: async () => ({ public_key: 'AQ', subscription_ids: [] }),
+    registerCharacterBrowserPush: async session => { requests.push(session); return { id }; },
+    removeCharacterBrowserPush: async (session, id) => { requests.push([session, id]); },
+  });
+  let renderer;
+  try {
+    const { BrowserPushControl } = load('src/components/chat/BrowserPushControl.tsx');
+    await act(async () => { renderer = create(React.createElement(BrowserPushControl, { sessionId: 'session', authorized: true })); });
+    assert.deepEqual(requests, []);
+    await click(renderer, '为此会话开启浏览器提醒');
+    assert.deepEqual(requests, ['permission', 'session']);
+    await act(async () => focus());
+    assert.equal(renderer.root.findAllByProps({ role: 'status' }).length, 0);
+    subscription = { ...device, endpoint: 'https://fcm.googleapis.com/rotated-device' };
+    await act(async () => focus());
+    assert.match(text(renderer.root.findByProps({ role: 'status' })), /权限或订阅已失效/);
+    subscription = device;
+    await act(async () => focus());
+    assert.equal(renderer.root.findAllByProps({ role: 'status' }).length, 0);
+    Notification.permission = 'denied';
+    await act(async () => focus());
+    assert.match(text(renderer.root.findByProps({ role: 'status' })), /权限或订阅已失效/);
+    await click(renderer, '关闭此浏览器提醒');
+    assert.deepEqual(requests, ['permission', 'session', ['session', id]]);
+    assert.equal(saved.size, 0);
+  } finally {
+    if (renderer) await unmount(renderer);
+    for (const name of ['window', 'navigator', 'Notification', 'localStorage']) {
+      if (originals[name]) Object.defineProperty(globalThis, name, originals[name]);
+      else delete globalThis[name];
+    }
+  }
+});
+
+test('inbox on a different character opens the linked session even outside the first page', async () => {
+  const originalWindow = globalThis.window;
+  const replaced = [];
+  globalThis.window = {
+    location: new URL('http://test/chat?character=other-role&session=wanted'),
+    history: { replaceState: (_state, _title, url) => {
+      replaced.push(url.search);
+      globalThis.window.location = new URL(url);
+    } },
+  };
+  const receiving = { ...character, id: 'other-role' };
+  const opened = [];
+  const load = loader({
+    listCharacterLibrary: async () => ({ characters: [character] }),
+    getLibraryCharacter: async id => {
+      assert.equal(id, receiving.id);
+      return receiving;
+    },
+    listCharacterChats: async id => {
+      assert.equal(id, receiving.id);
+      return { sessions: [{ id: 'listed', character_id: receiving.id, title: '列表里的会话', mode: 'initial',
+        revision: 1, character_revision: 1 }] };
+    },
+    listSharedChatMemories: async () => ({ memories: [] }),
+    getCharacterProactiveInbox: async () => ({ messages: [{
+      session_id: 'wanted', character_id: receiving.id, title: '另一个角色的会话', id: 'message', content: '许久不见', sent_at: 100,
+    }] }),
+    getCharacterChat: async id => {
+      opened.push(id);
+      return { session: { id, character_id: receiving.id, character: receiving, title: id === 'wanted' ? '已打开的会话' : '列表里的会话', mode: 'initial',
+        baseline: { history: [] }, state: { relationship: { stage: 'stranger' }, memories: [] } }, turns: [] };
+    },
+    getCharacterProactive: async () => ({ policy: { enabled: false, revision: 0, quiet_start: null, quiet_end: null }, jobs: [] }),
+  });
+  let renderer;
+  try {
+    await act(async () => { renderer = create(React.createElement(load('src/app/chat/page.tsx').default)); });
+    assert.deepEqual(opened, ['wanted']);
+    assert.deepEqual(replaced, []);
+    assert.ok(renderer.root.findAllByType('h2').some(node => text(node) === '已打开的会话'));
+    assert.ok(renderer.root.findAllByType('a').some(node => node.props.href === '/chat?character=other-role&session=wanted'));
+    await click(renderer, '列表里的会话');
+    assert.deepEqual(opened, ['wanted', 'listed']);
+    assert.deepEqual(replaced, ['?character=other-role&session=listed']);
+  } finally {
+    if (renderer) await unmount(renderer);
+    globalThis.window = originalWindow;
+  }
+});
+
+test('session deletion previews related copies and submits only explicit selections', async () => {
+  const originalWindow = globalThis.window;
+  globalThis.window = { location: { search: '' } };
+  const root = { id: 'original', character_id: character.id, title: '原会话', revision: 3, mode: 'initial' };
+  const branch = { ...root, id: 'branch', title: '关联分支', revision: 6, mode: 'branch' };
+  const copy = { ...root, id: 'copy', character_id: 'other', title: '跨角色副本', revision: 2 };
+  const previews = [], deletions = [];
+  const load = loader({
+    listCharacterLibrary: async () => ({ characters: [character] }),
+    listCharacterChats: async () => ({ sessions: [root, branch] }),
+    listSharedChatMemories: async () => ({ memories: [] }),
+    getCharacterProactiveInbox: async () => ({ messages: [root, branch, copy].map(session => ({
+      id: 'message', session_id: session.id, character_id: session.character_id, title: session.title,
+      content: '主动消息', sent_at: 100,
+    })) }),
+    previewCharacterChatDeletion: async selected => {
+      previews.push(selected);
+      return { selected: [root], related: [branch, copy] };
+    },
+    deleteCharacterChats: async selected => {
+      deletions.push(selected);
+      return { deleted_session_ids: selected.map(item => item.id) };
+    },
+  });
+  let renderer;
+  try {
+    await act(async () => { renderer = create(React.createElement(load('src/app/chat/page.tsx').default)); });
+    const check = async label => {
+      const item = renderer.root.findAllByType('label').find(node => text(node).includes(label));
+      assert.ok(item, label);
+      await act(async () => item.findByType('input').props.onChange({ target: { checked: true } }));
+    };
+    await check('原会话');
+    await click(renderer, '预览删除范围');
+    assert.deepEqual(previews, [[{ id: 'original', revision: 3 }]]);
+    assert.deepEqual(deletions, []);
+    await check('跨角色副本');
+    await click(renderer, '永久删除 2 个会话');
+    assert.deepEqual(deletions, [[{ id: 'original', revision: 3 }, { id: 'copy', revision: 2 }]]);
+    assert.deepEqual(renderer.root.findAllByType('a').map(node => node.props.href).filter(href => href.includes('session=')),
+      [`/chat?character=${character.id}&session=branch`]);
+  } finally {
+    if (renderer) await unmount(renderer);
+    globalThis.window = originalWindow;
+  }
+});
+
+test('shared preview and copy work when only getRandomValues is available', async t => {
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
+  Object.defineProperty(globalThis, 'crypto', {
+    configurable: true,
+    value: { getRandomValues: bytes => bytes.fill(42) },
+  });
+  t.after(() => Object.defineProperty(globalThis, 'crypto', previous));
+  const requests = [];
+  const SharedCharacterPreview = loader({
+    getSharedCharacter: async () => ({ publication_id: 'published', settings, sources: [] }),
+    copySharedCharacter: async (_token, _publication, request) => {
+      requests.push(request);
+      return character;
+    },
+  })('src/components/chat/CharacterSharing.tsx').SharedCharacterPreview;
+  let renderer;
+  await act(async () => {
+    renderer = create(React.createElement(SharedCharacterPreview, { token: 'token', onCopied: async () => {} }));
+  });
+  try {
+    await click(renderer, '预览或刷新分享内容');
+    await click(renderer, '预览或刷新分享内容');
+    await click(renderer, '确认复制此发布内容');
+    assert.deepEqual(requests, ['2a'.repeat(16)]);
+  } finally {
+    await unmount(renderer);
+  }
+});
+
+test('mixed conflict/deletion choices have no defaults; exact final result and one confirmation', async () => {
+  const h = await panel(); await click(h.renderer, '检查并预览');
+  assert.ok(button(h.renderer, '生成最终预览').props.disabled);
+  assert.ok(h.renderer.root.findAllByType('input').every(n => !n.props.checked));
+  assert.match(text(h.renderer.toJSON()), /作者已删除/);
+  await choices(h.renderer); await click(h.renderer, '生成最终预览');
+  assert.deepEqual(h.calls.preview[0].choices, { a: 'local', b: 'author' });
+  assert.match(text(h.renderer.toJSON()), /删除（新版不包含此篇）/);
+  const confirm = button(h.renderer, '确认保存此最终版本');
+  await act(async () => { confirm.props.onClick(); confirm.props.onClick(); });
+  assert.equal(h.calls.confirm.length, 1); assert.equal(h.calls.confirm[0].preview_id, 'exact');
+  assert.equal(h.imported(), 1); assert.equal(h.locked(), false);
+  await unmount(h.renderer);
+});
+
+test('expired confirmation drops choices and requires a fresh plan; cancel releases lock', async () => {
+  const h = await panel(harness({ confirmCharacterSourceUpdate: async () => { throw new ErrorClass(409); } }));
+  await click(h.renderer, '检查并预览'); await choices(h.renderer); await click(h.renderer, '生成最终预览');
+  await click(h.renderer, '确认保存'); assert.match(text(h.renderer.toJSON()), /预览已失效/);
+  assert.ok(!buttons(h.renderer).some(b => text(b).includes('确认保存')));
+  await click(h.renderer, '重新检查');
+  assert.ok(h.renderer.root.findAllByType('input').every(n => !n.props.checked));
+  await click(h.renderer, '取消更新'); assert.equal(h.locked(), false); assert.equal(h.imported(), 0);
+  await unmount(h.renderer);
+});
+
+test('unknown confirmation outcome retains exact preview for idempotent retry and blocks cancel', async () => {
+  let attempts = 0; const received = [];
+  const h = await panel(harness({ confirmCharacterSourceUpdate: async (_id, value) => {
+    received.push(value); if (++attempts === 1) throw new Error('network'); return { ...character, revision: 2 };
+  } }));
+  await click(h.renderer, '检查并预览'); await choices(h.renderer); await click(h.renderer, '生成最终预览');
+  await click(h.renderer, '确认保存'); assert.equal(h.locked(), true);
+  assert.ok(button(h.renderer, '取消更新').props.disabled); assert.ok(button(h.renderer, '重新检查').props.disabled);
+  await click(h.renderer, '重试同一确认'); assert.deepEqual(received[0], received[1]); assert.equal(h.locked(), false);
+  await unmount(h.renderer);
+});
+
+for (const reason of ['baseline', 'collision', 'unknown-kind']) test(`read-only blocked plan: ${reason}`, async () => {
+  const value = basePlan();
+  if (reason === 'baseline') value.source_merge = { ...value.source_merge, status: 'blocked', reason: 'baseline_unavailable', conflicts: [] };
+  else value.source_merge.conflicts[0].kind = reason === 'collision' ? 'addition_id_collision' : 'future_conflict';
+  const h = await panel(harness({ getCharacterSourceUpdate: async () => value }));
+  await click(h.renderer, '检查并预览');
+  assert.ok(button(h.renderer, '生成最终预览').props.disabled);
+  assert.equal(h.renderer.root.findAllByType('input').length, 0);
+  await click(h.renderer, '取消更新'); await unmount(h.renderer);
+});
+
+test('conflict-free plan requests final preview with explicit empty choices', async () => {
+  const value = basePlan(); value.source_merge = { status: 'ready', reason: null, conflicts: [], actions: [{ id: 'a', action: 'keep_local_modification' }], merged_sources: [doc('a')] };
+  const h = await panel(harness({ getCharacterSourceUpdate: async () => value }));
+  await click(h.renderer, '检查并预览'); assert.match(text(h.renderer.toJSON()), /保留本地修改/);
+  await click(h.renderer, '生成最终预览'); assert.deepEqual(h.calls.preview[0].choices, {});
+  await click(h.renderer, '取消更新'); await unmount(h.renderer);
+});
+
+test('preview errors cannot leave old choices or enable confirmation', async () => {
+  const h = await panel(harness({ previewCharacterSourceUpdate: async () => { throw new ErrorClass(409); } }));
+  await click(h.renderer, '检查并预览'); await choices(h.renderer); await click(h.renderer, '生成最终预览');
+  assert.match(text(h.renderer.toJSON()), /重新检查并重新选择/);
+  assert.ok(!buttons(h.renderer).some(b => text(b).includes('确认保存')));
+  await click(h.renderer, '重新检查'); assert.ok(h.renderer.root.findAllByType('input').every(n => !n.props.checked));
+  await click(h.renderer, '取消更新'); await unmount(h.renderer);
+});
+
+async function page(overrides) {
+  const h = harness(overrides); let confirmations = 0, answer = false;
+  globalThis.window = { location: { search: '', origin: 'http://test' }, confirm: () => { confirmations++; return answer; }, addEventListener() {}, removeEventListener() {} };
+  globalThis.document = { addEventListener() {}, removeEventListener() {} };
+  let renderer;
+  const Component = h.load('src/app/character-library/page.tsx').default;
+  await act(async () => { renderer = create(React.createElement(Component)); });
+  await click(renderer, '旅人');
+  return { ...h, renderer, confirmations: () => confirmations, answer: value => { answer = value; } };
+}
+
+test('read-only loaded sources are clean; cancel update preserves loaded content', async () => {
+  const h = await page(); await click(h.renderer, '查看或作为新版起点');
+  await click(h.renderer, '检查并预览'); assert.equal(h.confirmations(), 0);
+  await click(h.renderer, '取消更新');
+  assert.equal(h.renderer.root.findByProps({ id: 'source-body-a' }).props.value, 'a');
+  await unmount(h.renderer);
+});
+
+test('dirty source edits survive cancellation, failed save, role save and selection attempts; saved source reloads plan', async () => {
+  let fail = true;
+  const h = await page({ publishCharacterSources: async () => { if (fail) throw new Error('save failed'); return { id: 'new', index_status: 'completed' }; } });
+  await click(h.renderer, '查看或作为新版起点'); await change(h.renderer.root.findByProps({ id: 'source-body-a' }), 'keep me');
+  const before = h.calls.get;
+  await click(h.renderer, '检查并预览'); assert.equal(h.calls.get, before);
+  await click(h.renderer, '创建角色'); assert.equal(h.renderer.root.findByProps({ id: 'source-body-a' }).props.value, 'keep me');
+  const forms = h.renderer.root.findAllByType('form');
+  await act(async () => forms[0].props.onSubmit({ preventDefault() {} })); assert.equal(h.calls.save, 0);
+  await act(async () => forms[1].props.onSubmit({ preventDefault() {} }));
+  assert.equal(h.renderer.root.findByProps({ id: 'source-body-a' }).props.value, 'keep me');
+  fail = false; await act(async () => forms[1].props.onSubmit({ preventDefault() {} }));
+  assert.ok(h.calls.get > before); const prompts = h.confirmations();
+  await click(h.renderer, '检查并预览'); assert.equal(h.confirmations(), prompts);
+  assert.ok(h.renderer.root.findAllByType('fieldset').some(f => f.props.disabled));
+  assert.ok(button(h.renderer, '创建角色').props.disabled);
+  await click(h.renderer, '取消更新'); await unmount(h.renderer);
+});
+
+test('settings edits are retained when discarding is cancelled, and only explicit discard clears them', async () => {
+  const h = await page(); await change(h.renderer.root.findByProps({ id: 'character-name' }), 'unsaved');
+  await click(h.renderer, '检查并预览'); assert.equal(h.renderer.root.findByProps({ id: 'character-name' }).props.value, 'unsaved');
+  h.answer(true); await click(h.renderer, '检查并预览');
+  assert.equal(h.renderer.root.findByProps({ id: 'character-name' }).props.value, settings.name);
+  await click(h.renderer, '取消更新'); await unmount(h.renderer);
+});
+
+test('client sends only identity, choices and exact preview id, never server-generated body', async () => {
+  const { api } = loader().call(null, 'src/lib/api.ts'); const requests = [];
+  api.request = async (path, options) => { requests.push({ path, body: JSON.parse(options.body) }); return {}; };
+  const value = { revision: 1, source_revision: 2, publication_id: 'pub', local_corpus_id: null, choices: { a: 'author' }, preview_id: 'exact', settings, sources: [doc('a')] };
+  await api.confirmCharacterSourceUpdate('copy', value);
+  assert.deepEqual(requests[0].body, { revision: 1, source_revision: 2, publication_id: 'pub', local_corpus_id: null, choices: { a: 'author' }, preview_id: 'exact' });
+  await api.importCharacterSourceUpdate('copy', 1, 2, 'pub', null);
+  assert.equal(requests[1].body.choices, undefined); assert.equal(requests[1].body.preview_id, undefined);
+});
+
+test('in-flight source save excludes duplicate saves and competing update/revision changes', async () => {
+  let finish; let writes = 0;
+  const pending = new Promise(resolve => { finish = resolve; });
+  const h = await page({ publishCharacterSources: async () => { writes++; return pending; } });
+  await click(h.renderer, '查看或作为新版起点'); await change(h.renderer.root.findByProps({ id: 'source-body-a' }), 'pending edit');
+  const sourceForm = h.renderer.root.findAllByType('form')[1];
+  await act(async () => { sourceForm.props.onSubmit({ preventDefault() {} }); sourceForm.props.onSubmit({ preventDefault() {} }); });
+  assert.equal(writes, 1);
+  assert.ok(button(h.renderer, '检查并预览').props.disabled);
+  assert.ok(button(h.renderer, '创建角色').props.disabled);
+  await act(async () => finish({ id: 'saved', index_status: 'completed' }));
+  assert.equal(h.renderer.root.findByProps({ id: 'source-body-a' }).props.value, 'pending edit');
+  assert.ok(!button(h.renderer, '检查并预览').props.disabled);
+  await unmount(h.renderer);
+});
+
+test('removing every draft document is still dirty and cancelled update does not restore it', async () => {
+  const h = await page(); await click(h.renderer, '查看或作为新版起点'); await click(h.renderer, '从草稿移除此篇');
+  await click(h.renderer, '检查并预览'); assert.equal(h.confirmations(), 1);
+  assert.equal(h.renderer.root.findAllByProps({ id: 'source-body-a' }).length, 0);
+  assert.match(text(h.renderer.toJSON()), /有未保存的原作资料编辑/);
+  await unmount(h.renderer);
+});
+
+test('failed settings save keeps draft; failed source loading after discard prompt keeps old draft', async () => {
+  let loads = 0;
+  const h = await page({ saveLibraryCharacter: async () => { throw new Error('settings failure'); },
+    getCharacterSources: async () => { if (++loads > 1) throw new Error('load failure'); return { sources: [doc('a')] }; } });
+  await change(h.renderer.root.findByProps({ id: 'character-name' }), 'unsaved name');
+  await act(async () => h.renderer.root.findAllByType('form')[0].props.onSubmit({ preventDefault() {} }));
+  assert.equal(h.renderer.root.findByProps({ id: 'character-name' }).props.value, 'unsaved name');
+  await click(h.renderer, '查看或作为新版起点'); await change(h.renderer.root.findByProps({ id: 'source-body-a' }), 'unsaved source');
+  h.answer(true); await click(h.renderer, '查看或作为新版起点');
+  assert.equal(h.renderer.root.findByProps({ id: 'source-body-a' }).props.value, 'unsaved source');
+  await unmount(h.renderer);
+});
+
+test('double preview clicks send one request and lock competing sharing controls', async () => {
+  const h = await page();
+  const start = button(h.renderer, '检查并预览');
+  await act(async () => { start.props.onClick(); start.props.onClick(); });
+  assert.equal(h.calls.get, 2); // mount plus one explicit check
+  const shareSection = h.renderer.root.findByProps({ 'aria-label': '发布角色分享' });
+  assert.ok(shareSection.findByType('fieldset').props.disabled);
+  await click(h.renderer, '取消更新'); await unmount(h.renderer);
+});
