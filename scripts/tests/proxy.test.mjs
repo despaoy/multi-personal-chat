@@ -218,11 +218,30 @@ test('a valid response without a body remains 204', async () => {
 });
 
 test('logout retains an upstream failure body and clears the local cookie', async () => {
-  const response = await logout.POST(localRequest('/api/auth/logout', { method: 'POST' }));
-  assert.equal(response.status, 503);
-  assert.equal(await response.text(), 'logout unavailable');
-  assert.match(response.headers.get('set-cookie'), /access_token=;/);
-  assert.match(response.headers.get('set-cookie'), /Max-Age=0/i);
+  const previous = process.env.NODE_ENV;
+  process.env.NODE_ENV = 'production';
+  try {
+    const request = new Request('http://chat.test/api/auth/logout', { method: 'POST' });
+    const response = await logout.POST(request);
+    assert.equal(response.status, 503);
+    assert.equal(await response.text(), 'logout unavailable');
+    const cookie = response.headers.get('set-cookie');
+    assert.match(cookie, /access_token=;/);
+    assert.match(cookie, /Max-Age=0/i);
+    assert.doesNotMatch(cookie, /;\s*Secure\b/i);
+  } finally {
+    if (previous === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previous;
+  }
+});
+
+test('a rejected logout leaves the browser cookie alone', async () => {
+  const response = await logout.POST(localRequest('/api/auth/logout', {
+    method: 'POST',
+    headers: { Origin: 'https://unrelated.invalid' },
+  }));
+  assert.equal(response.status, 403);
+  assert.equal(response.headers.has('set-cookie'), false);
 });
 
 test('same-origin and permitted-path checks still reject before forwarding', async () => {
