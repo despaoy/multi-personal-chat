@@ -1,7 +1,6 @@
 """Only configured knowledge sources may be scanned or imported."""
 
-from knowledge.index_lifecycle import default_knowledge_index as index_lifecycle
-
+from pathlib import PurePosixPath
 from types import SimpleNamespace
 
 import httpx
@@ -11,8 +10,10 @@ from fastapi import FastAPI
 from api import knowledge
 from app.dependencies import get_current_admin
 from app.runtime import RuntimeContainer
-from infra.bounded_executor import BoundedThreadExecutor
 from db.database import SQLiteDB
+from infra.bounded_executor import BoundedThreadExecutor
+from knowledge.index_lifecycle import default_knowledge_index as index_lifecycle
+from knowledge.source_storage import SourceEntry
 
 TEXT = "完整登记规则：12月5日14点在二楼办理，本人携身份证和书面确认，未确认不得付款；截止为4日18点。"
 OUTSIDE = "完整外部合成资料：12月8日15点到三楼，须携证件并先获得书面确认；这不属于配置的知识来源。"
@@ -146,3 +147,40 @@ async def test_missing_optional_source_root_stays_an_explicit_empty_scan(sources
     response = await request(sources)
     assert response.status_code == 200
     assert response.json() == {"success": True, "directories": [], "message": "知识库目录不存在"}
+
+
+async def test_scan_and_import_accept_storage_keys_without_local_files(sources, monkeypatch):
+    root, folder, obj = map(PurePosixPath, (".", "bucket-prefix", "bucket-prefix/rules.txt"))
+    contents = TEXT.encode()
+    calls = []
+
+    class FixtureStorage:
+        def info(self, key):
+            return {
+                root: SourceEntry(True, 0, "root"),
+                folder: SourceEntry(True, 0, "prefix"),
+                obj: SourceEntry(False, len(contents), "object"),
+            }.get(key)
+
+        def children(self, key):
+            return {root: [folder], folder: [obj]}[key]
+
+        def read_bytes(self, key):
+            assert key == obj
+            calls.append(key)
+            return contents
+
+    monkeypatch.setattr(knowledge, "get_knowledge_source_storage", FixtureStorage)
+    assert not (sources.root / folder.name).exists()
+    rejected = await request(sources, name="../outside")
+    assert rejected.status_code == 400 and not calls
+    scanned = await request(sources)
+    assert scanned.status_code == 200 and not calls
+    assert scanned.json()["directories"][0]["children"] == [
+        {"name": "rules.txt", "type": "file", "size": len(contents), "extension": ".txt"},
+    ]
+    imported = await request(sources, name=folder.name)
+    assert imported.status_code == 200 and imported.json()["createdDocs"] == 1
+    assert calls == [obj]
+    document, = sources.db.get_knowledge_documents()
+    assert document["knowledge_base_id"] == sources.kb["id"] and document["content"] == TEXT
