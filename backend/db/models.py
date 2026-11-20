@@ -134,6 +134,12 @@ class CharacterChatSession(Base):
     )
 
 
+class CharacterChatErasureReceipt(Base):
+    """Content-free record of a permanently erased session."""
+    __tablename__ = "character_chat_erasure_receipts"
+    session_id: Mapped[str] = mapped_column(Text, primary_key=True)
+
+
 class CharacterSharedMemory(Base):
     """Explicit account-private snapshots offered to future conversations."""
     __tablename__ = "character_shared_memories"

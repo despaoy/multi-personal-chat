@@ -109,7 +109,10 @@ def test_postgres_memory_rewind_branch_and_atomic_delete(database):
         repo.delete_sessions("branch-owner", [{"id": session["id"], "revision": session["revision"]},
                                              {"id": branch["id"], "revision": 999}])
     assert repo.get("branch-owner", session["id"])["revision"] == session["revision"]
+    receipts = "SELECT session_id FROM character_chat_erasure_receipts WHERE session_id=:id"
+    assert database.execute_sql(receipts, {"id": session["id"]}) == []
     repo.delete_sessions("branch-owner", [{"id": session["id"], "revision": session["revision"]}])
+    assert database.execute_sql(receipts, {"id": session["id"]}) == [{"session_id": session["id"]}]
     assert repo.get("branch-owner", branch["id"])["baseline"]["history"][0]["message"] == "去海边"
 
 

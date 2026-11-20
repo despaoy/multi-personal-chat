@@ -6,6 +6,7 @@ import uuid
 from collections import defaultdict, deque
 from datetime import datetime, timezone
 
+from db.character_chat_erasure import ERASURE_TABLE, SESSION_ROWS
 from db.errors import RevisionConflictError
 from repositories.character_library import CharacterLibraryRepository, CharacterNotFoundError
 
@@ -134,21 +135,14 @@ class CharacterChatRepository:
             )
         for session_id in sorted(ids):
             params = {"id": session_id}
+            statements.extend((
+                (f"INSERT INTO {ERASURE_TABLE} (session_id) VALUES (:id) ON CONFLICT (session_id) DO NOTHING", params, None),
+                ("DELETE FROM character_chat_evidence WHERE turn_id IN "
+                 "(SELECT id FROM character_chat_turns WHERE session_id=:id)", params, None),
+            ))
             statements.extend(
-                [
-                    (
-                        "DELETE FROM character_chat_evidence WHERE turn_id IN "
-                        "(SELECT id FROM character_chat_turns WHERE session_id=:id)",
-                        params,
-                        None,
-                    ),
-                    ("DELETE FROM character_shared_memories WHERE source_session_id=:id", params, None),
-                    ("DELETE FROM character_chat_generations WHERE session_id=:id", params, None),
-                    ("DELETE FROM character_chat_enrichment_jobs WHERE session_id=:id", params, None),
-                    ("DELETE FROM character_chat_memory_vectors WHERE session_id=:id", params, None),
-                    ("DELETE FROM character_chat_turns WHERE session_id=:id", params, None),
-                    ("DELETE FROM character_chat_sessions WHERE id=:id", params, 1),
-                ]
+                (f"DELETE FROM {table} WHERE {column}=:id", params, 1 if table == "character_chat_sessions" else None)
+                for table, column in SESSION_ROWS
             )
         self.database.revision_transaction(statements)
         return {"deleted_session_ids": ids}

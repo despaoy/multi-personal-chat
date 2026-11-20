@@ -856,6 +856,9 @@ class SQLiteDB:
         from db.legacy_character_publications import backfill_legacy_copy_baselines
 
         backfill_legacy_copy_baselines(cursor.execute)
+        from db.models import CharacterChatErasureReceipt
+
+        cursor.execute(str(CreateTable(CharacterChatErasureReceipt.__table__, if_not_exists=True).compile(dialect=dialect())))
         self._ensure_column(cursor, 'character_source_corpora', 'index_receipt_json', 'TEXT')
         self._ensure_column(cursor, 'character_source_corpora', 'index_status', "TEXT NOT NULL DEFAULT 'pending'")
         self._ensure_column(cursor, 'character_source_corpora', 'index_attempt', 'INTEGER NOT NULL DEFAULT 1')

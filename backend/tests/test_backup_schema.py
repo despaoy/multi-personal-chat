@@ -13,6 +13,68 @@ from scripts.restore_sqlite_backup import restore_sqlite_backup
 
 
 @pytest.mark.asyncio
+async def test_restore_keeps_chat_erasure_receipts_and_purges_older_session_rows(tmp_path):
+    from character.library import CharacterSettings
+    from db.database import SQLiteDB
+    from repositories.character_chat import CharacterChatRepository
+
+    path = tmp_path / "chat.sqlite"
+    db = SQLiteDB(path)
+    try:
+        chats = CharacterChatRepository(db)
+        character = chats.characters.create("1", CharacterSettings(name="fixture", persona="fixture", greeting="hi"))
+        erased = chats.create("1", character["id"], "erased")
+        kept = chats.create("1", character["id"], "kept")
+        turn = chats.commit_turn(erased, "request", "deleted utterance", "deleted reply", "fixture", enqueue_enrichment=True)
+        erased = chats.get("1", erased["id"])
+        copy = chats.create("1", character["id"], "explicitly retained copy", source_session_id=erased["id"],
+                            source_revision=erased["revision"], source_turn_id=turn["id"])
+        db.execute_sql("DROP TABLE character_chat_erasure_receipts")
+        before = await BackupManager(str(path), backup_dir=str(tmp_path / "archives")).backup()
+    finally:
+        db.close_connection()
+    db = SQLiteDB(path)
+    try:
+        CharacterChatRepository(db).delete_sessions("1", [{"id": erased["id"], "revision": erased["revision"]}])
+    finally:
+        db.close_connection()
+
+    # Replaying the same old backup keeps both the deletion and its receipt.
+    for _ in range(2):
+        restore_sqlite_backup(Path(before.path), path)
+        with closing(sqlite3.connect(path)) as connection:
+            assert {row[0] for row in connection.execute("SELECT id FROM character_chat_sessions")} == {kept["id"], copy["id"]}
+            assert connection.execute("SELECT session_id FROM character_chat_erasure_receipts").fetchall() == [(erased["id"],)]
+            assert connection.execute("SELECT * FROM character_chat_turns WHERE session_id=?", (erased["id"],)).fetchall() == []
+            assert connection.execute("SELECT * FROM character_chat_enrichment_jobs WHERE session_id=?", (erased["id"],)).fetchall() == []
+
+    # Recovery into a new file can use a surviving, newer SQLite receipt source.
+    recovered = tmp_path / "recovered.sqlite"
+    restore_sqlite_backup(Path(before.path), recovered, deletion_records_from=path)
+    with closing(sqlite3.connect(recovered)) as connection:
+        assert connection.execute("SELECT id FROM character_chat_sessions WHERE id=?", (erased["id"],)).fetchone() is None
+
+
+@pytest.mark.asyncio
+async def test_restore_refuses_uncheckpointed_wal_without_replacing_target(tmp_path):
+    source, target = tmp_path / "source.sqlite", tmp_path / "target.sqlite"
+    with closing(sqlite3.connect(source)) as connection, connection:
+        connection.execute("CREATE TABLE archived (value TEXT)")
+    backup = await BackupManager(str(source), backup_dir=str(tmp_path / "archives")).backup()
+
+    with closing(sqlite3.connect(target)) as connection, connection:
+        assert connection.execute("PRAGMA journal_mode=WAL").fetchone() == ("wal",)
+        connection.execute("CREATE TABLE live (value TEXT)")
+        connection.execute("INSERT INTO live VALUES ('newer target')")
+        connection.commit()
+        assert target.with_name(target.name + "-wal").stat().st_size > 0
+        with pytest.raises(RuntimeError, match="uncheckpointed WAL"):
+            restore_sqlite_backup(Path(backup.path), target)
+        assert connection.execute("SELECT value FROM live").fetchall() == [("newer target",)]
+    assert not list(tmp_path.glob("*.safety-*"))
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("kind", [BackupType.FULL, BackupType.INCREMENTAL])
 async def test_backup_and_offline_restore_preserve_complete_schema_and_triggers(tmp_path, kind):
     source, target = tmp_path / "source.sqlite", tmp_path / "target.sqlite"
