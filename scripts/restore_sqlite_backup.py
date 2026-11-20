@@ -58,7 +58,8 @@ def _prepare_restored_chat(candidate: Path, receipts):
         has_outreach = "character_chat_proactive_policies" in tables
         has_push = "character_chat_push_subscriptions" in tables
         has_sharing = "character_library" in tables
-        if not any((has_erasure, has_outreach, has_push, has_sharing)):
+        has_memory_shares = "character_shared_memories" in tables
+        if not any((has_erasure, has_outreach, has_push, has_sharing, has_memory_shares)):
             return False
         connection.execute("PRAGMA foreign_keys=ON")
         connection.execute("PRAGMA secure_delete=ON")
@@ -88,6 +89,8 @@ def _prepare_restored_chat(candidate: Path, receipts):
             connection.execute("DELETE FROM character_chat_push_attempts")
         if "character_chat_push_subscriptions" in tables:
             connection.execute("DELETE FROM character_chat_push_subscriptions")
+        if has_memory_shares:
+            connection.execute("DELETE FROM character_shared_memories")
         if has_sharing:
             columns = {row[1] for row in connection.execute("PRAGMA table_info(character_library)")}
             if "sharing_epoch" not in columns:

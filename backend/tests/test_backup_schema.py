@@ -186,6 +186,52 @@ async def test_restore_keeps_character_shares_closed_and_preserves_copies(tmp_pa
 
 
 @pytest.mark.asyncio
+async def test_restore_does_not_regrant_revoked_memory_shares(tmp_path):
+    from character.library import CharacterSettings
+    from db.database import SQLiteDB
+    from repositories.character_chat import CharacterChatRepository
+    from repositories.character_library import CharacterNotFoundError
+
+    path = tmp_path / "memory-share.sqlite"
+    db = SQLiteDB(path)
+    try:
+        repo = CharacterChatRepository(db)
+        owner = "1"
+        role_ids = [
+            repo.characters.create(owner, CharacterSettings(name=name, persona="fixture", greeting="hi"))["id"]
+            for name in ("来源角色", "接收角色")
+        ]
+        source = repo.create(owner, role_ids[0], "来源")
+        source = repo.manage_memory(owner, source["id"], source["revision"], content="喜欢白茶")
+        memory_id = source["state"]["memories"][0]["id"]
+        source = repo.share_memory(owner, source["id"], memory_id, source["revision"])
+        grant = repo.shared_memories(owner)[0]["id"]
+        copied = repo.create(owner, role_ids[1], "既有副本", shared_memory_ids=[grant])
+        backup = await BackupManager(str(path), backup_dir=str(tmp_path / "archives")).backup()
+        repo.unshare_memory(owner, grant)
+    finally:
+        db.close_connection()
+
+    for target in (path, tmp_path / "recovered-memory-share.sqlite"):
+        restore_sqlite_backup(Path(backup.path), target)
+        db = SQLiteDB(target)
+        try:
+            repo = CharacterChatRepository(db)
+            assert repo.shared_memories(owner) == []
+            assert repo.get(owner, source["id"])["state"]["memories"][0]["content"] == "喜欢白茶"
+            assert repo.get(owner, copied["id"])["state"]["memories"][0]["content"] == "喜欢白茶"
+            with pytest.raises(CharacterNotFoundError):
+                repo.create(owner, role_ids[1], "旧链接", shared_memory_ids=[grant])
+            repo.share_memory(owner, source["id"], memory_id, source["revision"])
+            renewed = repo.shared_memories(owner)[0]["id"]
+            assert renewed != grant
+            fresh = repo.create(owner, role_ids[1], "新授权", shared_memory_ids=[renewed])
+            assert fresh["state"]["memories"][0]["content"] == "喜欢白茶"
+        finally:
+            db.close_connection()
+
+
+@pytest.mark.asyncio
 async def test_restore_refuses_uncheckpointed_wal_without_replacing_target(tmp_path):
     source, target = tmp_path / "source.sqlite", tmp_path / "target.sqlite"
     with closing(sqlite3.connect(source)) as connection, connection:

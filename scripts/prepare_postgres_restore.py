@@ -79,6 +79,7 @@ async def prepare_restore(staged_url, receipt_url):
             await connection.execute(text(f"UPDATE {_JOBS} SET status='cancelled',topic='' WHERE status='pending'"))
             await connection.execute(text(f"DELETE FROM {_ATTEMPTS}"))
             await connection.execute(text(f"DELETE FROM {_SUBSCRIPTIONS}"))
+            await connection.execute(text("DELETE FROM character_shared_memories"))
             sharing_sql, sharing_params = reset_restored_sharing()
             await connection.execute(text(sharing_sql), sharing_params)
     finally:
