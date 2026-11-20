@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { api, ApiRequestError } from '@/lib/api';
 import { createClientId } from '@/lib/client-id';
 import { GenerationDraft } from '@/components/chat/GenerationDraft';
+import { ProactivePanel } from '@/components/chat/ProactivePanel';
 import type { CharacterChatDeletionPreview, CharacterChatGeneration } from '@/lib/api-contracts';
 import type { CharacterChatSession, CharacterChatSummary, CharacterChatTurn, CharacterLibraryRecord, SendCharacterChatMessage, ContinuationPreview, CharacterSharedMemory, CharacterChatEvidence } from '@/lib/api-contracts';
 
@@ -428,6 +429,7 @@ function ChatWorkspace() {
             }}>延续此会话</Button>}
           </div>
           {session.hypothesis && <p className="rounded-lg bg-muted p-3">剧情假设：{session.hypothesis}</p>}
+          {session.mode !== 'branch' && <ProactivePanel key={session.id} sessionId={session.id} />}
           {watchedRequest && <GenerationDraft key={`${session.id}:${watchedRequest}`} sessionId={session.id} requestId={watchedRequest} />}
           {enrichmentPending && <p role="status" className="rounded-lg border p-3 text-sm">回复已保存，正在整理记忆、关系和对话摘要。你可以先输入下一条，整理结束后即可发送。</p>}
           {enrichmentRetryable && <div role="status" className="space-y-2 rounded-lg border p-3 text-sm">

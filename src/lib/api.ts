@@ -643,6 +643,24 @@ class ApiClient {
     });
   }
 
+  getCharacterProactive(id: string) {
+    return this.request<import('./api-contracts').CharacterProactiveState>(`/character-chats/${encodeURIComponent(id)}/proactive`);
+  }
+
+  saveCharacterProactive(id: string, policy: import('./api-contracts').CharacterProactivePolicy) {
+    return this.request<import('./api-contracts').CharacterProactivePolicy>(`/character-chats/${encodeURIComponent(id)}/proactive`, {
+      method: 'PUT', body: JSON.stringify(policy),
+    });
+  }
+
+  scheduleCharacterProactive(id: string, job: {
+    revision: number; request_id: string; kind: import('./api-contracts').ProactiveTopicKind; topic: string; due_at: number;
+  }) {
+    return this.request(`/character-chats/${encodeURIComponent(id)}/proactive/jobs`, {
+      method: 'POST', body: JSON.stringify(job),
+    });
+  }
+
   deleteCharacterChats(sessions: { id: string; revision: number }[]) {
     return this.request<{ deleted_session_ids: string[] }>('/character-chats/delete-selected', {
       method: 'POST', body: JSON.stringify({ sessions }),

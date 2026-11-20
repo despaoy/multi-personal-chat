@@ -27,6 +27,23 @@ def database():
     db.close()
 
 
+def test_postgres_proactive_delivery_respects_session_consent_and_is_idempotent(database):
+    from repositories.character_chat_proactive import CharacterChatProactiveRepository
+
+    repo = CharacterChatProactiveRepository(database)
+    owner = f"proactive-{uuid.uuid4().hex}"
+    character = repo.chats.characters.create(owner, CharacterSettings(name="fixture", persona="fixture", greeting="hi"))
+    session = repo.chats.create(owner, character["id"], "proactive")
+    identity = session["id"]
+    repo.set_policy(owner, identity, 0, enabled=True, cadence_hours=24, timezone="UTC", quiet_start=None, quiet_end=None)
+    repo.schedule(owner, identity, 1, "id", "event", "test event", 101, now=100)
+    with ThreadPoolExecutor(2) as pool:
+        assert sum(pool.map(lambda _: repo.deliver_due(now=101), range(2))) == 1
+    assert repo.view(owner, identity)["jobs"][0]["status"] == "sent"
+    repo.chats.delete_sessions(owner, [{"id": identity, "revision": session["revision"]}])
+    assert repo.deliver_due(now=200) == 0
+
+
 def test_postgres_legacy_copy_can_preview_and_confirm_an_author_update(database):
     from db.legacy_character_publications import backfill_legacy_copy_baselines
     from repositories.character_library import CharacterLibraryRepository

@@ -99,6 +99,8 @@ rank-bm25>=0.2.2,<1.0           # BM25关键词检索（RAG混合搜索，会自
 redis>=5.2.0,<9.0
 hiredis>=3.1.0,<4.0             # 可选，redis-py 会自动启用 C 加速解析器
 
+tzdata>=2025.1  # time-zone rules on installations without a system IANA database
+
 # Test runner
 pytest>=8.4.0,<10.0
 pytest-asyncio>=1.0.0,<2.0

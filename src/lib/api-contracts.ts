@@ -113,6 +113,31 @@ export interface CharacterChatDeletionPreview {
   related: DeletionSession[];
 }
 
+export interface CharacterProactivePolicy {
+  revision: number;
+  enabled: boolean;
+  cadence_hours: number;
+  timezone: string;
+  quiet_start: number | null;
+  quiet_end: number | null;
+}
+
+export type ProactiveTopicKind = 'follow_up' | 'event' | 'fiction';
+
+export interface CharacterProactiveState {
+  available: boolean;
+  policy: CharacterProactivePolicy;
+  jobs: {
+    id: string;
+    kind: ProactiveTopicKind;
+    topic: string;
+    due_at: number;
+    sent_at: number | null;
+    content: string | null;
+    status: 'pending' | 'sent';
+  }[];
+}
+
 export interface CharacterChatEvidence {
   sources?: Array<{ id: string; title: string; excerpt: string; truncated: boolean; line_start?: number | null; line_end?: number | null }>;
   retrieval_status?: string;

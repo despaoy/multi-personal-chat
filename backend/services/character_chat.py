@@ -20,7 +20,7 @@ from services.character_chat_policy import is_local_only, require_local_endpoint
 from services.character_chat_summary import RECENT_TURNS, valid_summaries
 
 
-def prepare_request(session, turns, message, retrieved_memories=None):
+def prepare_request(session, turns, message, retrieved_memories=None, *, proactive_messages=None):
     retained = [*session["baseline"]["history"], *turns]
     summaries = valid_summaries(session["state"], retained)
     covered = {source["turn_id"] for segment in summaries for source in segment["sources"]}
@@ -49,6 +49,7 @@ def prepare_request(session, turns, message, retrieved_memories=None):
                 "creator_reference": settings["reference_text"],
                 "branch_hypothesis": session["hypothesis"],
                 "conversation_summaries": summaries,
+                **({"previous_assistant_outreach": proactive_messages} if proactive_messages else {}),
             },
             ensure_ascii=False,
         ),
@@ -64,7 +65,8 @@ def prepare_request(session, turns, message, retrieved_memories=None):
 
 
 class CharacterChatService:
-    def __init__(self, database, complete, enrich=None, relationship=None, *, stream_events=False, background=False, retrieve=None, sources=None):
+    def __init__(self, database, complete, enrich=None, relationship=None, *, stream_events=False, background=False,
+                 retrieve=None, sources=None, proactive_history=None):
         self.repository = CharacterChatRepository(database)
         self.generations = CharacterChatGenerationRepository(database)
         self.complete = complete
@@ -74,6 +76,7 @@ class CharacterChatService:
         self.background = background
         self.retrieve = retrieve
         self.sources = sources
+        self.proactive_history = proactive_history
 
     async def generate(self, owner, session_id, *, revision, request_id, message, replace_turn_id=None):
         repo = self.repository
@@ -106,7 +109,10 @@ class CharacterChatService:
     async def generate_claimed(self, session, turns, request_id, message, replace_turn_id, token):
         # Edits use historical state; current-session vector indexes cannot represent that state.
         memories = await asyncio.to_thread(self.retrieve, session, message) if self.retrieve and not replace_turn_id else None
-        request = prepare_request(session, turns, message, memories)
+        outreach = None
+        if self.proactive_history and not replace_turn_id and session["mode"] != "branch":
+            outreach = await asyncio.to_thread(self.proactive_history, session["owner_user_id"], session["id"])
+        request = prepare_request(session, turns, message, memories, proactive_messages=outreach)
         if self.sources:
             request = await self.sources(request, session)
         async def event_sink(event):

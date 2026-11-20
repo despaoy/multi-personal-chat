@@ -6,6 +6,7 @@ import json
 import os
 from functools import partial
 from pathlib import Path
+from time import time
 
 import pytest
 from temporalio.testing import WorkflowEnvironment
@@ -20,6 +21,43 @@ from services import temporal_chat
 from services.character_chat_enrichment import process_enrichment
 from services.character_chat_summary import enrich_summary
 from workflows.chat_enrichment import ChatEnrichmentWorkflow
+
+
+@pytest.mark.skipif(os.getenv("RUN_TEMPORAL_INTEGRATION") != "1", reason="requires local Temporal dev server")
+def test_real_proactive_worker_commits_one_private_application_message(tmp_path):
+    from repositories.character_chat_proactive import CharacterChatProactiveRepository
+    from services.temporal_proactive import ChatProactiveActivities, dispatch_proactive
+    from workflows.chat_proactive import ChatProactiveWorkflow
+
+    db = SQLiteDB(tmp_path / "proactive.db")
+    repo = CharacterChatProactiveRepository(db)
+    character = repo.chats.characters.create("owner", CharacterSettings(name="测试", persona="谨慎", greeting="你好"))
+    session = repo.chats.create("owner", character["id"], "主动消息")
+    identity = session["id"]
+    repo.set_policy("owner", identity, 0, enabled=True, cadence_hours=24, timezone="UTC", quiet_start=None, quiet_end=None)
+    due = time() - 1
+    repo.schedule("owner", identity, 1, "job", "event", "PRIVATE-TOPIC", due, now=due - 1)
+
+    async def exercise():
+        cache = Path(__file__).resolve().parents[2] / ".uv-cache" / "temporal"
+        cache.mkdir(parents=True, exist_ok=True)
+        async with await WorkflowEnvironment.start_local(download_dest_dir=str(cache), ui=False) as env:
+            queue = "proactive-fixture"
+            await dispatch_proactive(db, env.client, queue, 1)
+            await dispatch_proactive(db, env.client, queue, 1)
+            async with Worker(env.client, task_queue=queue, workflows=[ChatProactiveWorkflow],
+                              activities=[ChatProactiveActivities(db).deliver]):
+                handle = env.client.get_workflow_handle(f"character-chat-proactive-{queue}-1")
+                assert await asyncio.wait_for(handle.result(), 30) == 1
+                assert "PRIVATE-TOPIC" not in (await handle.fetch_history()).to_json()
+            message, = repo.view("owner", identity)["jobs"]
+            assert message["status"] == "sent" and "PRIVATE-TOPIC" in message["content"]
+            assert repo.deliver_due() == 0
+
+    try:
+        asyncio.run(exercise())
+    finally:
+        db.close_connection()
 
 
 @pytest.mark.skipif(os.getenv("RUN_TEMPORAL_INTEGRATION") != "1", reason="requires local Temporal dev server")

@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import os
+from time import time
 
 from temporalio.client import Client
 from temporalio.worker import Worker
@@ -10,8 +11,10 @@ from temporalio.worker import Worker
 from app.env import load_backend_env
 from infra.environment import read_bool
 from services.temporal_chat import ChatEnrichmentActivities, dispatch_enrichment
+from services.temporal_proactive import ChatProactiveActivities, dispatch_proactive
 from services.temporal_sources import SourceIndexActivities, dispatch_sources
 from workflows.chat_enrichment import ChatEnrichmentWorkflow
+from workflows.chat_proactive import ChatProactiveWorkflow
 from workflows.source_indexing import SourceIndexWorkflow
 
 logger = logging.getLogger(__name__)
@@ -20,9 +23,11 @@ logger = logging.getLogger(__name__)
 async def run(database, client, task_queue):
     activities = ChatEnrichmentActivities(database)
     sources = SourceIndexActivities(database)
+    proactive = ChatProactiveActivities(database)
+    proactive_minute = None
     async with Worker(
-        client, task_queue=task_queue, workflows=[ChatEnrichmentWorkflow, SourceIndexWorkflow],
-        activities=[activities.enrich, activities.fail, sources.index, sources.fail],
+        client, task_queue=task_queue, workflows=[ChatEnrichmentWorkflow, SourceIndexWorkflow, ChatProactiveWorkflow],
+        activities=[activities.enrich, activities.fail, sources.index, sources.fail, proactive.deliver],
         max_concurrent_activities=4,
     ):
         while True:
@@ -35,6 +40,13 @@ async def run(database, client, task_queue):
                     await dispatch_sources(database, client, task_queue)
                 except Exception as exc:
                     logger.warning('Source dispatch unavailable: %s', type(exc).__name__)
+            minute = int(time() // 60)
+            if minute != proactive_minute and read_bool(os.environ, "CHARACTER_CHAT_PROACTIVE_ENABLED", False):
+                try:
+                    await dispatch_proactive(database, client, task_queue, minute)
+                    proactive_minute = minute
+                except Exception as exc:
+                    logger.warning("Proactive dispatch unavailable: %s", type(exc).__name__)
             await asyncio.sleep(2)
 
 

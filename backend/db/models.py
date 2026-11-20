@@ -134,6 +134,33 @@ class CharacterChatSession(Base):
     )
 
 
+class CharacterChatProactivePolicy(Base):
+    __tablename__ = "character_chat_proactive_policies"
+    session_id: Mapped[str] = mapped_column(Text, ForeignKey("character_chat_sessions.id"), primary_key=True)
+    revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    enabled: Mapped[int] = mapped_column(Integer, nullable=False)
+    cadence_hours: Mapped[int] = mapped_column(Integer, nullable=False)
+    timezone: Mapped[str] = mapped_column(Text, nullable=False)
+    quiet_start: Mapped[Optional[int]] = mapped_column(Integer)
+    quiet_end: Mapped[Optional[int]] = mapped_column(Integer)
+    last_sent_at: Mapped[Optional[float]] = mapped_column(Float)
+
+
+class CharacterChatProactiveJob(Base):
+    __tablename__ = "character_chat_proactive_jobs"
+    session_id: Mapped[str] = mapped_column(Text, ForeignKey("character_chat_sessions.id"), primary_key=True)
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    policy_revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    topic: Mapped[str] = mapped_column(Text, nullable=False)
+    due_at: Mapped[float] = mapped_column(Float, nullable=False)
+    next_attempt_at: Mapped[float] = mapped_column(Float, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    sent_at: Mapped[Optional[float]] = mapped_column(Float)
+    content: Mapped[Optional[str]] = mapped_column(Text)
+    __table_args__ = (Index("ix_chat_proactive_jobs_ready", "status", "next_attempt_at", "session_id"),)
+
+
 class CharacterChatErasureReceipt(Base):
     """Content-free record of a permanently erased session."""
     __tablename__ = "character_chat_erasure_receipts"

@@ -3,10 +3,11 @@
 import asyncio
 from functools import partial
 from typing import Literal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from api.character_library import account, call
 from app.runtime import get_runtime_container
@@ -20,6 +21,7 @@ from repositories.character_chat_generation import (
     EnrichmentInProgressError,
     GenerationInProgressError,
 )
+from repositories.character_chat_proactive import CharacterChatProactiveRepository
 from repositories.character_library import CharacterNotFoundError
 from services.character_chat import CharacterChatService, complete_with_provider
 from services.character_chat_events import generation_events
@@ -85,6 +87,35 @@ class RelationshipDecision(Revision):
     accept: bool
 
 
+class ProactivePolicy(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    revision: int = Field(ge=0)
+    enabled: bool
+    cadence_hours: int = Field(ge=24, le=168)
+    timezone: str = Field(min_length=1, max_length=80)
+    quiet_start: int | None = Field(ge=0, le=1439)
+    quiet_end: int | None = Field(ge=0, le=1439)
+
+    @model_validator(mode="after")
+    def validate_schedule(self):
+        try:
+            ZoneInfo(self.timezone)
+        except (ZoneInfoNotFoundError, ValueError) as exc:
+            raise ValueError("请选择有效时区") from exc
+        if (self.quiet_start is None) != (self.quiet_end is None):
+            raise ValueError("免打扰起止时间需同时填写")
+        if self.quiet_start is not None and self.quiet_start == self.quiet_end:
+            raise ValueError("免打扰起止时间需不同")
+        return self
+
+
+class ProactiveJob(Revision):
+    request_id: str = Field(min_length=1, max_length=100)
+    kind: Literal["follow_up", "event", "fiction"]
+    topic: str = Field(min_length=1, max_length=300)
+    due_at: float = Field(gt=0, le=1e10)
+
+
 def repository(request: Request):
     return CharacterChatRepository(get_runtime_container(request.app).db)
 
@@ -102,6 +133,7 @@ def service(request: Request):
         if read_bool(container.startup_env, "CHARACTER_CHAT_VECTORS_ENABLED", False) else None,
         sources=partial(retrieve_configured_sources, database=container.db)
         if read_bool(container.startup_env, 'CHARACTER_CHAT_SOURCES_ENABLED', False) else None,
+        proactive_history=CharacterChatProactiveRepository(container.db).recent_sent,
     )
 
 
@@ -184,6 +216,27 @@ def delete_selected(body: DeleteSessions, owner=Depends(account), repo=Depends(r
 @router.get("/{session_id}/continuation-preview")
 def continuation_preview(session_id: str, owner=Depends(account), repo=Depends(repository)):
     return call(repo.continuation_preview, owner, session_id)
+
+
+@router.get("/{session_id}/proactive")
+def proactive_state(session_id: str, owner=Depends(account), repo=Depends(repository)):
+    return call(CharacterChatProactiveRepository(repo.database).view, owner, session_id)
+
+
+@router.put("/{session_id}/proactive")
+def save_proactive_policy(session_id: str, body: ProactivePolicy, owner=Depends(account), repo=Depends(repository)):
+    try:
+        return call(lambda: CharacterChatProactiveRepository(repo.database).set_policy(owner, session_id, **body.model_dump()))
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
+@router.post("/{session_id}/proactive/jobs", status_code=201)
+def schedule_proactive_job(session_id: str, body: ProactiveJob, owner=Depends(account), repo=Depends(repository)):
+    try:
+        return call(lambda: CharacterChatProactiveRepository(repo.database).schedule(owner, session_id, **body.model_dump()))
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
 
 
 @router.post("/{session_id}/messages")

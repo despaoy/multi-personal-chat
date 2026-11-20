@@ -116,6 +116,10 @@ test('continuation binds a new source edition only after user selection', async 
       return submissions.length === 1 ? Promise.reject(new Error('模拟刷新前的失败')) : result;
     },
     getCharacterChat: async () => ({ session: result, turns: [] }),
+    getCharacterProactive: async () => ({
+      available: true, policy: { revision: 0, enabled: false, cadence_hours: 48, timezone: 'UTC', quiet_start: 1320, quiet_end: 480 },
+      jobs: [],
+    }),
   });
   let renderer;
   try {
@@ -134,6 +138,31 @@ test('continuation binds a new source edition only after user selection', async 
   } finally {
     if (renderer) await unmount(renderer);
     globalThis.window = originalWindow;
+  }
+});
+
+test('viewing a delivered character message does not request notification permission', async () => {
+  const policy = { revision: 2, enabled: false, cadence_hours: 48, timezone: 'UTC', quiet_start: 1320, quiet_end: 480 };
+  const load = loader({
+    getCharacterProactive: async id => {
+      assert.equal(id, 'session-id');
+      return { available: true, policy, jobs: [{
+        id: 'message', status: 'sent', content: '如果愿意，继续上次的话题。', sent_at: 100, due_at: 99,
+      }] };
+    },
+  });
+  let renderer;
+  const original = globalThis.Notification;
+  globalThis.Notification = { requestPermission: () => assert.fail('Opening a chat must not ask for browser permissions') };
+  try {
+    const { ProactivePanel } = load('src/components/chat/ProactivePanel.tsx');
+    await act(async () => { renderer = create(React.createElement(ProactivePanel, { sessionId: 'session-id' })); });
+    assert.ok(renderer.root.findAllByType('p').some(node => text(node) === '如果愿意，继续上次的话题。'));
+    assert.equal(renderer.root.findAllByType('form').length, 1);
+  } finally {
+    if (renderer) await unmount(renderer);
+    if (original === undefined) delete globalThis.Notification;
+    else globalThis.Notification = original;
   }
 });
 

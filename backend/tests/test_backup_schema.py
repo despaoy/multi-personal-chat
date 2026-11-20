@@ -17,6 +17,7 @@ async def test_restore_keeps_chat_erasure_receipts_and_purges_older_session_rows
     from character.library import CharacterSettings
     from db.database import SQLiteDB
     from repositories.character_chat import CharacterChatRepository
+    from repositories.character_chat_proactive import CharacterChatProactiveRepository
 
     path = tmp_path / "chat.sqlite"
     db = SQLiteDB(path)
@@ -29,6 +30,10 @@ async def test_restore_keeps_chat_erasure_receipts_and_purges_older_session_rows
         erased = chats.get("1", erased["id"])
         copy = chats.create("1", character["id"], "explicitly retained copy", source_session_id=erased["id"],
                             source_revision=erased["revision"], source_turn_id=turn["id"])
+        proactive = CharacterChatProactiveRepository(db)
+        proactive.set_policy("1", erased["id"], 0, enabled=True, cadence_hours=24, timezone="UTC",
+                             quiet_start=None, quiet_end=None)
+        proactive.schedule("1", erased["id"], 1, "old-job", "event", "deleted topic", 101, now=100)
         db.execute_sql("DROP TABLE character_chat_erasure_receipts")
         before = await BackupManager(str(path), backup_dir=str(tmp_path / "archives")).backup()
     finally:
@@ -47,6 +52,8 @@ async def test_restore_keeps_chat_erasure_receipts_and_purges_older_session_rows
             assert connection.execute("SELECT session_id FROM character_chat_erasure_receipts").fetchall() == [(erased["id"],)]
             assert connection.execute("SELECT * FROM character_chat_turns WHERE session_id=?", (erased["id"],)).fetchall() == []
             assert connection.execute("SELECT * FROM character_chat_enrichment_jobs WHERE session_id=?", (erased["id"],)).fetchall() == []
+            assert connection.execute("SELECT * FROM character_chat_proactive_jobs").fetchall() == []
+            assert connection.execute("SELECT * FROM character_chat_proactive_policies").fetchall() == []
 
     # Recovery into a new file can use a surviving, newer SQLite receipt source.
     recovered = tmp_path / "recovered.sqlite"
