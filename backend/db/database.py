@@ -713,86 +713,9 @@ class SQLiteDB:
         for statement in SOURCE_INDEX_STATEMENTS:
             cursor.execute(statement)
 
+        self._init_character_chat_schema(conn, cursor)
+
         # 初始化LoRA数据（如果表为空）
-        # Compile the shared schema so both development SQLite and PostgreSQL
-        # use the same character version constraints.
-        from sqlalchemy.dialects.sqlite import dialect
-        from sqlalchemy.schema import CreateIndex, CreateTable
-        from db.character_chat_history import HISTORY_PATH, migrate_baselines
-        from db.models import CharacterChatHistoryNode, CharacterChatHistoryStep
-        from db.models import CharacterLibraryEntry, CharacterLibraryVersion, CharacterChatSession, CharacterChatTurn, CharacterSharedMemory, CharacterChatEvidence, CharacterChatGeneration, CharacterChatEnrichmentJob, CharacterChatMemoryVector, CharacterSourceCorpus, CharacterPublication, CharacterPublicationCopy, CharacterSourceUpdateReceipt
-
-        for model in (CharacterLibraryEntry, CharacterLibraryVersion, CharacterChatSession, CharacterChatTurn, CharacterSharedMemory, CharacterChatEvidence, CharacterChatGeneration, CharacterChatEnrichmentJob, CharacterChatMemoryVector, CharacterSourceCorpus, CharacterPublication, CharacterPublicationCopy, CharacterSourceUpdateReceipt):
-            table = model.__table__
-            cursor.execute(str(CreateTable(table, if_not_exists=True).compile(dialect=dialect())))
-            for index in table.indexes:
-                cursor.execute(str(CreateIndex(index, if_not_exists=True).compile(dialect=dialect())))
-
-        if not conn.in_transaction:
-            cursor.execute("BEGIN IMMEDIATE")
-        needs_history_migration = cursor.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=:name", {"name": HISTORY_PATH},
-        ).fetchone() is None
-        if needs_history_migration:
-            for model in (CharacterChatHistoryNode, CharacterChatHistoryStep):
-                table = model.__table__
-                cursor.execute(str(CreateTable(table).compile(dialect=dialect())))
-                for index in table.indexes:
-                    cursor.execute(str(CreateIndex(index).compile(dialect=dialect())))
-            migrate_baselines(cursor.execute)
-
-        if self._ensure_column(cursor, 'character_chat_generations', 'request_revision', 'INTEGER NOT NULL DEFAULT 0'):
-            cursor.execute(
-                "UPDATE character_chat_generations SET request_revision=CASE WHEN json_valid(payload_json) "
-                "THEN COALESCE(CAST(json_extract(payload_json,'$[0]') AS INTEGER),0) ELSE 0 END"
-            )
-        self._ensure_column(cursor, 'character_library', 'publication_id', 'TEXT')
-        self._ensure_column(cursor, 'character_library', 'sharing_epoch', 'BIGINT NOT NULL DEFAULT 0')
-        self._ensure_column(cursor, 'character_library', 'source_publication_id', 'TEXT')
-        cursor.execute("INSERT OR IGNORE INTO character_publications (id,character_id,character_revision,settings_json,sources_json,created_at) "
-                       "SELECT 'legacy-' || c.id || '-' || CAST(c.shared_revision AS TEXT),c.id,c.shared_revision,v.settings_json,'[]',c.updated_at "
-                       "FROM character_library c JOIN character_library_versions v ON v.character_id=c.id AND v.revision=c.shared_revision "
-                       "WHERE c.share_token IS NOT NULL AND c.publication_id IS NULL")
-        cursor.execute("UPDATE character_library SET publication_id='legacy-' || id || '-' || CAST(shared_revision AS TEXT) "
-                       "WHERE share_token IS NOT NULL AND publication_id IS NULL")
-        from db.legacy_character_publications import backfill_legacy_copy_baselines
-
-        backfill_legacy_copy_baselines(cursor.execute)
-        from db.models import CharacterChatErasureReceipt, CharacterChatProactiveJob, CharacterChatProactivePolicy
-        from db.character_push_schema import PUSH_SCHEMA_034
-
-        for model in (CharacterChatErasureReceipt, CharacterChatProactivePolicy, CharacterChatProactiveJob):
-            table = model.__table__
-            cursor.execute(str(CreateTable(table, if_not_exists=True).compile(dialect=dialect())))
-            if model is CharacterChatProactivePolicy:
-                for column, sql_type in (
-                    ("inactivity_hours", "INTEGER"), ("inactivity_due_at", "REAL"),
-                    ("inactivity_turn_id", "TEXT"), ("inactivity_last_sent_turn_id", "TEXT"),
-                ):
-                    self._ensure_column(cursor, table.name, column, sql_type)
-            if model is CharacterChatProactiveJob:
-                self._ensure_column(cursor, table.name, "source_turn_id", "TEXT")
-                self._ensure_column(cursor, table.name, "event_key", "TEXT")
-            for index in table.indexes:
-                cursor.execute(str(CreateIndex(index, if_not_exists=True).compile(dialect=dialect())))
-        for statement in PUSH_SCHEMA_034:
-            cursor.execute(statement)
-        self._ensure_column(cursor, 'character_source_corpora', 'index_receipt_json', 'TEXT')
-        self._ensure_column(cursor, 'character_source_corpora', 'index_status', "TEXT NOT NULL DEFAULT 'pending'")
-        self._ensure_column(cursor, 'character_source_corpora', 'index_attempt', 'INTEGER NOT NULL DEFAULT 1')
-        self._ensure_column(cursor, 'character_source_corpora', 'edition_number', 'INTEGER NOT NULL DEFAULT 0')
-        from db.character_source_schema import (
-            BACKFILL_SOURCE_REVOCATIONS,
-            CREATE_SOURCE_REVOCATIONS,
-            SOURCE_EDITION_INDEX,
-            SOURCE_REVOCATIONS,
-        )
-
-        cursor.execute(SOURCE_EDITION_INDEX)
-        if not cursor.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (SOURCE_REVOCATIONS,)).fetchone():
-            cursor.execute(CREATE_SOURCE_REVOCATIONS)
-            cursor.execute(BACKFILL_SOURCE_REVOCATIONS)
-        cursor.execute("UPDATE character_source_corpora SET index_status='completed' WHERE index_receipt_json IS NOT NULL AND index_status='pending'")
         cursor.execute('SELECT COUNT(*) FROM loras')
         if cursor.fetchone()[0] == 0:
             self._init_default_loras(cursor)
@@ -935,6 +858,87 @@ class SQLiteDB:
                 cursor.execute("ROLLBACK TO SAVEPOINT embed_migration")
                 cursor.execute("RELEASE SAVEPOINT embed_migration")
                 raise
+
+    def _init_character_chat_schema(self, conn, cursor):
+        # Compile the shared schema so both development SQLite and PostgreSQL
+        # use the same character version constraints.
+        from sqlalchemy.dialects.sqlite import dialect
+        from sqlalchemy.schema import CreateIndex, CreateTable
+        from db.character_chat_history import HISTORY_PATH, migrate_baselines
+        from db.models import CharacterChatHistoryNode, CharacterChatHistoryStep
+        from db.models import CharacterLibraryEntry, CharacterLibraryVersion, CharacterChatSession, CharacterChatTurn, CharacterSharedMemory, CharacterChatEvidence, CharacterChatGeneration, CharacterChatEnrichmentJob, CharacterChatMemoryVector, CharacterSourceCorpus, CharacterPublication, CharacterPublicationCopy, CharacterSourceUpdateReceipt
+
+        for model in (CharacterLibraryEntry, CharacterLibraryVersion, CharacterChatSession, CharacterChatTurn, CharacterSharedMemory, CharacterChatEvidence, CharacterChatGeneration, CharacterChatEnrichmentJob, CharacterChatMemoryVector, CharacterSourceCorpus, CharacterPublication, CharacterPublicationCopy, CharacterSourceUpdateReceipt):
+            table = model.__table__
+            cursor.execute(str(CreateTable(table, if_not_exists=True).compile(dialect=dialect())))
+            for index in table.indexes:
+                cursor.execute(str(CreateIndex(index, if_not_exists=True).compile(dialect=dialect())))
+
+        if not conn.in_transaction:
+            cursor.execute("BEGIN IMMEDIATE")
+        needs_history_migration = cursor.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name=:name", {"name": HISTORY_PATH},
+        ).fetchone() is None
+        if needs_history_migration:
+            for model in (CharacterChatHistoryNode, CharacterChatHistoryStep):
+                table = model.__table__
+                cursor.execute(str(CreateTable(table).compile(dialect=dialect())))
+                for index in table.indexes:
+                    cursor.execute(str(CreateIndex(index).compile(dialect=dialect())))
+            migrate_baselines(cursor.execute)
+
+        if self._ensure_column(cursor, 'character_chat_generations', 'request_revision', 'INTEGER NOT NULL DEFAULT 0'):
+            cursor.execute(
+                "UPDATE character_chat_generations SET request_revision=CASE WHEN json_valid(payload_json) "
+                "THEN COALESCE(CAST(json_extract(payload_json,'$[0]') AS INTEGER),0) ELSE 0 END"
+            )
+        self._ensure_column(cursor, 'character_library', 'publication_id', 'TEXT')
+        self._ensure_column(cursor, 'character_library', 'sharing_epoch', 'BIGINT NOT NULL DEFAULT 0')
+        self._ensure_column(cursor, 'character_library', 'source_publication_id', 'TEXT')
+        cursor.execute("INSERT OR IGNORE INTO character_publications (id,character_id,character_revision,settings_json,sources_json,created_at) "
+                       "SELECT 'legacy-' || c.id || '-' || CAST(c.shared_revision AS TEXT),c.id,c.shared_revision,v.settings_json,'[]',c.updated_at "
+                       "FROM character_library c JOIN character_library_versions v ON v.character_id=c.id AND v.revision=c.shared_revision "
+                       "WHERE c.share_token IS NOT NULL AND c.publication_id IS NULL")
+        cursor.execute("UPDATE character_library SET publication_id='legacy-' || id || '-' || CAST(shared_revision AS TEXT) "
+                       "WHERE share_token IS NOT NULL AND publication_id IS NULL")
+        from db.legacy_character_publications import backfill_legacy_copy_baselines
+
+        backfill_legacy_copy_baselines(cursor.execute)
+        from db.models import CharacterChatErasureReceipt, CharacterChatProactiveJob, CharacterChatProactivePolicy
+        from db.character_push_schema import PUSH_SCHEMA_034
+
+        for model in (CharacterChatErasureReceipt, CharacterChatProactivePolicy, CharacterChatProactiveJob):
+            table = model.__table__
+            cursor.execute(str(CreateTable(table, if_not_exists=True).compile(dialect=dialect())))
+            if model is CharacterChatProactivePolicy:
+                for column, sql_type in (
+                    ("inactivity_hours", "INTEGER"), ("inactivity_due_at", "REAL"),
+                    ("inactivity_turn_id", "TEXT"), ("inactivity_last_sent_turn_id", "TEXT"),
+                ):
+                    self._ensure_column(cursor, table.name, column, sql_type)
+            if model is CharacterChatProactiveJob:
+                self._ensure_column(cursor, table.name, "source_turn_id", "TEXT")
+                self._ensure_column(cursor, table.name, "event_key", "TEXT")
+            for index in table.indexes:
+                cursor.execute(str(CreateIndex(index, if_not_exists=True).compile(dialect=dialect())))
+        for statement in PUSH_SCHEMA_034:
+            cursor.execute(statement)
+        self._ensure_column(cursor, 'character_source_corpora', 'index_receipt_json', 'TEXT')
+        self._ensure_column(cursor, 'character_source_corpora', 'index_status', "TEXT NOT NULL DEFAULT 'pending'")
+        self._ensure_column(cursor, 'character_source_corpora', 'index_attempt', 'INTEGER NOT NULL DEFAULT 1')
+        self._ensure_column(cursor, 'character_source_corpora', 'edition_number', 'INTEGER NOT NULL DEFAULT 0')
+        from db.character_source_schema import (
+            BACKFILL_SOURCE_REVOCATIONS,
+            CREATE_SOURCE_REVOCATIONS,
+            SOURCE_EDITION_INDEX,
+            SOURCE_REVOCATIONS,
+        )
+
+        cursor.execute(SOURCE_EDITION_INDEX)
+        if not cursor.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (SOURCE_REVOCATIONS,)).fetchone():
+            cursor.execute(CREATE_SOURCE_REVOCATIONS)
+            cursor.execute(BACKFILL_SOURCE_REVOCATIONS)
+        cursor.execute("UPDATE character_source_corpora SET index_status='completed' WHERE index_receipt_json IS NOT NULL AND index_status='pending'")
 
     def _ensure_column(self, cursor, table: str, column: str, definition: str):
         cursor.execute(f"PRAGMA table_info({table})")
