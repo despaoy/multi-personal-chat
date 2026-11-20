@@ -25,6 +25,20 @@ def isolated_snapshot(monkeypatch):
     return clock
 
 
+def test_fresh_sqlite_uses_endpoint_and_model_from_environment_until_saved(tmp_path, monkeypatch):
+    monkeypatch.setenv("OPENAI_COMPAT_BASE_URL", "http://127.0.0.1:49152/v1")
+    monkeypatch.setenv("OPENAI_COMPAT_MODEL", "fixture-local")
+    db = SQLiteDB(tmp_path / "fresh.db")
+    try:
+        provider = model_manager.OpenAICompatProvider(dict(db.config))
+        assert (provider.base_url, provider.model) == ("http://127.0.0.1:49152/v1", "fixture-local")
+        db.update_config({"openaiCompatBaseUrl": "https://saved.invalid/v1", "openaiCompatModel": "saved-model"})
+        reopened_provider = model_manager.OpenAICompatProvider(dict(db.config))
+        assert (reopened_provider.base_url, reopened_provider.model) == ("https://saved.invalid/v1", "saved-model")
+    finally:
+        db.close_connection()
+
+
 def test_valid_snapshot_is_copied_and_expires_at_the_declared_ttl(isolated_snapshot, tmp_path):
     database = SQLiteDB(tmp_path / "snapshot.db")
     try:

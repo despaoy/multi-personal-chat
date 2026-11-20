@@ -1217,9 +1217,10 @@ class SQLiteDB:
             "astrbotWechatPersonalAdapter": "gewechat",
             "astrbotWechatPersonalEndpoint": "",
             "astrbotWechatPersonalNotes": "",
-            "openaiCompatBaseUrl": "https://api.deepseek.com",
+            # An empty override keeps the runtime environment authoritative until an administrator saves settings.
+            "openaiCompatBaseUrl": "",
             "openaiCompatApiKey": "",
-            "openaiCompatModel": "deepseek-flash"
+            "openaiCompatModel": ""
         }
 
         for key, value in default_config.items():
