@@ -17,8 +17,11 @@ def test_jwt_requires_nonempty_subject(claims):
     assert caught.value.status_code == 401
 
 
-def _client():
+def _client(database=None):
+    from app.runtime import RuntimeContainer
+
     app = FastAPI()
+    app.state.runtime_container = RuntimeContainer(db=database, is_pg_mode=lambda: False)
     app.add_middleware(SecurityMiddleware, api_keys=["test-key"])
 
     @app.get("/private")
@@ -46,13 +49,13 @@ def test_invalid_jwt_can_still_use_explicit_valid_api_key():
     assert response.status_code == 200
 
 
-def test_revocation_failure_cannot_switch_to_api_key(monkeypatch):
-    from infra import token_revocation
+def test_revocation_failure_cannot_switch_to_api_key():
+    class BrokenDatabase:
+        def execute_sql(self, query, params):
+            raise OSError("synthetic revocation unavailable")
 
-    def fail(jti):
-        raise OSError("synthetic revocation unavailable")
-
-    monkeypatch.setattr(token_revocation, "is_token_revoked", fail)
     token = config.create_access_token("test", 1)
-    with _client() as client, pytest.raises(OSError, match="revocation unavailable"):
-        client.get("/private", headers={"Authorization": f"Bearer {token}", "X-API-Key": "test-key"})
+    with _client(BrokenDatabase()) as client:
+        response = client.get("/private", headers={"Authorization": f"Bearer {token}", "X-API-Key": "test-key"})
+    assert response.status_code == 503
+    assert response.headers["Retry-After"] == "1"

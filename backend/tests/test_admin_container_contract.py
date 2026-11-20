@@ -51,7 +51,8 @@ async def test_real_request_without_valid_container_fails_without_fallback(conta
 async def test_current_container_user_can_be_missing_without_becoming_a_database_error(global_database_forbidden):
     app = _app()
     app.state.runtime_container = RuntimeContainer(
-        db=SimpleNamespace(get_user_by_username=lambda _username: None), is_pg_mode=lambda: False
+        db=SimpleNamespace(get_user_by_username=lambda _username: None, execute_sql=lambda *_args: []),
+        is_pg_mode=lambda: False,
     )
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="https://isolated") as client:
         response = await client.get(

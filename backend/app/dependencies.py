@@ -9,6 +9,7 @@ from app.runtime import get_runtime_container
 from infra.auth_work import run_auth_database
 from infra.bounded_executor import BlockingWorkRejected, BlockingWorkTimeout
 from infra.observability import increment
+from infra.token_revocation import is_token_revoked
 
 
 def get_request_runtime(request: Request):
@@ -24,6 +25,35 @@ def get_request_http_client_pool(request: Request):
 
 def get_request_database(request: Request):
     return get_runtime_container(request.app).db
+
+
+def get_request_token(request: Request) -> str | None:
+    authorization = request.headers.get("Authorization", "")
+    if authorization.startswith("Bearer ") and authorization[7:]:
+        return authorization[7:]
+    return request.cookies.get("access_token")
+
+
+async def require_active_token(request: Request, payload: dict) -> None:
+    jti = payload.get("jti")
+    if not jti:
+        return
+    try:
+        database = get_request_database(request)
+        revoked = await run_auth_database(is_token_revoked, database, jti)
+    except Exception as exc:
+        increment("auth_token_revocation_unavailable")
+        raise HTTPException(
+            status_code=503,
+            detail="Authentication service is unavailable; retry later",
+            headers={"Retry-After": "1"},
+        ) from exc
+    if revoked:
+        raise HTTPException(
+            status_code=401,
+            detail="Token 已注销，请重新登录",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
 
 async def get_current_user(request: Request) -> dict:
@@ -43,18 +73,11 @@ async def get_current_user(request: Request) -> dict:
                 "permissions": api_key_payload.get("permissions"),
                 "auth_type": getattr(request.state, "auth_type", "api_key"),
             }
-        auth_header = request.headers.get("Authorization", "")
-        token = auth_header[7:] if auth_header.startswith("Bearer ") else None
-        token = token or request.cookies.get("access_token")
+        token = get_request_token(request)
         if not token:
             raise HTTPException(status_code=401, detail="缺少认证 Token")
         payload = verify_token(token)
-
-    # 检查 Token 是否已被注销
-    from infra.token_revocation import is_token_revoked
-
-    if is_token_revoked(payload.get("jti", "")):
-        raise HTTPException(status_code=401, detail="Token 已注销，请重新登录")
+        await require_active_token(request, payload)
 
     return {
         "user_id": payload.get("user_id"),

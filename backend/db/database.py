@@ -326,6 +326,14 @@ class SQLiteDB:
         # 使用 _ensure_column 做幂等迁移，已有数据库升级时自动添加该列。
         self._ensure_column(cursor, 'users', 'role', 'TEXT NOT NULL DEFAULT \'user\'')
 
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS auth_token_revocations (
+                jti TEXT PRIMARY KEY NOT NULL,
+                expires_at INTEGER NOT NULL
+            )
+        ''')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_auth_token_revocations_expiry ON auth_token_revocations(expires_at)')
+
         # 创建 API Key 表（统一访问控制，SQLite 与 PostgreSQL 共用主库）
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS api_keys (

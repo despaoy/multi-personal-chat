@@ -113,10 +113,6 @@ async def test_get_current_admin_allows_admin_role(monkeypatch):
     database = SimpleNamespace(get_user_by_username=None)
     request = _FakeRequest(payload, database)
 
-    # 绕过 token 黑名单检查
-    monkeypatch.setattr(
-        "infra.token_revocation.is_token_revoked", lambda jti: False, raising=False
-    )
     # DB 复核仍返回 admin
     monkeypatch.setattr(
         database, "get_user_by_username",
@@ -141,9 +137,6 @@ async def test_get_current_admin_rejects_non_admin_role(monkeypatch):
     request = _FakeRequest(payload, database)
 
     monkeypatch.setattr(
-        "infra.token_revocation.is_token_revoked", lambda jti: False, raising=False
-    )
-    monkeypatch.setattr(
         database, "get_user_by_username",
         lambda username: {"id": 2, "username": username, "role": "user"},
         raising=False,
@@ -164,9 +157,6 @@ async def test_get_current_admin_rejects_when_db_unreachable(monkeypatch):
     database = SimpleNamespace(get_user_by_username=None)
     request = _FakeRequest(payload, database)
 
-    monkeypatch.setattr(
-        "infra.token_revocation.is_token_revoked", lambda jti: False, raising=False
-    )
 
     def _raise(_username):
         raise RuntimeError("DB connection lost")
@@ -181,13 +171,10 @@ async def test_get_current_admin_rejects_when_db_unreachable(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_get_current_user_returns_role_from_payload(monkeypatch):
+async def test_get_current_user_returns_role_from_payload():
     """get_current_user 应返回 JWT payload 中的 role，缺失时默认 user"""
     from app import dependencies
 
-    monkeypatch.setattr(
-        "infra.token_revocation.is_token_revoked", lambda jti: False, raising=False
-    )
 
     # 1. payload 含 role
     payload = {"sub": "u1", "user_id": 1, "role": "admin", "jti": "jti-1"}

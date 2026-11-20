@@ -1,5 +1,6 @@
 """Authentication reads and writes the database bound to its application."""
 
+import asyncio
 from types import SimpleNamespace
 
 import httpx
@@ -9,12 +10,21 @@ from fastapi import FastAPI
 from app.runtime import RuntimeContainer
 
 
-def _app(database):
+def _app(database, *, middleware=False):
     from api.auth import router
 
     app = FastAPI()
     app.state.runtime_container = RuntimeContainer(db=database, is_pg_mode=lambda: False, startup_env={})
     app.include_router(router)
+    if middleware:
+        from middleware.security import SecurityMiddleware
+
+        app.add_middleware(SecurityMiddleware)
+
+        @app.get("/fixture-middleware-only")
+        async def protected():
+            return {"ok": True}
+
     return app
 
 
@@ -28,7 +38,7 @@ def databases(tmp_path, monkeypatch):
     def forbidden(*_args, **_kwargs):
         raise AssertionError("Authentication must not access the global database")
 
-    for method in ["get_user_by_username", "add_user", "execute_sql"]:
+    for method in ["get_user_by_username", "add_user", "execute_sql", "revision_transaction"]:
         monkeypatch.setattr(global_db, method, forbidden)
     monkeypatch.setenv("ENVIRONMENT", "test")
     yield databases
@@ -63,6 +73,51 @@ async def test_two_applications_keep_registration_login_and_profile_in_their_own
     assert _verify_password("synthetic-password-0", first.get_user_by_username("same-name")["password_hash"])
     assert _verify_password("synthetic-password-1", second.get_user_by_username("same-name")["password_hash"])
     assert not _verify_password("synthetic-password-0", second.get_user_by_username("same-name")["password_hash"])
+
+
+async def test_logout_is_shared_between_instances_without_revoking_other_logins(databases):
+    from app.config import create_access_token, verify_token
+    from db.database import SQLiteDB
+
+    database, _ = databases
+    database.add_user("revocation-account", "unused-hash")
+    user_id = database.get_user_by_username("revocation-account")["id"]
+    revoked = create_access_token("revocation-account", user_id)
+    active = create_access_token("revocation-account", user_id)
+    headers = {"Authorization": "Bearer " + revoked}
+    reopened = SQLiteDB(database.db_path)
+    try:
+        async with (
+            httpx.AsyncClient(transport=httpx.ASGITransport(app=_app(database, middleware=True)), base_url="https://isolated") as writer,
+            httpx.AsyncClient(transport=httpx.ASGITransport(app=_app(reopened, middleware=True)), base_url="https://isolated") as reader,
+        ):
+            assert (await reader.get("/fixture-middleware-only", headers=headers)).status_code == 200
+            results = await asyncio.gather(*(writer.post("/api/auth/logout", headers=headers) for _ in range(3)))
+            assert [item.status_code for item in results] == [200, 200, 200]
+            assert (await reader.get("/fixture-middleware-only", headers=headers)).status_code == 401
+            assert (await reader.get("/api/auth/me", headers=headers)).status_code == 401
+            assert (await reader.get("/api/auth/me", headers={"Authorization": "Bearer " + active})).status_code == 200
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=_app(reopened)), base_url="https://isolated") as direct:
+            assert (await direct.get("/api/auth/me", headers=headers)).status_code == 401
+            assert (await direct.post("/api/auth/logout", headers={"Authorization": "Bearer invalid"})).status_code == 200
+        assert database.execute_sql("SELECT jti FROM auth_token_revocations") == [{"jti": verify_token(revoked)["jti"]}]
+    finally:
+        reopened.close_connection()
+
+
+async def test_logout_reports_unavailable_revocation_storage():
+    from app.config import create_access_token
+
+    def unavailable(_statements):
+        raise OSError("synthetic revocation write failure")
+
+    database = SimpleNamespace(revision_transaction=unavailable)
+    transport = httpx.ASGITransport(app=_app(database, middleware=True))
+    async with httpx.AsyncClient(transport=transport, base_url="https://isolated") as client:
+        token = create_access_token("isolated", 1)
+        result = await client.post("/api/auth/logout", headers={"Authorization": "Bearer " + token})
+    assert result.status_code == 503
+    assert result.headers["Retry-After"] == "1"
 
 
 async def test_production_bootstrap_counts_only_the_bound_database(databases, monkeypatch):
@@ -105,7 +160,7 @@ async def test_missing_application_container_fails_without_global_database(metho
         response = await client.request(
             method, path, json=payload, headers={"Authorization": "Bearer " + create_access_token("scoped", 1, "user")}
         )
-    assert response.status_code == 500
+    assert response.status_code == (503 if method == "GET" else 500)
 
 
 async def test_login_database_failure_is_not_an_authentication_result(databases):

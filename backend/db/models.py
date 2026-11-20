@@ -320,6 +320,13 @@ class User(Base):
     role: Mapped[str] = mapped_column(Text, nullable=False, server_default="user")
 
 
+class AuthTokenRevocation(Base):
+    __tablename__ = "auth_token_revocations"
+    jti: Mapped[str] = mapped_column(Text, primary_key=True)
+    expires_at: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    __table_args__ = (Index("idx_auth_token_revocations_expiry", "expires_at"),)
+
+
 # ============================================
 # 2. API Key 表（统一访问控制）
 # ============================================

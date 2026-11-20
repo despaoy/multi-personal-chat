@@ -30,6 +30,29 @@ def database():
     db.close()
 
 
+def test_postgres_token_revocation_is_durable_across_database_adapters(database):
+    from db.pg_database import PgDatabase, SyncPgAdapter
+    from infra.token_revocation import is_token_revoked, revoke_token
+
+    expiry = int(time()) + 3600
+    identity = uuid.uuid4().hex
+    other = uuid.uuid4().hex
+    reader = SyncPgAdapter(PgDatabase(os.environ["DATABASE_URL"], require_migrations=True))
+    try:
+        assert not is_token_revoked(reader, identity)
+        with ThreadPoolExecutor(2) as pool:
+            writes = [pool.submit(revoke_token, adapter, identity, expiry) for adapter in (database, reader)]
+            for write in writes:
+                write.result(timeout=10)
+        assert is_token_revoked(reader, identity) and is_token_revoked(database, identity)
+        assert not is_token_revoked(reader, other)
+        assert database.execute_sql(
+            "SELECT jti, expires_at FROM auth_token_revocations WHERE jti = :jti", {"jti": identity}
+        ) == [{"jti": identity, "expires_at": expiry}]
+    finally:
+        reader.close()
+
+
 def test_postgres_concurrent_preset_installation_keeps_one_pending_edition(database):
     from character.kamimaho_preset import PRESET_KEY, SETTINGS, SOURCES
     from repositories.character_sources import CharacterSourceRepository
