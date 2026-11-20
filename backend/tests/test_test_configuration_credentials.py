@@ -120,8 +120,12 @@ assert "ENCRYPTION_KEY" not in os.environ
 existing = encryption.EncryptionManager(key=key).encrypt("synthetic existing legacy data")
 def no_network(*args, **kwargs):
     raise AssertionError("Application import must not connect to a model or external service")
+original_connect = socket.socket.connect
 socket.socket.connect = no_network
-import app.main as main
+try:
+    import app.main as main
+finally:
+    socket.socket.connect = original_connect
 import app.config as config
 from infra.deployment import validate_deployment_environment
 snapshot = main.app.state.runtime_container.startup_env
@@ -131,7 +135,7 @@ proof = dict(
     snapshot_same_verified_key=snapshot.get("ENCRYPTION_KEY") == encoded,
     process_same_verified_key=os.environ.get("ENCRYPTION_KEY") == encoded,
     same_legacy_data=config.encryption_mgr.decrypt(existing) == "synthetic existing legacy data",
-    canonical_exact=canonical.read_bytes() == configured + f"ENCRYPTION_KEY={encoded}\n".encode(),
+    canonical_exact=canonical.read_text(encoding="utf-8") == configured.decode("ascii") + f"ENCRYPTION_KEY={encoded}\n",
     legacy_unchanged=legacy.read_bytes() == legacy_before,
 )
 os.environ["ENCRYPTION_KEY"] = base64.urlsafe_b64encode(b"N" * 32).decode("ascii")
