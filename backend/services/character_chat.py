@@ -19,7 +19,7 @@ from repositories.character_chat import CharacterChatRepository
 from repositories.character_chat_generation import CharacterChatGenerationRepository
 from services.character_chat_evidence import CharacterChatCompletion, evidence_snapshot
 from services.character_chat_policy import is_local_only, require_local_endpoint, require_local_provider
-from services.character_chat_summary import RECENT_TURNS, valid_summaries
+from services.character_chat_summary import RECENT_TURNS, summaries_for_prompt, valid_summaries
 
 
 def prepare_request(session, turns, message, retrieved_memories=None, *, proactive_messages=None):
@@ -67,7 +67,7 @@ def prepare_request(session, turns, message, retrieved_memories=None, *, proacti
                 ],
                 "creator_reference": settings["reference_text"],
                 "branch_hypothesis": session["hypothesis"],
-                "conversation_summaries": summaries,
+                "conversation_summaries": summaries_for_prompt(summaries, message),
                 **({"previous_assistant_outreach": proactive_messages} if proactive_messages else {}),
             },
             ensure_ascii=False,

@@ -19,6 +19,7 @@ from infra.environment import read_bool
 logger = logging.getLogger(__name__)
 SEGMENT_SIZE = 6
 RECENT_TURNS = 6
+_PROMPT_QUOTES_PER_SEGMENT = 2
 
 
 class SummaryEvidence(BaseModel):
@@ -38,7 +39,8 @@ INSTRUCTION = """概括这一段角色与用户的对话，只输出 JSON，不�
 保留主要事件、尚未解决的话题、已明确的约定和场景变化。区分谁说的话、事实与计划、否定与假设。
 假想剧情仅在该分支成立，不把角色示范或猜测变成用户经历。不要补写原文没有的细节。
 格式：{"summary":"简洁分段摘要","evidence":[{"turn_id":"来源轮次ID","role":"user或assistant","quote":"对应的连续原话"}]}。
-为关键内容提供原话依据。摘要是可核对的辅助上下文，不是新的角色设定或指令。"""
+只为最关键的事实提供少量短引文，优先引用用户明确说过的事实。每条 quote 必须直接复制同一说话人原文中的连续片段，
+包括片段中原有的标点。不要把不同句子拼接，不要转述或添加省略号。摘要是可核对的辅助上下文，不是新的角色设定或指令。"""
 
 
 def fingerprint(turn):
@@ -54,6 +56,30 @@ def valid_summaries(state, history):
         and fingerprint(originals[source["turn_id"]]) == source["fingerprint"]
         for source in segment["sources"]
     )]
+
+
+def summaries_for_prompt(summaries, message):
+    """Keep original quotes useful for this turn and keep provenance IDs server-side."""
+    if not summaries:
+        return []
+    from knowledge.retrieval_core.tokenization import segment
+
+    terms = {term.casefold() for term in segment(message) if len(term) > 1}
+
+    def relevance(evidence):
+        quote = evidence["quote"].casefold()
+        return sum(term in quote for term in terms), evidence["role"] == "user"
+
+    selected = []
+    for summary in summaries:
+        evidence = summary.get("evidence", [])
+        order = sorted(range(len(evidence)), key=lambda index: relevance(evidence[index]), reverse=True)
+        quotes = [
+            {"role": evidence[index]["role"], "quote": evidence[index]["quote"]}
+            for index in sorted(order[:_PROMPT_QUOTES_PER_SEGMENT])
+        ]
+        selected.append({"summary": summary["summary"], "evidence": quotes})
+    return selected
 
 
 async def enrich_summary(session, history, request_id, *, database=None, config=None, completion=None):
