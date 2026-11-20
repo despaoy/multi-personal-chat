@@ -95,6 +95,7 @@ class ProactivePolicy(BaseModel):
     timezone: str = Field(min_length=1, max_length=80)
     quiet_start: int | None = Field(ge=0, le=1439)
     quiet_end: int | None = Field(ge=0, le=1439)
+    inactivity_hours: int | None = Field(default=None, ge=72, le=720)
 
     @model_validator(mode="after")
     def validate_schedule(self):
@@ -178,6 +179,11 @@ def share_memory(session_id: str, memory_id: str, body: Revision, owner=Depends(
         return call(repo.share_memory, owner, session_id, memory_id, body.revision)
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
+
+
+@router.get("/proactive-inbox")
+def proactive_inbox(owner=Depends(account), repo=Depends(repository)):
+    return {"messages": CharacterChatProactiveRepository(repo.database).inbox(owner)}
 
 
 @router.get("/{session_id}")

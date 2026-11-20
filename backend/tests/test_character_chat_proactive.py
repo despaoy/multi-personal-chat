@@ -1,7 +1,9 @@
 """Account consent, scheduling and idempotent in-app delivery."""
 
 import asyncio
+import sqlite3
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import closing
 from datetime import UTC, datetime
 
 import pytest
@@ -107,6 +109,97 @@ def test_proactive_api_owner_and_policy_bounds(proactive):
         assert client.put(path, json={"revision": 1, **policy(enabled=False)}).status_code == 404
         payload = {"revision": 1, "request_id": "foreign", "kind": "event", "topic": "失败", "due_at": 2000000000}
         assert client.post(path + "/jobs", json=payload).status_code == 404
+
+
+def test_idle_greeting_is_opt_in_and_delivered_once_per_activity(proactive, monkeypatch):
+    from repositories import character_chat
+
+    repo, session = proactive
+    identity = session["id"]
+    clock = [2000000000]
+    monkeypatch.setattr(character_chat, "timestamp", lambda: datetime.fromtimestamp(clock[0], UTC).isoformat())
+    waiting = 72 * 3600
+    rules = policy(quiet_start=None, quiet_end=None)
+    assert repo.set_policy("owner", identity, 0, **rules)["inactivity_hours"] is None
+    first = repo.chats.commit_turn(session, "first", "你好", "你好", "test")
+    assert repo.deliver_due(now=clock[0] + waiting) == 0
+    repo.set_policy("owner", identity, 1, inactivity_hours=72, now=clock[0], **rules)
+    old_due = clock[0] + waiting
+    assert repo.deliver_due(now=old_due - 1) == 0
+    clock[0] = old_due - 2
+    session = repo.chats.get("owner", identity)
+    repo.chats.commit_turn(session, "returned", "我回来了", "你好", "test")
+    assert repo.deliver_due(now=old_due) == 0
+    due = clock[0] + waiting
+    from repositories.character_chat_generation import CharacterChatGenerationRepository
+
+    generations = CharacterChatGenerationRepository(repo.db)
+    token = generations.claim(repo.chats.get("owner", identity), "active", "正在聊天", lease_seconds=10**9)
+    assert repo.deliver_due(now=due) == 0
+    generations.fail(identity, "active", token, "fixture")
+    with ThreadPoolExecutor(2) as pool:
+        assert sum(pool.map(lambda _: repo.deliver_due(now=due), range(2))) == 1
+    repo.set_policy("owner", identity, 2, inactivity_hours=72, now=due, **policy(enabled=False))
+    repo.set_policy("owner", identity, 3, inactivity_hours=72, now=due + 1, **rules)
+    assert repo.deliver_due(now=due + waiting + 1) == 0
+    clock[0] = due + waiting + 1
+    repo.chats.commit_turn(repo.chats.get("owner", identity), "another-return", "又回来了", "你好", "test")
+    assert repo.has_due(clock[0] + waiting)
+    session = repo.chats.get("owner", identity)
+    repo.chats.retract("owner", identity, first["id"], session["revision"])
+    assert repo.deliver_due(now=due + 2 * waiting) == 0
+    assert not repo.has_due(clock[0] + waiting)
+    assert [job["kind"] for job in repo.view("owner", identity)["jobs"]] == ["inactivity"]
+
+
+def test_cross_session_inbox_is_owner_scoped_and_uses_latest_message(proactive):
+    repo, first = proactive
+    second = repo.chats.create("owner", first["character_id"], "另一个会话")
+    character = repo.chats.characters.create("other", CharacterSettings(name="其他", persona="坦率", greeting="你好"))
+    foreign = repo.chats.create("other", character["id"], "其他账号会话")
+    for owner, session in (("owner", first), ("owner", second), ("other", foreign)):
+        identity = session["id"]
+        repo.set_policy(owner, identity, 0, **policy(quiet_start=None, quiet_end=None))
+        repo.schedule(owner, identity, 1, "first", "event", "旧话题", 101, now=100)
+        repo.schedule(owner, identity, 1, "second", "event", owner + identity, 86502, now=100)
+    assert repo.deliver_due(now=101) == 3
+    assert repo.deliver_due(now=86502) == 3
+    app = FastAPI()
+    app.include_router(router)
+    app.dependency_overrides[get_current_user] = lambda: {"user_id": "owner"}
+    app.dependency_overrides[repository] = lambda: repo.chats
+    with TestClient(app) as client:
+        response = client.get("/api/character-chats/proactive-inbox")
+    assert response.status_code == 200
+    messages = response.json()["messages"]
+    assert {item["session_id"] for item in messages} == {first["id"], second["id"]}
+    assert all(item["id"] == "second" for item in messages)
+
+
+def test_sqlite_startup_upgrades_existing_manual_policy_without_enabling_inactivity(tmp_path):
+    path = tmp_path / "older-policy.db"
+    db = SQLiteDB(path)
+    repo = CharacterChatProactiveRepository(db)
+    character = repo.chats.characters.create("owner", CharacterSettings(name="角色", persona="坦率", greeting="你好"))
+    session = repo.chats.create("owner", character["id"], "原有会话")
+    try:
+        repo.set_policy("owner", session["id"], 0, **policy(cadence_hours=96))
+    finally:
+        db.close_connection()
+    with closing(sqlite3.connect(path)) as connection, connection:
+        connection.execute("DROP INDEX ix_chat_proactive_inactive_due")
+        for name in ("inactivity_hours", "inactivity_due_at", "inactivity_turn_id", "inactivity_last_sent_turn_id"):
+            connection.execute(f"ALTER TABLE character_chat_proactive_policies DROP COLUMN {name}")
+
+    db = SQLiteDB(path)
+    try:
+        repo = CharacterChatProactiveRepository(db)
+        upgraded = repo.view("owner", session["id"])["policy"]
+        assert upgraded["enabled"] and upgraded["cadence_hours"] == 96
+        assert upgraded["inactivity_hours"] is None
+        assert repo.deliver_due() == 0
+    finally:
+        db.close_connection()
 
 
 def test_outreach_context_is_available_only_to_original_ordinary_session(proactive):

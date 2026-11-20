@@ -120,6 +120,7 @@ export interface CharacterProactivePolicy {
   timezone: string;
   quiet_start: number | null;
   quiet_end: number | null;
+  inactivity_hours: number | null;
 }
 
 export type ProactiveTopicKind = 'follow_up' | 'event' | 'fiction';
@@ -129,13 +130,22 @@ export interface CharacterProactiveState {
   policy: CharacterProactivePolicy;
   jobs: {
     id: string;
-    kind: ProactiveTopicKind;
+    kind: ProactiveTopicKind | 'inactivity';
     topic: string;
     due_at: number;
     sent_at: number | null;
     content: string | null;
     status: 'pending' | 'sent';
   }[];
+}
+
+export interface ProactiveInboxMessage {
+  session_id: string;
+  character_id: string;
+  title: string;
+  id: string;
+  content: string;
+  sent_at: number;
 }
 
 export interface CharacterChatEvidence {

@@ -647,6 +647,10 @@ class ApiClient {
     return this.request<import('./api-contracts').CharacterProactiveState>(`/character-chats/${encodeURIComponent(id)}/proactive`);
   }
 
+  getCharacterProactiveInbox() {
+    return this.request<{ messages: import('./api-contracts').ProactiveInboxMessage[] }>('/character-chats/proactive-inbox');
+  }
+
   saveCharacterProactive(id: string, policy: import('./api-contracts').CharacterProactivePolicy) {
     return this.request<import('./api-contracts').CharacterProactivePolicy>(`/character-chats/${encodeURIComponent(id)}/proactive`, {
       method: 'PUT', body: JSON.stringify(policy),

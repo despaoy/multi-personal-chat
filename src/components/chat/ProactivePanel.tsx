@@ -39,6 +39,7 @@ export function ProactivePanel({ sessionId }: { sessionId: string }) {
         setDraft(previous => previous ?? {
           revision: result.policy.revision, enabled: result.policy.enabled, cadence_hours: result.policy.cadence_hours,
           quiet_start: result.policy.quiet_start, quiet_end: result.policy.quiet_end,
+          inactivity_hours: result.policy.inactivity_hours ?? null,
           timezone: result.policy.revision ? result.policy.timezone : Intl.DateTimeFormat().resolvedOptions().timeZone,
         });
       } catch (error) {
@@ -88,6 +89,16 @@ export function ProactivePanel({ sessionId }: { sessionId: string }) {
         <input type="checkbox" checked={draft.enabled} disabled={busy} onChange={event => setDraft({ ...draft, enabled: event.target.checked })} />
         允许这个会话主动联系我
       </label>
+      <label className="flex items-center gap-2">
+        <input type="checkbox" checked={draft.inactivity_hours !== null} disabled={busy || !draft.enabled}
+          onChange={event => setDraft({ ...draft, inactivity_hours: event.target.checked ? 168 : null })} />
+        允许久未联系时问候一次
+      </label>
+      {draft.inactivity_hours !== null && <label className="block text-sm">未联系多久后问候（小时）
+        <input className="ml-2 w-20 rounded border p-1" required type="number" min={72} max={720}
+          value={draft.inactivity_hours} disabled={busy || !draft.enabled}
+          onChange={event => setDraft({ ...draft, inactivity_hours: Number(event.target.value) })} />
+      </label>}
       <label className="block text-sm">发送间隔（小时）
         <input className="ml-2 w-20 rounded border p-1" required type="number" min={24} max={168} value={draft.cadence_hours}
           disabled={busy} onChange={event => setDraft({ ...draft, cadence_hours: Number(event.target.value) })} />

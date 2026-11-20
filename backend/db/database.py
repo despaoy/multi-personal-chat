@@ -861,6 +861,12 @@ class SQLiteDB:
         for model in (CharacterChatErasureReceipt, CharacterChatProactivePolicy, CharacterChatProactiveJob):
             table = model.__table__
             cursor.execute(str(CreateTable(table, if_not_exists=True).compile(dialect=dialect())))
+            if model is CharacterChatProactivePolicy:
+                for column, sql_type in (
+                    ("inactivity_hours", "INTEGER"), ("inactivity_due_at", "REAL"),
+                    ("inactivity_turn_id", "TEXT"), ("inactivity_last_sent_turn_id", "TEXT"),
+                ):
+                    self._ensure_column(cursor, table.name, column, sql_type)
             for index in table.indexes:
                 cursor.execute(str(CreateIndex(index, if_not_exists=True).compile(dialect=dialect())))
         self._ensure_column(cursor, 'character_source_corpora', 'index_receipt_json', 'TEXT')

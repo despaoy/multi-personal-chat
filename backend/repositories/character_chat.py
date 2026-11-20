@@ -509,6 +509,12 @@ class CharacterChatRepository:
                 "VALUES (:turn,:session,:revision,'pending',:now)",
                 {"turn": turn_id, "session": session_id, "revision": session["revision"] + 1, "now": timestamp()}, 1,
             ))
+        statements.append((
+            "UPDATE character_chat_proactive_policies SET inactivity_turn_id=:turn,"
+            "inactivity_due_at=CAST(:now_epoch AS DOUBLE PRECISION)+inactivity_hours*3600 "
+            "WHERE session_id=:session AND enabled=1 AND inactivity_hours IS NOT NULL",
+            {"turn": turn_id, "now_epoch": datetime.fromisoformat(params["now"]).timestamp(), "session": session_id}, None,
+        ))
         self.database.revision_transaction(statements)
         return self.prior(owner, session_id, request_id)
 
@@ -543,6 +549,8 @@ class CharacterChatRepository:
             [
                 self.cas(session, state),
                 self.deactivate_after(session_id, selected["position"]),
+                ("UPDATE character_chat_proactive_policies SET inactivity_due_at=NULL,inactivity_turn_id=NULL "
+                 "WHERE session_id=:session AND inactivity_due_at IS NOT NULL", {"session": session_id}, None),
                 *self.revoke_changed_shares(session_id, state),
             ]
         )

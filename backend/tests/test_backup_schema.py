@@ -63,6 +63,41 @@ async def test_restore_keeps_chat_erasure_receipts_and_purges_older_session_rows
 
 
 @pytest.mark.asyncio
+async def test_restore_does_not_regrant_old_outreach_consent(tmp_path):
+    from character.library import CharacterSettings
+    from db.database import SQLiteDB
+    from repositories.character_chat_proactive import CharacterChatProactiveRepository
+
+    path = tmp_path / "restore-consent.sqlite"
+    db = SQLiteDB(path)
+    try:
+        repo = CharacterChatProactiveRepository(db)
+        character = repo.chats.characters.create("1", CharacterSettings(name="fixture", persona="fixture", greeting="hi"))
+        session = repo.chats.create("1", character["id"], "old consent")
+        identity = session["id"]
+        settings = dict(cadence_hours=24, timezone="UTC", quiet_start=None, quiet_end=None)
+        repo.set_policy("1", identity, 0, enabled=True, inactivity_hours=72, **settings)
+        repo.chats.commit_turn(session, "activity", "hello", "hi", "fixture")
+        repo.schedule("1", identity, 1, "delivered", "event", "已有正式记录", 101, now=100)
+        repo.schedule("1", identity, 1, "waiting", "event", "原待发话题", 300, now=100)
+        assert repo.deliver_due(now=101) == 1
+        backup = await BackupManager(str(path), backup_dir=str(tmp_path / "archives")).backup()
+        repo.set_policy("1", identity, 1, enabled=False, **settings)
+    finally:
+        db.close_connection()
+    restore_sqlite_backup(Path(backup.path), path)
+    db = SQLiteDB(path)
+    try:
+        repo = CharacterChatProactiveRepository(db)
+        view = repo.view("1", identity)
+        assert not view["policy"]["enabled"]
+        assert [job["id"] for job in view["jobs"]] == ["delivered"]
+        assert not repo.has_due(4102444800)
+    finally:
+        db.close_connection()
+
+
+@pytest.mark.asyncio
 async def test_restore_refuses_uncheckpointed_wal_without_replacing_target(tmp_path):
     source, target = tmp_path / "source.sqlite", tmp_path / "target.sqlite"
     with closing(sqlite3.connect(source)) as connection, connection:

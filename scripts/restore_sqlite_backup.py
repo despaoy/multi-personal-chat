@@ -43,25 +43,37 @@ def _read_erasure_receipts(path: Path, *, required=False):
     return set()
 
 
-def _apply_erasure_receipts(candidate: Path, receipts):
+def _prepare_restored_chat(candidate: Path, receipts):
     with closing(sqlite3.connect(candidate)) as connection, connection:
         tables = _table_names(connection)
-        if not receipts and (
-            ERASURE_TABLE not in tables or not connection.execute(f"SELECT 1 FROM {ERASURE_TABLE} LIMIT 1").fetchone()
-        ):
+        has_erasure = bool(receipts) or (ERASURE_TABLE in tables and bool(
+            connection.execute(f"SELECT 1 FROM {ERASURE_TABLE} LIMIT 1").fetchone()
+        ))
+        has_outreach = "character_chat_proactive_policies" in tables
+        if not has_erasure and not has_outreach:
             return False
         connection.execute("PRAGMA foreign_keys=ON")
         connection.execute("PRAGMA secure_delete=ON")
-        connection.execute(f"CREATE TABLE IF NOT EXISTS {ERASURE_TABLE} (session_id TEXT PRIMARY KEY NOT NULL)")
-        connection.executemany(f"INSERT OR IGNORE INTO {ERASURE_TABLE} (session_id) VALUES (?)",
-                               ((session_id,) for session_id in receipts))
-        erased = f"SELECT session_id FROM {ERASURE_TABLE}"
-        if {"character_chat_turns", "character_chat_evidence"} <= tables:
-            connection.execute("DELETE FROM character_chat_evidence WHERE turn_id IN "
-                               f"(SELECT id FROM character_chat_turns WHERE session_id IN ({erased}))")
-        for table, column in SESSION_ROWS:
-            if table in tables:
-                connection.execute(f"DELETE FROM {table} WHERE {column} IN ({erased})")
+        if has_erasure:
+            connection.execute(f"CREATE TABLE IF NOT EXISTS {ERASURE_TABLE} (session_id TEXT PRIMARY KEY NOT NULL)")
+            connection.executemany(f"INSERT OR IGNORE INTO {ERASURE_TABLE} (session_id) VALUES (?)",
+                                   ((session_id,) for session_id in receipts))
+            erased = f"SELECT session_id FROM {ERASURE_TABLE}"
+            if {"character_chat_turns", "character_chat_evidence"} <= tables:
+                connection.execute("DELETE FROM character_chat_evidence WHERE turn_id IN "
+                                   f"(SELECT id FROM character_chat_turns WHERE session_id IN ({erased}))")
+            for table, column in SESSION_ROWS:
+                if table in tables:
+                    connection.execute(f"DELETE FROM {table} WHERE {column} IN ({erased})")
+        if has_outreach:
+            # An older snapshot cannot speak for a user's current consent.
+            columns = {row[1] for row in connection.execute("PRAGMA table_info(character_chat_proactive_policies)")}
+            idle_reset = ",inactivity_due_at=NULL,inactivity_turn_id=NULL" if "inactivity_due_at" in columns else ""
+            connection.execute(
+                "UPDATE character_chat_proactive_policies SET enabled=0,revision=revision+1" + idle_reset
+            )
+        if "character_chat_proactive_jobs" in tables:
+            connection.execute("UPDATE character_chat_proactive_jobs SET status='cancelled',topic='' WHERE status='pending'")
     return True
 
 
@@ -91,7 +103,7 @@ def restore_sqlite_backup(
         receipts = _read_erasure_receipts(database) if database.exists() else set()
         if deletion_records_from is not None:
             receipts.update(_read_erasure_receipts(deletion_records_from.expanduser().resolve(), required=True))
-        if _apply_erasure_receipts(temporary, receipts):
+        if _prepare_restored_chat(temporary, receipts):
             _validate_sqlite(temporary)
 
         if database.exists():

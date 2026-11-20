@@ -11,6 +11,7 @@ import { api, ApiRequestError } from '@/lib/api';
 import { createClientId } from '@/lib/client-id';
 import { GenerationDraft } from '@/components/chat/GenerationDraft';
 import { ProactivePanel } from '@/components/chat/ProactivePanel';
+import { ProactiveInbox } from '@/components/chat/ProactiveInbox';
 import type { CharacterChatDeletionPreview, CharacterChatGeneration } from '@/lib/api-contracts';
 import type { CharacterChatSession, CharacterChatSummary, CharacterChatTurn, CharacterLibraryRecord, SendCharacterChatMessage, ContinuationPreview, CharacterSharedMemory, CharacterChatEvidence } from '@/lib/api-contracts';
 
@@ -46,6 +47,7 @@ function ChatWorkspace() {
   const [deleteSelection, setDeleteSelection] = useState<string[]>([]);
   const [deletionPreview, setDeletionPreview] = useState<CharacterChatDeletionPreview>();
   const [relatedDeletionIds, setRelatedDeletionIds] = useState<string[]>([]);
+  const [deletedInboxSessions, setDeletedInboxSessions] = useState<ReadonlySet<string>>(() => new Set());
   const [sourceExcerpt, setSourceExcerpt] = useState<{ message: string; reply: string; title: string }>();
   const [session, setSession] = useState<CharacterChatSession>();
   const [turns, setTurns] = useState<CharacterChatTurn[]>([]);
@@ -82,6 +84,7 @@ function ChatWorkspace() {
   const settingsChanged = Boolean(preview && preview.previous_character_revision !== preview.character_revision);
   const latestEdition = preview?.latest_source_corpus;
   const loadVersion = useRef(0);
+  const requestedSession = useRef<{ characterId: string; sessionId: string } | null>(null);
 
   const refreshShared = useCallback(async () => {
     const result = await api.listSharedChatMemories();
@@ -110,10 +113,32 @@ function ChatWorkspace() {
     setSessionOffset(response.sessions.length); setMoreSessions(response.sessions.length === 100);
   }, []);
 
+  const open = useCallback(async (id: string, initial?: { version: number; characterId: string }) => {
+    const response = await api.getCharacterChat(id);
+    if (initial && initial.version !== loadVersion.current) return response;
+    if (initial && response.session.character_id !== initial.characterId) throw new Error('会话不属于所选角色');
+    setSession(response.session);
+    setGeneration(response.generation);
+    setEnrichmentPending(response.enrichment_pending);
+    setEnrichmentRetryable(response.enrichment_retryable);
+    setSessions(previous => previous.map(item => item.id === id ? { ...item, revision: response.session.revision } : item));
+    setRelationshipStage(response.session.state.relationship.stage);
+    setRelationshipSummary(response.session.state.relationship.summary || '');
+    setSourceExcerpt(undefined);
+    setMemoryDraft('');
+    setMemoryEditing(undefined);
+    setTurns(response.turns);
+    setNewSession(false);
+    setBranchTurn(undefined);
+    return response;
+  }, []);
+
   useEffect(() => {
     let active = true;
     api.listCharacterLibrary().then(async response => {
-      const requested = new URLSearchParams(window.location.search).get('character');
+      const query = new URLSearchParams(window.location.search);
+      const requested = query.get('character');
+      const sessionId = query.get('session');
       let requestedCharacter: CharacterLibraryRecord | undefined;
       if (requested && !response.characters.some(item => item.id === requested)) {
         try { requestedCharacter = await api.getLibraryCharacter(requested); }
@@ -122,6 +147,7 @@ function ChatWorkspace() {
       if (!active) return;
       setCharacters(requestedCharacter ? [requestedCharacter, ...response.characters] : response.characters);
       setCharacterOffset(response.characters.length); setMoreCharacters(response.characters.length === 100);
+      if (requested && sessionId) requestedSession.current = { characterId: requested, sessionId };
       setCharacterId(requestedCharacter?.id || response.characters.find(item => item.id === requested)?.id || response.characters[0]?.id || '');
     }).catch(error => { if (active) setError(String(error)); });
     return () => { active = false; };
@@ -148,12 +174,15 @@ function ChatWorkspace() {
     setBranchTurn(undefined);
     pending.current = null;
     if (!characterId) return;
-    api.listCharacterChats(characterId).then(response => {
+    const initial = requestedSession.current;
+    requestedSession.current = null;
+    api.listCharacterChats(characterId).then(async response => {
       if (version === loadVersion.current) {
         setSessions(response.sessions); setSessionOffset(response.sessions.length); setMoreSessions(response.sessions.length === 100);
+        if (initial?.characterId === characterId) await open(initial.sessionId, { version, characterId });
       }
     }).catch(error => { if (version === loadVersion.current) setError(String(error)); });
-  }, [characterId]);
+  }, [characterId, open]);
 
   async function run(operation: () => Promise<void>) {
     setBusy(true);
@@ -184,6 +213,7 @@ function ChatWorkspace() {
     const selected = [...deletionPreview.selected, ...deletionPreview.related.filter(item => relatedDeletionIds.includes(item.id))];
     try {
       const result = await api.deleteCharacterChats(selected.map(({ id, revision }) => ({ id, revision })));
+      setDeletedInboxSessions(previous => new Set([...previous, ...result.deleted_session_ids]));
       setDeleteSelection([]); setSource(''); setSourceExcerpt(undefined);
       if (session && result.deleted_session_ids.includes(session.id)) {
         setSession(undefined); setTurns([]); setNewSession(true); setDraft(''); setEditing(undefined); setBranchTurn(undefined); pending.current = null;
@@ -195,24 +225,6 @@ function ChatWorkspace() {
     } finally {
       clearDeletionPreview();
     }
-  }
-
-  async function open(id: string) {
-    const response = await api.getCharacterChat(id);
-    setSession(response.session);
-    setGeneration(response.generation);
-    setEnrichmentPending(response.enrichment_pending);
-    setEnrichmentRetryable(response.enrichment_retryable);
-    setSessions(previous => previous.map(item => item.id === id ? { ...item, revision: response.session.revision } : item));
-    setRelationshipStage(response.session.state.relationship.stage);
-    setRelationshipSummary(response.session.state.relationship.summary || '');
-    setSourceExcerpt(undefined);
-    setMemoryDraft('');
-    setMemoryEditing(undefined);
-    setTurns(response.turns);
-    setNewSession(false);
-    setBranchTurn(undefined);
-    return response;
   }
 
   async function send() {
@@ -284,6 +296,7 @@ function ChatWorkspace() {
       <Button asChild variant="outline"><Link href="/character-library">管理角色</Link></Button>
     </div>
     {error && <p role="alert" className="rounded-lg border border-destructive p-3 text-destructive">{error}</p>}
+    <ProactiveInbox hiddenSessions={deletedInboxSessions} />
     <div className="grid gap-5 md:grid-cols-[240px_1fr]">
       <aside className="space-y-3">
         <Label htmlFor="chat-character">角色</Label>

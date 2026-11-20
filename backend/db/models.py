@@ -144,6 +144,11 @@ class CharacterChatProactivePolicy(Base):
     quiet_start: Mapped[Optional[int]] = mapped_column(Integer)
     quiet_end: Mapped[Optional[int]] = mapped_column(Integer)
     last_sent_at: Mapped[Optional[float]] = mapped_column(Float)
+    inactivity_hours: Mapped[Optional[int]] = mapped_column(Integer)
+    inactivity_due_at: Mapped[Optional[float]] = mapped_column(Float)
+    inactivity_turn_id: Mapped[Optional[str]] = mapped_column(Text)
+    inactivity_last_sent_turn_id: Mapped[Optional[str]] = mapped_column(Text)
+    __table_args__ = (Index("ix_chat_proactive_inactive_due", "enabled", "inactivity_due_at"),)
 
 
 class CharacterChatProactiveJob(Base):
@@ -158,7 +163,10 @@ class CharacterChatProactiveJob(Base):
     status: Mapped[str] = mapped_column(Text, nullable=False)
     sent_at: Mapped[Optional[float]] = mapped_column(Float)
     content: Mapped[Optional[str]] = mapped_column(Text)
-    __table_args__ = (Index("ix_chat_proactive_jobs_ready", "status", "next_attempt_at", "session_id"),)
+    __table_args__ = (
+        Index("ix_chat_proactive_jobs_ready", "status", "next_attempt_at", "session_id"),
+        Index("ix_chat_proactive_inbox", "session_id", "status", "sent_at"),
+    )
 
 
 class CharacterChatErasureReceipt(Base):

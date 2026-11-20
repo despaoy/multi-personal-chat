@@ -37,7 +37,9 @@ function loader(api) {
     const loadedModule = { exports: {} }; cache.set(path, loadedModule.exports);
     const req = id => {
       if (id === 'react' || id === 'react/jsx-runtime') return testRequire(id);
-      if (id === '@/lib/api' && api) return { api, ApiRequestError: ErrorClass };
+      if (id === '@/lib/api' && api) return {
+        api: { getCharacterProactiveInbox: async () => ({ messages: [] }), ...api }, ApiRequestError: ErrorClass,
+      };
       if (id.startsWith('@/components/ui/')) {
         const tag = id.endsWith('button') ? 'button' : id.endsWith('input') ? 'input' : 'label';
         const name = tag[0].toUpperCase() + tag.slice(1);
@@ -166,6 +168,44 @@ test('viewing a delivered character message does not request notification permis
   }
 });
 
+test('inbox on a different character opens the linked session even outside the first page', async () => {
+  const originalWindow = globalThis.window;
+  globalThis.window = { location: { search: '?character=other-role&session=wanted' } };
+  const receiving = { ...character, id: 'other-role' };
+  const opened = [];
+  const load = loader({
+    listCharacterLibrary: async () => ({ characters: [character] }),
+    getLibraryCharacter: async id => {
+      assert.equal(id, receiving.id);
+      return receiving;
+    },
+    listCharacterChats: async id => {
+      assert.equal(id, receiving.id);
+      return { sessions: [] };
+    },
+    listSharedChatMemories: async () => ({ memories: [] }),
+    getCharacterProactiveInbox: async () => ({ messages: [{
+      session_id: 'wanted', character_id: receiving.id, title: '另一个角色的会话', id: 'message', content: '许久不见', sent_at: 100,
+    }] }),
+    getCharacterChat: async id => {
+      opened.push(id);
+      return { session: { id, character_id: receiving.id, character: receiving, title: '已打开的会话', mode: 'initial',
+        baseline: { history: [] }, state: { relationship: { stage: 'stranger' }, memories: [] } }, turns: [] };
+    },
+    getCharacterProactive: async () => ({ policy: { enabled: false, revision: 0, quiet_start: null, quiet_end: null }, jobs: [] }),
+  });
+  let renderer;
+  try {
+    await act(async () => { renderer = create(React.createElement(load('src/app/chat/page.tsx').default)); });
+    assert.deepEqual(opened, ['wanted']);
+    assert.ok(renderer.root.findAllByType('h2').some(node => text(node) === '已打开的会话'));
+    assert.ok(renderer.root.findAllByType('a').some(node => node.props.href === '/chat?character=other-role&session=wanted'));
+  } finally {
+    if (renderer) await unmount(renderer);
+    globalThis.window = originalWindow;
+  }
+});
+
 test('session deletion previews related copies and submits only explicit selections', async () => {
   const originalWindow = globalThis.window;
   globalThis.window = { location: { search: '' } };
@@ -177,6 +217,10 @@ test('session deletion previews related copies and submits only explicit selecti
     listCharacterLibrary: async () => ({ characters: [character] }),
     listCharacterChats: async () => ({ sessions: [root, branch] }),
     listSharedChatMemories: async () => ({ memories: [] }),
+    getCharacterProactiveInbox: async () => ({ messages: [root, branch, copy].map(session => ({
+      id: 'message', session_id: session.id, character_id: session.character_id, title: session.title,
+      content: '主动消息', sent_at: 100,
+    })) }),
     previewCharacterChatDeletion: async selected => {
       previews.push(selected);
       return { selected: [root], related: [branch, copy] };
@@ -201,6 +245,8 @@ test('session deletion previews related copies and submits only explicit selecti
     await check('跨角色副本');
     await click(renderer, '永久删除 2 个会话');
     assert.deepEqual(deletions, [[{ id: 'original', revision: 3 }, { id: 'copy', revision: 2 }]]);
+    assert.deepEqual(renderer.root.findAllByType('a').map(node => node.props.href).filter(href => href.includes('session=')),
+      [`/chat?character=${character.id}&session=branch`]);
   } finally {
     if (renderer) await unmount(renderer);
     globalThis.window = originalWindow;

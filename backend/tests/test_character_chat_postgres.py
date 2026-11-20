@@ -40,7 +40,17 @@ def test_postgres_proactive_delivery_respects_session_consent_and_is_idempotent(
     with ThreadPoolExecutor(2) as pool:
         assert sum(pool.map(lambda _: repo.deliver_due(now=101), range(2))) == 1
     assert repo.view(owner, identity)["jobs"][0]["status"] == "sent"
+    repo.set_policy(owner, identity, 1, enabled=True, cadence_hours=24, timezone="UTC", quiet_start=None, quiet_end=None,
+                    inactivity_hours=72)
+    assert repo._policy(identity)["inactivity_due_at"] is None
+    repo.chats.commit_turn(session, "reply", "hi", "hello", "test")
+    due = repo._policy(identity)["inactivity_due_at"]
+    assert repo.deliver_due(now=due - 1) == 0
+    assert repo.deliver_due(now=due) == 1
+    assert repo.inbox(owner)[0]["kind"] == "inactivity"
+    session = repo.chats.get(owner, identity)
     repo.chats.delete_sessions(owner, [{"id": identity, "revision": session["revision"]}])
+    assert repo.inbox(owner) == []
     assert repo.deliver_due(now=200) == 0
 
 
