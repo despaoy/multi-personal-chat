@@ -24,7 +24,7 @@
 | 4 历史与剧情 | Chrome 验证编辑、撤回、分支导航和独立历史；继承历史迁移为账号内不可变节点和有序路径；SQLite 和 PostgreSQL 均验证恢复旧备份后删除回执仍有效 | 保留真实服务切换前的业务验收 |
 | 5 原作资料 | 真实 PostgreSQL 和 OpenSearch 集成已通过；Chrome 验证主动迁移与可展开出处快照；月社妃预设已通过四题的 BGE 重排分数回放、Flash 和网页验证 | 在线重排推理的并发延迟和更广的原作问答场景待验收 |
 | 6 主动互动 | 应用内消息、来源撤回、频率与免打扰有数据库与 worker 测试；真实 Temporal 与 Flash 验证两条月社妃日常连续；Chrome 可显示本机模拟推送 | 外部推送实际送达、更长剧情的人物一致性待验收 |
-| 7 整体集成 | 临时真实 PostgreSQL、Temporal、搜索与网页各有验收记录；完成 PostgreSQL 备份恢复演练；生产构建及仓库检查通过 | 生产 Compose 验收待完成 |
+| 7 整体集成 | 临时真实 PostgreSQL、Temporal、搜索与网页各有验收记录；完成 PostgreSQL 备份恢复演练；官方 Compose 工具验证默认配置、可选 worker 和 15G 配置 | 生产容器启动和整栈联调待完成 |
 
 ## 模块1当前工作
 
@@ -355,5 +355,11 @@ DeepSeek Flash 使用同一合成人物、熟悉程度、历史和用户消息�
 Chrome 经真实 OpenSearch 和 DeepSeek Flash 重跑四题。正式资料排序入口消费了全部四组实际模型分数。姓氏和剧情题引用了对应出处，未记载的怀表细节明确答不知道，指代不清的情节先追问，两种情况均无引用。刷新后可展开出处，另一账号请求会话返回 404。临时 OpenSearch 已停止。另有 84 项定向后端测试通过。
 
 这次联调回放向量和重排分数，CPU 用时来自独立评分进程。在线推理的并发延迟、较大资料集和对字面覆盖率的质量对比仍待验收。可单独配置 `RERANKER_DEVICE=cpu`，默认继续使用设备自动选择。
+
+## Compose 的角色聊天部署入口
+
+标准 Compose 增加可选的 `character-chat` profile。聊天 worker 在 API 通过就绪检查后启动，与 API 使用同一套构建配置、数据库和模型路径，单独连接配置好的 Temporal。原作资料功能可分别启用查询和索引。标准与 15G 配置都显式允许本地限定会话使用各自容器网络中的 vLLM。
+
+通过官方 Compose v2.39.4 的 `config` 命令检查了默认服务、启用 worker 后的服务关系和配置、15G 服务配置。默认无 worker，启用后其内部端口不对外发布，模型目录只读。32 项 Windows 定向回归通过，LHM 上 11 项 Linux 部署脚本回归通过，其中模拟 Docker 验证启动失败能向调用方返回。LHM 检查到 RTX 4090 D 正在使用，未发现 Docker、Podman 或 Docker socket。生产镜像构建、容器启动和容器内整栈联调待有符合 LHM 路径要求的隔离运行时后验证。[Compose config](https://docs.docker.com/reference/cli/docker/compose/config/)
 
 68 项后端回归及仓库完整性检查通过，隔离 OpenSearch 已停止。

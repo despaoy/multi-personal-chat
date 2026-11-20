@@ -180,7 +180,21 @@ python -m workflows.run_chat_worker
 - 应用内主动联系由 worker 的 `CHARACTER_CHAT_PROACTIVE_ENABLED` 开启，实际发送仍需要会话授权。浏览器提醒还需向 API 和 worker 注入同一套 VAPID 配置，并通过浏览器的安全上下文访问网页。配置格式见 [浏览器提醒交付记录](../development/MODULE_DELIVERY.md#浏览器提醒)。
 - 虚构日常由聊天 worker 使用后端模型配置生成。独立启动时为 worker 配置所选模型和后端运行环境，沿用会话的本地模型限制。生成超时或模型不可用时，应用内记录采用带虚构标识的模板。
 
-现有 Docker Compose 定义应用及基础服务。启用上述后台功能时，需要从能够访问同一数据库和相应依赖的运行环境单独启动角色聊天 worker。可以选用本机或外部 Temporal、OpenSearch 端点，按所选环境注入配置。
+标准 Docker Compose 可使用 `character-chat` profile 启动同版本的聊天 worker，也可使用上面的独立进程。两种方式均连接到已就绪的 Temporal。资料功能还需运行可从 API 和 worker 访问的 OpenSearch。
+
+- 使用 Compose 时，将配置注入 `deploy/` 下的 Compose 环境。设置容器可到达的 `TEMPORAL_ADDRESS` 与 `CHARACTER_SEARCH_URL`，并按需提供认证。只有服务与容器在同一网络时才使用对应服务名。容器的 `127.0.0.1` 指向容器自身。
+- 资料查询与索引分别由 `CHARACTER_CHAT_SOURCES_ENABLED` 和 `CHARACTER_SOURCE_INDEXING_ENABLED` 启用。模型目录位于 Compose 的 `deploy/data/models/`，容器内以只读方式挂载到 `/app/models`。默认使用 CPU，也可以在容器可用的设备范围内显式配置。
+- 本地限定会话默认可访问 Compose 内的 vLLM。自托管 OpenSearch 或其他本地模型端点需要将其 origin 显式加入 `LOCAL_MODEL_ALLOWED_ORIGINS`，例如 `http://search.lan:9200`。
+- 在 LHM 使用 Compose 前，应确认容器运行时的镜像、卷和日志目录都在 `/home/boot/lhm/` 下。预先核对模型目录与符号链接的实际目标。
+
+迁移成功后，启用可选 worker：
+
+```bash
+docker compose --profile character-chat up -d --build --wait
+docker compose --profile character-chat logs --tail 80 chat-worker
+```
+
+在 Temporal 核对对应任务队列已有聊天 worker，再用测试会话验证后台处理或索引更新。旧版 15G Compose 可继续配合独立启动的 worker 使用。
 
 前端：
 
