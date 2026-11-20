@@ -27,6 +27,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy.types import UserDefinedType
 
 from db.character_chat_history import HISTORY_NODES, HISTORY_OWNER_INDEX, HISTORY_PATH
+from db.character_source_schema import SOURCE_REVOCATIONS
 
 
 class Base(DeclarativeBase):
@@ -114,6 +115,12 @@ class CharacterSourceCorpus(Base):
     revoked: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[str] = mapped_column(Text, nullable=False)
     __table_args__ = (Index("ix_character_source_scope", "owner_user_id", "character_id", "character_revision"),)
+
+
+class CharacterSourceRevocationReceipt(Base):
+    """A revoked edition ID survives restores even if that edition is absent."""
+    __tablename__ = SOURCE_REVOCATIONS
+    corpus_id: Mapped[str] = mapped_column(Text, primary_key=True)
 
 
 class CharacterChatSession(Base):

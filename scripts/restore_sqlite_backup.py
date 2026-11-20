@@ -24,6 +24,14 @@ from backend.db.character_chat_history import (
     ORPHANED_HISTORY_NODE,
 )
 from backend.db.character_sharing_restore import reset_restored_sharing
+from backend.db.character_source_schema import (
+    BACKFILL_SOURCE_REVOCATIONS,
+    CREATE_SOURCE_REVOCATIONS,
+    INSERT_SOURCE_REVOCATION,
+    REPLAY_SOURCE_REVOCATIONS,
+    REVOKED_SOURCE_IDS,
+    SOURCE_REVOCATIONS,
+)
 
 
 def _validate_sqlite(path: Path) -> None:
@@ -40,16 +48,22 @@ def _table_names(connection):
     return {name for (name,) in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")}
 
 
-def _read_erasure_receipts(path: Path, *, required=False):
+def _read_restore_records(path: Path, *, required=False):
+    erasures, revocations = set(), set()
     with closing(sqlite3.connect(path.as_uri() + "?mode=ro", uri=True)) as connection:
-        if ERASURE_TABLE in _table_names(connection):
-            return {session_id for (session_id,) in connection.execute(f"SELECT session_id FROM {ERASURE_TABLE}")}
-    if required:
-        raise ValueError("The supplied recovery database has no chat erasure table")
-    return set()
+        tables = _table_names(connection)
+        if ERASURE_TABLE in tables:
+            erasures.update(identity for (identity,) in connection.execute(f"SELECT session_id FROM {ERASURE_TABLE}"))
+        elif required:
+            raise ValueError("The supplied recovery database has no chat erasure table")
+        if SOURCE_REVOCATIONS in tables:
+            revocations.update(identity for (identity,) in connection.execute(f"SELECT corpus_id FROM {SOURCE_REVOCATIONS}"))
+        if "character_source_corpora" in tables:
+            revocations.update(identity for (identity,) in connection.execute(REVOKED_SOURCE_IDS))
+    return erasures, revocations
 
 
-def _prepare_restored_chat(candidate: Path, receipts):
+def _prepare_restored_state(candidate: Path, receipts, revocations):
     with closing(sqlite3.connect(candidate)) as connection, connection:
         tables = _table_names(connection)
         has_erasure = bool(receipts) or (ERASURE_TABLE in tables and bool(
@@ -59,7 +73,8 @@ def _prepare_restored_chat(candidate: Path, receipts):
         has_push = "character_chat_push_subscriptions" in tables
         has_sharing = "character_library" in tables
         has_memory_shares = "character_shared_memories" in tables
-        if not any((has_erasure, has_outreach, has_push, has_sharing, has_memory_shares)):
+        has_catalog = "character_source_corpora" in tables
+        if not any((has_erasure, has_outreach, has_push, has_sharing, has_memory_shares, has_catalog, revocations)):
             return False
         connection.execute("PRAGMA foreign_keys=ON")
         connection.execute("PRAGMA secure_delete=ON")
@@ -76,6 +91,12 @@ def _prepare_restored_chat(candidate: Path, receipts):
                     connection.execute(f"DELETE FROM {table} WHERE {column} IN ({erased})")
             if {HISTORY_NODES, HISTORY_PATH} <= tables:
                 connection.execute(f"DELETE FROM {HISTORY_NODES} WHERE {ORPHANED_HISTORY_NODE}")
+        if has_catalog or revocations:
+            connection.execute(CREATE_SOURCE_REVOCATIONS)
+            connection.executemany(INSERT_SOURCE_REVOCATION, ({"id": identity} for identity in revocations))
+            if has_catalog:
+                connection.execute(BACKFILL_SOURCE_REVOCATIONS)
+                connection.execute(REPLAY_SOURCE_REVOCATIONS)
         if has_outreach:
             # An older snapshot cannot speak for a user's current consent.
             columns = {row[1] for row in connection.execute("PRAGMA table_info(character_chat_proactive_policies)")}
@@ -122,10 +143,14 @@ def restore_sqlite_backup(
             target.flush()
             os.fsync(target.fileno())
         _validate_sqlite(temporary)
-        receipts = _read_erasure_receipts(database) if database.exists() else set()
+        receipts, revocations = _read_restore_records(database) if database.exists() else (set(), set())
         if deletion_records_from is not None:
-            receipts.update(_read_erasure_receipts(deletion_records_from.expanduser().resolve(), required=True))
-        if _prepare_restored_chat(temporary, receipts):
+            additional_receipts, additional_revocations = _read_restore_records(
+                deletion_records_from.expanduser().resolve(), required=True,
+            )
+            receipts.update(additional_receipts)
+            revocations.update(additional_revocations)
+        if _prepare_restored_state(temporary, receipts, revocations):
             _validate_sqlite(temporary)
 
         if database.exists():
@@ -147,7 +172,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--database", required=True, type=Path)
     parser.add_argument(
         "--deletion-records-from", type=Path,
-        help="Additional SQLite database containing newer erasure receipts, for recovery to a lost database.",
+        help="Additional SQLite database with newer chat erasures and source revocations.",
     )
     parser.add_argument(
         "--confirm-backend-stopped",

@@ -899,9 +899,17 @@ class SQLiteDB:
         self._ensure_column(cursor, 'character_source_corpora', 'index_status', "TEXT NOT NULL DEFAULT 'pending'")
         self._ensure_column(cursor, 'character_source_corpora', 'index_attempt', 'INTEGER NOT NULL DEFAULT 1')
         self._ensure_column(cursor, 'character_source_corpora', 'edition_number', 'INTEGER NOT NULL DEFAULT 0')
-        from db.character_source_schema import SOURCE_EDITION_INDEX
+        from db.character_source_schema import (
+            BACKFILL_SOURCE_REVOCATIONS,
+            CREATE_SOURCE_REVOCATIONS,
+            SOURCE_EDITION_INDEX,
+            SOURCE_REVOCATIONS,
+        )
 
         cursor.execute(SOURCE_EDITION_INDEX)
+        if not cursor.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (SOURCE_REVOCATIONS,)).fetchone():
+            cursor.execute(CREATE_SOURCE_REVOCATIONS)
+            cursor.execute(BACKFILL_SOURCE_REVOCATIONS)
         cursor.execute("UPDATE character_source_corpora SET index_status='completed' WHERE index_receipt_json IS NOT NULL AND index_status='pending'")
         cursor.execute('SELECT COUNT(*) FROM loras')
         if cursor.fetchone()[0] == 0:

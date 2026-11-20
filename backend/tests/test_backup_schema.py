@@ -232,6 +232,54 @@ async def test_restore_does_not_regrant_revoked_memory_shares(tmp_path):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("legacy", [False, True])
+async def test_restore_replays_revoked_editions_across_older_backups(tmp_path, legacy):
+    from character.library import CharacterSettings
+    from db.database import SQLiteDB
+    from repositories.character_chat import CharacterChatRepository
+    from repositories.character_library import CharacterNotFoundError
+    from repositories.character_sources import CharacterSourceRepository
+
+    path = tmp_path / "sources.sqlite"
+    db = SQLiteDB(path)
+    try:
+        sources = CharacterSourceRepository(db)
+        chats = CharacterChatRepository(db)
+        owner = "1"
+        role = chats.characters.create(owner, CharacterSettings(name="角色", persona="fixture", greeting="hi"))
+        oldest = await BackupManager(str(path), backup_dir=str(tmp_path / "oldest")).backup()
+        source = {"id": "line", "title": "合成资料", "content": "合成原文"}
+        revoked = sources.publish(owner, role["id"], 1, [source])
+        kept = sources.publish(owner, role["id"], 1, [dict(source, content="应保留的原文")])
+        chat = chats.create(owner, role["id"], "已保存出处", source_corpus_id=revoked["id"])
+        evidence = {"sources": [{"title": source["title"], "excerpt": source["content"]}]}
+        chats.commit_turn(chat, "citation", "当时的原话？", "合成原文", "test",
+                          evidence=evidence, source_corpus_id=revoked["id"])
+        before = await BackupManager(str(path), backup_dir=str(tmp_path / "before")).backup()
+        sources.revoke(owner, revoked["id"])
+        if legacy:
+            db.execute_sql("DROP TABLE character_source_revocation_receipts")
+    finally:
+        db.close_connection()
+
+    restore_sqlite_backup(Path(oldest.path), path)
+    recovered = tmp_path / "recovered-sources.sqlite"
+    restore_sqlite_backup(Path(before.path), recovered, deletion_records_from=path)
+    restore_sqlite_backup(Path(before.path), path)
+    for target in (recovered, path):
+        db = SQLiteDB(target)
+        try:
+            sources = CharacterSourceRepository(db)
+            assert [edition["id"] for edition in sources.list(owner, role["id"], 1)] == [kept["id"]]
+            with pytest.raises(CharacterNotFoundError):
+                sources.get(owner, revoked["id"])
+            assert all(job["corpus_id"] != revoked["id"] for job in sources.pending_index_jobs())
+            assert CharacterChatRepository(db).turns(owner, chat["id"])[0]["evidence"] == evidence
+        finally:
+            db.close_connection()
+
+
+@pytest.mark.asyncio
 async def test_restore_refuses_uncheckpointed_wal_without_replacing_target(tmp_path):
     source, target = tmp_path / "source.sqlite", tmp_path / "target.sqlite"
     with closing(sqlite3.connect(source)) as connection, connection:

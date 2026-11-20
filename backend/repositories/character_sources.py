@@ -6,6 +6,7 @@ import uuid
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from db.character_source_schema import INSERT_SOURCE_REVOCATION
 from db.errors import RevisionConflictError
 from repositories.character_chat import timestamp
 from repositories.character_library import CharacterLibraryRepository, CharacterNotFoundError
@@ -111,6 +112,7 @@ class CharacterSourceRepository:
         self.database.revision_transaction([
             ('UPDATE character_source_corpora SET revoked=1 WHERE id=:id AND owner_user_id=:owner AND revoked=0',
              {'id': corpus_id, 'owner': owner}, 1),
+            (INSERT_SOURCE_REVOCATION, {'id': corpus_id}, None),
         ])
 
     def pending_index_jobs(self, limit=100):

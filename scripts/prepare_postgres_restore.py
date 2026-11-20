@@ -19,6 +19,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "backend"))
 from db.character_chat_erasure import ERASURE_TABLE, SESSION_ROWS
 from db.character_chat_history import HISTORY_NODES, ORPHANED_HISTORY_NODE
 from db.character_sharing_restore import reset_restored_sharing
+from db.character_source_schema import (
+    INSERT_SOURCE_REVOCATION,
+    REPLAY_SOURCE_REVOCATIONS,
+    REVOKED_SOURCE_IDS,
+    SOURCE_REVOCATIONS,
+)
 from db.schema_readiness import require_current_migrations
 from db.urls import normalize_async_database_url
 
@@ -48,10 +54,23 @@ async def prepare_restore(staged_url, receipt_url):
                 raise ValueError("Receipt connection resolved to an unexpected database")
             result = await connection.execute(text(f"SELECT session_id FROM {ERASURE_TABLE}"))
             receipt_ids = result.scalars().all()
+            has_receipts = await connection.scalar(text("SELECT to_regclass(:table) IS NOT NULL"),
+                                                   {"table": SOURCE_REVOCATIONS})
+            revoked_ids = set()
+            if has_receipts:
+                revoked_ids.update(await connection.scalars(text(f"SELECT corpus_id FROM {SOURCE_REVOCATIONS}")))
+            # A downgraded writer can revoke editions without recording new receipts.
+            can_read_legacy = await connection.scalar(text(
+                "SELECT has_column_privilege('character_source_corpora','id','SELECT') "
+                "AND has_column_privilege('character_source_corpora','revoked','SELECT')"
+            ))
+            if can_read_legacy or not has_receipts:
+                revoked_ids.update(await connection.scalars(text(REVOKED_SOURCE_IDS)))
     finally:
         await receipt_engine.dispose()
 
-    tables = sorted({ERASURE_TABLE, _EVIDENCE, HISTORY_NODES, "character_library", *(table for table, _ in SESSION_ROWS)})
+    tables = sorted({ERASURE_TABLE, _EVIDENCE, HISTORY_NODES, "character_library", "character_source_corpora",
+                     SOURCE_REVOCATIONS, *(table for table, _ in SESSION_ROWS)})
     staged_engine = create_async_engine(staged, hide_parameters=True)
     try:
         async with staged_engine.begin() as connection:
@@ -64,6 +83,9 @@ async def prepare_restore(staged_url, receipt_url):
                     text(f"INSERT INTO {ERASURE_TABLE} (session_id) VALUES (:id) ON CONFLICT DO NOTHING"),
                     [{"id": identity} for identity in receipt_ids],
                 )
+            if revoked_ids:
+                await connection.execute(text(INSERT_SOURCE_REVOCATION), [{"id": identity} for identity in revoked_ids])
+            await connection.execute(text(REPLAY_SOURCE_REVOCATIONS))
             erased = f"SELECT session_id FROM {ERASURE_TABLE}"
             await connection.execute(text(
                 f"DELETE FROM {_EVIDENCE} WHERE turn_id IN "
