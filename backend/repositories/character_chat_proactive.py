@@ -22,11 +22,13 @@ _INACTIVITY_READY = (
     "AND NOT EXISTS (SELECT 1 FROM character_chat_generations g "
     "WHERE g.session_id=p.session_id AND g.status='running' AND g.lease_until>:now)"
 )
+FICTION_LABEL = "【角色虚构日常】"
 _TEXT = {
     "follow_up": "上次说到「{topic}」，如果你想继续，我还在听。",
     "event": "你之前提过「{topic}」。如果愿意聊，后来怎么样了？",
-    "fiction": "【角色虚构日常】今天翻开旧日记，想到「{topic}」。下次见面时想听听你的想法。",
+    "fiction": FICTION_LABEL + "今天翻开旧日记，想到「{topic}」。下次见面时想听听你的想法。",
 }
+_FICTION_LEASE_SECONDS = 90
 
 
 def in_quiet_hours(policy, now):
@@ -240,18 +242,22 @@ class CharacterChatProactiveRepository:
             + _INACTIVITY_READY + " LIMIT 1", {"now": now},
         ))
 
-    def deliver_due(self, *, now=None):
+    def _due_jobs(self, now, *, fiction=None):
+        kind = {True: " AND j.kind='fiction'", False: " AND j.kind<>'fiction'", None: ""}
+        return self.db.execute_sql(
+            "SELECT j.session_id,j.id,j.kind,j.topic,j.policy_revision,j.next_attempt_at,s.owner_user_id "
+            "FROM character_chat_proactive_jobs j JOIN character_chat_sessions s ON s.id=j.session_id "
+            "WHERE j.status='pending' AND j.next_attempt_at<=:now" + kind[fiction]
+            + " ORDER BY j.next_attempt_at,j.id LIMIT 100", {"now": now},
+        )
+
+    def deliver_due(self, *, now=None, include_fiction=True):
         """Run a restart-safe worker sweep. No private text leaves the database worker."""
         def clock():
             return time() if now is None else now
 
         ready_at = clock()
-        jobs = self.db.execute_sql(
-            "SELECT j.session_id,j.id,j.kind,j.topic,j.policy_revision,s.owner_user_id "
-            "FROM character_chat_proactive_jobs j JOIN character_chat_sessions s ON s.id=j.session_id "
-            "WHERE j.status='pending' AND j.next_attempt_at<=:now ORDER BY j.next_attempt_at,j.id LIMIT 100",
-            {"now": ready_at},
-        )
+        jobs = self._due_jobs(ready_at, fiction=None if include_fiction else False)
         sent = 0
         for job in jobs:
             try:
@@ -272,21 +278,68 @@ class CharacterChatProactiveRepository:
                 continue
         return sent
 
-    def _deliver(self, job, now):
+    def _ready_job(self, job, now, *, session=None):
         session_id = job["session_id"]
-        session = self.chats.get(job["owner_user_id"], session_id)
+        if session is None:
+            session = self.chats.get(job["owner_user_id"], session_id)
         policy = self._policy(session_id)
         if not policy["enabled"] or policy["revision"] != job["policy_revision"]:
-            return False
+            return None
         next_allowed = next_allowed_at(policy, now)
-        params = {"session": session_id, "id": job["id"], "revision": policy["revision"], "now": now}
+        params = {"session": session_id, "id": job["id"], "revision": policy["revision"], "now": now,
+                  "expected_attempt": job["next_attempt_at"]}
         if next_allowed is not None:
             self.db.revision_transaction([
                 ("UPDATE character_chat_proactive_jobs SET next_attempt_at=:next "
-                 "WHERE session_id=:session AND id=:id AND policy_revision=:revision AND status='pending'",
+                 "WHERE session_id=:session AND id=:id AND policy_revision=:revision "
+                 "AND status='pending' AND next_attempt_at=:expected_attempt",
                  {**params, "next": next_allowed}, None),
             ])
+            return None
+        return session, policy, params
+
+    def claim_fiction(self, *, now=None):
+        now = time() if now is None else now
+        for job in self._due_jobs(now, fiction=True):
+            try:
+                ready = self._ready_job(job, now)
+                if ready is None:
+                    continue
+                session, policy, params = ready
+                # The due-time column also fences the current render and makes an expired claim eligible again.
+                lease = now + _FICTION_LEASE_SECONDS
+                self.db.revision_transaction([
+                    self._session_guard(session),
+                    ("UPDATE character_chat_proactive_policies SET revision=revision "
+                     "WHERE session_id=:session AND revision=:revision AND enabled=1 "
+                     "AND (last_sent_at IS NULL OR last_sent_at<=:cutoff)",
+                     {**params, "cutoff": now - policy["cadence_hours"] * 3600}, 1),
+                    ("UPDATE character_chat_proactive_jobs SET next_attempt_at=:lease "
+                     "WHERE session_id=:session AND id=:id AND policy_revision=:revision AND status='pending' "
+                     "AND next_attempt_at=:expected_attempt", {**params, "lease": lease}, 1),
+                ])
+                prior = self.fiction_history(job["owner_user_id"], job["session_id"], limit=3)["entries"]
+                return {**job, "next_attempt_at": lease}, session, [item["content"] for item in reversed(prior)]
+            except (RevisionConflictError, CharacterNotFoundError):
+                continue
+        return None
+
+    def finish_fiction(self, claim, text, *, now=None):
+        now = time() if now is None else now
+        job, session, _ = claim
+        if now >= job["next_attempt_at"]:
             return False
+        content = f"{FICTION_LABEL}{text}" if text else None
+        try:
+            return self._deliver(job, now, session=session, content=content)
+        except (RevisionConflictError, CharacterNotFoundError):
+            return False
+
+    def _deliver(self, job, now, *, session=None, content=None):
+        ready = self._ready_job(job, now, session=session)
+        if ready is None:
+            return False
+        session, policy, params = ready
         self.db.revision_transaction([
             self._session_guard(session),
             ("UPDATE character_chat_proactive_policies SET last_sent_at=:now "
@@ -295,8 +348,8 @@ class CharacterChatProactiveRepository:
              {**params, "cutoff": now - policy["cadence_hours"] * 3600}, 1),
             ("UPDATE character_chat_proactive_jobs SET status='sent',sent_at=:now,content=:content "
              "WHERE session_id=:session AND id=:id AND policy_revision=:revision "
-             "AND status='pending' AND next_attempt_at<=:now",
-             {**params, "content": _TEXT[job["kind"]].format(topic=job["topic"])}, 1),
+             "AND status='pending' AND next_attempt_at=:expected_attempt",
+             {**params, "content": content or _TEXT[job["kind"]].format(topic=job["topic"])}, 1),
         ])
         return True
 

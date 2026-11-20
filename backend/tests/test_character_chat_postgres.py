@@ -68,6 +68,32 @@ def test_postgres_production_startup_requires_current_migration_head():
     asyncio.run(check())
 
 
+def test_postgres_fiction_rendering_keeps_one_valid_lease(database):
+    from repositories.character_chat_proactive import CharacterChatProactiveRepository
+
+    repo = CharacterChatProactiveRepository(database)
+    owner = f"fiction-{uuid.uuid4().hex}"
+    character = repo.chats.characters.create(owner, CharacterSettings(name="fixture", persona="fixture", greeting="hi"))
+    session = repo.chats.create(owner, character["id"], "fiction")
+    identity = session["id"]
+    repo.set_policy(owner, identity, 0, enabled=True, cadence_hours=24, timezone="UTC", quiet_start=None, quiet_end=None)
+    repo.schedule(owner, identity, 1, "id", "fiction", "test fiction", 101, now=100)
+    barrier = Barrier(2)
+
+    def claim(_):
+        barrier.wait(timeout=5)
+        return repo.claim_fiction(now=101)
+
+    with ThreadPoolExecutor(2) as pool:
+        expired, = [lease for lease in pool.map(claim, range(2)) if lease is not None]
+    current = repo.claim_fiction(now=191)
+    assert current is not None and not repo.finish_fiction(expired, "expired body", now=192)
+    assert repo.finish_fiction(current, "new body", now=192)
+    assert not repo.finish_fiction(current, "duplicate body", now=192)
+    entry, = repo.fiction_history(owner, identity)["entries"]
+    assert entry["content"] == "【角色虚构日常】new body"
+
+
 def test_postgres_proactive_delivery_respects_session_consent_and_is_idempotent(database):
     from repositories.character_chat_proactive import CharacterChatProactiveRepository
 

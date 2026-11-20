@@ -177,7 +177,9 @@ class CharacterChatService:
         )
 
 
-async def complete_with_provider(request, session, request_id, *, database, http_client_pool, event_sink=None):
+async def complete_with_provider(
+    request, session, request_id, *, database, http_client_pool, event_sink=None, max_reply_tokens: int | None = None,
+):
     from app.config import get_llm_semaphore
     from inference.local_model_access import get_local_model_lock
     from inference.model_manager import get_model_manager
@@ -194,6 +196,9 @@ async def complete_with_provider(request, session, request_id, *, database, http
         raise RuntimeError("当前模型为 mock，请配置有效的模型提供商")
     deepseek = context.provider_name == "openai_compat" and is_deepseek_api(context.provider.base_url)
     options = read_generation_options(await asyncio.to_thread(lambda: dict(database.config)), default_top_p=1.0 if deepseek else 0.9)
+    max_tokens = options["maxTokens"]
+    if max_reply_tokens is not None:
+        max_tokens = min(max_tokens, max_reply_tokens)
     timeout = read_positive_float(os.environ, "MODEL_INFERENCE_TIMEOUT", 180.0)
     metadata = {
         "traceId": request_id,
@@ -213,7 +218,7 @@ async def complete_with_provider(request, session, request_id, *, database, http
         request = replace(
             request,
             temperature=options["temperature"],
-            max_tokens=options["maxTokens"],
+            max_tokens=max_tokens,
             top_p=options["topP"],
             context_window_tokens=budget.window_tokens,
         )

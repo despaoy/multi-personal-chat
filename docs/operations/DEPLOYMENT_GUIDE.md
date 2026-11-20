@@ -178,6 +178,7 @@ python -m workflows.run_chat_worker
 - API 开启 `CHARACTER_CHAT_BACKGROUND_ENABLED` 后，正式回复会生成记忆、关系及摘要的后台处理任务。准备好 worker 后再开启。私人记忆向量、摘要和模型分别配置。
 - 原作资料索引由 worker 的 `CHARACTER_SOURCE_INDEXING_ENABLED` 开启。API 和 worker 使用相同的 `CHARACTER_SEARCH_URL`、`CHARACTER_SEARCH_INDEX` 和本地嵌入模型配置。OpenSearch 认证配置可以在两端分别注入。
 - 应用内主动联系由 worker 的 `CHARACTER_CHAT_PROACTIVE_ENABLED` 开启，实际发送仍需要会话授权。浏览器提醒还需向 API 和 worker 注入同一套 VAPID 配置，并通过浏览器的安全上下文访问网页。配置格式见 [浏览器提醒交付记录](../development/MODULE_DELIVERY.md#浏览器提醒)。
+- 虚构日常由聊天 worker 使用后端模型配置生成。独立启动时为 worker 配置所选模型和后端运行环境，沿用会话的本地模型限制。生成超时或模型不可用时，应用内记录采用带虚构标识的模板。
 
 现有 Docker Compose 定义应用及基础服务。启用上述后台功能时，需要从能够访问同一数据库和相应依赖的运行环境单独启动角色聊天 worker。可以选用本机或外部 Temporal、OpenSearch 端点，按所选环境注入配置。
 

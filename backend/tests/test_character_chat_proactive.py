@@ -5,6 +5,7 @@ import sqlite3
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
 from datetime import UTC, datetime
+from types import SimpleNamespace
 
 import pytest
 from fastapi import FastAPI
@@ -18,6 +19,7 @@ from db.database import SQLiteDB
 from db.errors import RevisionConflictError
 from repositories.character_chat_proactive import CharacterChatProactiveRepository
 from services.character_chat import CharacterChatService
+from services.temporal_proactive import ChatProactiveActivities, WebPushConfig
 
 
 @pytest.fixture
@@ -374,3 +376,82 @@ def test_outreach_context_is_available_only_to_original_ordinary_session(proacti
     branch = repo.chats.create("owner", session["character_id"], "假想分支", source_session_id=identity,
                                source_revision=2, source_turn_id=turn["id"])
     asyncio.run(client.generate("owner", branch["id"], revision=1, request_id="branch-answer", message="继续聊"))
+
+
+def test_worker_writes_role_specific_fiction_and_keeps_prior_story(proactive, monkeypatch):
+    from repositories import character_chat_proactive
+
+    repo, session = proactive
+    identity = session["id"]
+    settings = policy(quiet_start=None, quiet_end=None)
+    repo.set_policy("owner", identity, 0, **settings)
+    repo.schedule("owner", identity, 1, "old", "fiction", "旧地图", 101, now=100)
+    assert repo.deliver_due(now=101) == 1
+    repo.schedule("owner", identity, 1, "new", "fiction", "起雾的码头", 86502, now=100)
+    monkeypatch.setattr(character_chat_proactive, "time", lambda: 86502)
+    monkeypatch.setattr(WebPushConfig, "from_env", staticmethod(lambda: None))
+
+    async def complete(request, target, request_id):
+        assert target["id"] == identity
+        assert request_id == "proactive-fiction:new"
+        assert "角色名：旅人" in request.persona_prompt and "坦率" in request.persona_prompt
+        assert "起雾的码头" in request.message and "旧地图" in request.message
+        assert request.memory_write_enabled is False
+        return SimpleNamespace(reply="【角色虚构日常】我把旧地图摊在码头，雾里竟传来风铃声。")
+
+    worker = ChatProactiveActivities(repo.db, complete)
+    assert asyncio.run(worker.deliver()) == 1
+    assert asyncio.run(worker.deliver()) == 0
+    latest, previous = repo.fiction_history("owner", identity)["entries"]
+    assert latest["content"] == "【角色虚构日常】我把旧地图摊在码头，雾里竟传来风铃声。"
+    assert "旧地图" in previous["content"]
+
+
+def test_fiction_claim_recovers_and_cannot_publish_after_consent_changes(proactive):
+    repo, session = proactive
+    identity = session["id"]
+    settings = policy(quiet_start=None, quiet_end=None)
+    repo.set_policy("owner", identity, 0, **settings)
+    repo.schedule("owner", identity, 1, "fiction", "fiction", "写一段虚构日常", 101, now=100)
+    with ThreadPoolExecutor(2) as workers:
+        first, = [claim for claim in workers.map(lambda _: repo.claim_fiction(now=101), range(2)) if claim]
+    assert repo.claim_fiction(now=190) is None
+    second = repo.claim_fiction(now=191)
+    assert second is not None
+    assert not repo.finish_fiction(first, "旧 worker 返回的正文", now=192)
+    repo.set_policy("owner", identity, 1, **{**settings, "enabled": False})
+    assert not repo.finish_fiction(second, "已撤销的正文", now=192)
+    assert not repo.fiction_history("owner", identity)["entries"]
+
+
+def test_fiction_falls_back_if_model_is_unavailable(proactive, monkeypatch):
+    from repositories import character_chat_proactive
+
+    repo, session = proactive
+    identity = session["id"]
+    repo.set_policy("owner", identity, 0, **policy(quiet_start=None, quiet_end=None))
+    repo.schedule("owner", identity, 1, "fiction", "fiction", "旧地图", 101, now=100)
+    monkeypatch.setattr(character_chat_proactive, "time", lambda: 101)
+    monkeypatch.setattr(WebPushConfig, "from_env", staticmethod(lambda: None))
+
+    async def unavailable(*args):
+        raise TimeoutError()
+
+    assert asyncio.run(ChatProactiveActivities(repo.db, unavailable).deliver()) == 1
+    entry, = repo.fiction_history("owner", identity)["entries"]
+    assert entry["content"].startswith("【角色虚构日常】") and "旧地图" in entry["content"]
+
+
+def test_fiction_result_is_deferred_if_quiet_hours_start_during_generation(proactive):
+    repo, session = proactive
+    identity = session["id"]
+    repo.set_policy("owner", identity, 0, **policy(timezone="UTC"))
+    quiet_begins = 22 * 3600
+    repo.schedule("owner", identity, 1, "fiction", "fiction", "窗外下雪", quiet_begins - 1, now=100)
+    claim = repo.claim_fiction(now=quiet_begins - 1)
+    assert claim is not None
+    assert not repo.finish_fiction(claim, "初雪到了。", now=quiet_begins + 1)
+    assert not repo.fiction_history("owner", identity)["entries"]
+    later = 32 * 3600
+    fresh_claim = repo.claim_fiction(now=later)
+    assert fresh_claim is not None and repo.finish_fiction(fresh_claim, "雪已经落了半夜。", now=later)
