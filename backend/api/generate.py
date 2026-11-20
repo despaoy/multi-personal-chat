@@ -207,6 +207,53 @@ def _response_cache_keys(
     return prompt_hash, cache_key, 60 if use_knowledge_base else 300
 
 
+async def _read_cached_response(
+    request: MessageRequest,
+    lora_name: str,
+    runtime_config: dict[str, Any],
+    *,
+    provider,
+    request_provider: str,
+    enable_rag: bool,
+) -> tuple[GenerateResponse | None, str, str, int]:
+    try:
+        model_identity = {
+            "provider": request_provider,
+            "status": provider.get_status(),
+            "endpoint": getattr(provider, "base_url", None),
+            "credential_sha256": hashlib.sha256(getattr(provider, "api_key", "").encode()).hexdigest(),
+        }
+    except Exception as exc:
+        raise HTTPException(503, "模型配置读取失败，请检查配置及模型状态后重试") from exc
+    try:
+        prompt_hash, cache_key, cache_ttl = _response_cache_keys(
+            request,
+            lora_name,
+            runtime_config,
+            enable_rag=enable_rag,
+            model_identity=model_identity,
+        )
+        cached = await response_cache.get(prompt_hash, cache_key)
+        response = GenerateResponse.model_validate(cached) if cached is not None else None
+    except ValidationError as exc:
+        raise HTTPException(
+            503,
+            detail={
+                "stage": "response_cache",
+                "reason": "invalid_cached_response",
+                "fields": list(
+                    dict.fromkeys(
+                        str(error["loc"][0]) if error["loc"] else "$" for error in exc.errors(include_input=False)
+                    )
+                ),
+                "message": "缓存的生成结果缺少必要字段或内容无效，请清理该条缓存后重试。",
+            },
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(503, "回复缓存读取失败，请检查缓存状态后重试") from exc
+    return response, prompt_hash, cache_key, cache_ttl
+
+
 async def _generate_reply_impl(
     request: MessageRequest,
     current_user: dict | None = None,
@@ -474,41 +521,14 @@ async def _generate_reply_body(
     )
     provider = request_context.provider
     if use_response_cache:
-        try:
-            model_identity = {
-                "provider": request_provider,
-                "status": provider.get_status(),
-                "endpoint": getattr(provider, "base_url", None),
-                "credential_sha256": hashlib.sha256(getattr(provider, "api_key", "").encode()).hexdigest(),
-            }
-        except Exception as exc:
-            raise HTTPException(503, "模型配置读取失败，请检查配置及模型状态后重试") from exc
-        try:
-            prompt_hash, cache_key, cache_ttl = _response_cache_keys(
-                request,
-                lora_name,
-                runtime_config,
-                enable_rag=enable_rag,
-                model_identity=model_identity,
-            )
-            cached = await response_cache.get(prompt_hash, cache_key)
-            response = GenerateResponse.model_validate(cached) if cached is not None else None
-        except ValidationError as exc:
-            raise HTTPException(
-                503,
-                detail={
-                    "stage": "response_cache",
-                    "reason": "invalid_cached_response",
-                    "fields": list(
-                        dict.fromkeys(
-                            str(error["loc"][0]) if error["loc"] else "$" for error in exc.errors(include_input=False)
-                        )
-                    ),
-                    "message": "缓存的生成结果缺少必要字段或内容无效，请清理该条缓存后重试。",
-                },
-            ) from exc
-        except Exception as exc:
-            raise HTTPException(503, "回复缓存读取失败，请检查缓存状态后重试") from exc
+        response, prompt_hash, cache_key, cache_ttl = await _read_cached_response(
+            request,
+            lora_name,
+            runtime_config,
+            provider=provider,
+            request_provider=request_provider,
+            enable_rag=enable_rag,
+        )
         if response is not None:
             logger.debug("response cache hit")
             if persist_message:
