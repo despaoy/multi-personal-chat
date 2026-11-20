@@ -110,6 +110,29 @@ def character(repo):
     return repo.characters.create("1", CharacterSettings(name="旅人", persona="谨慎", greeting="你好"))
 
 
+@pytest.mark.parametrize("delete", [False, True])
+def test_snapshot_rejects_session_changed_during_turn_read(repo, monkeypatch, delete):
+    entry = character(repo)
+    session = repo.create("1", entry["id"], "并发读取")
+    repo.commit_turn(session, "previous", "原消息", "原回复", "test")
+    session = repo.get("1", session["id"])
+    assert repo._active_turns("2", session["id"]) == []
+    active_turns = repo._active_turns
+
+    def read_then_change(owner, session_id):
+        turns = active_turns(owner, session_id)
+        if delete:
+            repo.delete_sessions(owner, [{"id": session_id, "revision": session["revision"]}])
+        else:
+            repo.commit_turn(session, "concurrent", "新消息", "新回复", "test")
+        return turns
+
+    monkeypatch.setattr(repo, "_active_turns", read_then_change)
+    error = CharacterNotFoundError if delete else RevisionConflictError
+    with pytest.raises(error):
+        repo.snapshot("1", session["id"])
+
+
 def test_selected_deletion_erases_inactive_history_and_shares_only_in_scope(repo):
     entry = character(repo)
     source = repo.create("1", entry["id"], "删除来源")

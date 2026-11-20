@@ -50,10 +50,15 @@ class CharacterChatRepository:
 
     def turns(self, owner, session_id):
         self.get(owner, session_id)
+        return self._active_turns(owner, session_id)
+
+    def _active_turns(self, owner, session_id):
         rows = self.database.execute_sql(
-            "SELECT t.*,e.payload_json FROM character_chat_turns t LEFT JOIN character_chat_evidence e ON e.turn_id=t.id "
-            "WHERE t.session_id=:id AND t.active=1 ORDER BY t.position",
-            {"id": session_id},
+            "SELECT t.*,e.payload_json FROM character_chat_turns t "
+            "JOIN character_chat_sessions s ON s.id=t.session_id "
+            "LEFT JOIN character_chat_evidence e ON e.turn_id=t.id "
+            "WHERE t.session_id=:id AND s.owner_user_id=:owner AND t.active=1 ORDER BY t.position",
+            {"id": session_id, "owner": owner},
         )
         return [self.decode_turn(row) for row in rows]
 
@@ -149,8 +154,14 @@ class CharacterChatRepository:
 
     def snapshot(self, owner, session_id):
         session = self.get(owner, session_id)
-        turns = self.turns(owner, session_id)
-        if self.get(owner, session_id)["revision"] != session["revision"]:
+        turns = self._active_turns(owner, session_id)
+        rows = self.database.execute_sql(
+            "SELECT revision FROM character_chat_sessions WHERE id=:id AND owner_user_id=:owner",
+            {"id": session_id, "owner": owner},
+        )
+        if not rows:
+            raise CharacterNotFoundError("会话不存在")
+        if rows[0]["revision"] != session["revision"]:
             raise RevisionConflictError()
         return session, turns
 
