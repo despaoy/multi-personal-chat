@@ -10,6 +10,10 @@ from repositories.character_chat import timestamp
 from repositories.character_library import CharacterLibraryRepository, CharacterNotFoundError
 
 
+class SourceIndexNotReadyError(ValueError):
+    """An otherwise authorized source version has no completed index."""
+
+
 class OriginalSource(BaseModel):
     model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
     id: str = Field(min_length=1, max_length=100, pattern=r'^[a-zA-Z0-9_-]+$')
@@ -114,20 +118,30 @@ class CharacterSourceRepository:
 
     def require_indexed(self, owner, corpus_id, index_name, embedding_identity):
         corpus = self.get(owner, corpus_id)
+        if corpus['index_status'] != 'completed':
+            raise SourceIndexNotReadyError('资料索引尚未准备完成')
         receipt = json.loads(corpus.get('index_receipt_json') or '{}')
-        if (corpus['index_status'] != 'completed' or receipt.get('index_name') != index_name or receipt.get('embedding_identity') != embedding_identity
+        if (receipt.get('index_name') != index_name or receipt.get('embedding_identity') != embedding_identity
                 or receipt.get('corpus_digest') != corpus['content_digest'] or receipt.get('chunk_count', 0) < 1):
             raise ValueError('资料索引尚未准备完成')
         return corpus
 
     def verify_candidate(self, owner, character_id, character_revision, corpus_id, candidate):
+        return self.verify_candidates(owner, character_id, character_revision, corpus_id, [candidate])[0]
+
+    def verify_candidates(self, owner, character_id, character_revision, corpus_id, candidates):
         corpus = self.get(owner, corpus_id)
-        required = {'owner_id': owner, 'character_id': character_id, 'character_revision': character_revision, 'corpus_revision': corpus_id}
         if corpus['character_id'] != character_id or corpus['character_revision'] != character_revision:
             raise CharacterNotFoundError('资料版本不属于当前角色版本')
+        required = {'owner_id': owner, 'character_id': character_id, 'character_revision': character_revision, 'corpus_revision': corpus_id}
+        sources = {item['id']: item for item in corpus['sources']}
+        return [self._verify_candidate(required, sources, candidate) for candidate in candidates]
+
+    @staticmethod
+    def _verify_candidate(required, sources, candidate):
         if any(candidate.get(key) != value for key, value in required.items()):
             raise ValueError('Source candidate scope changed')
-        source = next((s for s in corpus['sources'] if s['id'] == candidate.get('source_id')), None)
+        source = sources.get(candidate.get('source_id'))
         if source is None:
             raise CharacterNotFoundError('原文不存在')
         lines = source['content'].splitlines()
@@ -137,6 +151,7 @@ class CharacterSourceRepository:
         content = '\n'.join(lines[start - 1:end])
         if digest(content) != candidate.get('content_sha256'):
             raise ValueError('Source candidate content changed')
+        corpus_id = required['corpus_revision']
         identity = f'{corpus_id}:{source["id"]}:{start}:{end}'
         if candidate.get('chunk_id') != identity:
             raise ValueError('Source candidate identity changed')

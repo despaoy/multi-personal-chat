@@ -55,7 +55,8 @@ function ChatWorkspace() {
   const [source, setSource] = useState('');
   const [title, setTitle] = useState('新的相遇');
   const [acceptChange, setAcceptChange] = useState(false);
-  const [preview, setPreview] = useState<ContinuationPreview>();
+  const [previewResult, setPreview] = useState<ContinuationPreview>();
+  const [useNewSources, setUseNewSources] = useState(false);
   const [excludedMemories, setExcludedMemories] = useState<string[]>([]);
   const [resetRelationship, setResetRelationship] = useState(false);
   const [inheritHistory, setInheritHistory] = useState(true);
@@ -76,8 +77,9 @@ function ChatWorkspace() {
   const [relationshipSummary, setRelationshipSummary] = useState('');
   const pending = useRef<{ sessionId: string; body: SendCharacterChatMessage } | null>(null);
   const selectedCharacter = characters.find(item => item.id === characterId);
-  const sourceSession = sessions.find(item => item.id === source);
+  const preview = previewResult?.source_session_id === source ? previewResult : undefined;
   const settingsChanged = Boolean(preview && preview.previous_character_revision !== preview.character_revision);
+  const latestEdition = preview?.latest_source_corpus;
   const loadVersion = useRef(0);
 
   const refreshShared = useCallback(async () => {
@@ -90,6 +92,7 @@ function ChatWorkspace() {
   useEffect(() => {
     let active = true;
     setPreview(undefined);
+    setUseNewSources(false);
     setSelectedShared([]);
     setAcceptChange(false);
     setExcludedMemories([]);
@@ -349,12 +352,13 @@ function ChatWorkspace() {
       <section className="min-w-0 space-y-4">
         {newSession ? <form className="space-y-4 rounded-xl border p-5" onSubmit={event => { event.preventDefault(); void run(async () => {
           if (!selectedCharacter) return;
-          if (sourceSession && !preview) return;
+          if (source && !preview) return;
           const created = await api.createCharacterChat({ character_id: characterId, title,
             ...(localOnly ? { network_policy: 'local_only' as const } : {}),
             expected_character_revision: preview?.character_revision ?? selectedCharacter.revision,
-            ...(!sourceSession ? { shared_memory_ids: selectedShared } : {}),
-            ...(sourceSession && preview ? { source_session_id: sourceSession.id, source_revision: preview.source_revision, accept_settings_change: acceptChange,
+            ...(!source ? { shared_memory_ids: selectedShared } : {}),
+            ...(latestEdition && (useNewSources || settingsChanged) ? { source_corpus_id: latestEdition.id } : {}),
+            ...(preview ? { source_session_id: preview.source_session_id, source_revision: preview.source_revision, accept_settings_change: acceptChange,
               excluded_memory_ids: excludedMemories, reset_relationship: resetRelationship, inherit_history: inheritHistory } : {}) });
           await refreshSessions(characterId); await open(created.id); setDraft(''); setEditing(undefined); pending.current = null;
         }); }}>
@@ -382,9 +386,16 @@ function ChatWorkspace() {
             })}>加载更多共享记忆</Button>}
           </details>}
           {source && <Button type="button" variant="outline" disabled={busy} onClick={() => void run(async () => {
-            setAcceptChange(false); setPreview(undefined); setExcludedMemories([]); setResetRelationship(false); setInheritHistory(true);
+            setAcceptChange(false); setPreview(undefined); setUseNewSources(false); setExcludedMemories([]); setResetRelationship(false); setInheritHistory(true);
             setPreview(await api.getContinuationPreview(source));
           })}>刷新继承预览</Button>}
+          {preview && latestEdition && preview.source_corpus_id !== latestEdition.id && <div className="space-y-2 rounded-lg border p-3 text-sm">
+            {settingsChanged ? <p>延续到新角色设定时，将使用与它对应的资料版本。</p> : <label className="flex items-start gap-2">
+              <input type="checkbox" checked={useNewSources} disabled={busy} onChange={event => setUseNewSources(event.target.checked)} />
+              在新会话中使用最新资料版本
+            </label>}
+            <p>资料发布于 {new Date(latestEdition.created_at).toLocaleString()}。{latestEdition.index_status === 'completed' ? '索引已就绪。' : '索引尚未就绪，暂时无法核对原文。'}原会话继续使用原来的版本。</p>
+          </div>}
           {preview && <details className="rounded-lg border p-3" open={settingsChanged}>
             <summary className="cursor-pointer">查看设定差异与将继承的记忆</summary>
             {Object.entries(preview.changes).map(([field, change]) => <div key={field} className="my-3 space-y-1">
@@ -412,6 +423,9 @@ function ChatWorkspace() {
             <h2 className="text-lg font-medium">{session.title}</h2>
             <p className="text-sm text-muted-foreground">{session.network_policy === 'local_only' ? '仅使用本地模型 · 未配置本地辅助模型时，记忆、关系和摘要需手动管理' : '允许使用已配置的云端模型'}</p>
             <Button disabled={busy} variant="outline" onClick={() => void run(async () => { await open(session.id); await refreshSessions(characterId); })}>刷新会话</Button>
+            {session.mode !== 'branch' && <Button disabled={busy} variant="outline" onClick={() => {
+              setSource(session.id); setAcceptChange(false); setUseNewSources(false); setNewSession(true);
+            }}>延续此会话</Button>}
           </div>
           {session.hypothesis && <p className="rounded-lg bg-muted p-3">剧情假设：{session.hypothesis}</p>}
           {watchedRequest && <GenerationDraft key={`${session.id}:${watchedRequest}`} sessionId={session.id} requestId={watchedRequest} />}

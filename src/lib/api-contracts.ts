@@ -206,6 +206,9 @@ export interface CharacterSourceEdition extends CharacterSourceEditionSummary {
 }
 
 export interface ContinuationPreview {
+  source_session_id: string;
+  source_corpus_id: string | null;
+  latest_source_corpus: CharacterSourceEditionSummary | null;
   source_revision: number;
   character_revision: number;
   previous_character_revision: number;

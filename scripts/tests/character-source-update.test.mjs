@@ -93,6 +93,50 @@ async function choices(renderer) {
 }
 async function unmount(renderer) { await act(async () => renderer.unmount()); }
 
+test('continuation binds a new source edition only after user selection', async () => {
+  const originalWindow = globalThis.window;
+  globalThis.window = { location: { search: '' } };
+  const source = { id: 'old', character_id: character.id, title: '旧会话', revision: 3, mode: 'initial' };
+  const result = {
+    id: 'new-session', character, baseline: { history: [] },
+    state: { relationship: { stage: 'stranger' }, memories: [] },
+  };
+  const submissions = [];
+  const load = loader({
+    listCharacterLibrary: async () => ({ characters: [character] }),
+    listCharacterChats: async () => ({ sessions: [source] }),
+    listSharedChatMemories: async () => ({ memories: [] }),
+    getContinuationPreview: async () => ({
+      source_session_id: source.id, source_revision: source.revision, character_revision: 1, previous_character_revision: 1,
+      source_corpus_id: 'old-source', latest_source_corpus: { id: 'new-source', index_status: 'completed', created_at: '2026-11-19' },
+      changes: {}, relationship: { stage: 'stranger' }, memories: [],
+    }),
+    createCharacterChat: async body => {
+      submissions.push(body);
+      return submissions.length === 1 ? Promise.reject(new Error('模拟刷新前的失败')) : result;
+    },
+    getCharacterChat: async () => ({ session: result, turns: [] }),
+  });
+  let renderer;
+  try {
+    await act(async () => { renderer = create(React.createElement(load('src/app/chat/page.tsx').default)); });
+    await change(renderer.root.findByProps({ id: 'chat-source' }), source.id);
+    const submit = () => act(async () => renderer.root.findByType('form').props.onSubmit({ preventDefault() {} }));
+    await submit();
+    assert.equal(submissions[0].source_session_id, 'old');
+    assert.equal(submissions[0].source_corpus_id, undefined);
+    const option = renderer.root.findAllByType('label').find(node => text(node).includes('在新会话中使用最新资料版本'));
+    assert.ok(option);
+    assert.equal(option.findByType('input').props.checked, false);
+    await act(async () => option.findByType('input').props.onChange({ target: { checked: true } }));
+    await submit();
+    assert.equal(submissions[1].source_corpus_id, 'new-source');
+  } finally {
+    if (renderer) await unmount(renderer);
+    globalThis.window = originalWindow;
+  }
+});
+
 test('session deletion previews related copies and submits only explicit selections', async () => {
   const originalWindow = globalThis.window;
   globalThis.window = { location: { search: '' } };

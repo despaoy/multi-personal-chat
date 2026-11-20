@@ -1,0 +1,62 @@
+"""Second-stage ranking and bounded context for verified character sources."""
+
+from hashlib import sha256
+
+from knowledge.retrieval_core.tokenization import segment
+
+SOURCE_CANDIDATE_LIMIT = 24
+SOURCE_EVIDENCE_LIMIT = 8
+_CONTEXT_LINES = 2
+_CONTEXT_CHARS = 1800
+
+
+def rank_verified_sources(query, documents, *, reranker=None):
+    if not documents:
+        return []
+    if reranker is not None:
+        by_id = {document["id"]: document for document in documents}
+        ranked = reranker.rerank(query, [dict(document) for document in documents], top_k=len(documents))
+        order = [document["id"] for document in ranked]
+        if len(order) != len(documents) or set(order) != by_id.keys():
+            raise ValueError("Source reranker returned a different candidate set")
+        # The ranker may reorder verified IDs, but cannot rewrite their text or lineage.
+        return [by_id[identity] for identity in order[:SOURCE_EVIDENCE_LIMIT]]
+
+    terms = {term.casefold() for term in segment(query) if len(term) > 1}
+
+    def coverage(document):
+        body = document["content"].casefold()
+        title = document["title"].casefold()
+        return sum(term in body for term in terms) + sum(term in title for term in terms)
+
+    # Python's stable sort preserves the hybrid rank when literal coverage ties.
+    return sorted(documents, key=coverage, reverse=True)[:SOURCE_EVIDENCE_LIMIT]
+
+
+def expand_source_context(documents, corpus):
+    """Expand within the same original paragraph and report the exact citable span."""
+    selected = {document["source_id"] for document in documents}
+    originals = {source["id"]: source["content"].splitlines() for source in corpus["sources"]
+                 if source["id"] in selected}
+    expanded = {}
+    for document in documents:
+        lines = originals[document["source_id"]]
+        start, end = document["line_start"], document["line_end"]
+        anchor_start, anchor_end = start, end
+        size = len(document["content"])
+        for _ in range(_CONTEXT_LINES):
+            if start > 1 and lines[start - 2].strip() and size + len(lines[start - 2]) + 1 <= _CONTEXT_CHARS:
+                start -= 1
+                size += len(lines[start - 1]) + 1
+            if end < len(lines) and lines[end].strip() and size + len(lines[end]) + 1 <= _CONTEXT_CHARS:
+                size += len(lines[end]) + 1
+                end += 1
+        if (start, end) != (anchor_start, anchor_end):
+            content = "\n".join(lines[start - 1:end])
+            document = {
+                **document, "id": f'{corpus["id"]}:{document["source_id"]}:{start}:{end}',
+                "content": content, "line_start": start, "line_end": end,
+                "content_sha256": sha256(content.encode()).hexdigest(),
+            }
+        expanded.setdefault(document["id"], document)
+    return list(expanded.values())

@@ -47,6 +47,16 @@ def test_source_api_authorization_and_immutable_session_binding(tmp_path):
             for turn_id in (None, turn['id']):
                 child = chats.create('owner', char['id'], '延续或分支', source_session_id=old['id'], source_revision=2, source_turn_id=turn_id)
                 assert child['source_corpus_id'] == first['id']
+            preview = chats.continuation_preview('owner', old['id'])
+            assert preview['source_session_id'] == old['id'] and preview['source_corpus_id'] == first['id']
+            assert preview['latest_source_corpus']['id'] == second['id']
+            migrated = chats.create('owner', char['id'], '改用新资料', source_session_id=old['id'],
+                                    source_revision=preview['source_revision'], source_corpus_id=second['id'])
+            assert migrated['source_corpus_id'] == second['id']
+            assert chats.get('owner', old['id'])['source_corpus_id'] == first['id']
+            older_point = chats.create('owner', char['id'], '从旧节点分支', source_session_id=migrated['id'],
+                                       source_revision=migrated['revision'], source_turn_id=turn['id'])
+            assert older_point['source_corpus_id'] == first['id']
             versions = client.get(path, params={'revision': 1}).json()['corpora']
             assert {v['id'] for v in versions} == {first['id'], second['id']}
             assert all('sources_json' not in v and 'sources' not in v for v in versions)

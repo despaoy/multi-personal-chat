@@ -155,12 +155,20 @@ class CharacterChatRepository:
         return session, turns
 
     def continuation_preview(self, owner, session_id):
+        from repositories.character_sources import CharacterSourceRepository
+
         source = self.get(owner, session_id)
         latest = self.characters.get(owner, source["character_id"])
+        editions = CharacterSourceRepository(self.database).list(
+            owner, source["character_id"], latest["settings_revision"], 1,
+        )
         return {
+            "source_session_id": session_id,
             "source_revision": source["revision"],
             "character_revision": latest["settings_revision"],
             "previous_character_revision": source["character_revision"],
+            "source_corpus_id": source["source_corpus_id"],
+            "latest_source_corpus": editions[0] if editions else None,
             "changes": {
                 key: {"previous": source["character"]["settings"][key], "next": value}
                 for key, value in latest["settings"].items()
