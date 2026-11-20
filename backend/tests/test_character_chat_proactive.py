@@ -58,10 +58,33 @@ def test_candidates_use_source_time_and_do_not_guess_uncertain_dates():
     ]
 
 
+@pytest.mark.parametrize(("message", "reminder"), [
+    ("我下周三参加面试", "2026-11-26T01:00:00+00:00"),
+    ("本星期日我有考试", "2026-11-23T01:00:00+00:00"),
+    ("下下礼拜一我有答辩", "2026-12-01T01:00:00+00:00"),
+    ("12月3号我有复试", "2026-12-04T01:00:00+00:00"),
+    ("2027-01-03我有演讲", "2027-01-04T01:00:00+00:00"),
+    ("周三我有面试", None),
+    ("下周三或周四我有面试", None),
+    ("下周三至五我有面试", None),
+    ("下周一、三我有面试", None),
+    ("12月3号到5号我有面试", None),
+    ("明年12月3日我有面试", None),
+    ("本周一我有面试", None),
+    ("2月30号我有面试", None),
+])
+def test_candidate_reminders_use_only_unambiguous_calendar_dates(message, reminder):
+    created = "2026-11-20T17:00:00+00:00"  # Saturday in the configured timezone.
+    now = datetime.fromisoformat(created).timestamp()
+    candidate, = outreach_candidates([{"id": "source", "message": message, "created_at": created}], "Asia/Shanghai", now)
+    assert candidate["topic"] == message
+    assert candidate["suggested_at"] == (datetime.fromisoformat(reminder).timestamp() if reminder else None)
+
+
 def test_sourced_job_requires_confirmation_and_disappears_when_source_is_retracted(proactive):
     repo, session = proactive
     owner, identity = "owner", session["id"]
-    sentence = "明天我有面试"
+    sentence = "下周三我有面试"
     turn = repo.chats.commit_turn(session, "first", sentence + "。", "我记得了。", "fixture")
     app = FastAPI()
     app.include_router(router)
