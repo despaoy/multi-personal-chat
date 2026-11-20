@@ -443,3 +443,12 @@ def test_explicit_cpu_does_not_probe_gpu(monkeypatch):
         raise AssertionError('explicit CPU must not probe GPU')
     monkeypatch.setattr(torch.cuda, 'is_available', detect)
     assert CrossEncoderReranker(RerankConfig(model_name='fake-model', device='cpu')).device == 'cpu'
+
+
+def test_reranker_device_can_be_configured_without_requiring_cuda(monkeypatch):
+    monkeypatch.setenv("RERANKER_DEVICE", " cpu ")
+    monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
+    assert CrossEncoderReranker(RerankConfig(model_name="fixture")).device == "cpu"
+    assert CrossEncoderReranker(RerankConfig(model_name="fixture", device="auto")).device == "cuda:0"
+    monkeypatch.setenv("RERANKER_DEVICE", " ")
+    assert RerankConfig().device == "auto"

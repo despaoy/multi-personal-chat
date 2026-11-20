@@ -27,7 +27,7 @@ _BACKEND_DIR = Path(__file__).parent
 @dataclass
 class RerankConfig:
     model_name: str = field(default_factory=lambda: os.getenv("RERANKER_MODEL_PATH", str(_BACKEND_DIR / "bge-reranker-base")))
-    device: str = "auto"
+    device: str = field(default_factory=lambda: os.getenv("RERANKER_DEVICE", "").strip() or "auto")
     batch_size: int = 8
     max_length: int = 512
     warmup_on_init: bool = False

@@ -57,6 +57,7 @@ chmod 600 backend/.env
 - `VLLM_LORA_ROOT="$MULTIPERSONAL_LAB_ROOT"/runtime/loras`
 - `EMBEDDING_MODEL_PATH="$MULTIPERSONAL_LAB_ROOT"/runtime/models/paraphrase-multilingual-MiniLM-L12-v2`
 - `RERANKER_MODEL_PATH="$MULTIPERSONAL_LAB_ROOT"/runtime/models/bge-reranker-v2-m3`
+- `RERANKER_DEVICE=auto` 默认按可用设备选择。需要把重排留在 CPU 时设为 `cpu`，也可显式指定 `cuda:0` 等设备。
 - `CHARACTER_RAG_INDEX_ROOT="$MULTIPERSONAL_LAB_ROOT"/runtime/rag/character_knowledge_index_v3`
 - `CHARACTER_RAG_ABSTAIN_THRESHOLD=0.25`
 
