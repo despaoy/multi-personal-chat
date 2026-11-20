@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.dependencies import get_current_user
 from app.runtime import get_runtime_container
+from character import kamimaho_preset
 from character.library import CharacterPackage, CharacterSettings
 from db.errors import RevisionConflictError
 from repositories.character_library import CharacterLibraryRepository, CharacterNotFoundError, SourceMergeBlockedError
@@ -168,6 +169,13 @@ def create_character(body: CharacterSettings, owner=Depends(account), repo=Depen
 @router.post("/import", status_code=201)
 def import_character(body: CharacterPackage, owner=Depends(account), repo=Depends(repository)):
     return repo.create(owner, body.settings)
+
+
+@router.post("/presets/{preset_key}", status_code=201)
+def install_preset(preset_key: str, owner=Depends(account), repo=Depends(original_sources)):
+    if preset_key != kamimaho_preset.PRESET_KEY:
+        raise HTTPException(404, "预设角色不存在")
+    return source_call(repo.install_preset, owner, preset_key, kamimaho_preset.SETTINGS, kamimaho_preset.SOURCES)
 
 
 @router.post('/import-preview')

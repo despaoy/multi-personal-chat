@@ -30,6 +30,21 @@ def database():
     db.close()
 
 
+def test_postgres_concurrent_preset_installation_keeps_one_pending_edition(database):
+    from character.kamimaho_preset import PRESET_KEY, SETTINGS, SOURCES
+    from repositories.character_sources import CharacterSourceRepository
+
+    owner = uuid.uuid4().hex
+    sources = CharacterSourceRepository(database)
+    with ThreadPoolExecutor(2) as pool:
+        created = list(pool.map(lambda _: sources.install_preset(owner, PRESET_KEY, SETTINGS, SOURCES), range(2)))
+    assert created[0]["id"] == created[1]["id"]
+    assert len(sources.characters.list(owner)) == 1
+    edition, = sources.list(owner, created[0]["id"], 1)
+    assert edition["index_status"] == "pending"
+    assert len(sources.get(owner, edition["id"])["sources"]) == 3
+
+
 def test_postgres_production_startup_requires_current_migration_head():
     from sqlalchemy import text
 

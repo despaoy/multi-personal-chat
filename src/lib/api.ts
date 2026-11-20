@@ -813,6 +813,10 @@ class ApiClient {
     return this.request<CharacterLibraryRecord>('/character-library/import', { method: 'POST', body: JSON.stringify(value) });
   }
 
+  installLibraryPreset(presetKey: string) {
+    return this.request<CharacterLibraryRecord>(`/character-library/presets/${encodeURIComponent(presetKey)}`, { method: 'POST' });
+  }
+
   previewLibraryCharacterImport(value: unknown) {
     return this.request<CharacterPackage>('/character-library/import-preview', { method: 'POST', body: JSON.stringify(value) });
   }

@@ -6,6 +6,7 @@ import uuid
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from db.errors import RevisionConflictError
 from repositories.character_chat import timestamp
 from repositories.character_library import CharacterLibraryRepository, CharacterNotFoundError
 
@@ -41,6 +42,30 @@ class CharacterSourceRepository:
 
     def publish(self, owner, character_id, character_revision, sources):
         self.characters.get(owner, character_id, character_revision)
+        params = self._edition_params(owner, character_id, character_revision, sources)
+        self.database.revision_transaction([
+            ('UPDATE character_library SET revision=revision WHERE id=:character AND owner_user_id=:owner AND revision=:revision', params, 1),
+            self._insert_edition(params),
+        ])
+        return self.get(owner, params['id'])
+
+    def install_preset(self, owner, key, settings, sources):
+        character_id = uuid.uuid5(uuid.NAMESPACE_URL, json.dumps(["character-library-preset", key, owner])).hex
+        params = self._edition_params(owner, character_id, 1, sources)
+        try:
+            self.database.revision_transaction([
+                *self.characters.creation_statements(owner, settings, character_id),
+                self._insert_edition(params),
+            ])
+        except RevisionConflictError as exc:
+            try:
+                return self.characters.get(owner, character_id)
+            except CharacterNotFoundError:
+                raise exc from None
+        return self.characters.get(owner, character_id)
+
+    @staticmethod
+    def _edition_params(owner, character_id, character_revision, sources):
         if not 1 <= len(sources) <= 100:
             raise ValueError('A corpus requires 1 to 100 sources')
         validated = [OriginalSource.model_validate(source).model_dump() for source in sources]
@@ -49,17 +74,16 @@ class CharacterSourceRepository:
         payload = json.dumps(validated, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
         if len(payload.encode('utf-8')) > 5_000_000:
             raise ValueError('Source edition exceeds 5 MB')
-        params = {'id': uuid.uuid4().hex, 'owner': owner, 'character': character_id, 'revision': character_revision,
-                  'digest': digest(payload), 'payload': payload, 'now': timestamp()}
-        self.database.revision_transaction([
-            ('UPDATE character_library SET revision=revision WHERE id=:character AND owner_user_id=:owner AND revision=:revision', params, 1),
-            ('INSERT INTO character_source_corpora (id,owner_user_id,character_id,character_revision,content_digest,'
+        return {'id': uuid.uuid4().hex, 'owner': owner, 'character': character_id, 'revision': character_revision,
+                'digest': digest(payload), 'payload': payload, 'now': timestamp()}
+
+    @staticmethod
+    def _insert_edition(params):
+        return ('INSERT INTO character_source_corpora (id,owner_user_id,character_id,character_revision,content_digest,'
              'sources_json,revoked,created_at,edition_number) '
              'SELECT :id,:owner,:character,:revision,:digest,:payload,0,:now,COALESCE(MAX(edition_number),0)+1 '
              'FROM character_source_corpora WHERE owner_user_id=:owner AND character_id=:character '
-             'AND character_revision=:revision', params, 1),
-        ])
-        return self.get(owner, params['id'])
+             'AND character_revision=:revision', params, 1)
 
     def get(self, owner, corpus_id):
         rows = self.database.execute_sql('SELECT * FROM character_source_corpora WHERE id=:id AND owner_user_id=:owner AND revoked=0',

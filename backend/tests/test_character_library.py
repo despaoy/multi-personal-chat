@@ -9,12 +9,13 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from api.character_library import repository, router
+from api.character_library import original_sources, repository, router
 from app.dependencies import get_current_user
 from character.library import CharacterSettings
 from db.database import SQLiteDB
 from db.errors import RevisionConflictError
 from repositories.character_library import CharacterLibraryRepository, CharacterNotFoundError
+from repositories.character_sources import CharacterSourceRepository
 
 
 @pytest.fixture
@@ -46,6 +47,38 @@ def test_import_preview_validates_without_persisting_and_rejects_private_fields(
         assert repo.list('other-owner') == []
         exported = client.get(f"/api/character-library/{imported.json()['id']}/export")
         assert exported.json() == preview.json()
+
+
+def test_preset_installation_is_independent_repeatable_and_scope_checked(repo):
+    sources = CharacterSourceRepository(repo.database)
+    app = FastAPI()
+    app.include_router(router)
+    app.dependency_overrides[get_current_user] = lambda: {"user_id": "first"}
+    app.dependency_overrides[original_sources] = lambda: sources
+    url = "/api/character-library/presets/kamimaho-kisaki"
+    with TestClient(app) as client, ThreadPoolExecutor(2) as pool:
+        responses = list(pool.map(lambda _: client.post(url), range(2)))
+        assert all(response.status_code == 201 for response in responses)
+        first, duplicate = [response.json() for response in responses]
+        assert first["settings"]["name"] == "月社妃"
+        assert first["id"] == duplicate["id"] and len(repo.list("first")) == 1
+        edition, = sources.list("first", first["id"], 1)
+        assert edition["index_status"] == "pending" and first["share_token"] is None
+        corpus = sources.get("first", edition["id"])
+        assert "学校用月社" in corpus["sources"][1]["content"]
+        assert "https://kagura.rdy.jp/kamimaho/qa_old02.html" in corpus["sources"][1]["content"]
+        repo.update("first", first["id"], 1, settings("自己的版本"))
+        sources.revoke("first", edition["id"])
+        reinstalled = client.post(url).json()
+        assert reinstalled["settings"]["name"] == "自己的版本"
+        assert sources.list("first", first["id"], 1) == []
+        app.dependency_overrides[get_current_user] = lambda: {"user_id": "second"}
+        second = client.post(url).json()
+        assert second["id"] != first["id"] and second["settings"]["name"] == "月社妃"
+        with pytest.raises(CharacterNotFoundError):
+            sources.list("second", first["id"], 1)
+        app.dependency_overrides[get_current_user] = lambda: {"user_id": "second", "auth_type": "api_key"}
+        assert client.post(url).status_code == 403
 
 
 def test_versions_and_stale_updates(repo):

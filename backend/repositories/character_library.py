@@ -48,6 +48,10 @@ class CharacterLibraryRepository:
 
     def create(self, owner: str, settings: CharacterSettings):
         character_id = uuid.uuid4().hex
+        self.database.revision_transaction(self.creation_statements(owner, settings, character_id))
+        return self.get(owner, character_id)
+
+    def creation_statements(self, owner, settings, character_id):
         timestamp = datetime.now(timezone.utc).isoformat()
         params = {
             "id": character_id,
@@ -58,18 +62,15 @@ class CharacterLibraryRepository:
             "settings": settings.model_dump_json(),
             "revision": 1,
         }
-        self.database.revision_transaction(
-            [
-                (
-                    "INSERT INTO character_library (id,owner_user_id,revision,source_character_id,source_revision,created_at,updated_at) "
-                    "VALUES (:id,:owner,1,:source,:source_revision,:now,:now)",
-                    params,
-                    1,
-                ),
-                self._insert_version(params),
-            ]
-        )
-        return self.get(owner, character_id)
+        return [
+            (
+                "INSERT INTO character_library (id,owner_user_id,revision,source_character_id,source_revision,created_at,updated_at) "
+                "VALUES (:id,:owner,1,:source,:source_revision,:now,:now) ON CONFLICT (id) DO NOTHING",
+                params,
+                1,
+            ),
+            self._insert_version(params),
+        ]
 
     @staticmethod
     def _insert_version(params):

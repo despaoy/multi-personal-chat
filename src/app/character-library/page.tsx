@@ -146,6 +146,13 @@ function CharacterLibrary() {
       <h1 className="text-2xl font-semibold">我的角色</h1>
       <div className="flex gap-2">
         <Button disabled={busy} onClick={() => choose()}>创建角色</Button>
+        <Button disabled={busy} variant="outline" onClick={() => void run(async () => {
+          if (!discardAllowed()) return;
+          const preset = await api.installLibraryPreset('kamimaho-kisaki');
+          select(preset);
+          setNotice('已打开月社妃预设。可在资料版本面板查看出处和索引状态。');
+          await refresh();
+        })}>添加预设 · 月社妃</Button>
         <Button disabled={busy} variant="outline" onClick={() => fileInput.current?.click()}>导入角色</Button>
         <Button disabled={busy} variant="outline" onClick={() => void run(refresh)}>刷新列表</Button>
       </div>
