@@ -187,6 +187,82 @@ async function choices(renderer) {
 }
 async function unmount(renderer) { await act(async () => renderer.unmount()); }
 
+test('chat restores the original edit request and recovers a committed reply after a timeout', async () => {
+  const body = { request_id: 'original', revision: 4, message: '上一次编辑', replace_turn_id: 'turn' };
+  const snapshot = { session: { id: 'room', revision: 4 }, turns: [], generation: { status: 'failed', body } };
+  const submissions = [];
+  const timeout = new Error('send timed out');
+  const { useCharacterChatGeneration } = loader({
+    sendCharacterChat: async (id, message) => {
+      submissions.push([id, structuredClone(message)]);
+      throw timeout;
+    },
+  })('src/hooks/useCharacterChatGeneration.ts');
+  let chat, renderer, sharedRefreshes = 0;
+  function Probe() {
+    chat = useCharacterChatGeneration(snapshot, { paused: false, onPoll: assert.fail });
+    return null;
+  }
+  const send = () => chat.send({
+    reload: async () => submissions.length === 1 ? snapshot : { ...snapshot, turns: [{ request_id: 'original' }] },
+    refreshSessions: async () => assert.fail('Recovery already loaded the committed turn'),
+    refreshShared: async () => { sharedRefreshes++; },
+  });
+  try {
+    await act(async () => { renderer = create(React.createElement(Probe)); });
+    await act(async () => chat.restoreDraft('room', body));
+    assert.equal(chat.editing, 'turn');
+    await act(async () => assert.rejects(send, error => error === timeout));
+    assert.equal(chat.draft, body.message);
+    await act(send);
+    assert.deepEqual(submissions, [['room', body], ['room', body]]);
+    assert.equal(chat.draft, '');
+    assert.equal(chat.editing, undefined);
+    assert.equal(sharedRefreshes, 1);
+  } finally {
+    if (renderer) await unmount(renderer);
+  }
+});
+
+test('chat polls after a transient disconnect and ignores a response after changing sessions', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const requests = [];
+  const applied = [];
+  const onPoll = snapshot => applied.push(snapshot);
+  let finishPoll;
+  const held = new Promise(resolve => { finishPoll = resolve; });
+  const { useCharacterChatGeneration } = loader({
+    getCharacterChat: async id => {
+      requests.push(id);
+      if (requests.length === 1) throw new Error('disconnected');
+      return held;
+    },
+  })('src/hooks/useCharacterChatGeneration.ts');
+  const running = { session: { id: 'room' }, generation: { status: 'running', request_id: 'original' } };
+  function Probe({ snapshot }) {
+    useCharacterChatGeneration(snapshot, { paused: false, onPoll });
+    return null;
+  }
+  let renderer;
+  try {
+    await act(async () => { renderer = create(React.createElement(Probe, { snapshot: running })); });
+    await act(async () => t.mock.timers.tick(1499));
+    assert.deepEqual(requests, []);
+    await act(async () => t.mock.timers.tick(1));
+    await act(async () => t.mock.timers.tick(2999));
+    assert.deepEqual(requests, ['room']);
+    await act(async () => t.mock.timers.tick(1));
+    assert.deepEqual(requests, ['room', 'room']);
+    await act(async () => renderer.update(React.createElement(Probe, { snapshot: { session: { id: 'other' } } })));
+    await act(async () => finishPoll({ ...running, turns: [] }));
+    await act(async () => t.mock.timers.tick(5000));
+    assert.deepEqual(requests, ['room', 'room']);
+    assert.deepEqual(applied, []);
+  } finally {
+    if (renderer) await unmount(renderer);
+  }
+});
+
 test('continuation binds a new source edition only after user selection', async () => {
   const originalWindow = globalThis.window;
   globalThis.window = { location: { search: '' } };
