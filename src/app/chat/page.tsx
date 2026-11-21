@@ -8,12 +8,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { api, ApiRequestError } from '@/lib/api';
-import { createClientId } from '@/lib/client-id';
 import { GenerationDraft } from '@/components/chat/GenerationDraft';
 import { ProactivePanel } from '@/components/chat/ProactivePanel';
 import { ProactiveInbox } from '@/components/chat/ProactiveInbox';
-import type { CharacterChatDeletionPreview, CharacterChatGeneration, CharacterChatRelationshipDimensions } from '@/lib/api-contracts';
-import type { CharacterChatSession, CharacterChatSummary, CharacterChatTurn, CharacterLibraryRecord, SendCharacterChatMessage, ContinuationPreview, CharacterSharedMemory, CharacterChatEvidence } from '@/lib/api-contracts';
+import { useCharacterChatGeneration, type CharacterChatSnapshot } from '@/hooks/useCharacterChatGeneration';
+import type { CharacterChatDeletionPreview, CharacterChatRelationshipDimensions } from '@/lib/api-contracts';
+import type { CharacterChatSession, CharacterChatSummary, CharacterLibraryRecord, ContinuationPreview, CharacterSharedMemory, CharacterChatEvidence } from '@/lib/api-contracts';
 
 const relationshipStages = { stranger: '初识', acquaintance: '认识', familiar: '熟悉', close: '亲近' };
 const relationshipTones = { restrained: '保持克制', playful: '可以轻松接梗' };
@@ -78,12 +78,7 @@ function ChatWorkspace() {
   const [deletedInboxSessions, setDeletedInboxSessions] = useState<ReadonlySet<string>>(() => new Set());
   const [sourceExcerpt, setSourceExcerpt] = useState<{ message: string; reply: string; title: string }>();
   const [branchOrigin, setBranchOrigin] = useState<string>();
-  const [session, setSession] = useState<CharacterChatSession>();
-  const [turns, setTurns] = useState<CharacterChatTurn[]>([]);
-  const [generation, setGeneration] = useState<CharacterChatGeneration | null>(null);
-  const [enrichmentPending, setEnrichmentPending] = useState(false);
-  const [enrichmentRetryable, setEnrichmentRetryable] = useState(false);
-  const [streamRequest, setStreamRequest] = useState<{ sessionId: string; requestId: string } | null>(null);
+  const [snapshot, setSnapshot] = useState<CharacterChatSnapshot>();
   const [source, setSource] = useState('');
   const [title, setTitle] = useState('新的相遇');
   const [acceptChange, setAcceptChange] = useState(false);
@@ -95,8 +90,6 @@ function ChatWorkspace() {
   const [sharedMemories, setSharedMemories] = useState<CharacterSharedMemory[]>([]);
   const [selectedShared, setSelectedShared] = useState<string[]>([]);
   const [moreShared, setMoreShared] = useState(false);
-  const [draft, setDraft] = useState('');
-  const [editing, setEditing] = useState<string>();
   const [branchTurn, setBranchTurn] = useState<string>();
   const [hypothesis, setHypothesis] = useState('');
   const [busy, setBusy] = useState(false);
@@ -108,7 +101,11 @@ function ChatWorkspace() {
   const [relationshipStage, setRelationshipStage] = useState<CharacterChatSession['state']['relationship']['stage']>('stranger');
   const [relationshipSummary, setRelationshipSummary] = useState('');
   const [relationshipDimensions, setRelationshipDimensions] = useState<CharacterChatRelationshipDimensions>({});
-  const pending = useRef<{ sessionId: string; body: SendCharacterChatMessage } | null>(null);
+  const session = snapshot?.session;
+  const turns = snapshot?.turns ?? [];
+  const generation = snapshot?.generation;
+  const enrichmentPending = snapshot?.enrichment_pending;
+  const enrichmentRetryable = snapshot?.enrichment_retryable;
   const selectedCharacter = characters.find(item => item.id === characterId);
   const preview = previewResult?.source_session_id === source ? previewResult : undefined;
   const settingsChanged = Boolean(preview && preview.previous_character_revision !== preview.character_revision);
@@ -117,6 +114,14 @@ function ChatWorkspace() {
   const needsSourceChoice = sourceRevoked && sourceSelection === 'default';
   const loadVersion = useRef(0);
   const requestedSession = useRef<{ characterId: string; sessionId: string } | null>(null);
+
+  const applySnapshot = useCallback((response: CharacterChatSnapshot) => {
+    setSnapshot(response);
+    const { id, revision } = response.session;
+    setSessions(previous => previous.map(item => item.id === id ? { ...item, revision } : item));
+  }, []);
+  const { draft, setDraft, editing, editDraft, clearDraft, restoreDraft, watchedRequest, send } =
+    useCharacterChatGeneration(snapshot, { paused: busy || newSession, onPoll: applySnapshot });
 
   const refreshShared = useCallback(async () => {
     const result = await api.listSharedChatMemories();
@@ -150,22 +155,17 @@ function ChatWorkspace() {
     if (initial && initial.version !== loadVersion.current) return response;
     if (initial && response.session.character_id !== initial.characterId) throw new Error('会话不属于所选角色');
     rememberChatLocation(response.session.character_id, response.session.id);
-    setSession(response.session);
-    setGeneration(response.generation);
-    setEnrichmentPending(response.enrichment_pending);
-    setEnrichmentRetryable(response.enrichment_retryable);
-    setSessions(previous => previous.map(item => item.id === id ? { ...item, revision: response.session.revision } : item));
+    applySnapshot(response);
     setRelationshipStage(response.session.state.relationship.stage);
     setRelationshipSummary(response.session.state.relationship.summary || '');
     setRelationshipDimensions(response.session.state.relationship.dimensions || {});
     setSourceExcerpt(undefined);
     setMemoryDraft('');
     setMemoryEditing(undefined);
-    setTurns(response.turns);
     setNewSession(false);
     setBranchTurn(undefined);
     return response;
-  }, []);
+  }, [applySnapshot]);
 
   useEffect(() => {
     if (branchOrigin) focusTurn(branchOrigin);
@@ -199,18 +199,12 @@ function ChatWorkspace() {
     setRelatedDeletionIds([]);
     setSessionOffset(0); setMoreSessions(false); setSourceExcerpt(undefined);
     setSelectedShared([]);
-    setSession(undefined);
-    setGeneration(null);
-    setEnrichmentPending(false);
-    setEnrichmentRetryable(false);
-    setTurns([]);
+    setSnapshot(undefined);
     setSource('');
     setAcceptChange(false);
     setNewSession(true);
-    setDraft('');
-    setEditing(undefined);
+    clearDraft();
     setBranchTurn(undefined);
-    pending.current = null;
     if (!characterId) return;
     const initial = requestedSession.current;
     requestedSession.current = null;
@@ -220,7 +214,7 @@ function ChatWorkspace() {
         if (initial?.characterId === characterId) await open(initial.sessionId, { version, characterId });
       }
     }).catch(error => { if (version === loadVersion.current) setError(String(error)); });
-  }, [characterId, open]);
+  }, [characterId, clearDraft, open]);
 
   async function run(operation: () => Promise<void>) {
     setBusy(true);
@@ -259,7 +253,7 @@ function ChatWorkspace() {
       setDeleteSelection([]); setSource(''); setSourceExcerpt(undefined);
       if (session && result.deleted_session_ids.includes(session.id)) {
         rememberChatLocation(characterId);
-        setSession(undefined); setTurns([]); setNewSession(true); setDraft(''); setEditing(undefined); setBranchTurn(undefined); pending.current = null;
+        setSnapshot(undefined); setNewSession(true); clearDraft(); setBranchTurn(undefined);
       }
       await refreshSessions(characterId); await refreshShared();
     } catch (error) {
@@ -275,7 +269,7 @@ function ChatWorkspace() {
     setBranchOrigin(undefined);
     try {
       const parent = await open(branch.source_session_id);
-      setDraft(''); setEditing(undefined); pending.current = null;
+      clearDraft();
       if (branch.source_turn_id) {
         if ([...parent.turns, ...parent.session.baseline.history].some(turn => turn.id === branch.source_turn_id)) {
           setBranchOrigin(branch.source_turn_id);
@@ -290,71 +284,6 @@ function ChatWorkspace() {
       throw error;
     }
   }
-
-  async function send() {
-    if (!session || !draft.trim() || generation?.status === 'running' || (enrichmentPending && !editing)) return;
-    const existing = pending.current;
-    const body: SendCharacterChatMessage = existing?.sessionId === session.id && existing.body.message === draft && (existing.body.replace_turn_id || undefined) === editing
-      ? existing.body : { revision: session.revision, request_id: createClientId(), message: draft, ...(editing ? { replace_turn_id: editing } : {}) };
-    pending.current = { sessionId: session.id, body };
-    setStreamRequest({ sessionId: session.id, requestId: body.request_id });
-    try {
-      await api.sendCharacterChat(session.id, body);
-      setDraft('');
-      setEditing(undefined);
-      pending.current = null;
-      await open(session.id);
-      await refreshSessions(characterId);
-      if (body.replace_turn_id) await refreshShared();
-    } catch (error) {
-      // A timeout may follow a committed response. Read back before offering a retry.
-      try {
-        const response = await open(session.id);
-        if (response.turns.some(turn => turn.request_id === body.request_id)) {
-          pending.current = null;
-          setDraft('');
-          setEditing(undefined);
-          if (body.replace_turn_id) await refreshShared();
-          return;
-        }
-        if (response.session.revision !== body.revision) pending.current = null;
-      } catch { /* Keep the original failure and exact retry identity. */ }
-      throw error;
-    } finally {
-      setStreamRequest(null);
-    }
-  }
-
-  const activeSessionId = session?.id;
-  const watchedRequest = streamRequest && streamRequest.sessionId === activeSessionId ? streamRequest.requestId
-    : generation?.status === 'running' ? generation.request_id : undefined;
-  useEffect(() => {
-    if (!activeSessionId || (generation?.status !== 'running' && !enrichmentPending) || busy || newSession) return;
-    let active = true;
-    let timer: ReturnType<typeof setTimeout>;
-    const poll = async () => {
-      try {
-        const response = await api.getCharacterChat(activeSessionId);
-        if (!active) return;
-        setSession(response.session);
-        setTurns(response.turns);
-        setGeneration(response.generation);
-        setEnrichmentPending(response.enrichment_pending);
-        setEnrichmentRetryable(response.enrichment_retryable);
-        const waiting = pending.current;
-        if (waiting?.sessionId === activeSessionId && response.turns.some(turn => turn.request_id === waiting.body.request_id)) {
-          pending.current = null;
-          setDraft(current => current === waiting.body.message ? '' : current);
-          setEditing(undefined);
-        }
-        setSessions(previous => previous.map(item => item.id === activeSessionId ? { ...item, revision: response.session.revision } : item));
-        if (response.generation?.status !== 'running' && !response.enrichment_pending) return;
-      } catch { /* Keep polling after a transient disconnect; manual refresh remains available. */ }
-      if (active) timer = setTimeout(poll, 3000);
-    };
-    timer = setTimeout(poll, 1500);
-    return () => { active = false; clearTimeout(timer); };
-  }, [activeSessionId, generation?.status, enrichmentPending, busy, newSession]);
 
   return <div className="mx-auto max-w-6xl space-y-4">
     <div className="flex flex-wrap items-center justify-between gap-3">
@@ -386,7 +315,7 @@ function ChatWorkspace() {
         }}>新会话</Button>
         <nav aria-label="会话列表" className="space-y-2">
           {sessions.map(item => <button key={item.id} disabled={busy} onClick={() => void run(async () => {
-            await open(item.id); setDraft(''); setEditing(undefined); pending.current = null;
+            await open(item.id); clearDraft();
           })} className={`w-full rounded-lg border p-3 text-left ${session?.id === item.id && !newSession ? 'bg-muted' : ''}`}>
             <span className="block">{item.title}</span>
             <span className="text-xs text-muted-foreground">{item.mode === 'branch' ? '假想分支' : item.mode === 'continuation' ? '延续关系' : '初识'} · 角色版本 {item.character_revision}</span>
@@ -448,7 +377,7 @@ function ChatWorkspace() {
               : latestEdition && (sourceSelection === 'latest' || settingsChanged) ? { source_corpus_id: latestEdition.id } : {}),
             ...(preview ? { source_session_id: preview.source_session_id, source_revision: preview.source_revision, accept_settings_change: acceptChange,
               excluded_memory_ids: excludedMemories, reset_relationship: resetRelationship, inherit_history: inheritHistory } : {}) });
-          await refreshSessions(characterId); await open(created.id); setDraft(''); setEditing(undefined); pending.current = null;
+          await refreshSessions(characterId); await open(created.id); clearDraft();
         }); }}>
           <h2 className="text-lg font-medium">开始新的对话</h2>
           <label className="flex items-center gap-2"><input type="checkbox" checked={localOnly} disabled={busy} onChange={event => setLocalOnly(event.target.checked)} />仅使用本地模型</label>
@@ -548,10 +477,9 @@ function ChatWorkspace() {
             <p>{generation.status === 'running' ? '这条消息仍在生成，完成后会自动显示。关闭页面不会取消生成。' : '上次生成未完成，可恢复原消息后重试。'}</p>
             {generation.body && <p className="whitespace-pre-wrap text-sm">{generation.body.message}</p>}
             {generation.status !== 'running' && generation.body && <Button disabled={busy} variant="outline" onClick={() => {
-              if (draft && draft !== generation.body!.message && !window.confirm('用上次未完成的消息替换当前草稿？')) return;
-              const body = generation.body!;
-              pending.current = { sessionId: session.id, body };
-              setDraft(body.message); setEditing(body.replace_turn_id || undefined);
+              const body = generation.body;
+              if (!body || (draft && draft !== body.message && !window.confirm('用上次未完成的消息替换当前草稿？'))) return;
+              restoreDraft(session.id, body);
             }}>恢复到输入框</Button>}
           </div>}
           {!!session.state.summaries?.length && <details className="rounded-lg border p-4">
@@ -681,13 +609,13 @@ function ChatWorkspace() {
               <p className="whitespace-pre-wrap"><span className="font-medium">{session.character.settings.name}</span><br />{turn.reply}</p>
               <AnswerSources evidence={turn.evidence} />
               <div className="flex flex-wrap gap-2">
-                <Button variant="ghost" size="sm" disabled={busy} onClick={() => { setEditing(turn.id); setDraft(turn.message); pending.current = null; }}>编辑</Button>
+                <Button variant="ghost" size="sm" disabled={busy} onClick={() => editDraft(turn.id, turn.message)}>编辑</Button>
                 <Button variant="ghost" size="sm" disabled={busy} onClick={() => {
                   if (!window.confirm('撤回这条消息和后续对话？相关关系和记忆将回到此前状态。')) return;
                   void run(async () => {
                     await api.retractCharacterChat(session.id, turn.id, session.revision);
                     await open(session.id); await refreshSessions(characterId); await refreshShared();
-                    setEditing(undefined); setDraft(''); pending.current = null;
+                    clearDraft();
                   });
                 }}>从此处撤回</Button>
                 <Button variant="ghost" size="sm" disabled={busy} onClick={() => { setBranchTurn(turn.id); setHypothesis(''); }}>创建分支</Button>
@@ -697,18 +625,21 @@ function ChatWorkspace() {
           {branchTurn && <form className="space-y-3 rounded-lg border p-4" onSubmit={event => { event.preventDefault(); void run(async () => {
             const branch = await api.createCharacterChat({ character_id: characterId, title: `${session.title} · 分支`.slice(0, 100),
               source_session_id: session.id, source_revision: session.revision, source_turn_id: branchTurn, hypothesis });
-            await refreshSessions(characterId); await open(branch.id); setDraft(''); setEditing(undefined); pending.current = null;
+            await refreshSessions(characterId); await open(branch.id); clearDraft();
           }); }}>
             <Label htmlFor="chat-hypothesis">这个分支有什么不同？</Label>
             <textarea id="chat-hypothesis" required maxLength={8000} disabled={busy} rows={3} className="w-full rounded-md border bg-background p-3" value={hypothesis} onChange={event => setHypothesis(event.target.value)} />
             <div className="flex gap-2"><Button disabled={busy}>保存并进入分支</Button><Button type="button" variant="ghost" disabled={busy} onClick={() => setBranchTurn(undefined)}>取消</Button></div>
           </form>}
-          <form className="space-y-3 rounded-xl border p-4" onSubmit={event => { event.preventDefault(); void run(send); }}>
+          <form className="space-y-3 rounded-xl border p-4" onSubmit={event => {
+            event.preventDefault();
+            void run(() => send({ reload: open, refreshSessions: () => refreshSessions(characterId), refreshShared }));
+          }}>
             <Label htmlFor="chat-message">{editing ? '编辑消息并替换后续走向' : '发送消息'}</Label>
             {editing && <p className="text-sm text-muted-foreground">生成成功后，原消息及后续对话会退出当前走向。</p>}
             <textarea id="chat-message" required maxLength={8000} disabled={busy} rows={4} className="w-full rounded-md border bg-background p-3" value={draft} onChange={event => setDraft(event.target.value)} />
             <div className="flex gap-2"><Button disabled={busy || generation?.status === 'running' || (enrichmentPending && !editing) || !draft.trim()}>{busy ? '正在处理…' : editing ? '保存并继续' : '发送'}</Button>
-              {editing && <Button type="button" variant="ghost" disabled={busy} onClick={() => { setEditing(undefined); setDraft(''); pending.current = null; }}>取消编辑</Button>}
+              {editing && <Button type="button" variant="ghost" disabled={busy} onClick={clearDraft}>取消编辑</Button>}
             </div>
           </form>
         </>}

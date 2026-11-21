@@ -14,6 +14,8 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
+    from services.chat_generation import ChatGenerationService
+
 
 @dataclass(slots=True)
 class RuntimeContainer:
@@ -29,6 +31,7 @@ class RuntimeContainer:
     backup_mgr: Any | None = None
     access_control_mgr: Any | None = None
     character_chat_tasks: Any | None = None
+    chat_generation_factory: Callable[..., ChatGenerationService] | None = None
 
     def __post_init__(self) -> None:
         # Keep startup validation deterministic even if tests or callers mutate

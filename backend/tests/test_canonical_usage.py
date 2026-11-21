@@ -61,7 +61,10 @@ async def canonical_usage(review_usage, monkeypatch):
     pool = HttpClientPool(max_connections=1)
     runtime = SimpleNamespace(check_rate_limits=AsyncMock(), priority_for=lambda *args: 1, submit=submit)
     app = FastAPI()
-    app.state.runtime_container = RuntimeContainer(rig.database, lambda: False, runtime, http_client_pool=pool)
+    app.state.runtime_container = RuntimeContainer(
+        rig.database, lambda: False, runtime, http_client_pool=pool,
+        chat_generation_factory=generate._build_chat_generation_service,
+    )
 
     async def run(message=QUESTION):
         return await narrative.canonical_generate(
@@ -121,8 +124,12 @@ async def test_canonical_accounts_all_calls_and_preserves_scope_and_failure(cano
     if not failure:
         assert messages[0]["senderId"] == "1" and messages[0]["adapter"] == "narrative:" + ROLE
         assert messages[0]["branchId"] is None
+        case.app.state.runtime_container.http_client_pool = None
         replay = await case.run()
         assert replay.reply == result.reply and not replay.modelInvoked
+        with pytest.raises(HTTPException) as conflict:
+            await case.run("这条不同的问题沿用了上一轮的请求 ID。")
+        assert conflict.value.status_code == 409
         assert len(case.rig.installed.calls) == calls and case.rig.writer.call_count == 1
         assert case.snapshots.call_count == 1
     assert get_request_context() is None and not has_pending_usage()

@@ -20,7 +20,6 @@ from typing import TYPE_CHECKING, Any, Literal, TypeVar
 from fastapi import APIRouter, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from api.generate import generate_reply_core
 from app.runtime import RuntimeContainer, get_runtime_container
 from db.schemas import MessageRequest, MessageText
 from infra.concurrency_control import InferenceQueueFull, RateLimitExceeded
@@ -349,6 +348,7 @@ async def receive_astrbot_message(
                 source_db=source_db,
                 runtime=runtime,
                 http_client_pool=container.http_client_pool,
+                chat_generation_factory=container.chat_generation_factory,
             ),
             timeout=remaining,
         )
@@ -391,7 +391,10 @@ async def receive_astrbot_message(
         }) from exc
 
 
-async def _process_astrbot_message(request, text, dedup_message_id, trace_id, start_time, context, *, source_db, runtime, http_client_pool=None):
+async def _process_astrbot_message(
+    request, text, dedup_message_id, trace_id, start_time, context,
+    *, source_db, runtime, http_client_pool, chat_generation_factory,
+):
     await runtime.check_rate_limits(request.platform, request.conversationId, request.senderId)
 
     session_id = _session_id(request.platform, request.conversationType, request.conversationId)
@@ -418,6 +421,11 @@ async def _process_astrbot_message(request, text, dedup_message_id, trace_id, st
             "stage": "dependencies", "traceId": trace_id,
             "message": "Application HTTP pool unavailable; check application startup",
         })
+    if chat_generation_factory is None:
+        raise HTTPException(503, detail={
+            "stage": "dependencies", "traceId": trace_id,
+            "message": "Chat generation service unavailable; check application startup",
+        })
 
     msg = MessageRequest(
         message=text,
@@ -437,14 +445,17 @@ async def _process_astrbot_message(request, text, dedup_message_id, trace_id, st
     )
     priority = runtime.priority_for("astrbot", request.conversationType)
     context["request"] = msg.model_dump()
-    result = await runtime.submit(
-        lambda: generate_reply_core(
+
+    async def generate():
+        service = chat_generation_factory(runtime, message_db=source_db, http_client_pool=http_client_pool)
+        return await service.generate(
             msg,
             current_user={"username": "astrbot", "user_id": 0},
-            message_db=source_db,
-            http_client_pool=http_client_pool,
             delivery_context=context,
-        ),
+        )
+
+    result = await runtime.submit(
+        generate,
         session_id=session_id,
         priority=priority,
         timeout=_MODEL_TIMEOUT,
