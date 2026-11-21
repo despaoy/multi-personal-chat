@@ -7,12 +7,11 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.dependencies import get_current_user, require_narrative_enabled, get_request_http_client_pool
+from app.dependencies import get_current_user, get_request_http_client_pool, require_narrative_enabled
 from app.runtime import get_runtime_container
 from character.profile_registry import CharacterProfileNotFoundError, get_default_profile_registry
 from db.schemas import GenerateResponse, MessageRequest, MessageText
 from repositories.narrative import NarrativeRepository, owner_id
-
 
 router = APIRouter(prefix="/api/narrative-branches", dependencies=[Depends(require_narrative_enabled)])
 
@@ -57,7 +56,6 @@ def characters(user=Depends(get_current_user)):
 
 @router.post("/canonical/generate")
 async def canonical_generate(body: CanonicalMessage, request: Request, user=Depends(get_current_user)):
-    from api.generate import _generate_reply_impl
     from infra.concurrency_control import InferenceQueueFull, RateLimitExceeded
 
     owner = owner_id(user)
@@ -97,10 +95,15 @@ async def canonical_generate(body: CanonicalMessage, request: Request, user=Depe
             conversationId=session,
             conversationType="private",
         )
-        return await _generate_reply_impl(
-            req, user, message_db=container.db, http_client_pool=get_request_http_client_pool(request),
-            _canonical_character_id=body.character_id,
+        factory = container.chat_generation_factory
+        if factory is None:
+            raise HTTPException(503, detail={
+                "stage": "dependencies", "message": "Chat generation service unavailable; check application startup",
+            })
+        service = factory(
+            runtime, message_db=container.db, http_client_pool=get_request_http_client_pool(request),
         )
+        return await service.generate_canonical(req, user, character_id=body.character_id)
 
     try:
         await runtime.check_rate_limits("web", session, owner)

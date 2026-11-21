@@ -68,7 +68,10 @@ async def workspace(tmp_path, monkeypatch):
     pool = HttpClientPool(max_connections=1)
     app = FastAPI()
     runtime = SimpleNamespace(check_rate_limits=AsyncMock(), priority_for=lambda *args: 1, submit=submit)
-    app.state.runtime_container = RuntimeContainer(scoped, lambda: False, runtime, http_client_pool=pool)
+    app.state.runtime_container = RuntimeContainer(
+        scoped, lambda: False, runtime, http_client_pool=pool,
+        chat_generation_factory=state.api._build_chat_generation_service,
+    )
 
     async def call(kind, trace):
         if kind == "branch":

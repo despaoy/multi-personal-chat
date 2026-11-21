@@ -381,7 +381,8 @@ def test_full_web_generation_and_canonical_return(repo, monkeypatch):
     app = FastAPI()
     app.add_exception_handler(NarrativeError, global_exception_handler)
     app.state.runtime_container = RuntimeContainer(
-        repo.db, lambda: False, runtime, http_client_pool=HttpClientPool(max_connections=1)
+        repo.db, lambda: False, runtime, http_client_pool=HttpClientPool(max_connections=1),
+        chat_generation_factory=gen._build_chat_generation_service,
     )
     app.include_router(gen.router)
     app.include_router(narrative_router)

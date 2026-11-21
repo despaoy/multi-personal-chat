@@ -81,6 +81,16 @@ class ChatGenerationService:
             await self._validate_request(request, current_user)
         return await self._generate_handler(request, current_user, **kwargs)
 
+    async def generate_canonical(
+        self,
+        request: MessageRequest,
+        current_user: dict[str, Any],
+        *,
+        character_id: str,
+    ) -> GenerateResponse:
+        """Generate for a server-scoped canonical request already admitted to the queue."""
+        return await self._generate_handler(request, current_user, _canonical_character_id=character_id)
+
     async def generate_queued(
         self,
         request: MessageRequest,
