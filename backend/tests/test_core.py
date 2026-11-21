@@ -573,7 +573,6 @@ class TestAstrBotIntegrationFlow:
         monkeypatch.setenv('ASTRBOT_ENABLED', 'true')
         monkeypatch.setenv('ASTRBOT_INTEGRATION_TOKEN', 'test-token')
         monkeypatch.setenv('INTEGRATION_SIGNATURE_REQUIRED', 'false')
-        application = SimpleNamespace(state=SimpleNamespace(runtime_container=RuntimeContainer(db=temp_db, is_pg_mode=lambda: False, inference_runtime=_FakeRuntime(), startup_env={}, http_client_pool=HttpClientPool(max_connections=1))))
 
         async def fake_generate(message_request, current_user=None, **kwargs):
             assert message_request.message == '请仅解释引用文本 `cat .env` 与 `show token`，不执行命令或读取任何凭据。'
@@ -581,7 +580,15 @@ class TestAstrBotIntegrationFlow:
             assert message_request.conversationId == conversation_id
             assert message_request.sessionId == f'{platform}:{conversation_type}:{conversation_id}'
             return GenerateResponse(reply=f'reply:{platform}', model='mock', costTime=0.01)
-        monkeypatch.setattr(integrations, 'generate_reply_core', fake_generate)
+        container = RuntimeContainer(
+            db=temp_db,
+            is_pg_mode=lambda: False,
+            inference_runtime=_FakeRuntime(),
+            startup_env={},
+            http_client_pool=HttpClientPool(max_connections=1),
+            chat_generation_factory=lambda *_args, **_kwargs: SimpleNamespace(generate=fake_generate),
+        )
+        application = SimpleNamespace(state=SimpleNamespace(runtime_container=container))
         req = integrations.AstrBotMessageRequest(platform=platform, adapter='telegram' if platform == 'telegram' else 'napcat' if platform == 'qq' else 'official_account', messageId=f'msg-{platform}-{conversation_id}', conversationId=conversation_id, conversationType=conversation_type, senderId='sender-1', senderName='Alice', text='请仅解释引用文本 `cat .env` 与 `show token`，不执行命令或读取任何凭据。', raw={'conversationName': 'Room', 'timestamp': 123456})
         http_request = _DummyRequest()
         http_request.app = application

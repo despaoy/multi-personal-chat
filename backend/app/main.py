@@ -391,9 +391,12 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 def create_app(container: RuntimeContainer | None = None) -> FastAPI:
     """Assemble one FastAPI application around an explicit runtime container."""
+    from api.generate import _build_chat_generation_service
     from inference.model_readiness import check_model_readiness
 
     runtime_container = container if container is not None else RuntimeContainer.default(startup_env=_STARTUP_ENV)
+    if runtime_container.chat_generation_factory is None:
+        runtime_container.chat_generation_factory = _build_chat_generation_service
     application = FastAPI(
         title="MultiPersonal Chat System API (增强版)",
         description="MultiPersonal Chat System后端服务API - 高并发/高可靠/高安全增强版",
