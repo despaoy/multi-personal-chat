@@ -193,6 +193,8 @@ class GenerationRequest:
     # Internal bound for one fresh-input regeneration after authority changes.
     authority_refresh_count: int = field(default=0, repr=False)
     review_citations_against_question: bool = False
+    # Called after capacity is acquired, including retries and citation recovery.
+    before_model_call: Callable[[], Awaitable[None]] | None = field(default=None, repr=False, compare=False)
 
 
 
@@ -573,7 +575,9 @@ def _build_packet_budgeted_request(request: GenerationRequest) -> GenerationPlan
     return _build_generation_request_core(replace(request, retrieval=retrieval))
 
 
-async def _generate_text(generate: Callable[..., Awaitable[str]], **kwargs) -> str:
+async def _generate_text(generate: Callable[..., Awaitable[str]], *, before_model_call=None, **kwargs) -> str:
+    if before_model_call is not None:
+        await before_model_call()
     reply = await generate(**kwargs)
     if not isinstance(reply, str) or not reply.strip():
         raise ValueError("Model response must be non-empty text")
@@ -756,7 +760,7 @@ async def generate_character_response(
             request = refreshed
             plan = build_generation_request(request)
     messages = [dict(message) for message in plan.messages]
-    generate_text = partial(_generate_text, generate)
+    generate_text = partial(_generate_text, generate, before_model_call=request.before_model_call)
     reply = await generate_text(
         messages=messages,
         lora_name=plan.lora_name,

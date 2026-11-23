@@ -115,6 +115,19 @@ class CharacterChatGenerationRepository:
         self.database.revision_transaction(statements)
         return params["token"]
 
+    def require_active(self, session, request_id, token):
+        """Check whether this attempt still owns its snapshot before model dispatch."""
+        rows = self.database.execute_sql(
+            "SELECT 1 FROM character_chat_sessions s JOIN character_chat_generations g ON g.session_id=s.id "
+            "WHERE s.id=:session AND s.owner_user_id=:owner AND s.revision=:revision "
+            "AND g.request_id=:request AND g.request_revision=s.revision "
+            "AND g.lease_token=:token AND g.lease_until>:now AND g.status='running'",
+            {"session": session["id"], "owner": session["owner_user_id"], "revision": session["revision"],
+             "request": request_id, "token": token, "now": time.time()},
+        )
+        if not rows:
+            raise RevisionConflictError()
+
     def publish(self, session, request_id, token, event):
         kind = event.get("type")
         delta = event.get("text", "")

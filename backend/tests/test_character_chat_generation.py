@@ -2,16 +2,20 @@
 
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
+from functools import partial
+from types import SimpleNamespace
 
 import pytest
 
 from character.library import CharacterSettings
 from db.database import SQLiteDB
 from db.errors import RevisionConflictError
+from inference.generation_request import RetrievalResult
 from repositories.character_chat import CharacterChatRepository
 from repositories.character_chat_generation import CharacterChatGenerationRepository, GenerationInProgressError
 from repositories.character_library import CharacterNotFoundError
-from services.character_chat import CharacterChatService
+from services.character_chat import CharacterChatService, complete_with_provider
 from services.character_chat_tasks import CharacterChatTasks
 
 
@@ -107,6 +111,9 @@ def test_expired_attempt_is_fenced_and_result_is_atomic(setup):
     assert jobs.get("1", session["id"], "request")["status"] == "interrupted"
     second = jobs.claim(session, "request", "你好")
     assert second != first
+    jobs.require_active(session, "request", second)
+    with pytest.raises(RevisionConflictError):
+        jobs.require_active(session, "request", first)
     with pytest.raises(RevisionConflictError):
         repo.commit_turn(session, "request", "你好", "旧回复", "test", generation_token=first)
     assert repo.get("1", session["id"])["revision"] == 1
@@ -120,6 +127,75 @@ def test_expired_attempt_is_fenced_and_result_is_atomic(setup):
         jobs.get("other", session["id"], "request")
     repo.delete_sessions("1", [{"id": session["id"], "revision": 2}])
     assert db.execute_sql("SELECT * FROM character_chat_generations") == []
+
+
+@pytest.mark.parametrize("change", ["retract", "delete"])
+def test_waiting_grounded_generation_does_not_send_revoked_history(setup, monkeypatch, change):
+    from app import config
+    from inference import model_manager
+
+    db, repo, session, jobs = setup
+    session_id = session["id"]
+    first = repo.commit_turn(session, "first", "先前的私密约定", "角色确认", "fixture")
+    calls = []
+
+    class Provider:
+        name = "openai_compat"
+        base_url = "https://controlled-test.invalid/v1"
+        model = "controlled-test"
+
+        def snapshot(self):
+            return self
+
+        def get_status(self):
+            return {"modelName": self.model}
+
+        async def async_stream(self, *, messages, **kwargs):
+            calls.append(messages)
+            yield "按约定处理。"
+
+    provider = Provider()
+    monkeypatch.setattr(
+        model_manager, "get_model_manager", lambda **kwargs: SimpleNamespace(get_current_provider=lambda: provider)
+    )
+
+    async def with_sources(request, _session):
+        return replace(request, retrieval=RetrievalResult(status="ok", evidence="原作资料的公开片段"))
+
+    chat = CharacterChatService(
+        db, partial(complete_with_provider, database=db, http_client_pool=None), sources=with_sources, stream_events=True,
+    )
+
+    async def exercise():
+        waiting = asyncio.Event()
+        resume = asyncio.Event()
+
+        async def acquire():
+            waiting.set()
+            await resume.wait()
+
+        monkeypatch.setattr(config, "get_llm_semaphore", lambda: SimpleNamespace(acquire=acquire, release=lambda: None))
+        task = asyncio.create_task(chat.generate("1", session_id, revision=2, request_id="waiting", message="按约定继续聊"))
+        try:
+            await asyncio.wait_for(waiting.wait(), 5)
+            assert jobs.get("1", session_id, "waiting")["status"] == "running"
+            if change == "retract":
+                repo.retract("1", session_id, first["id"], 2)
+            else:
+                repo.delete_sessions("1", [{"id": session_id, "revision": 2}])
+        finally:
+            resume.set()
+        with pytest.raises(RevisionConflictError):
+            await task
+        assert not calls
+        if change == "retract":
+            assert jobs.get("1", session_id, "waiting")["status"] == "superseded"
+            assert not repo.turns("1", session_id)
+        else:
+            with pytest.raises(CharacterNotFoundError):
+                jobs.get("1", session_id, "waiting")
+
+    asyncio.run(exercise())
 
 
 def test_concurrent_claims_allow_only_one_provider_attempt(setup):
