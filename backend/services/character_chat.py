@@ -13,7 +13,7 @@ from character.decision_policy import relationship_stage_guidance
 from character.models import CompiledCharacterContext
 from db.errors import RevisionConflictError
 from inference.generation_options import read_generation_options
-from inference.generation_request import GenerationRequest, generate_character_response
+from inference.generation_request import ContextAuthorityChangedError, GenerationRequest, generate_character_response
 from infra.environment import read_positive_float
 from repositories.character_chat import CharacterChatRepository
 from repositories.character_chat_generation import CharacterChatGenerationRepository
@@ -162,6 +162,14 @@ class CharacterChatService:
         request = prepare_request(session, turns, message, memories, proactive_messages=outreach)
         if self.sources:
             request = await self.sources(request, session)
+
+        async def before_model_call():
+            await asyncio.to_thread(self.generations.require_active, session, request_id, token)
+            revalidate = request.public_context_revalidator
+            if revalidate is not None and await revalidate(request) != request:
+                raise ContextAuthorityChangedError("Source context changed before model dispatch")
+
+        request = replace(request, before_model_call=before_model_call)
 
         # Evidence can be revoked while the provider is streaming. Release
         # grounded text only through the final authority-checked save.
