@@ -125,7 +125,37 @@ def _exact_candidates(answer, sources):
     return choices
 
 
-async def recover_missing_citations(result, generate, *, context_window_tokens):
+def disclaims_requested_detail(question, answer, source_bodies):
+    """Recognize an explicit lack of evidence about the sole requested property."""
+    if not question:
+        return False
+    # Leave compound questions to the annotator: a different part may be answered.
+    detail = re.fullmatch(
+        r"(?P<subject>[^？?。！!；;]+?)是(?:什么|哪种|哪一种)(?P<field>[\u4e00-\u9fff]{1,8})[？?]?",
+        question.strip(),
+    )
+    if not detail or re.search(r"为什么|如何|怎么|什么|哪|是否|是不是|以及|并且|还有|[、和与及]", detail["subject"]):
+        return False
+    for clause in re.split(r"[，,。.!！?？；;：:\n]", answer):
+        denied = re.fullmatch(
+            r"(?:(.+?)(?:没有依据|缺乏依据|无从确认|无法确认|没有记载)"
+            r"|(?:原作|原文|资料)?没(?:有)?(?:提到|提及|提|记载|交代|写明)(.+))",
+            clause.strip(),
+        )
+        if denied:
+            topic = (denied[1] or denied[2]).replace("的", "")
+            field = detail["field"]
+            if topic.endswith(field):
+                subject = topic.removesuffix(field)
+                if (
+                    subject and detail["subject"].replace("的", "").endswith(subject)
+                    and not any(clause.strip() in body for body in source_bodies)
+                ):
+                    return True
+    return False
+
+
+async def recover_missing_citations(result, generate, *, context_window_tokens, question=None):
     retrieval = result.plan.retrieval
     if (
         result.response_citations
@@ -138,12 +168,22 @@ async def recover_missing_citations(result, generate, *, context_window_tokens):
     sources = _sources(retrieval)
     if not sources:
         return replace(result, citation_repair_status="no_admitted_sources")
+    if disclaims_requested_detail(question, result.reply, [source["body"] for source in sources]):
+        return replace(result, citation_repair_status="no_exact_span")
     payload = {
         "answer": result.reply,
         "sources": [{"key": source["key"], "body": source["body"]} for source in sources],
     }
+    policy = ANNOTATION_POLICY
+    if question:
+        payload["question"] = question
+        policy += (
+            "先确定 question 要求查明的具体事实，再判断候选片段本身是否给出了其中一项的答案。"
+            "同一人物、物件或事件的其他事实不能作为这项答案的出处。"
+            "如果回答只说明所问细节未知，即使另外复述了来源中的背景，也返回空列表。"
+        )
     messages = [
-        {"role": "system", "content": ANNOTATION_POLICY},
+        {"role": "system", "content": policy},
         {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
     ]
     if not ReviewContextBudget(context_window_tokens).fits(messages, ANNOTATION_TOKENS):

@@ -42,6 +42,43 @@ def test_only_answer_used_sources_are_captured_without_private_metadata():
         evidence_snapshot(result([{"source_id": "invented", "source_title": "模型编造"}]))
 
 
+@pytest.mark.parametrize(('reply', 'has_source'), [
+    ('不确定。', False),
+    ('铜铃把手的形状，我可说不准。', False),
+    ('铜铃把手是什么形状，原作没交代，我说不准。', False),
+    ('我按铜铃让门房暂缓熄灯。铜铃把手的形状，我可说不准。', True),
+    ('生锈铁环的形状，我可说不准。', True),
+])
+def test_source_marker_on_uncertainty_only_reply(reply, has_source):
+    value = result([{'id': 's1'}])
+    value.reply = reply
+    value.plan.retrieval.documents = ({'id': 's1', 'title': '换岗', 'content': '我按铜铃让门房暂缓熄灯。'},)
+    snapshot = evidence_snapshot(value, question='井架换岗时铜铃的把手是什么形状？')
+    assert bool(snapshot['sources']) is has_source
+
+
+def test_short_uncertain_original_line_keeps_only_its_cited_source():
+    value = result([{'id': 's1'}, {'id': 's2'}])
+    value.reply = '不确定。'
+    value.plan.retrieval.documents = (
+        {'id': 's1', 'content': '问到鸟儿来自哪儿，她说：“不确定。”'},
+        {'id': 's2', 'content': '门外响起了铃声。'},
+    )
+    snapshot = evidence_snapshot(value, question='她被问到鸟儿来自哪儿，当时的原话是什么？')
+    assert [item['id'] for item in snapshot['sources']] == ['s1']
+
+
+def test_detail_disclaimer_checks_each_marked_source():
+    value = result([{'id': 'background'}, {'id': 'inspection'}])
+    value.reply = '按铃叫门房等工人落地，把手形状没有依据。'
+    value.plan.retrieval.documents = (
+        {'id': 'background', 'content': '按铃叫门房等工人落地。'},
+        {'id': 'inspection', 'content': '查阅记录后的结论：把手形状没有依据。'},
+    )
+    snapshot = evidence_snapshot(value, question='井架换岗时铜铃的把手是什么形状？')
+    assert [item['id'] for item in snapshot['sources']] == ['inspection']
+
+
 def test_snapshot_marks_truncated_text():
     value = result([{"id": "s1"}])
     value.plan.retrieval.documents = ({"id": "s1", "content": "长" * 12001},)
