@@ -11,9 +11,8 @@ from dataclasses import dataclass, field, replace
 from functools import partial
 from typing import TYPE_CHECKING, Any, Literal
 
-from inference.context_budget import InputBudgetError
 from inference.context_budget import CONTEXT_SAFETY_MARGIN_TOKENS as CONTEXT_SAFETY_MARGIN_TOKENS
-from inference.context_budget import configured_context_window
+from inference.context_budget import InputBudgetError, configured_context_window
 from inference.context_budget import estimated_tokens as _estimated_tokens
 from inference.history import validate_history
 from inference.prompt_policy import (
@@ -193,6 +192,7 @@ class GenerationRequest:
     )
     # Internal bound for one fresh-input regeneration after authority changes.
     authority_refresh_count: int = field(default=0, repr=False)
+    review_citations_against_question: bool = False
 
 
 
@@ -394,9 +394,8 @@ def build_generation_request(request: GenerationRequest) -> GenerationPlan:
             request.retrieval.task_coverage, query=request.retrieval.task_query or request.message
         )
         request = replace(request, retrieval=replace(request.retrieval, task_coverage=tasks))
-    if request.retrieval.public_task_review:
-        if request.retrieval.public_task_query != request.message:
-            raise ValueError("Public task review discarded the original message")
+    if request.retrieval.public_task_review and request.retrieval.public_task_query != request.message:
+        raise ValueError("Public task review discarded the original message")
     if request.retrieval.public_curated_review:
         from knowledge.curated_task_evidence import exclude_changed_sources
 
@@ -665,7 +664,10 @@ async def generate_character_response(
         if refreshed != request:
             return await refresh_answer(refreshed)
         result = finalize_answer_citations(result)
-        result = await recover_missing_citations(result, generate_text, context_window_tokens=request.context_window_tokens)
+        result = await recover_missing_citations(
+            result, generate_text, context_window_tokens=request.context_window_tokens,
+            question=request.message if request.review_citations_against_question else None,
+        )
         if result.citation_repair_attempted:
             refreshed = await _revalidate_context(request)
             if refreshed != request:

@@ -107,6 +107,7 @@ def prepare_request(session, turns, message, retrieved_memories=None, *, proacti
     return GenerationRequest(
         message=message, persona_prompt=persona, history=history, character_context=context, memory_write_enabled=False,
         creator_examples=tuple(settings["examples"]), creator_reference=settings["reference_text"],
+        review_citations_against_question=bool(session.get("source_corpus_id")),
     )
 
 
@@ -281,7 +282,7 @@ async def complete_with_provider(
                         result = await generate_character_response(request, generate)
                 finally:
                     semaphore.release()
-    return CharacterChatCompletion(result.reply, metadata["modelName"], evidence_snapshot(result))
+    return CharacterChatCompletion(result.reply, metadata["modelName"], evidence_snapshot(result, question=request.message))
 
 
 async def collect_stream(stream, event_sink, *, clock=time.monotonic):

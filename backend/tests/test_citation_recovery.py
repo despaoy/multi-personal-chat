@@ -1,7 +1,5 @@
 """Only omitted citation recovery and immutable, admitted source spans."""
 
-from services import chat_answer
-
 import asyncio
 import json
 from dataclasses import replace
@@ -17,6 +15,7 @@ from inference.generation_request import (
     RetrievalResult,
     generate_character_response,
 )
+from services import chat_answer
 
 pytestmark = pytest.mark.usefixtures("no_live_context_review")
 
@@ -241,7 +240,8 @@ def test_actual_failed_nonanswer_quotes_stay_rejected():
         recovery.validate_annotations(raw, ANSWER, recovery._sources(original.plan.retrieval))
 
 
-def test_candidates_prompt_keeps_complete_inputs_and_one_annotation():
+@pytest.mark.parametrize("question", [None, "井架换岗时为什么按铃？"])
+def test_candidates_prompt_keeps_complete_inputs_and_one_annotation(question):
     original = result()
     calls = []
 
@@ -249,17 +249,32 @@ def test_candidates_prompt_keeps_complete_inputs_and_one_annotation():
         calls.append(kwargs)
         payload = json.loads(kwargs["messages"][-1]["content"])
         assert payload["answer"] == ANSWER
+        if question:
+            assert payload["question"] == question
+        else:
+            assert "question" not in payload
         assert payload["sources"] == [
             {"key": s["key"], "body": s["body"]} for s in recovery._sources(original.plan.retrieval)
         ]
         return json.dumps({"citations": payload["allowed_exact_quotes"]})
 
-    repaired = asyncio.run(recovery.recover_missing_citations(original, model, context_window_tokens=65536))
+    repaired = asyncio.run(recovery.recover_missing_citations(original, model, context_window_tokens=65536, question=question))
     assert (
         len(calls) == 1
         and repaired.reply == ANSWER
         and {c["source_id"] for c in repaired.response_citations} == {"a", "b"}
     )
+
+
+def test_missing_detail_does_not_bind_a_repeated_background_fact():
+    question = "井架换岗时铜铃的把手是什么形状？"
+    reply = "按铃叫门房等工人落地，把手形状没有依据。"
+    sources = ["按铃叫门房等工人落地。"]
+    assert recovery.disclaims_requested_detail(question, reply, sources)
+    assert recovery.disclaims_requested_detail(question, "叫门房等工人落地再熄灯，没提把手形状。", sources)
+    assert not recovery.disclaims_requested_detail("为什么按铃？铜铃的把手是什么形状？", reply, sources)
+    assert not recovery.disclaims_requested_detail("木门的把手是什么颜色？", reply, sources)
+    assert not recovery.disclaims_requested_detail(question, reply, ["调查记录：把手形状没有依据。"])
 
 
 def test_repeated_valid_source_spans_bind_once():
@@ -323,10 +338,11 @@ def test_annotation_cancellation_propagates_without_a_result():
 @pytest.mark.parametrize('failure', ['provider', 'timeout', 'invalid'])
 async def test_chat_annotation_failure_propagates_without_returning_an_answer(monkeypatch, semantic_plan, failure):
     from types import SimpleNamespace
-    from tests.test_public_fact_coverage import FULL, QUERY, run
+
     from db.schemas import MessageRequest
     from inference.context_budget import ReviewContextBudget
     from knowledge import public_question_binding, public_task_evidence
+    from tests.test_public_fact_coverage import FULL, QUERY, run
     complete, _ = await run()
     complete['citations'] = [dict(source_id=row['id']) for row in complete['results']]
     authoritative = {row['document_id']: dict(row, id=row['document_id']) for row in complete['results']}
