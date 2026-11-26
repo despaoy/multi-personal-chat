@@ -39,9 +39,16 @@ def test_postgres_token_revocation_is_durable_across_database_adapters(database)
     other = uuid.uuid4().hex
     reader = SyncPgAdapter(PgDatabase(os.environ["DATABASE_URL"], require_migrations=True))
     try:
+        assert not is_token_revoked(database, identity)
         assert not is_token_revoked(reader, identity)
+        ready = Barrier(2)
+
+        def revoke(adapter):
+            ready.wait(timeout=10)
+            revoke_token(adapter, identity, expiry)
+
         with ThreadPoolExecutor(2) as pool:
-            writes = [pool.submit(revoke_token, adapter, identity, expiry) for adapter in (database, reader)]
+            writes = [pool.submit(revoke, adapter) for adapter in (database, reader)]
             for write in writes:
                 write.result(timeout=10)
         assert is_token_revoked(reader, identity) and is_token_revoked(database, identity)
