@@ -109,12 +109,14 @@ def prepare_request(session, turns, message, retrieved_memories=None, *, proacti
     )
     greeting = {"role": "assistant", "content": settings["greeting"]}
     history = [] if mixed_settings else [greeting]
-    complete_history = list(history) if covered - recent and not mixed_settings else None
+    complete_history = list(history) if covered - recent else None
     folded_offsets = []
     excluded = set(session["state"].get("summary_excluded_turn_ids", ()))
     for index, turn in enumerate(retained):
         if mixed_settings and index == len(inherited):
             history.append(greeting)
+            if complete_history is not None:
+                complete_history.append(greeting)
         turn_revision = turn.get("character_revision")
         prefix = f"【旧设定版本 {turn_revision} 时】" if mixed_settings and turn_revision not in {None, revision} else ""
         pair = ({"role": "user", "content": prefix + turn["message"]},
@@ -125,9 +127,8 @@ def prepare_request(session, turns, message, retrieved_memories=None, *, proacti
         if complete_history is not None:
             if folded and (
                 turn["id"] in excluded
-                or (index < len(inherited) and (revision is None or turn_revision != revision))
+                or (index < len(inherited) and (mixed_settings or revision is None or turn_revision != revision))
             ):
-                complete_history = None
                 continue
             if folded:
                 if not all(memory_write_allowed(row["content"]) for row in pair):
@@ -136,6 +137,8 @@ def prepare_request(session, turns, message, retrieved_memories=None, *, proacti
             complete_history.extend(pair)
     if mixed_settings and not turns:
         history.append(greeting)
+        if complete_history is not None:
+            complete_history.append(greeting)
     return GenerationRequest(
         message=message, persona_prompt=persona, history=history, character_context=context, memory_write_enabled=False,
         creator_examples=tuple(settings["examples"]), creator_reference=settings["reference_text"],
