@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+from dataclasses import replace
 from functools import partial
 
 import pytest
@@ -9,6 +10,8 @@ import pytest
 from character.library import CharacterSettings
 from character.memory_llm import MemoryLlmConfig
 from db.database import SQLiteDB
+from inference.context_budget import CONTEXT_SAFETY_MARGIN_TOKENS, estimated_tokens
+from inference.generation_request import build_generation_request
 from repositories.character_chat import CharacterChatRepository
 from services.character_chat import prepare_request
 from services.character_chat_enrichment import process_enrichment
@@ -72,6 +75,22 @@ def test_summary_activity_compacts_context_and_rewind_removes_summary(conversati
     assert not continued["state"].get("summaries")
     rolled = repo.retract("1", session["id"], turns[-1]["id"], current["revision"])
     assert not rolled["state"].get("summaries")
+
+
+def test_summarized_history_uses_actual_remaining_window(conversation):
+    _, _, session, turns = conversation
+    state = asyncio.run(summarizer(Writer(turns[0]))(session, turns, "summary"))
+    request = prepare_request({**session, "state": state}, turns, "继续")
+    full = build_generation_request(replace(request, context_window_tokens=1_000_000))
+    assert [m["content"] for m in full.messages[:-1] if m["role"] == "user"] == [t["message"] for t in turns]
+    assert "尚未实施" in full.messages[-1]["content"]
+    limit = (sum(estimated_tokens(m["content"]) + 4 for m in full.messages)
+             + request.max_tokens + CONTEXT_SAFETY_MARGIN_TOKENS)
+    assert build_generation_request(replace(request, context_window_tokens=limit)).messages == full.messages
+    tight = replace(request, context_window_tokens=limit - 1)
+    compact = build_generation_request(tight)
+    assert compact.messages == build_generation_request(replace(tight, complete_history=())).messages
+    assert compact.messages != full.messages
 
 
 def test_invalid_evidence_does_not_create_summary(conversation):
