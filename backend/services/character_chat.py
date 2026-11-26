@@ -95,6 +95,7 @@ def prepare_request(session, turns, message, retrieved_memories=None, *, proacti
     greeting = {"role": "assistant", "content": settings["greeting"]}
     history = [] if mixed_settings else [greeting]
     complete_history = list(history) if covered - recent and not mixed_settings else None
+    folded_offsets = []
     excluded = set(session["state"].get("summary_excluded_turn_ids", ()))
     for index, turn in enumerate(retained):
         if mixed_settings and index == len(inherited):
@@ -114,6 +115,8 @@ def prepare_request(session, turns, message, retrieved_memories=None, *, proacti
             ):
                 complete_history = None
             else:
+                if folded:
+                    folded_offsets.append(len(complete_history))
                 complete_history.extend(pair)
     if mixed_settings and not turns:
         history.append(greeting)
@@ -122,6 +125,7 @@ def prepare_request(session, turns, message, retrieved_memories=None, *, proacti
         creator_examples=tuple(settings["examples"]), creator_reference=settings["reference_text"],
         review_citations_against_question=bool(session.get("source_corpus_id")),
         complete_history=tuple(complete_history or ()),
+        folded_turn_offsets=tuple(folded_offsets) if complete_history else (),
     )
 
 
