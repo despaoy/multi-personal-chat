@@ -25,7 +25,10 @@ def _examples(messages):
         if (messages[position]["role"] == "user" and end < len(messages)
                 and messages[end]["role"] == "assistant"):
             end += 1
-        yield messages[position:end]
+        yield [
+            {"示例访客" if message["role"] == "user" else "示例角色": message["content"]}
+            for message in messages[position:end]
+        ]
         position = end
 
 
@@ -56,7 +59,7 @@ def add_creator_context(request: GenerationRequest, plan: GenerationPlan) -> Gen
     references = _reference_excerpts(request.message, request.creator_reference) if request.creator_reference else ()
     candidates = (
         ("参考资料节选", references),
-        ("示范对话（供参考表达风格）", _examples(request.creator_examples)),
+        ("作者虚构的台词样本（示例访客与当前用户无关，仅模仿角色说话风格）", _examples(request.creator_examples)),
     )
     for label, items in candidates:
         for item in items:
