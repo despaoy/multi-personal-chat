@@ -195,6 +195,8 @@ class GenerationRequest:
     review_citations_against_question: bool = False
     # Called after capacity is acquired, including retries and citation recovery.
     before_model_call: Callable[[], Awaitable[None]] | None = field(default=None, repr=False, compare=False)
+    # An alternative to summarized Web chat history, admitted only as a whole.
+    complete_history: tuple[Message, ...] = field(default=(), repr=False)
 
 
 
@@ -410,6 +412,13 @@ def build_generation_request(request: GenerationRequest) -> GenerationPlan:
         from inference.creator_context import add_creator_context
 
         plan = add_creator_context(request, plan)
+    if request.complete_history and plan.history_policy == "conversation" and plan.should_generate:
+        validate_history(request.complete_history)
+        fixed = tuple(msg for msg in plan.messages[:-1] if msg["role"] == "system")
+        messages = (*fixed, *request.complete_history, plan.messages[-1])
+        cost = sum(_estimated_tokens(msg["content"]) + 4 for msg in messages)
+        if cost + request.max_tokens + CONTEXT_SAFETY_MARGIN_TOKENS <= request.context_window_tokens:
+            return replace(plan, messages=messages)
     return plan
 
 

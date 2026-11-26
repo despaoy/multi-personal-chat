@@ -10,6 +10,7 @@ from dataclasses import replace
 
 from character.chat_relationship import relationship_dimension_guidance
 from character.decision_policy import relationship_stage_guidance
+from character.memory_extractor import memory_write_allowed
 from character.models import CompiledCharacterContext
 from db.errors import RevisionConflictError
 from inference.generation_options import read_generation_options
@@ -93,21 +94,34 @@ def prepare_request(session, turns, message, retrieved_memories=None, *, proacti
     )
     greeting = {"role": "assistant", "content": settings["greeting"]}
     history = [] if mixed_settings else [greeting]
+    complete_history = list(history) if covered - recent and not mixed_settings else None
+    excluded = set(session["state"].get("summary_excluded_turn_ids", ()))
     for index, turn in enumerate(retained):
         if mixed_settings and index == len(inherited):
             history.append(greeting)
-        if turn["id"] in covered and turn["id"] not in recent:
-            continue
         turn_revision = turn.get("character_revision")
         prefix = f"【旧设定版本 {turn_revision} 时】" if mixed_settings and turn_revision not in {None, revision} else ""
-        history.extend([{"role": "user", "content": prefix + turn["message"]},
-                        {"role": "assistant", "content": prefix + turn["reply"]}])
+        pair = ({"role": "user", "content": prefix + turn["message"]},
+                {"role": "assistant", "content": prefix + turn["reply"]})
+        folded = turn["id"] in covered and turn["id"] not in recent
+        if not folded:
+            history.extend(pair)
+        if complete_history is not None:
+            if folded and (
+                turn["id"] in excluded
+                or (index < len(inherited) and (revision is None or turn_revision != revision))
+                or not all(memory_write_allowed(row["content"]) for row in pair)
+            ):
+                complete_history = None
+            else:
+                complete_history.extend(pair)
     if mixed_settings and not turns:
         history.append(greeting)
     return GenerationRequest(
         message=message, persona_prompt=persona, history=history, character_context=context, memory_write_enabled=False,
         creator_examples=tuple(settings["examples"]), creator_reference=settings["reference_text"],
         review_citations_against_question=bool(session.get("source_corpus_id")),
+        complete_history=tuple(complete_history or ()),
     )
 
 
