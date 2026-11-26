@@ -47,6 +47,19 @@ def prepare_request(session, turns, message, retrieved_memories=None, *, proacti
     persona += "\n按当前已生效的关系调整表达：" + relationship_stage_guidance(relationship.get("stage", "stranger"))
     persona += "。尊重用户此刻明确的边界，并保留人物的独立立场。"
     persona += relationship_dimension_guidance(relationship)
+    if relationship.get("origin") == "user":
+        dimensions = relationship.get("dimensions", {})
+        saved_options = {}
+        if "initiative" in dimensions:
+            saved_options["允许角色主动建议下一步"] = dimensions["initiative"] == "offer"
+        if "tone" in dimensions:
+            saved_options["允许轻松打趣"] = dimensions["tone"] == "playful"
+        relationship = {**relationship, "已确认的互动选项": saved_options}
+        persona += (
+            "\n用户询问已保存或已确认的关系设置时，按 conversation_reference 中的 relationship 回答。"
+            "其中‘已确认的互动选项’记录界面当前值，true 表示已启用，false 表示未启用，未列出的表示尚未指定。"
+            "先前聊天中的提议、同意或疑问只说明当时说了什么。平时按当前方式聊天，只有用户问设置时才谈选项。"
+        )
     persona += (
         "\n用户明确说先放下某个话题时，只回应当前话题，连举例也不要转回已暂停的话题。"
         "用户说只想听你的看法时，给出自己的判断，不追加对方没要的建议、安排或追问。"

@@ -53,6 +53,9 @@ def test_relationship_guidance_uses_only_the_committed_stage(tmp_path):
         assert "建议接续未聊完的话题" in prepared.persona_prompt
         assert "可以接梗" not in prepared.persona_prompt
         assert "待确认内容" not in prepared.character_context.conversation_reference_context
+        recorded = json.loads(prepared.character_context.conversation_reference_context)["relationship"]
+        assert recorded["已确认的互动选项"] == {"允许角色主动建议下一步": True, "允许轻松打趣": False}
+        assert "已确认的互动选项" not in familiar["state"]["relationship"]
     finally:
         db.close_connection()
 
