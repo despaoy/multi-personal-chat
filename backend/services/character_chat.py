@@ -111,13 +111,14 @@ def prepare_request(session, turns, message, retrieved_memories=None, *, proacti
             if folded and (
                 turn["id"] in excluded
                 or (index < len(inherited) and (revision is None or turn_revision != revision))
-                or not all(memory_write_allowed(row["content"]) for row in pair)
             ):
                 complete_history = None
-            else:
-                if folded:
-                    folded_offsets.append(len(complete_history))
-                complete_history.extend(pair)
+                continue
+            if folded:
+                if not all(memory_write_allowed(row["content"]) for row in pair):
+                    continue
+                folded_offsets.append(len(complete_history))
+            complete_history.extend(pair)
     if mixed_settings and not turns:
         history.append(greeting)
     return GenerationRequest(
