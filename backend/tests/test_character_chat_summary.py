@@ -121,6 +121,19 @@ def test_one_restricted_folded_turn_does_not_hide_other_visible_turns(conversati
     assert all(m["content"] != turns[2]["reply"] for m in history)
 
 
+def test_mixed_versions_restore_only_eligible_summarized_turns(conversation):
+    _, _, session, turns = conversation
+    state = asyncio.run(summarizer(Writer(turns[0]))(session, turns, "summary"))
+    inherited = [{**turns[0], "character_revision": 1}]
+    continued = {**session, "character_revision": 2, "state": state,
+                 "baseline": {**session["baseline"], "history": inherited}}
+    request = prepare_request(continued, turns[1:], "继续")
+    plan = build_generation_request(replace(request, context_window_tokens=1_000_000))
+    history = [m for m in plan.messages[:-1] if m["role"] != "system"]
+    assert history[0] == {"role": "assistant", "content": session["character"]["settings"]["greeting"]}
+    assert [m["content"] for m in history if m["role"] == "user"] == [t["message"] for t in turns[1:]]
+
+
 def test_invalid_evidence_does_not_create_summary(conversation):
     _, _, session, turns = conversation
     state = asyncio.run(summarizer(Writer(turns[0], invalid=True))(session, turns, "summary"))
