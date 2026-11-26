@@ -23,6 +23,31 @@ from services.character_chat_policy import is_local_only, require_local_endpoint
 from services.character_chat_summary import RECENT_TURNS, summaries_for_prompt, valid_summaries
 
 
+def _branch_premise_for_prompt(session):
+    """Place current manual choices after the premises they superseded."""
+    relationship = session["state"]["relationship"]
+    premise = session["hypothesis"]
+    edits = []
+    if session["mode"] != "branch" or relationship.get("origin") != "user" or not premise:
+        return premise
+    for field, label in (("stage", "关系阶段"), ("summary", "相处关系")):
+        if field not in relationship:
+            continue
+        active_premise = premise
+        for turn in reversed(session["baseline"]["history"]):
+            previous = (turn.get("state_after") or {}).get("relationship")
+            if previous is None or field not in previous or not active_premise:
+                break
+            if previous.get(field) != relationship.get(field):
+                if premise.startswith(active_premise):
+                    edits.append((len(active_premise), f"\n随后用户手动调整了{label}：{relationship[field]}"))
+                break
+            active_premise = turn.get("hypothesis", "")
+    for offset, change in sorted(edits, reverse=True):
+        premise = premise[:offset] + change + premise[offset:]
+    return premise
+
+
 def prepare_request(session, turns, message, retrieved_memories=None, *, proactive_messages=None):
     inherited = session["baseline"]["history"]
     retained = [*inherited, *turns]
@@ -68,7 +93,8 @@ def prepare_request(session, turns, message, retrieved_memories=None, *, proacti
         persona += (
             "\n本轮处于假想分支。conversation_reference 中的 branch_hypothesis 是这个分支起点的剧情前提。"
             "它明确设定的关系、称呼、背景和共同经历，在这个分支内成立；若与起点继承的关系或设定冲突，以剧情前提为准。"
-            "未涉及的部分沿用原设定。回答当前情况时，再结合分支开始后已经发生的变化。"
+            "未涉及的部分沿用原设定。按先后顺序理解后续调整，同一事项以最新变化为准。"
+            "当前称呼有变化时，整段回答都使用新称呼；只有问到过去才回顾旧称。"
             "用户核对往事时只说已经确定的部分。称呼不能证明相识经过，共同经历不能证明具体分工。"
             "没有提过的细节用角色口吻说记不清。用户要继续剧情时才向后推演。"
             "在戏内用角色自己的口吻回答，直接称呼对方、叙述经历。"
@@ -123,7 +149,7 @@ def prepare_request(session, turns, message, retrieved_memories=None, *, proacti
             {
                 "relationship": relationship,
                 "memories": confirmed_memories,
-                "branch_hypothesis": session["hypothesis"],
+                "branch_hypothesis": _branch_premise_for_prompt(session),
                 "conversation_summaries": summaries_for_prompt(summaries, message),
                 **({"previous_assistant_outreach": proactive_messages} if proactive_messages else {}),
             },
