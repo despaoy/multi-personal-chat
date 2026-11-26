@@ -60,6 +60,29 @@ def test_relationship_guidance_uses_only_the_committed_stage(tmp_path):
         db.close_connection()
 
 
+def test_branch_prompt_orders_manual_change_before_child_premise(tmp_path):
+    db = SQLiteDB(tmp_path / "branch-relationship.db")
+    try:
+        repo = CharacterChatRepository(db)
+        role = repo.characters.create("1", CharacterSettings(name="迟禾", persona="谨慎", greeting="你好"))
+        root = repo.create("1", role["id"], "初识")
+        pivot = repo.commit_turn(root, "start", "进门", "请坐", "fixture")
+        root = repo.get("1", root["id"])
+        branch = repo.create("1", role["id"], "改称", source_session_id=root["id"],
+                             source_revision=root["revision"], source_turn_id=pivot["id"], hypothesis="叫我杏师兄。")
+        branch = repo.update_relationship("1", branch["id"], branch["revision"], "familiar", "叫我南灯。")
+        turn = repo.commit_turn(branch, "later", "开场", "好", "fixture")
+        branch = repo.get("1", branch["id"])
+        child = repo.create("1", role["id"], "子分支", source_session_id=branch["id"],
+                            source_revision=branch["revision"], source_turn_id=turn["id"], hypothesis="改称青禾。")
+        packet = prepare_request(child, [], "现在叫什么？")
+        premise = json.loads(packet.character_context.conversation_reference_context)["branch_hypothesis"]
+        assert premise.index("杏师兄") < premise.index("南灯") < premise.index("青禾")
+        assert "南灯" not in child["hypothesis"]
+    finally:
+        db.close_connection()
+
+
 @pytest.fixture
 def proposal(monkeypatch):
     monkeypatch.setenv("RELATIONSHIP_LLM_ENABLED", "true")
