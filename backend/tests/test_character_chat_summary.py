@@ -108,6 +108,19 @@ def test_partial_compaction_preserves_unsummarized_turn_with_repeated_wording(co
     assert partial.messages == (*full.messages[:4], *full.messages[6:])
 
 
+def test_one_restricted_folded_turn_does_not_hide_other_visible_turns(conversation):
+    _, _, session, turns = conversation
+    turns[2] = {**turns[2], "reply": "这一轮不要保存，也不要记住。"}
+    state = asyncio.run(summarizer(Writer(turns[0]))(session, turns, "summary"))
+    request = prepare_request({**session, "state": state}, turns, "第一个计划是什么？")
+    plan = build_generation_request(replace(request, context_window_tokens=1_000_000))
+    history = plan.messages[:-1]
+    assert [m["content"] for m in history if m["role"] == "user"] == [
+        t["message"] for t in turns if t["id"] != turns[2]["id"]
+    ]
+    assert all(m["content"] != turns[2]["reply"] for m in history)
+
+
 def test_invalid_evidence_does_not_create_summary(conversation):
     _, _, session, turns = conversation
     state = asyncio.run(summarizer(Writer(turns[0], invalid=True))(session, turns, "summary"))
