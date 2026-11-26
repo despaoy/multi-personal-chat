@@ -89,8 +89,23 @@ def test_summarized_history_uses_actual_remaining_window(conversation):
     assert build_generation_request(replace(request, context_window_tokens=limit)).messages == full.messages
     tight = replace(request, context_window_tokens=limit - 1)
     compact = build_generation_request(tight)
-    assert compact.messages == build_generation_request(replace(tight, complete_history=())).messages
-    assert compact.messages != full.messages
+    assert compact.messages == (*full.messages[:2], *full.messages[4:])
+    assert "尚未实施" in compact.messages[-1]["content"]
+
+
+def test_partial_compaction_preserves_unsummarized_turn_with_repeated_wording(conversation):
+    _, _, session, turns = conversation
+    turns[1] = {**turns[1], "message": turns[0]["message"]}
+    # The first turn was skipped by the summarizer. The next turn repeats it.
+    state = asyncio.run(summarizer(Writer(turns[1]))(session, turns, "summary"))
+    summary = state["summaries"][0]
+    summary["sources"] = summary["sources"][1:]
+    request = prepare_request({**session, "state": state}, turns, "继续")
+    full = build_generation_request(replace(request, context_window_tokens=1_000_000))
+    limit = (sum(estimated_tokens(m["content"]) + 4 for m in full.messages)
+             + request.max_tokens + CONTEXT_SAFETY_MARGIN_TOKENS - 1)
+    partial = build_generation_request(replace(request, context_window_tokens=limit))
+    assert partial.messages == (*full.messages[:4], *full.messages[6:])
 
 
 def test_invalid_evidence_does_not_create_summary(conversation):
