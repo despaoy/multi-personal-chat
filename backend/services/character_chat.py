@@ -79,6 +79,19 @@ def prepare_request(session, turns, message, retrieved_memories=None, *, proacti
             "询问过去时，按当时的原话说明。比较现在和过去时，分别给出两者，"
             "不要用旧对话、继承记忆或旧摘要覆盖当前角色设定，也不要把当前设定写回过去。"
         )
+    confirmed_memories = [
+        {"content": item["content"], "origin": "user"} if item.get("origin") == "user" else item
+        for item in (session["state"]["memories"] if retrieved_memories is None else retrieved_memories)
+        if item.get("status") == "confirmed"
+    ]
+    if any(item.get("origin") == "user" for item in confirmed_memories):
+        persona += (
+            "\n本轮 conversation_reference 的 memories 中，origin 为 user 的 content 是用户手动确认的当前记录。"
+            "被问到手动保存了什么时，按该条 content 原意回答，保留肯定或否定；聊天原话只说明当时说过什么。"
+            "当天的临时选择就按当天的意思回应。"
+            "新的长期说法与手动记录冲突时，可按新说法继续聊，同时说明保存的仍是原来的内容。"
+            "只有实际修改成功后，才能说旧记忆已经更改或失效。"
+        )
     context = CompiledCharacterContext(
         profile_context=persona,
         dynamic_context="",
@@ -86,11 +99,7 @@ def prepare_request(session, turns, message, retrieved_memories=None, *, proacti
         conversation_reference_context=json.dumps(
             {
                 "relationship": relationship,
-                "memories": [
-                    {"content": item["content"], "origin": "user"} if item.get("origin") == "user" else item
-                    for item in (session["state"]["memories"] if retrieved_memories is None else retrieved_memories)
-                    if item.get("status") == "confirmed"
-                ],
+                "memories": confirmed_memories,
                 "branch_hypothesis": session["hypothesis"],
                 "conversation_summaries": summaries_for_prompt(summaries, message),
                 **({"previous_assistant_outreach": proactive_messages} if proactive_messages else {}),
