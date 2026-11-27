@@ -54,7 +54,7 @@ function AnswerSources({ evidence }: { evidence?: CharacterChatEvidence }) {
       <p className="my-2 text-xs text-muted-foreground">以下保存的是回答生成时的资料片段。出处可核对，不代表模型对原文的理解一定正确。</p>
       {evidence.sources.map((source, index) => <section key={`${source.id}-${index}`} className="mt-3 space-y-1">
         <p className="font-medium">{source.title}</p>
-        {source.line_start != null && <p className="text-xs text-muted-foreground">原文第 {source.line_start}{source.line_end != null ? `—${source.line_end}` : ''} 行</p>}
+        {source.line_start != null && <p className="text-xs text-muted-foreground">所收录资料内第 {source.line_start}{source.line_end != null ? `—${source.line_end}` : ''} 行</p>}
         <blockquote className="whitespace-pre-wrap break-words border-l-2 pl-3">{source.excerpt || '本条记录未保存原文片段。'}</blockquote>
         {source.truncated && <p className="text-xs text-muted-foreground">片段较长，此处保存了部分内容。</p>}
       </section>)}
