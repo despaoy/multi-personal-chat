@@ -602,8 +602,8 @@ class ApiClient {
     return this.request<CharacterChatSession>('/character-chats', { method: 'POST', body: JSON.stringify(body) });
   }
 
-  getCharacterChat(id: string) {
-    return this.request<{ session: CharacterChatSession; turns: CharacterChatTurn[]; enrichment_pending: boolean; enrichment_retryable: boolean; generation: import('./api-contracts').CharacterChatGeneration | null }>(`/character-chats/${encodeURIComponent(id)}`);
+  getCharacterChat(id: string, signal?: AbortSignal) {
+    return this.request<{ session: CharacterChatSession; turns: CharacterChatTurn[]; enrichment_pending: boolean; enrichment_retryable: boolean; generation: import('./api-contracts').CharacterChatGeneration | null }>(`/character-chats/${encodeURIComponent(id)}`, { signal });
   }
 
   retryChatEnrichment(id: string, revision: number) {

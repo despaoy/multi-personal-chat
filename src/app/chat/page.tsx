@@ -151,8 +151,10 @@ function ChatWorkspace() {
     setSessionOffset(response.sessions.length); setMoreSessions(response.sessions.length === 100);
   }, []);
 
-  const open = useCallback(async (id: string, initial?: { version: number; characterId: string }) => {
-    const response = await api.getCharacterChat(id);
+  const open = useCallback(async (id: string, { initial, signal }: {
+    initial?: { version: number; characterId: string }; signal?: AbortSignal;
+  } = {}) => {
+    const response = await api.getCharacterChat(id, signal);
     if (initial && initial.version !== loadVersion.current) return response;
     if (initial && response.session.character_id !== initial.characterId) throw new Error('会话不属于所选角色');
     rememberChatLocation(response.session.character_id, response.session.id);
@@ -212,7 +214,7 @@ function ChatWorkspace() {
     api.listCharacterChats(characterId).then(async response => {
       if (version === loadVersion.current) {
         setSessions(response.sessions); setSessionOffset(response.sessions.length); setMoreSessions(response.sessions.length === 100);
-        if (initial?.characterId === characterId) await open(initial.sessionId, { version, characterId });
+        if (initial?.characterId === characterId) await open(initial.sessionId, { initial: { version, characterId } });
       }
     }).catch(error => { if (version === loadVersion.current) setError(String(error)); });
   }, [characterId, clearDraft, open]);
