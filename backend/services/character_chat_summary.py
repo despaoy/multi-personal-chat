@@ -7,6 +7,7 @@ import json
 import logging
 import os
 from contextlib import nullcontext
+from heapq import nlargest
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -58,7 +59,25 @@ def valid_summaries(state, history):
     )]
 
 
-def summaries_for_prompt(summaries, message):
+def requests_original_words(message):
+    query = message.casefold()
+    return any(cue in query for cue in (
+        "原话", "原句", "逐字", "一字不差", "verbatim", "exact wording", "exact words",
+    ))
+
+
+def _folded_quotes(folded_sources):
+    """Yield contiguous excerpts only from turns admitted for raw history."""
+    from knowledge.text_splitter import smart_text_split
+
+    for turn_id, turn in folded_sources.items():
+        for role, field in (("user", "message"), ("assistant", "reply")):
+            content = turn[field]
+            for quote in smart_text_split(content, chunk_size=500, overlap=50):
+                yield {"turn_id": turn_id, "role": role, "quote": quote}
+
+
+def summaries_for_prompt(summaries, message, folded_sources=None):
     """Keep original quotes useful for this turn and keep provenance IDs server-side."""
     if not summaries:
         return []
@@ -70,9 +89,20 @@ def summaries_for_prompt(summaries, message):
         quote = evidence["quote"].casefold()
         return sum(term in quote for term in terms), evidence["role"] == "user"
 
+    matches = []
+    if folded_sources:
+        matches = nlargest(_PROMPT_QUOTES_PER_SEGMENT, _folded_quotes(folded_sources), key=relevance)
     selected = []
     for summary in summaries:
-        evidence = summary.get("evidence", [])
+        evidence = list(summary.get("evidence", []))
+        if matches:
+            source_ids = {source["turn_id"] for source in summary["sources"]}
+            seen = {(item["role"], item["quote"]) for item in evidence}
+            for item in matches:
+                key = item["role"], item["quote"]
+                if item["turn_id"] in source_ids and key not in seen and relevance(item)[0]:
+                    evidence.append(item)
+                    seen.add(key)
         order = sorted(range(len(evidence)), key=lambda index: relevance(evidence[index]), reverse=True)
         quotes = [
             {"role": evidence[index]["role"], "quote": evidence[index]["quote"]}
