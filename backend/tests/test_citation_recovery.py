@@ -391,3 +391,64 @@ def test_background_cannot_support_an_unmentioned_objects_attribute():
     assert recovery.disclaims_requested_detail(question, reply, bodies)
     assert not recovery.disclaims_requested_detail("为什么讨厌海？" + question, reply, bodies)
     assert not recovery.disclaims_requested_detail(question, reply, ["后来她说，没提帽子，更没提颜色。"])
+
+
+@pytest.mark.parametrize("invalid", [None, "wrong_source", "fabricated_quote", "timeout"])
+async def test_character_review_keeps_reply_and_binds_only_verified_claims(invalid):
+    original = result()
+    marked = original.plan.retrieval.citations[0]
+    original = replace(original, response_citations=(marked,), reply="课程地点在兰亭教室。")
+    calls = []
+
+    async def authorized():
+        calls.append("authorized")
+
+    async def model(**kwargs):
+        calls.append("review")
+        payload = json.loads(kwargs["messages"][-1]["content"])
+        assert set(payload["sources"]) == {"S1"}
+        if invalid == "timeout":
+            raise TimeoutError
+        return json.dumps({"claims": [{
+            "question_quote": "在哪儿上课",
+            "source_key": "S2" if invalid == "wrong_source" else "S1",
+            "answer_quote": "课程地点在兰亭教室",
+            "source_quote": "未提交的原文" if invalid == "fabricated_quote" else A,
+        }]})
+
+    checked = await recovery.review_character_citations(
+        original, model, question="在哪儿上课？", context_window_tokens=65536, before_model_call=authorized,
+    )
+    assert calls == ["authorized", "review"]
+    assert checked.reply == original.reply and checked.citation_repair_attempted
+    if invalid:
+        assert not checked.response_citations and checked.citation_repair_status == "review_unavailable"
+    else:
+        assert checked.response_citations == (dict(marked, answer_excerpt="课程地点在兰亭教室", evidence_quote=A),)
+
+
+async def test_character_review_propagates_revocation_before_dispatch():
+    async def revoked():
+        raise PermissionError
+
+    async def model(**kwargs):
+        pytest.fail("revoked evidence reached the reviewer")
+
+    with pytest.raises(PermissionError):
+        await recovery.review_character_citations(
+            result(), model, question="在哪儿上课？", context_window_tokens=65536, before_model_call=revoked,
+        )
+
+
+async def test_character_review_skips_dispatch_when_reply_used_its_time_budget():
+    original = result()
+
+    async def model(**kwargs):
+        pytest.fail("optional review exhausted the reply deadline")
+
+    checked = await recovery.review_character_citations(
+        original, model, question="在哪儿上课？", context_window_tokens=65536, before_model_call=None,
+        deadline=asyncio.get_running_loop().time() + 0.1,
+    )
+    assert checked.reply == original.reply and not checked.response_citations
+    assert checked.citation_repair_status == "review_deadline"

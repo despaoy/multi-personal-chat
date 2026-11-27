@@ -11,6 +11,31 @@ from inference.citation_recovery import ANNOTATION_POLICY
 from inference.generation_request import ContextAuthorityChangedError, generate_character_response
 
 
+async def test_failed_character_review_cannot_release_a_revoked_source(tmp_path):
+    db, docs, request = fixture(tmp_path)
+    request = replace(request, review_citations_against_question=True)
+    replies = []
+    reviews = []
+
+    async def model(**kwargs):
+        messages = kwargs["messages"]
+        if messages[-1]["content"].startswith("{"):
+            payload = json.loads(messages[-1]["content"])
+            reviews.append(payload["answer"])
+            if len(reviews) == 1:
+                db.delete_knowledge_document(docs[0]["id"])
+                raise TimeoutError
+            return '{"claims":[]}'
+        text = wire(messages)
+        replies.append(text)
+        return BODY_A if BODY_A in text else BODY_B
+
+    result = await generate_character_response(request, model)
+    assert reviews == [BODY_A, BODY_B] and len(replies) == 2
+    assert BODY_A not in replies[-1] and result.reply == BODY_B
+    assert result.authority_refreshed and not result.response_citations
+
+
 @pytest.mark.asyncio
 async def test_deleted_public_source_regenerates_from_only_remaining_full_sources(tmp_path):
     db, docs, request = fixture(tmp_path)

@@ -140,6 +140,8 @@ def prepare_request(session, turns, message, retrieved_memories=None, *, proacti
             "即使检索到了泛泛的作品背景，也不要先复述背景、补猜情节或添加引用。"
             "澄清时只询问缺少的人物、地点、场景或时间，不列举对话中未明确提到的情节作为选项。"
             "例如只问‘你指的是哪一段？’。等对方说清之后，再基于有依据的相关资料回答。"
+            "读完同一说话人的整句台词，包括跨行的后半句。问到原因时，先回答台词里直接表达的理由；"
+            "人物没解释更深的动机，不影响回答已经说出的理由。"
             "检索到的原作选段可能不全。选段没写到所问细节时，用角色口吻说‘从这些片段看不出来’。"
             "不要把局部缺失说成‘原作没交代’；只有明确的全作依据才支持这种判断。"
         )
@@ -382,7 +384,8 @@ async def complete_with_provider(
             top_p=options["topP"],
             context_window_tokens=budget.window_tokens,
         )
-        async with account_usage(database, metadata), asyncio.timeout(timeout):
+        async with account_usage(database, metadata), asyncio.timeout(timeout) as inference_timeout:
+            request = replace(request, citation_review_deadline=inference_timeout.when())
             if context.provider_name == "vllm":
                 from inference.vllm_client import get_vllm_client
 

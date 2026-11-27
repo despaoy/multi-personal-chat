@@ -194,6 +194,7 @@ class GenerationRequest:
     # Internal bound for one fresh-input regeneration after authority changes.
     authority_refresh_count: int = field(default=0, repr=False)
     review_citations_against_question: bool = False
+    citation_review_deadline: float | None = field(default=None, repr=False, compare=False)
     # Called after capacity is acquired, including retries and citation recovery.
     before_model_call: Callable[[], Awaitable[None]] | None = field(default=None, repr=False, compare=False)
     # Authorized chronological history before summary compaction.
@@ -394,6 +395,7 @@ def _system_prompt(request: GenerationRequest) -> str:
                 "只问一个细节而资料没有交代时，直接说该细节无法确认，不必复述附近的情节。"
                 "资料只写了一种理由时，也只确认这一种，不推断是否还有其他理由。"
                 "用户提出的假设和由此推演的内容不加标记。"
+                "假设本身不能证明原作发生过相反的事。片段没交代某件事时，不推断它发生过或没有发生。"
             )
     return prompt
 
@@ -706,7 +708,7 @@ async def generate_character_response(
                 ),
             )
     from inference.answer_citations import finalize_answer_citations, prepare_answer_citations
-    from inference.citation_recovery import recover_missing_citations
+    from inference.citation_recovery import recover_missing_citations, review_character_citations
 
     async def refresh_answer(refreshed):
         if request.authority_refresh_count >= 1:
@@ -726,10 +728,14 @@ async def generate_character_response(
         if refreshed != request:
             return await refresh_answer(refreshed)
         result = finalize_answer_citations(result)
-        result = await recover_missing_citations(
-            result, generate_text, context_window_tokens=request.context_window_tokens,
-            question=request.message if request.review_citations_against_question else None,
-        )
+        if request.review_citations_against_question:
+            result = await review_character_citations(
+                result, partial(_generate_text, generate), question=request.message,
+                context_window_tokens=request.context_window_tokens, before_model_call=request.before_model_call,
+                deadline=request.citation_review_deadline,
+            )
+        else:
+            result = await recover_missing_citations(result, generate_text, context_window_tokens=request.context_window_tokens)
         if result.citation_repair_attempted:
             refreshed = await _revalidate_context(request)
             if refreshed != request:
