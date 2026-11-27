@@ -111,7 +111,7 @@ async def retrieve_configured_sources(request, session, *, database):
     url = os.getenv('CHARACTER_SEARCH_URL', '').strip()
     if not url:
         raise ValueError('CHARACTER_SEARCH_URL is required for original-source retrieval')
-    require_local_endpoint(session, url)
+    require_local_endpoint(session, url, service="原作资料检索")
     provider = get_default_embedding_provider()
     rerank = rerank_source_model if read_bool(os.environ, 'RERANKER_ENABLED') else None
     timeout = read_positive_float(os.environ, 'CHARACTER_SOURCE_RERANK_TIMEOUT_SECONDS', 25.0) if rerank else None
