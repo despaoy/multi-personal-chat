@@ -170,7 +170,8 @@ def prepare_request(session, turns, message, retrieved_memories=None, *, proacti
     history = [] if mixed_settings else [greeting]
     complete_history = list(history) if covered - recent else None
     folded_offsets = []
-    primary_turns = []
+    dialogue_turns = []
+    primary_count = 0
     excluded = set(session["state"].get("summary_excluded_turn_ids", ()))
     for index, turn in enumerate(retained):
         if mixed_settings and index == len(inherited):
@@ -182,17 +183,15 @@ def prepare_request(session, turns, message, retrieved_memories=None, *, proacti
         pair = ({"role": "user", "content": prefix + turn["message"]},
                 {"role": "assistant", "content": prefix + turn["reply"]})
         folded = turn["id"] in covered and turn["id"] not in recent
+        allowed = turn["id"] not in excluded and (
+            index >= len(inherited) or (revision is not None and turn_revision == revision and not mixed_settings)
+        )
+        dialogue_turns.append((turn, allowed, folded, len(folded_offsets) if folded else primary_count))
         if not folded:
             history.extend(pair)
-            allowed = turn["id"] not in excluded and (
-                index >= len(inherited) or (revision is not None and turn_revision == revision and not mixed_settings)
-            )
-            primary_turns.append((turn, allowed))
+            primary_count += 1
         if complete_history is not None:
-            if folded and (
-                turn["id"] in excluded
-                or (index < len(inherited) and (mixed_settings or revision is None or turn_revision != revision))
-            ):
+            if folded and not allowed:
                 continue
             if folded:
                 if not all(memory_write_allowed(row["content"]) for row in pair):
@@ -230,7 +229,9 @@ def prepare_request(session, turns, message, retrieved_memories=None, *, proacti
         review_citations_against_question=bool(session.get("source_corpus_id")),
         complete_history=tuple(complete_history or ()),
         folded_turn_offsets=tuple(folded_offsets) if complete_history else (),
-        trimmed_dialogue_quote=lambda omitted: trimmed_dialogue_quote(message, primary_turns, available, omitted),
+        trimmed_dialogue_quote=lambda primary, folded: trimmed_dialogue_quote(
+            message, dialogue_turns, available, primary, folded
+        ),
     )
 
 

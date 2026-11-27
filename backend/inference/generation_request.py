@@ -199,7 +199,7 @@ class GenerationRequest:
     # Authorized chronological history before summary compaction.
     complete_history: tuple[Message, ...] = field(default=(), repr=False)
     folded_turn_offsets: tuple[int, ...] = field(default=(), repr=False)
-    trimmed_dialogue_quote: Callable[[int], Message | None] | None = field(default=None, repr=False)
+    trimmed_dialogue_quote: Callable[[int, int], Message | None] | None = field(default=None, repr=False)
 
 
 
@@ -415,6 +415,15 @@ def build_generation_request(request: GenerationRequest) -> GenerationPlan:
         from inference.creator_context import add_creator_context
 
         plan = add_creator_context(request, plan)
+
+    def with_omitted_quote(current, primary, folded):
+        if request.trimmed_dialogue_quote and (quote := request.trimmed_dialogue_quote(primary, folded)):
+            from inference.prompt_policy import dialogue_evidence_block
+
+            evidence = dialogue_evidence_block(json.dumps([quote], ensure_ascii=False))
+            return {**current, "content": evidence + "\n\n" + current["content"]}
+        return current
+
     if request.complete_history and plan.history_policy == "conversation" and plan.should_generate:
         validate_history(request.complete_history)
         fixed = tuple(msg for msg in plan.messages[:-1] if msg["role"] == "system")
@@ -425,23 +434,28 @@ def build_generation_request(request: GenerationRequest) -> GenerationPlan:
             return replace(plan, messages=messages)
         # Only remove pairs already represented by a valid summary, oldest first.
         removed = set()
-        for offset in request.folded_turn_offsets:
+        current = plan.messages[-1]
+        for count, offset in enumerate(request.folded_turn_offsets, start=1):
             pair = request.complete_history[offset:offset + 2]
             excess -= sum(_estimated_tokens(m["content"]) + 4 for m in pair)
             removed.update((offset, offset + 1))
             if excess <= 0:
+                if current is plan.messages[-1]:
+                    current = with_omitted_quote(current, 0, count)
+                    excess += _estimated_tokens(current["content"]) - _estimated_tokens(plan.messages[-1]["content"])
+                    if excess > 0:
+                        continue
                 kept = (m for i, m in enumerate(request.complete_history) if i not in removed)
-                return replace(plan, messages=(*fixed, *kept, messages[-1]))
+                return replace(plan, messages=(*fixed, *kept, current))
     if request.trimmed_dialogue_quote and plan.should_generate and plan.history_policy == "conversation":
         omitted = sum(m["role"] == "user" for m in request.history) - sum(
             m["role"] == "user" for m in plan.messages[:-1]
         )
-        if omitted > 0 and (quote := request.trimmed_dialogue_quote(omitted)):
-            from inference.prompt_policy import dialogue_evidence_block
-
-            current = plan.messages[-1]
-            evidence = dialogue_evidence_block(json.dumps([quote], ensure_ascii=False))
-            messages = (*plan.messages[:-1], {**current, "content": evidence + "\n\n" + current["content"]})
+        if omitted or request.folded_turn_offsets:
+            current = with_omitted_quote(plan.messages[-1], omitted, len(request.folded_turn_offsets))
+            if current is plan.messages[-1]:
+                return plan
+            messages = (*plan.messages[:-1], current)
             cost = sum(_estimated_tokens(m["content"]) + 4 for m in messages)
             if cost + request.max_tokens + CONTEXT_SAFETY_MARGIN_TOKENS <= request.context_window_tokens:
                 return replace(plan, messages=messages)
