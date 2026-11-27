@@ -114,6 +114,25 @@ def test_budget_trimmed_turn_recalls_only_an_eligible_original(conversation):
     ).messages)
 
 
+def test_earliest_user_statement_survives_budget_trim_and_memory_correction(conversation):
+    _, _, session, turns = conversation
+    turns[0] = {**turns[0], "reply": "我喜欢玻璃杯。"}
+    turns[1] = {**turns[1], "message": "我常用银纹杯。"}
+    turns[2] = {**turns[2], "message": "我今天带了木杯。"}
+    turns[6] = {**turns[6], "message": "把物品放回柜子里。" * 2400}
+    state = {**session["state"], "memories": [{"origin": "user", "status": "confirmed", "content": "常用青瓷杯。"}]}
+
+    def current_message(state):
+        request = prepare_request({**session, "state": state}, turns, "那我最早在聊天里说的是什么杯？")
+        return build_generation_request(replace(request, context_window_tokens=8192)).messages[-1]["content"]
+
+    prompt = current_message(state)
+    assert "常用青瓷杯。" in prompt and "我常用银纹杯。" in prompt
+    assert "木杯" not in prompt and "玻璃杯" not in prompt
+    restricted = current_message({**state, "summary_excluded_turn_ids": [turns[1]["id"]]})
+    assert "银纹杯" not in restricted and "木杯" not in restricted
+
+
 def test_partial_compaction_preserves_unsummarized_turn_with_repeated_wording(conversation):
     _, _, session, turns = conversation
     turns[1] = {**turns[1], "message": turns[0]["message"]}

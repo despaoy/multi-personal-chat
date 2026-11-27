@@ -68,14 +68,22 @@ def requests_original_words(message):
 
 
 def trimmed_dialogue_quote(question, primary_turns, available, omitted):
-    """Return a bounded original statement from the most recent matching omitted turn."""
+    """Recover one bounded statement from budget-trimmed dialogue."""
     from character.quoted_erasure_authority import masked_quotes
     from knowledge.retrieval_core.tokenization import segment
 
-    terms = {t for t in segment(question.casefold()) if len(t) > 1 and t.isalnum()} - {
+    earliest_user = re.search(r"我(?:最早|最初|一开始)(?:在(?:聊天|对话)(?:里|中))?(?:说|提到|提过|告诉)", question)
+    query = question[:earliest_user.start()] + " " + question[earliest_user.end():] if earliest_user else question
+    terms = {t for t in segment(query.casefold()) if len(t) > 1 and t.isalnum()} - {
         "现在", "之前", "原话", "什么", "哪个", "哪里", "怎么", "回答", "告诉", "不确定",
         "我们", "你们", "the", "what", "which", "was", "were", "where", "before",
     }
+    if earliest_user:
+        terms -= {"的是", "说过", "提到", "那时", "当时"}
+        # A queried object can be a single character, e.g. “什么杯”.
+        for topic in re.findall(r"(?:什么|哪种|哪个)([\u4e00-\u9fff])[呢呀啊吗]?(?=[？?。！!\s]|$)", query):
+            if topic not in "呢呀啊吗":
+                terms.add(topic)
     if not terms:
         return None
 
@@ -83,18 +91,20 @@ def trimmed_dialogue_quote(question, primary_turns, available, omitted):
         text = text.casefold()
         return sum(len(term) for term in terms if term in text)
 
-    # Summary evidence, confirmed memory and the newer admitted turns take precedence.
-    if any(score(text) for text in available):
+    # Current memory can answer ordinary questions, but cannot attest to a past utterance.
+    if not earliest_user and any(score(text) for text in available):
         return None
-    for index in range(len(primary_turns) - 1, -1, -1):
+    indices = range(omitted) if earliest_user else reversed(range(len(primary_turns)))
+    speakers = (("user", "message"),) if earliest_user else (("user", "message"), ("assistant", "reply"))
+    for index in indices:
         turn, allowed = primary_turns[index]
-        if not any(score(turn[key]) for key in ("message", "reply")):
+        if not any(score(turn[key]) for _, key in speakers):
             continue
         if index >= omitted or not allowed or not all(memory_write_allowed(turn[k]) for k in ("message", "reply")):
             return None
         best = None
         best_score = 0
-        for role, key in (("user", "message"), ("assistant", "reply")):
+        for role, key in speakers:
             original = turn[key]
             try:
                 masked, _ = masked_quotes(original)
