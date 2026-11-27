@@ -83,6 +83,8 @@ function ChatWorkspace() {
   const [title, setTitle] = useState('新的相遇');
   const [acceptChange, setAcceptChange] = useState(false);
   const [previewResult, setPreview] = useState<ContinuationPreview>();
+  const [previewNeedsRefresh, setPreviewNeedsRefresh] = useState(false);
+  const previewRequest = useRef(0);
   const [sourceSelection, setSourceSelection] = useState<'default' | 'latest' | 'none'>('default');
   const [excludedMemories, setExcludedMemories] = useState<string[]>([]);
   const [resetRelationship, setResetRelationship] = useState(false);
@@ -133,15 +135,17 @@ function ChatWorkspace() {
 
   useEffect(() => {
     let active = true;
+    const request = ++previewRequest.current;
     setPreview(undefined);
+    setPreviewNeedsRefresh(false);
     setSourceSelection('default');
     setSelectedShared([]);
     setAcceptChange(false);
     setExcludedMemories([]);
     setResetRelationship(false);
     setInheritHistory(true);
-    if (source) api.getContinuationPreview(source).then(result => { if (active) setPreview(result); })
-      .catch(error => { if (active) setError(String(error)); });
+    if (source) api.getContinuationPreview(source).then(result => { if (active && request === previewRequest.current) setPreview(result); })
+      .catch(error => { if (active && request === previewRequest.current) setError(String(error)); });
     return () => { active = false; };
   }, [source]);
 
@@ -371,7 +375,7 @@ function ChatWorkspace() {
       <section className="min-w-0 space-y-4">
         {newSession ? <form className="space-y-4 rounded-xl border p-5" onSubmit={event => { event.preventDefault(); void run(async () => {
           if (!selectedCharacter) return;
-          if ((source && !preview) || needsSourceChoice) return;
+          if ((source && (!preview || previewNeedsRefresh)) || needsSourceChoice) return;
           const created = await api.createCharacterChat({ character_id: characterId, title,
             ...(localOnly ? { network_policy: 'local_only' as const } : {}),
             expected_character_revision: preview?.character_revision ?? selectedCharacter.revision,
@@ -406,8 +410,20 @@ function ChatWorkspace() {
             })}>加载更多共享记忆</Button>}
           </details>}
           {source && <Button type="button" variant="outline" disabled={busy} onClick={() => void run(async () => {
-            setAcceptChange(false); setPreview(undefined); setSourceSelection('default'); setExcludedMemories([]); setResetRelationship(false); setInheritHistory(true);
-            setPreview(await api.getContinuationPreview(source));
+            const selected = new Map(preview?.memories.filter(memory => !excludedMemories.includes(memory.id))
+              .map(memory => [memory.id, memory.content]));
+            setAcceptChange(false);
+            const request = ++previewRequest.current;
+            setPreviewNeedsRefresh(true);
+            const updated = await api.getContinuationPreview(source);
+            if (request !== previewRequest.current) return;
+            setExcludedMemories(updated.memories.filter(memory => selected.get(memory.id) !== memory.content)
+              .map(memory => memory.id));
+            if (sourceSelection === 'latest' && latestEdition?.id !== updated.latest_source_corpus?.id) {
+              setSourceSelection('default');
+            }
+            setPreview(updated);
+            setPreviewNeedsRefresh(false);
           })}>刷新继承预览</Button>}
           {sourceRevoked && <fieldset className="space-y-2 rounded-lg border p-3 text-sm" disabled={busy}>
             <legend>原会话绑定的资料版本已撤销</legend>
@@ -451,7 +467,7 @@ function ChatWorkspace() {
             <input type="checkbox" checked={acceptChange} disabled={busy} onChange={event => setAcceptChange(event.target.checked)} />
             角色设定从版本 {preview?.previous_character_revision} 更新为 {preview?.character_revision}。确认使用所展示的新设定，并按上方选择继承关系、记忆与对话。
           </label>}
-          <Button disabled={busy || !characterId || (Boolean(source) && !preview) || needsSourceChoice || (settingsChanged && !acceptChange)}>开始聊天</Button>
+          <Button disabled={busy || !characterId || (Boolean(source) && (!preview || previewNeedsRefresh)) || needsSourceChoice || (settingsChanged && !acceptChange)}>开始聊天</Button>
         </form> : session && <>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className="text-lg font-medium">{session.title}</h2>
