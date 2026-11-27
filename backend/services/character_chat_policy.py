@@ -6,8 +6,8 @@ from urllib.parse import urlsplit
 
 
 class LocalOnlyPolicyError(ValueError):
-    def __init__(self):
-        super().__init__("此会话仅允许本地模型；请配置本地模型服务后重试")
+    def __init__(self, service="模型"):
+        super().__init__(f"此会话仅允许本地{service}；请配置本地{service}服务后重试")
 
 
 def is_local_only(session):
@@ -40,9 +40,9 @@ def local_endpoint_allowed(url):
     return False
 
 
-def require_local_endpoint(session, url):
+def require_local_endpoint(session, url, *, service="模型"):
     if is_local_only(session) and not local_endpoint_allowed(url):
-        raise LocalOnlyPolicyError()
+        raise LocalOnlyPolicyError(service)
 
 
 def require_local_provider(session, context):
