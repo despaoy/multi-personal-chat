@@ -193,6 +193,23 @@ def test_latest_agreement_survives_compaction_when_summary_omits_correction(conv
     assert all("赤杉码头" not in message["content"] for message in messages)
 
 
+def test_long_chat_focus_uses_admitted_turns_and_only_spare_capacity(conversation):
+    _, _, session, turns = conversation
+    turns[0] = {**turns[0], "message": "今晚雾桥仓排的是祁苒。"}
+    turns[1] = {**turns[1], "message": "祁苒的个人交接编号是青鸟。"}
+    turns[2] = {**turns[2], "message": "个人交接编号改成白鸽。", "reply": "这一轮不要保存，也不要记住。"}
+    turns[3] = {**turns[3], "message": "清点库存。" * 26000}
+    request = replace(prepare_request(session, turns, "今晚雾桥仓值班那个人的个人交接编号是什么？"),
+                      context_window_tokens=1_000_000)
+    plain = build_generation_request(replace(request, focus_long_dialogue=False)).messages
+    focused = build_generation_request(request).messages
+    assert focused[1:-1] == plain[1:-1]
+    assert turns[0]["message"] in focused[-1]["content"] and turns[1]["message"] in focused[-1]["content"]
+    assert "白鸽" not in focused[-1]["content"] and "青鸟" not in focused[0]["content"]
+    limit = sum(estimated_tokens(m["content"]) + 4 for m in plain) + request.max_tokens + CONTEXT_SAFETY_MARGIN_TOKENS
+    assert build_generation_request(replace(request, context_window_tokens=limit)).messages == plain
+
+
 def test_literal_recall_uses_visible_source_even_when_summary_omits_its_wording(conversation):
     _, _, session, turns = conversation
     turns[2] = {**turns[2], "message": "窗边的台灯还能用。"}

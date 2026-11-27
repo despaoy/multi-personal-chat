@@ -201,6 +201,7 @@ class GenerationRequest:
     complete_history: tuple[Message, ...] = field(default=(), repr=False)
     folded_turn_offsets: tuple[int, ...] = field(default=(), repr=False)
     trimmed_dialogue_quote: Callable[[int, int], Message | None] | None = field(default=None, repr=False)
+    focus_long_dialogue: bool = False
 
 
 
@@ -405,6 +406,17 @@ def _system_prompt(request: GenerationRequest) -> str:
 
 def build_generation_request(request: GenerationRequest) -> GenerationPlan:
     """Build the one canonical model-facing message and parameter contract."""
+    plan = _plan_dialogue(request)
+    if request.focus_long_dialogue and plan.should_generate and plan.history_policy == "conversation":
+        from inference.dialogue_focus import focus_dialogue
+
+        messages = focus_dialogue(request, plan.messages)
+        if messages is not plan.messages:
+            return replace(plan, messages=messages)
+    return plan
+
+
+def _plan_dialogue(request: GenerationRequest) -> GenerationPlan:
     from inference.source_context_budget import admit_deferred_sources
     from inference.task_evidence_coverage import validate_task_candidates
 
