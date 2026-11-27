@@ -158,7 +158,10 @@ function CharacterLibrary() {
           await refresh();
         })}>添加预设 · 月社妃</Button>
         <Button disabled={busy} variant="outline" onClick={() => fileInput.current?.click()}>导入角色</Button>
-        <Button disabled={busy} variant="outline" onClick={() => void run(refresh)}>刷新列表</Button>
+        <Button disabled={busy} variant="outline" onClick={() => void run(async () => {
+          await refresh();
+          setSourceEpoch(value => value + 1);
+        })}>刷新列表</Button>
       </div>
     </div>
     <input ref={fileInput} type="file" accept="application/json,.json" className="hidden" aria-label="导入角色文件"
