@@ -232,6 +232,7 @@ def prepare_request(session, turns, message, retrieved_memories=None, *, proacti
     return GenerationRequest(
         message=message, persona_prompt=persona, history=history, character_context=context, memory_write_enabled=False,
         creator_examples=tuple(settings["examples"]), creator_reference=settings["reference_text"],
+        focus_long_dialogue=not inherited and not excluded and not session.get("source_corpus_id"),
         review_citations_against_question=bool(session.get("source_corpus_id")),
         complete_history=tuple(complete_history or ()),
         folded_turn_offsets=tuple(folded_offsets) if complete_history else (),
