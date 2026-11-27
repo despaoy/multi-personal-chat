@@ -10,7 +10,7 @@ from character.library import CharacterSettings
 from db.database import SQLiteDB
 from db.errors import RevisionConflictError
 from inference.generation_request import GenerationRequest, generate_character_response
-from knowledge.character_source_ranking import rank_source_candidates, rerank_source_model
+from knowledge.character_source_ranking import SOURCE_EVIDENCE_LIMIT, rank_source_candidates, rerank_source_model
 from repositories.character_chat import CharacterChatRepository
 from repositories.character_chat_generation import CharacterChatGenerationRepository
 from repositories.character_library import CharacterNotFoundError
@@ -28,6 +28,14 @@ class Provider:
 
     def embed_query(self, message):
         return [1, 0, 0]
+
+
+def test_fallback_keeps_hybrid_hit_when_literal_matches_fill_evidence_window():
+    passage = {"id": "answer", "title": "值班簿", "content": "屋里的火苗已经熄了。"}
+    matches = [{"id": str(i), "title": "灯具登记", "content": "清单另附。"} for i in range(SOURCE_EVIDENCE_LIMIT)]
+    ranked = asyncio.run(rank_source_candidates("灯具还亮着吗？", [passage, *matches]))
+    assert ranked[0] == matches[0] and passage in ranked
+    assert len({doc["id"] for doc in ranked}) == len(ranked) == SOURCE_EVIDENCE_LIMIT
 
 
 def test_timed_out_source_rerank_keeps_its_slot_without_blocking_following_requests(monkeypatch):
