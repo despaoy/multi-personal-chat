@@ -427,6 +427,28 @@ def test_background_enrichment_cannot_overwrite_later_user_actions(setup, change
         assert repo.get("1", session["id"])["state"]["memories"] == []
 
 
+def test_retracted_snapshot_never_starts_memory_enrichment(setup, monkeypatch):
+    from repositories.character_chat_enrichment import CharacterChatEnrichmentRepository
+    from services.character_chat_enrichment import process_enrichment
+
+    db, repo, session, _ = setup
+    turn = repo.commit_turn(session, "request", "喜欢茶", "知道了", "test", enqueue_enrichment=True)
+    load = CharacterChatEnrichmentRepository.load_snapshot
+
+    def retract_after_load(jobs, turn_id, revision):
+        snapshot = load(jobs, turn_id, revision)
+        assert snapshot is not None
+        repo.retract("1", session["id"], turn_id, revision)
+        return snapshot
+
+    async def unexpected(*args):
+        pytest.fail("Retracted dialogue reached an auxiliary stage")
+
+    monkeypatch.setattr(CharacterChatEnrichmentRepository, "load_snapshot", retract_after_load)
+    assert asyncio.run(process_enrichment(turn["id"], database=db, expected_revision=2,
+                                          enrich=unexpected, relationship=unexpected)) == "superseded"
+
+
 @pytest.mark.parametrize("interrupted", ["memory", "relationship", "summary", None])
 def test_background_enrichment_stops_before_next_stage_after_user_changes(setup, interrupted, monkeypatch):
     from services.character_chat_enrichment import process_enrichment
