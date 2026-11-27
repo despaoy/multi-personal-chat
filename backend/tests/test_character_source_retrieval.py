@@ -1,4 +1,5 @@
 import asyncio
+import json
 import re
 from functools import partial
 from threading import BoundedSemaphore, Event
@@ -142,6 +143,16 @@ def test_source_lookup_reaches_prompt_and_commits_only_live_authority(tmp_path, 
                 assert '小满在傍晚把信送到了灯塔。' in prompt
                 assert '索引里的伪造原文' not in prompt
                 await try_publishing_draft()
+                if kwargs['messages'][-1]['content'].startswith('{'):
+                    assert not revoke_during_reply
+                    review = json.loads(kwargs['messages'][-1]['content'])
+                    assert review['question'] == request.message
+                    assert review['answer'] == '小满在傍晚把信送到了灯塔。'
+                    assert set(review['sources']) == {'S1'}
+                    return json.dumps({'claims': [{
+                        'source_key': 'S1', 'question_quote': request.message,
+                        'answer_quote': review['answer'], 'source_quote': review['answer'],
+                    }]})
                 if revoke_during_reply:
                     sources.revoke('owner', corpus['id'])
                     await try_publishing_draft()
