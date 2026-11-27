@@ -153,6 +153,8 @@ def prepare_request(session, turns, message, retrieved_memories=None, *, proacti
         persona += (
             "\n本轮 conversation_reference 的 memories 中，origin 为 user 的 content 是用户手动确认的当前记录。"
             "被问到手动保存了什么时，按该条 content 原意回答，保留肯定或否定；聊天原话只说明当时说过什么。"
+            "被问到用户当时在聊天里说了什么时，依据历史对话中用户自己的发言。"
+            "手动记录可能在聊天之后被纠正，不能据此倒推当时的原话。两者都被问到时，分别说明。"
             "当天的临时选择就按当天的意思回应。"
             "新的长期说法与手动记录冲突时，可按新说法继续聊，同时说明保存的仍是原来的内容。"
             "只有实际修改成功后，才能说旧记忆已经更改或失效。"
