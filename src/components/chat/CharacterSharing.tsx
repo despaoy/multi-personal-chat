@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { api } from '@/lib/api';
+import { api, ApiRequestError } from '@/lib/api';
 import { createClientId } from '@/lib/client-id';
 import { Button } from '@/components/ui/button';
 import type { CharacterLibraryRecord, CharacterOriginalSource, CharacterPublicationPreview, CharacterSourceEdition, CharacterSourceEditionSummary, SharedCharacterPublication } from '@/lib/api-contracts';
@@ -116,7 +116,12 @@ export function SharedCharacterPreview({ token, onCopied, disabled = false, acqu
     if (flight.current || (acquire && !acquire())) return;
     flight.current = true; setBusy(true); setError('');
     try { await operation(); }
-    catch (error) { setError(error instanceof Error ? error.message : String(error)); }
+    catch (error) {
+      if (error instanceof ApiRequestError && [401, 403, 404, 409].includes(error.status)) {
+        setPreview(undefined);
+      }
+      setError(error instanceof Error ? error.message : String(error));
+    }
     finally { flight.current = false; setBusy(false); release?.(); }
   }
 
