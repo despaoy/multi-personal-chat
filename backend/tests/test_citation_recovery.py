@@ -427,6 +427,32 @@ async def test_character_review_keeps_reply_and_binds_only_verified_claims(inval
         assert checked.response_citations == (dict(marked, answer_excerpt="课程地点在兰亭教室", evidence_quote=A),)
 
 
+async def test_character_review_resolves_followup_using_only_last_admitted_exchange():
+    original = result()
+    question = "那是在哪里？"
+    previous = {"user": "说回上课这件事。", "assistant": "好，我们说的是这门课。"}
+    history = (
+        {"role": "system", "content": "不应转发的人设"},
+        {"role": "user", "content": "不相关的早期话题"},
+        {"role": "assistant", "content": "早期回复"},
+        *({"role": role, "content": text} for role, text in previous.items()),
+        {"role": "user", "content": question},
+    )
+    original = replace(original, plan=replace(original.plan, messages=history))
+
+    async def model(**kwargs):
+        payload = json.loads(kwargs["messages"][-1]["content"])
+        assert payload["previous_turn"] == previous and payload["question"] == question
+        assert "早期" not in str(payload) and "人设" not in str(payload)
+        return json.dumps({"claims": [{"question_quote": question, "source_key": "S1",
+                                      "answer_quote": A, "source_quote": A}]})
+
+    checked = await recovery.review_character_citations(
+        original, model, question=question, context_window_tokens=65536, before_model_call=None,
+    )
+    assert [citation["source_id"] for citation in checked.response_citations] == ["a"]
+
+
 async def test_character_review_propagates_revocation_before_dispatch():
     async def revoked():
         raise PermissionError
