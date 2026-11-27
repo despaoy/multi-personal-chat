@@ -172,8 +172,11 @@ def list_sessions(
 
 @router.post("", status_code=201)
 def create_session(body: CreateSession, owner=Depends(account), repo=Depends(repository)):
+    conflict_detail = None
+    if body.source_session_id and not body.source_turn_id:
+        conflict_detail = "继承预览已过期，请点击“刷新继承预览”，核对后重新确认。"
     try:
-        return call(lambda: repo.create(owner, **body.model_dump()))
+        return call(lambda: repo.create(owner, **body.model_dump()), conflict_detail=conflict_detail)
     except ValueError as exc:
         raise HTTPException(409, str(exc)) from exc
 

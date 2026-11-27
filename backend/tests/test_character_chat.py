@@ -694,6 +694,13 @@ def test_continuation_preview_and_version_confirmation(repo):
     with TestClient(app) as client:
         result = client.get(f"/api/character-chats/{source['id']}/continuation-preview")
         assert result.status_code == 200 and result.json()["character_revision"] == 3
+        preview = result.json()
+        repo.manage_memory("1", source["id"], preview["source_revision"], content="喜欢红茶")
+        stale = client.post("/api/character-chats", json={
+            "title": "延续", "character_id": entry["id"], "source_session_id": source["id"],
+            "source_revision": preview["source_revision"], "expected_character_revision": 3, "accept_settings_change": True,
+        })
+        assert stale.status_code == 409 and "刷新继承预览" in stale.json()["detail"]
 
 
 def test_continuation_choices_isolate_memory_relationship_and_raw_history(repo):
