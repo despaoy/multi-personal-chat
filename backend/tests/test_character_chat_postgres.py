@@ -72,7 +72,7 @@ def test_postgres_concurrent_preset_installation_keeps_one_pending_edition(datab
     assert len(sources.characters.list(owner)) == 1
     edition, = sources.list(owner, created[0]["id"], 1)
     assert edition["index_status"] == "pending"
-    assert len(sources.get(owner, edition["id"])["sources"]) == 3
+    assert sources.get(owner, edition["id"])["sources"] == list(SOURCES)
 
 
 def test_postgres_concurrent_import_confirmation_creates_one_character(database):
