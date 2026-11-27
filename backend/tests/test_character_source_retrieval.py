@@ -86,7 +86,7 @@ def test_unfinished_index_allows_reply_without_source_admission(tmp_path):
         session = chats.create('owner', char['id'], '普通聊天')
         prompt = prepare_request(session, [], "她当时见到的那个人是谁？").persona_prompt
         assert "只问一个聚焦的澄清问题" in prompt
-        assert "不要先复述背景、补猜情节或添加引用" in prompt
+        assert "检索选段用于查证，不能用来猜用户指哪一段" in prompt
         assert "不列举对话中未明确提到的情节作为选项" in prompt
 
         class Index:
