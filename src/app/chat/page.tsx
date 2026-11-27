@@ -400,7 +400,11 @@ function ChatWorkspace() {
             <p className="text-sm text-muted-foreground">仅供你自己的角色会话使用。取消共享只阻止之后带入，已经复制到其他会话的记忆需在对应会话中删除。</p>
             {sharedMemories.map(item => <div key={item.id} className="flex items-start justify-between gap-2 py-2">
               <label className="flex gap-2 text-sm"><input type="checkbox" disabled={busy} checked={selectedShared.includes(item.id)} onChange={event => setSelectedShared(previous => event.target.checked ? [...previous, item.id] : previous.filter(id => id !== item.id))} />{item.memory.content}</label>
-              <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => void run(async () => { await api.unshareChatMemory(item.id); await refreshShared(); })}>取消共享</Button>
+              <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={() => void run(async () => {
+                await api.unshareChatMemory(item.id);
+                setSharedMemories(previous => previous.filter(memory => memory.id !== item.id));
+                setSelectedShared(previous => previous.filter(id => id !== item.id));
+              })}>取消共享</Button>
             </div>)}
             {!sharedMemories.length && <p className="text-sm">尚无共享记忆，可在已有会话的记忆面板中选择共享。</p>}
             <Button type="button" variant="outline" disabled={busy} onClick={() => void run(refreshShared)}>刷新共享列表</Button>
