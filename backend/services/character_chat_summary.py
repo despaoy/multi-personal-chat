@@ -73,7 +73,7 @@ def trimmed_dialogue_quote(question, dialogue_turns, available, omitted_primary,
     from knowledge.retrieval_core.tokenization import segment
 
     earliest_user = re.search(r"我(?:最早|最初|一开始)(?:在(?:聊天|对话)(?:里|中))?(?:说|提到|提过|告诉)", question)
-    if not earliest_user and not omitted_primary:
+    if not (omitted_primary or omitted_folded):
         return None
     query = question[:earliest_user.start()] + " " + question[earliest_user.end():] if earliest_user else question
     terms = {t for t in segment(query.casefold()) if len(t) > 1 and t.isalnum()} - {
@@ -99,8 +99,6 @@ def trimmed_dialogue_quote(question, dialogue_turns, available, omitted_primary,
     turns = dialogue_turns if earliest_user else reversed(dialogue_turns)
     speakers = (("user", "message"),) if earliest_user else (("user", "message"), ("assistant", "reply"))
     for turn, allowed, folded, index in turns:
-        if folded and not earliest_user:
-            continue
         if not any(score(turn[key]) for _, key in speakers):
             continue
         omitted = omitted_folded if folded else omitted_primary
