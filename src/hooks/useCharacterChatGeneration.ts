@@ -9,6 +9,7 @@ export type CharacterChatSnapshot = Awaited<ReturnType<typeof api.getCharacterCh
 
 type PendingMessage = { sessionId: string; body: SendCharacterChatMessage };
 type Recovery = PendingMessage & { deadline: number; error: string; previousAttempt?: number };
+const STATUS_READ_TIMEOUT_MS = 10_000;
 
 function includesTurn(snapshot: CharacterChatSnapshot, requestId: string) {
   return snapshot.turns.some(turn => turn.request_id === requestId);
@@ -54,7 +55,7 @@ export function useCharacterChatGeneration(
     refreshSessions,
     refreshShared,
   }: {
-    reload: (sessionId: string) => Promise<CharacterChatSnapshot>;
+    reload: (sessionId: string, options: { signal: AbortSignal }) => Promise<CharacterChatSnapshot>;
     refreshSessions: () => Promise<void>;
     refreshShared: () => Promise<void>;
   }) {
@@ -76,12 +77,12 @@ export function useCharacterChatGeneration(
     setStreamRequest({ sessionId: session.id, requestId: body.request_id });
     try {
       await api.sendCharacterChat(session.id, body);
-      await reload(session.id);
+      await reload(session.id, { signal: AbortSignal.timeout(STATUS_READ_TIMEOUT_MS) });
       clearDraft();
     } catch (error) {
       // The server may have saved the reply before the connection failed.
       try {
-        const response = await reload(session.id);
+        const response = await reload(session.id, { signal: AbortSignal.timeout(STATUS_READ_TIMEOUT_MS) });
         if (includesTurn(response, body.request_id)) {
           clearDraft();
           if (body.replace_turn_id) await refreshShared();
@@ -119,7 +120,7 @@ export function useCharacterChatGeneration(
     let timer: ReturnType<typeof setTimeout>;
     const poll = async () => {
       try {
-        const response = await api.getCharacterChat(sessionId);
+        const response = await api.getCharacterChat(sessionId, AbortSignal.timeout(STATUS_READ_TIMEOUT_MS));
         if (!active) return;
         const saved = recovering && includesTurn(response, recovering.body.request_id);
         onPoll(response, saved ? recovering.error : undefined);
