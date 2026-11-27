@@ -20,7 +20,13 @@ from repositories.character_chat import CharacterChatRepository
 from repositories.character_chat_generation import CharacterChatGenerationRepository
 from services.character_chat_evidence import CharacterChatCompletion, evidence_snapshot
 from services.character_chat_policy import is_local_only, require_local_endpoint, require_local_provider
-from services.character_chat_summary import RECENT_TURNS, requests_original_words, summaries_for_prompt, valid_summaries
+from services.character_chat_summary import (
+    RECENT_TURNS,
+    requests_original_words,
+    summaries_for_prompt,
+    trimmed_dialogue_quote,
+    valid_summaries,
+)
 
 
 def _branch_premise_for_prompt(session):
@@ -164,6 +170,7 @@ def prepare_request(session, turns, message, retrieved_memories=None, *, proacti
     history = [] if mixed_settings else [greeting]
     complete_history = list(history) if covered - recent else None
     folded_offsets = []
+    primary_turns = []
     excluded = set(session["state"].get("summary_excluded_turn_ids", ()))
     for index, turn in enumerate(retained):
         if mixed_settings and index == len(inherited):
@@ -177,6 +184,10 @@ def prepare_request(session, turns, message, retrieved_memories=None, *, proacti
         folded = turn["id"] in covered and turn["id"] not in recent
         if not folded:
             history.extend(pair)
+            allowed = turn["id"] not in excluded and (
+                index >= len(inherited) or (revision is not None and turn_revision == revision and not mixed_settings)
+            )
+            primary_turns.append((turn, allowed))
         if complete_history is not None:
             if folded and (
                 turn["id"] in excluded
@@ -194,6 +205,10 @@ def prepare_request(session, turns, message, retrieved_memories=None, *, proacti
         history.append(greeting)
         if complete_history is not None:
             complete_history.append(greeting)
+    prompt_summaries = summaries_for_prompt(summaries, message, folded_sources)
+    available = [m["content"] for m in confirmed_memories]
+    available.extend(s["summary"] for s in prompt_summaries)
+    available.extend(item["quote"] for s in prompt_summaries for item in s["evidence"])
     context = CompiledCharacterContext(
         profile_context=persona,
         dynamic_context="",
@@ -203,7 +218,7 @@ def prepare_request(session, turns, message, retrieved_memories=None, *, proacti
                 "relationship": relationship,
                 "memories": confirmed_memories,
                 "branch_hypothesis": _branch_premise_for_prompt(session),
-                "conversation_summaries": summaries_for_prompt(summaries, message, folded_sources),
+                "conversation_summaries": prompt_summaries,
                 **({"previous_assistant_outreach": proactive_messages} if proactive_messages else {}),
             },
             ensure_ascii=False,
@@ -215,6 +230,7 @@ def prepare_request(session, turns, message, retrieved_memories=None, *, proacti
         review_citations_against_question=bool(session.get("source_corpus_id")),
         complete_history=tuple(complete_history or ()),
         folded_turn_offsets=tuple(folded_offsets) if complete_history else (),
+        trimmed_dialogue_quote=lambda omitted: trimmed_dialogue_quote(message, primary_turns, available, omitted),
     )
 
 

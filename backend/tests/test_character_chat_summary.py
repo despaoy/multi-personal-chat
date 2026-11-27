@@ -93,6 +93,27 @@ def test_summarized_history_uses_actual_remaining_window(conversation):
     assert "尚未实施" in compact.messages[-1]["content"]
 
 
+def test_budget_trimmed_turn_recalls_only_an_eligible_original(conversation):
+    _, _, session, turns = conversation
+    quote = "旧渡口封签如今改为「只许试用」。"
+    turns[6] = {**turns[6], "message": "把物品放回柜子里。" * 2400 + "\n" + quote}
+    question = "现在旧渡口封签上印的是什么？"
+    request = prepare_request(session, turns, question)
+    tight = replace(request, context_window_tokens=8192)
+    plan = build_generation_request(tight)
+    assert quote in plan.messages[-1]["content"]
+    assert not any("把物品放回柜子" in m["content"] for m in plan.messages)
+    full = build_generation_request(replace(request, context_window_tokens=1_000_000))
+    assert sum(quote in m["content"] for m in full.messages) == 1
+    assert quote not in full.messages[-1]["content"]
+
+    excluded = {**session["state"], "summary_excluded_turn_ids": [turns[6]["id"]]}
+    restricted = prepare_request({**session, "state": excluded}, turns, question)
+    assert all(quote not in m["content"] for m in build_generation_request(
+        replace(restricted, context_window_tokens=8192)
+    ).messages)
+
+
 def test_partial_compaction_preserves_unsummarized_turn_with_repeated_wording(conversation):
     _, _, session, turns = conversation
     turns[1] = {**turns[1], "message": turns[0]["message"]}

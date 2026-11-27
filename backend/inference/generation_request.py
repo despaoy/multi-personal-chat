@@ -7,6 +7,7 @@ generation-parameter contract seen by the model.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field, replace
 from functools import partial
 from typing import TYPE_CHECKING, Any, Literal
@@ -198,6 +199,7 @@ class GenerationRequest:
     # Authorized chronological history before summary compaction.
     complete_history: tuple[Message, ...] = field(default=(), repr=False)
     folded_turn_offsets: tuple[int, ...] = field(default=(), repr=False)
+    trimmed_dialogue_quote: Callable[[int], Message | None] | None = field(default=None, repr=False)
 
 
 
@@ -430,6 +432,19 @@ def build_generation_request(request: GenerationRequest) -> GenerationPlan:
             if excess <= 0:
                 kept = (m for i, m in enumerate(request.complete_history) if i not in removed)
                 return replace(plan, messages=(*fixed, *kept, messages[-1]))
+    if request.trimmed_dialogue_quote and plan.should_generate and plan.history_policy == "conversation":
+        omitted = sum(m["role"] == "user" for m in request.history) - sum(
+            m["role"] == "user" for m in plan.messages[:-1]
+        )
+        if omitted > 0 and (quote := request.trimmed_dialogue_quote(omitted)):
+            from inference.prompt_policy import dialogue_evidence_block
+
+            current = plan.messages[-1]
+            evidence = dialogue_evidence_block(json.dumps([quote], ensure_ascii=False))
+            messages = (*plan.messages[:-1], {**current, "content": evidence + "\n\n" + current["content"]})
+            cost = sum(_estimated_tokens(m["content"]) + 4 for m in messages)
+            if cost + request.max_tokens + CONTEXT_SAFETY_MARGIN_TOKENS <= request.context_window_tokens:
+                return replace(plan, messages=messages)
     return plan
 
 
