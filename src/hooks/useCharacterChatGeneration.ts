@@ -116,12 +116,13 @@ export function useCharacterChatGeneration(
   const recovering = recovery?.sessionId === sessionId ? recovery : null;
   useEffect(() => {
     if (!sessionId || (generationStatus !== 'running' && !enrichmentPending && !recovering) || paused) return;
-    let active = true;
+    const controller = new AbortController();
     let timer: ReturnType<typeof setTimeout>;
     const poll = async () => {
       try {
-        const response = await api.getCharacterChat(sessionId, AbortSignal.timeout(STATUS_READ_TIMEOUT_MS));
-        if (!active) return;
+        const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(STATUS_READ_TIMEOUT_MS)]);
+        const response = await api.getCharacterChat(sessionId, signal);
+        if (controller.signal.aborted) return;
         const saved = recovering && includesTurn(response, recovering.body.request_id);
         onPoll(response, saved ? recovering.error : undefined);
         const waiting = pending.current;
@@ -139,7 +140,7 @@ export function useCharacterChatGeneration(
         }
         if (!recovering && response.generation?.status !== 'running' && !response.enrichment_pending) return;
       } catch (error) {
-        if (!active) return;
+        if (controller.signal.aborted) return;
         if (error instanceof ApiRequestError && [401, 403, 404].includes(error.status)) {
           setRecovery(null);
           return;
@@ -149,11 +150,11 @@ export function useCharacterChatGeneration(
         setRecovery(null);
         return;
       }
-      if (active) timer = setTimeout(poll, 3000);
+      if (!controller.signal.aborted) timer = setTimeout(poll, 3000);
     };
     timer = setTimeout(poll, 1500);
     return () => {
-      active = false;
+      controller.abort();
       clearTimeout(timer);
     };
   }, [sessionId, generationStatus, enrichmentPending, paused, onPoll, recovering]);
