@@ -825,6 +825,36 @@ def test_web_memory_auto_confirmation_requires_user_assertion(repo, message, evi
         assert pending["status"] == "pending" and pending["memory_key"] == candidate["memory_key"]
 
 
+@pytest.mark.parametrize(("qualifiers", "expected"), [
+    ({"frequency": {"source_unit": "q1"}}, "confirmed"),
+    ({"frequency": "平时"}, "confirmed"),
+    ({"frequency": "平时", "condition": {"source_unit": "q1"}}, "pending"),
+])
+def test_explicit_habit_with_grounded_frequency(repo, qualifiers, expected):
+    import json
+
+    from character.memory_llm import MemoryLlmConfig
+    from services.character_chat_memory import enrich_state
+
+    class Writer:
+        async def complete(self, messages):
+            return json.dumps({"memories": [{
+                "operation": "ADD", "kind": "other_user_fact", "value": "咖啡",
+                "evidence": {"start_unit": "q1", "end_unit": "q1"}, "qualifiers": qualifiers,
+                "confidence": 0.99, "attributed_to": "user",
+            }]})
+
+    session = repo.create("1", character(repo)["id"], "习惯频率")
+    state = asyncio.run(enrich_state("记住，我平时不喝咖啡。", session, "habit",
+                                     config=MemoryLlmConfig(True, "https://test.invalid", "test"), completion=Writer()))
+    record, = state["memories"]
+    assert record["status"] == expected
+    assert record["evidence"] == "我平时不喝咖啡。"
+    if expected == "confirmed":
+        assert record["content"] == "用户平时不喝咖啡"
+        assert record["qualifiers"]["frequency"] in ("平时", "我平时不喝咖啡")
+
+
 @pytest.mark.parametrize("with_keyed_memory", [False, True])
 def test_manual_note_is_read_only_context_for_the_memory_writer(repo, with_keyed_memory):
     from character.memory_llm import MemoryLlmConfig

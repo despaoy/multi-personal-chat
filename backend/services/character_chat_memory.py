@@ -20,7 +20,7 @@ from services.character_chat_policy import is_local_only, local_endpoint_allowed
 logger = logging.getLogger(__name__)
 
 _EXPLICIT_HABIT = re.compile(
-    r"(?:(?:请)?记住[，,：:\s]*)?(?P<claim>我(?:平时|通常|一向)(?:不)?"
+    r"(?:(?:请)?记住[，,：:\s]*)?(?P<claim>我(?P<frequency>平时|通常|一向)(?:不)?"
     r"(?P<action>喝|吃|用|买|选)(?P<subject>[\w]{1,20}))[。.!！]?"
 )
 
@@ -109,7 +109,12 @@ async def enrich_state(message, session, request_id, *, database=None, config=No
                 None,
             )
             verified_habit = (
-                habit is not None and proposal.fact_kind == "other_user_fact" and unqualified
+                habit is not None and proposal.fact_kind == "other_user_fact"
+                and not proposal.valid_from and not proposal.valid_to
+                # A source-unit reference resolves to the whole clause containing the frequency.
+                and proposal.qualifiers in (
+                    (), (("frequency", habit["frequency"]),), (("frequency", habit["claim"]),),
+                )
                 and key in {"fact_" + habit["subject"], f"fact_habit_{habit['action']}_{habit['subject']}"}
                 and habit["claim"] in proposal.evidence
             )
@@ -123,8 +128,7 @@ async def enrich_state(message, session, request_id, *, database=None, config=No
             if any(item["content"] == content for item in same_key):
                 continue
             confirmed = (
-                proposal.operation == "ADD" and unqualified
-                and (preference is not None or verified_habit)
+                proposal.operation == "ADD" and ((preference is not None and unqualified) or verified_habit)
                 and not same_key
                 and not any(not item.get("memory_key") for item in state["memories"])
             )
