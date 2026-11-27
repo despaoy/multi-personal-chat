@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 import httpx
 import pytest
 
-from inference.chat_stream import chat_deltas
+from inference.chat_stream import CompletionLengthError, chat_deltas
 from inference.model_manager import OpenAICompatProvider
 from inference.openai_protocol import ProviderResponseError
 from inference.usage import CompletionUsage, collect_usage
@@ -46,7 +46,7 @@ def test_separate_usage_chunk():
 
 
 @pytest.mark.parametrize("events", [
-    [chunk("partial")], [chunk("partial", "length"), "[DONE]"],
+    [chunk("partial")],
     [chunk("partial"), "[DONE]"], [chunk(finish="stop"), "[DONE]"],
     [chunk("ok", "stop"), chunk("extra"), "[DONE]"],
     ["invalid JSON"], [{"error": {"message": "private upstream detail"}}],
@@ -54,6 +54,11 @@ def test_separate_usage_chunk():
 def test_incomplete_or_invalid_stream_is_not_success(events):
     with pytest.raises(ValueError):
         consume(events)
+
+
+def test_length_limit_reports_a_truncated_completion():
+    with pytest.raises(CompletionLengthError):
+        consume([chunk("partial"), chunk(finish="length"), "[DONE]"])
 
 
 @pytest.mark.parametrize("mode", ["complete", "disconnect", "cancel", "http_error"])

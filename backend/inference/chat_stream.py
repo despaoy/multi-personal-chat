@@ -3,6 +3,10 @@
 import json
 
 
+class CompletionLengthError(ValueError):
+    """The provider stopped generation at its token limit."""
+
+
 async def chat_deltas(lines, usage=None):
     data = []
     size = 0
@@ -55,6 +59,8 @@ async def chat_deltas(lines, usage=None):
                 yield content
         reason = choice.get("finish_reason")
         if reason is not None:
+            if reason == "length":
+                raise CompletionLengthError("Completion stream reached its token limit")
             if reason != "stop":
                 raise ValueError("Completion stream did not finish normally")
             finished = True
