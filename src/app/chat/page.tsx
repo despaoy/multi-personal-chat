@@ -46,7 +46,9 @@ function focusTurn(turnId: string) {
 function AnswerSources({ evidence }: { evidence?: CharacterChatEvidence }) {
   if (!evidence) return null;
   return <div className="space-y-2 text-sm">
-    {evidence.retrieval_status === 'character_abstention' && <p className="text-muted-foreground">本轮未取得足够的资料依据。</p>}
+    {evidence.retrieval_status === 'character_abstention' && <p className="text-muted-foreground">
+      {evidence.reason === 'retrieval_unavailable' ? '本轮未能读取原作资料，可稍后重新提问。' : '本轮未取得足够的资料依据。'}
+    </p>}
     {!!evidence.sources?.length && <details className="rounded-lg border p-3">
       <summary className="cursor-pointer">本条回答的资料出处（{evidence.sources.length}）</summary>
       <p className="my-2 text-xs text-muted-foreground">以下保存的是回答生成时的资料片段。出处可核对，不代表模型对原文的理解一定正确。</p>
