@@ -6,6 +6,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 from contextlib import nullcontext
 from heapq import nlargest
 from typing import Literal
@@ -64,6 +65,49 @@ def requests_original_words(message):
     return any(cue in query for cue in (
         "原话", "原句", "逐字", "一字不差", "verbatim", "exact wording", "exact words",
     ))
+
+
+def trimmed_dialogue_quote(question, primary_turns, available, omitted):
+    """Return a bounded original statement from the most recent matching omitted turn."""
+    from character.quoted_erasure_authority import masked_quotes
+    from knowledge.retrieval_core.tokenization import segment
+
+    terms = {t for t in segment(question.casefold()) if len(t) > 1 and t.isalnum()} - {
+        "现在", "之前", "原话", "什么", "哪个", "哪里", "怎么", "回答", "告诉", "不确定",
+        "我们", "你们", "the", "what", "which", "was", "were", "where", "before",
+    }
+    if not terms:
+        return None
+
+    def score(text):
+        text = text.casefold()
+        return sum(len(term) for term in terms if term in text)
+
+    # Summary evidence, confirmed memory and the newer admitted turns take precedence.
+    if any(score(text) for text in available):
+        return None
+    for index in range(len(primary_turns) - 1, -1, -1):
+        turn, allowed = primary_turns[index]
+        if not any(score(turn[key]) for key in ("message", "reply")):
+            continue
+        if index >= omitted or not allowed or not all(memory_write_allowed(turn[k]) for k in ("message", "reply")):
+            return None
+        best = None
+        best_score = 0
+        for role, key in (("user", "message"), ("assistant", "reply")):
+            original = turn[key]
+            try:
+                masked, _ = masked_quotes(original)
+            except ValueError:
+                continue
+            for match in re.finditer(r"[^。！？.!?\n]+[。！？.!?]*", masked):
+                quote = original[match.start():match.end()].strip()
+                relevance = score(quote)
+                if relevance > best_score and len(quote) <= 140 and not quote.endswith(("?", "？")):
+                    best = {"role": role, "quote": quote}
+                    best_score = relevance
+        return best
+    return None
 
 
 def _folded_quotes(folded_sources):

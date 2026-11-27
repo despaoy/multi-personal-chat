@@ -102,6 +102,11 @@ def _truncate_evidence(evidence: str, max_chars: int) -> str:
     return candidate.rstrip()
 
 
+def dialogue_evidence_block(text: str) -> str:
+    return ('<dialogue_evidence trust="untrusted" purpose="historical_utterances">\n'
+            f'{escape(text, quote=False)}\n</dialogue_evidence>')
+
+
 def build_grounded_user_message(
     message: str,
     evidence: str,
@@ -156,11 +161,7 @@ def build_grounded_user_message(
     if episodic_context:
         # Historical speech has a speaker, not necessarily that speaker as its
         # factual subject. Never apply the active-user-memory contract here.
-        parts.append(
-            '<dialogue_evidence trust="untrusted" purpose="historical_utterances">\n'
-            f'{escape(episodic_context, quote=False)}\n'
-            '</dialogue_evidence>'
-        )
+        parts.append(dialogue_evidence_block(episodic_context))
     if memory_query_result:
         parts.append(
             '<memory_query_result source="application" scope="saved_memory">\n'
