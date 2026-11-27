@@ -26,7 +26,11 @@ function localDateTime(timestamp: number) {
 
 export function ProactivePanel({ sessionId }: { sessionId: string }) {
   const [view, setView] = useState<CharacterProactiveState>();
-  const [draft, setDraft] = useState<CharacterProactivePolicy>();
+  const [edits, setDraft] = useState<CharacterProactivePolicy>();
+  const policy = view?.policy;
+  const draft = edits ?? (policy && (policy.revision ? policy : {
+    ...policy, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  }));
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [topic, setTopic] = useState('');
@@ -48,12 +52,6 @@ export function ProactivePanel({ sessionId }: { sessionId: string }) {
         const result = await api.getCharacterProactive(sessionId);
         if (!active || generation !== readGeneration.current) return;
         setView(result);
-        setDraft(previous => previous ?? {
-          revision: result.policy.revision, enabled: result.policy.enabled, cadence_hours: result.policy.cadence_hours,
-          quiet_start: result.policy.quiet_start, quiet_end: result.policy.quiet_end,
-          inactivity_hours: result.policy.inactivity_hours ?? null,
-          timezone: result.policy.revision ? result.policy.timezone : Intl.DateTimeFormat().resolvedOptions().timeZone,
-        });
       } catch (error) {
         if (active && generation === readGeneration.current) setError(error instanceof Error ? error.message : String(error));
       }
@@ -130,7 +128,9 @@ export function ProactivePanel({ sessionId }: { sessionId: string }) {
     {draft && <form className="space-y-2" onSubmit={event => {
       event.preventDefault();
       void run(async () => {
-        setDraft(await api.saveCharacterProactive(sessionId, draft));
+        const saved = await api.saveCharacterProactive(sessionId, draft);
+        setView(current => current && { ...current, policy: saved });
+        setDraft(undefined);
       });
     }}>
       <label className="flex items-center gap-2">
@@ -160,9 +160,9 @@ export function ProactivePanel({ sessionId }: { sessionId: string }) {
         <label>免打扰结束 <input disabled={busy} type="time" value={timeLabel(draft.quiet_end)} onChange={event => setDraft({ ...draft, quiet_end: minutesAt(event.target.value) })} /></label>
       </div>
       <p className="text-sm text-muted-foreground">两处时间都留空可取消免打扰。保存设置会取消此前尚未发送的安排。</p>
-      <Button type="submit" variant="outline" disabled={busy}>保存主动联系设置</Button>
+      <Button type="submit" variant="outline" disabled={busy || policy?.revision !== draft.revision}>保存主动联系设置</Button>
       {view?.policy.revision !== draft.revision && <Button type="button" variant="ghost" disabled={busy}
-        onClick={() => { if (view) setDraft(view.policy); }}>重新载入最新设置</Button>}
+        onClick={() => setDraft(undefined)}>重新载入最新设置</Button>}
     </form>}
     {view?.policy.enabled && <section className="space-y-2" aria-label="从对话选取话题">
       <Button type="button" variant="outline" disabled={busy} onClick={() => void run(async () => {
