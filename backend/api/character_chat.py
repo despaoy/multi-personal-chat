@@ -15,6 +15,7 @@ from app.runtime import get_runtime_container
 from character.chat_relationship import RelationshipDimensions, RelationshipStage
 from db.errors import RevisionConflictError
 from db.schemas import MessageText
+from inference.chat_stream import CompletionLengthError
 from infra.environment import read_bool
 from repositories.character_chat import CharacterChatRepository
 from repositories.character_chat_enrichment import CharacterChatEnrichmentRepository
@@ -362,6 +363,8 @@ async def generate_message(
         raise HTTPException(
             429, "请求过于频繁，请稍后重试", headers={"Retry-After": str(max(1, ceil(exc.retry_after)))},
         ) from exc
+    except CompletionLengthError as exc:
+        raise HTTPException(502, "回复达到模型长度上限，未保存为正式消息。可以恢复原消息，请角色简短回答后重试。") from exc
     except (InferenceQueueFull, TimeoutError) as exc:
         raise HTTPException(503, "生成未完成，请刷新会话核对后重试") from exc
 
