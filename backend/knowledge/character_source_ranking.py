@@ -63,8 +63,16 @@ def rank_verified_sources(query, documents, *, rerank=None):
         title = document["title"].casefold()
         return sum(term in body for term in terms) + sum(term in title for term in terms)
 
-    # Python's stable sort preserves the hybrid rank when literal coverage ties.
-    return sorted(documents, key=coverage, reverse=True)[:SOURCE_EVIDENCE_LIMIT]
+    # Literal matches can refine the hybrid order, but a paraphrased passage
+    # may have no overlapping words. Keep both rankings in the evidence window.
+    literal = sorted(documents, key=coverage, reverse=True)
+    selected = {}
+    for literal_hit, hybrid_hit in zip(literal, documents):
+        for hit in (literal_hit, hybrid_hit):
+            selected.setdefault(hit["id"], hit)
+            if len(selected) == SOURCE_EVIDENCE_LIMIT:
+                return list(selected.values())
+    return list(selected.values())
 
 
 def expand_source_context(documents, corpus):
