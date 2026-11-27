@@ -179,6 +179,20 @@ def test_earliest_user_quote_follows_omitted_summary_turn_across_budgets(convers
     assert turns[0]["message"] in prompt(8192)[-1]["content"]
 
 
+def test_latest_agreement_survives_compaction_when_summary_omits_correction(conversation):
+    _, _, session, turns = conversation
+    turns[1] = {**turns[1], "message": "退件袋定在赤杉码头交接。"}
+    turns[2] = {**turns[2], "message": "退件袋改在银杏钟楼交接。"}
+    turns[3] = {**turns[3], "reply": "清点货架上的纸箱。" * 3000}
+    state = asyncio.run(enrich_summary(session, turns, "summary", completion=Writer(turns[0]),
+                                       config=MemoryLlmConfig(True, "https://test.invalid", "test", max_input_chars=50000)))
+    assert state["summary_processing"] == "completed"
+    request = prepare_request({**session, "state": state}, turns, "最后定下的退件袋交接地点是哪里？")
+    messages = build_generation_request(replace(request, context_window_tokens=8192)).messages
+    assert turns[2]["message"] in messages[-1]["content"]
+    assert all("赤杉码头" not in message["content"] for message in messages)
+
+
 def test_literal_recall_uses_visible_source_even_when_summary_omits_its_wording(conversation):
     _, _, session, turns = conversation
     turns[2] = {**turns[2], "message": "窗边的台灯还能用。"}
