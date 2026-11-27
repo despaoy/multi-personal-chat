@@ -63,6 +63,7 @@ async def enrich_state(message, session, request_id, *, database=None, config=No
             config.confidence_threshold,
             context_window_tokens=config.context_window_tokens,
             scope_authorization=authorization,
+            unkeyed_as_read_only=True,
         )
         async with asyncio.timeout(config.timeout_seconds):
             if database is None:
