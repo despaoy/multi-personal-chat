@@ -15,7 +15,7 @@ export function GenerationDraft({ sessionId, requestId }: { sessionId: string; r
         if (value.request_id !== requestId || typeof value.status !== 'string') return;
         if (value.status === 'running') {
           setText(typeof value.draft_text === 'string' ? value.draft_text : '');
-          setStatus('正在生成 · 以下为尚未保存的草稿');
+          setStatus(value.draft_text ? '以下为尚未保存的草稿' : '正在等待回复草稿…');
         } else {
           source.close();
           setText('');
