@@ -148,6 +148,37 @@ def test_partial_compaction_preserves_unsummarized_turn_with_repeated_wording(co
     assert partial.messages == (*full.messages[:4], *full.messages[6:])
 
 
+def test_earliest_user_quote_follows_omitted_summary_turn_across_budgets(conversation):
+    _, _, session, turns = conversation
+    turns[0] = {**turns[0], "message": "我常用银纹杯。"}
+    turns[1] = {**turns[1], "reply": "把箱子放回仓库。" * 3000}
+    turns[9] = {**turns[9], "message": "今天我带了木杯。"}
+    state = asyncio.run(enrich_summary(session, turns, "summary", completion=Writer(turns[2]),
+                                       config=MemoryLlmConfig(True, "https://test.invalid", "test", max_input_chars=50000)))
+    assert state["summary_processing"] == "completed"
+    session = {**session, "state": state}
+    question = "那我最早在聊天里说的是什么杯？"
+
+    def prompt(window):
+        request = prepare_request(session, turns, question)
+        return build_generation_request(replace(request, context_window_tokens=window)).messages
+
+    full = prompt(1_000_000)
+    assert full[2]["content"] == turns[0]["message"] and "银纹杯" not in full[-1]["content"]
+    reserve = prepare_request(session, turns, question).max_tokens + CONTEXT_SAFETY_MARGIN_TOKENS
+    limit = sum(estimated_tokens(m["content"]) + 4 for m in full) + reserve - 1
+    near_limit = prompt(limit)
+    assert turns[0]["message"] in near_limit[-1]["content"]
+    assert sum(estimated_tokens(m["content"]) + 4 for m in near_limit) + reserve <= limit
+    compact = prompt(8192)
+    assert all("银纹杯" not in m["content"] for m in compact[:-1])
+    assert turns[0]["message"] in compact[-1]["content"] and "木杯" not in compact[-1]["content"]
+    assert any(m["content"] == turns[9]["message"] for m in compact[:-1])
+    # Also force the unsummarized history to overflow after every summary pair is removed.
+    turns[7] = {**turns[7], "reply": "清点货架上的工具。" * 3000}
+    assert turns[0]["message"] in prompt(8192)[-1]["content"]
+
+
 def test_literal_recall_uses_visible_source_even_when_summary_omits_its_wording(conversation):
     _, _, session, turns = conversation
     turns[2] = {**turns[2], "message": "窗边的台灯还能用。"}

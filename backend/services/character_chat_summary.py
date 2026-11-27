@@ -67,12 +67,14 @@ def requests_original_words(message):
     ))
 
 
-def trimmed_dialogue_quote(question, primary_turns, available, omitted):
+def trimmed_dialogue_quote(question, dialogue_turns, available, omitted_primary, omitted_folded):
     """Recover one bounded statement from budget-trimmed dialogue."""
     from character.quoted_erasure_authority import masked_quotes
     from knowledge.retrieval_core.tokenization import segment
 
     earliest_user = re.search(r"我(?:最早|最初|一开始)(?:在(?:聊天|对话)(?:里|中))?(?:说|提到|提过|告诉)", question)
+    if not earliest_user and not omitted_primary:
+        return None
     query = question[:earliest_user.start()] + " " + question[earliest_user.end():] if earliest_user else question
     terms = {t for t in segment(query.casefold()) if len(t) > 1 and t.isalnum()} - {
         "现在", "之前", "原话", "什么", "哪个", "哪里", "怎么", "回答", "告诉", "不确定",
@@ -94,12 +96,14 @@ def trimmed_dialogue_quote(question, primary_turns, available, omitted):
     # Current memory can answer ordinary questions, but cannot attest to a past utterance.
     if not earliest_user and any(score(text) for text in available):
         return None
-    indices = range(omitted) if earliest_user else reversed(range(len(primary_turns)))
+    turns = dialogue_turns if earliest_user else reversed(dialogue_turns)
     speakers = (("user", "message"),) if earliest_user else (("user", "message"), ("assistant", "reply"))
-    for index in indices:
-        turn, allowed = primary_turns[index]
+    for turn, allowed, folded, index in turns:
+        if folded and not earliest_user:
+            continue
         if not any(score(turn[key]) for _, key in speakers):
             continue
+        omitted = omitted_folded if folded else omitted_primary
         if index >= omitted or not allowed or not all(memory_write_allowed(turn[k]) for k in ("message", "reply")):
             return None
         best = None
