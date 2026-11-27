@@ -32,7 +32,7 @@ from services.character_chat_memory import enrich_state
 from services.character_chat_policy import LocalOnlyPolicyError
 from services.character_chat_relationship import enrich_relationship
 from services.character_chat_vectors import select_memories
-from services.character_source_retrieval import retrieve_configured_sources
+from services.character_source_retrieval import MissingSourceSearchURLError, retrieve_configured_sources
 from services.character_web_push import WebPushConfig
 
 router = APIRouter(prefix="/api/character-chats", tags=["character-chats"])
@@ -353,6 +353,8 @@ async def generate_message(
         raise HTTPException(409, "上一轮记忆和关系仍在整理，请稍后继续发送") from exc
     except LocalOnlyPolicyError as exc:
         raise HTTPException(422, str(exc)) from exc
+    except MissingSourceSearchURLError as exc:
+        raise HTTPException(500, str(exc)) from exc
     except RateLimitExceeded as exc:
         raise HTTPException(
             429, "请求过于频繁，请稍后重试", headers={"Retry-After": str(max(1, ceil(exc.retry_after)))},
