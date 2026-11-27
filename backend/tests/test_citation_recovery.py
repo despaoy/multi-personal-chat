@@ -382,3 +382,12 @@ async def test_chat_annotation_failure_propagates_without_returning_an_answer(mo
     assert len(planning) == 1 and len(calls) == 2
     if failure != 'invalid':
         assert caught.value is error
+
+
+def test_background_cannot_support_an_unmentioned_objects_attribute():
+    question = "回到原作。那一幕，能确认她戴着什么颜色的帽子吗？"
+    reply = "只写了海风吹乱头发，没提帽子，更没提颜色。"
+    bodies = ["我讨厌大海，受不了海风吹乱头发。"]
+    assert recovery.disclaims_requested_detail(question, reply, bodies)
+    assert not recovery.disclaims_requested_detail("为什么讨厌海？" + question, reply, bodies)
+    assert not recovery.disclaims_requested_detail(question, reply, ["后来她说，没提帽子，更没提颜色。"])

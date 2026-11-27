@@ -129,6 +129,18 @@ def disclaims_requested_detail(question, answer, source_bodies):
     """Recognize an explicit lack of evidence about the sole requested property."""
     if not question:
         return False
+    # In “什么颜色的帽子”, a denial that the passage even mentions the hat
+    # answers the whole question. Nearby quoted dialogue cannot establish it.
+    qualified = re.search(r"什么[\u4e00-\u9fff]{1,4}的(?P<object>[\u4e00-\u9fff]{1,8}?)(?:吗|呢)?[？?]?$", question)
+    if qualified and not re.search(r"为什么|如何|怎么|什么|哪|是否|是不是|以及|并且|还有|[？?、和与及]", question[:qualified.start()]):
+        obj = qualified["object"]
+        denial = (
+            r"(?:^|[，,。.!！?？；;：:—\s])(?:(?:原作|原文|资料|片段)(?:中|里)?)?"
+            r"(?:没(?:有)?(?:提到|提及|提|记载|交代|写明|写到)|未提及)"
+            + re.escape(obj) + r"(?=[，,。.!！?？；;\s]|$)"
+        )
+        if re.search(denial, answer) and not any(obj in body for body in source_bodies):
+            return True
     # Leave compound questions to the annotator: a different part may be answered.
     detail = re.fullmatch(
         r"(?P<subject>[^？?。！!；;]+?)是(?:什么|哪种|哪一种)(?P<field>[\u4e00-\u9fff]{1,8})[？?]?",

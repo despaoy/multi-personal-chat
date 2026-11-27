@@ -383,9 +383,18 @@ def _system_prompt(request: GenerationRequest) -> str:
 
         prompt += "\n\n" + POLICY
     if request.retrieval.has_evidence and request.retrieval.answer_citations_bound:
-        from inference.answer_citations import citation_output_policy
+        from inference.answer_citations import citation_marker, citation_output_policy
 
         prompt += "\n\n" + citation_output_policy(request.retrieval.citation_namespace)
+        if request.review_citations_against_question:
+            marker = citation_marker(request.retrieval.citation_namespace, "S1")
+            prompt += (
+                "\n角色说话时，界面会自动隐藏出处标记。即使用自己的话转述，也要在回答用户所问事实的句子后紧跟对应标记。"
+                f"输出格式示例：角色自己的回答。{marker} "
+                "只问一个细节而资料没有交代时，直接说该细节无法确认，不必复述附近的情节。"
+                "资料只写了一种理由时，也只确认这一种，不推断是否还有其他理由。"
+                "用户提出的假设和由此推演的内容不加标记。"
+            )
     return prompt
 
 
