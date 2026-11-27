@@ -15,6 +15,8 @@ async def process_enrichment(turn_id, *, database, enrich, relationship, expecte
     async def still_active():
         return await asyncio.to_thread(repo.keep_active, turn_id, session["revision"])
 
+    if not await still_active():
+        return "superseded"
     state = await enrich(turn["message"], session, turn["request_id"])
     if not await still_active():
         return "superseded"
