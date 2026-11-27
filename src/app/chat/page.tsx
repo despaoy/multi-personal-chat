@@ -493,7 +493,9 @@ function ChatWorkspace() {
             })}>重试后台整理</Button>
           </div>}
           {generation && <div role="status" className="space-y-2 rounded-lg border p-3">
-            <p>{generation.status === 'running' ? '这条消息仍在生成，完成后会自动显示。关闭页面不会取消生成。' : '上次生成未完成，可恢复原消息后重试。'}</p>
+            <p>{generation.status === 'running'
+              ? `正在等待正式回复，可以先离开页面。如果到 ${new Date(generation.lease_until * 1000).toLocaleTimeString('zh-CN', { hour12: false })} 仍未收到回复，可恢复原消息后重试。`
+              : '上次生成未完成，可恢复原消息后重试。'}</p>
             {generation.body && <p className="whitespace-pre-wrap text-sm">{generation.body.message}</p>}
             {generation.status !== 'running' && generation.body && <Button disabled={busy} variant="outline" onClick={() => {
               const body = generation.body;
