@@ -1,13 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api } from '@/lib/api';
+import { api, ApiRequestError } from '@/lib/api';
 import type { SendCharacterChatMessage } from '@/lib/api-contracts';
 import { createClientId } from '@/lib/client-id';
 
 export type CharacterChatSnapshot = Awaited<ReturnType<typeof api.getCharacterChat>>;
 
 type PendingMessage = { sessionId: string; body: SendCharacterChatMessage };
+type Recovery = PendingMessage & { deadline: number; error: string; previousAttempt?: number };
 
 function includesTurn(snapshot: CharacterChatSnapshot, requestId: string) {
   return snapshot.turns.some(turn => turn.request_id === requestId);
@@ -15,30 +16,34 @@ function includesTurn(snapshot: CharacterChatSnapshot, requestId: string) {
 
 export function useCharacterChatGeneration(
   snapshot: CharacterChatSnapshot | undefined,
-  { paused, onPoll }: { paused: boolean; onPoll: (snapshot: CharacterChatSnapshot) => void },
+  { paused, onPoll }: { paused: boolean; onPoll: (snapshot: CharacterChatSnapshot, recoveredError?: string) => void },
 ) {
   const [draft, setDraft] = useState('');
   const [editing, setEditing] = useState<string>();
   const [streamRequest, setStreamRequest] = useState<{ sessionId: string; requestId: string } | null>(null);
   const pending = useRef<PendingMessage | null>(null);
+  const [recovery, setRecovery] = useState<Recovery | null>(null);
   const sessionId = snapshot?.session.id;
   const generation = snapshot?.generation;
   const generationStatus = generation?.status;
   const enrichmentPending = snapshot?.enrichment_pending;
 
   const clearDraft = useCallback(() => {
+    setRecovery(null);
     pending.current = null;
     setDraft('');
     setEditing(undefined);
   }, []);
 
   function editDraft(turnId: string, message: string) {
+    setRecovery(null);
     pending.current = null;
     setDraft(message);
     setEditing(turnId);
   }
 
   function restoreDraft(sessionId: string, body: SendCharacterChatMessage) {
+    setRecovery(null);
     pending.current = { sessionId, body };
     setDraft(body.message);
     setEditing(body.replace_turn_id || undefined);
@@ -67,13 +72,12 @@ export function useCharacterChatGeneration(
         ...(editing ? { replace_turn_id: editing } : {}),
       };
     pending.current = { sessionId: session.id, body };
+    setRecovery(null);
     setStreamRequest({ sessionId: session.id, requestId: body.request_id });
     try {
       await api.sendCharacterChat(session.id, body);
-      clearDraft();
       await reload(session.id);
-      await refreshSessions();
-      if (body.replace_turn_id) await refreshShared();
+      clearDraft();
     } catch (error) {
       // The server may have saved the reply before the connection failed.
       try {
@@ -83,35 +87,67 @@ export function useCharacterChatGeneration(
           if (body.replace_turn_id) await refreshShared();
           return;
         }
-        if (response.session.revision !== body.revision) pending.current = null;
-      } catch { /* Keep the original failure and exact retry identity. */ }
+        if (response.session.revision !== body.revision) {
+          pending.current = null;
+        }
+      } catch (readError) {
+        if (readError instanceof ApiRequestError && [401, 403, 404].includes(readError.status)) throw error;
+      }
+      if (pending.current?.body === body && (!(error instanceof ApiRequestError) || error.status >= 500)) {
+        setRecovery({
+          sessionId: session.id, body, deadline: Date.now() + 60_000,
+          error: error instanceof Error ? error.message : String(error),
+          previousAttempt: generation?.request_id === body.request_id ? generation.attempt : undefined,
+        });
+      }
       throw error;
     } finally {
       setStreamRequest(null);
     }
+    await refreshSessions();
+    if (body.replace_turn_id) await refreshShared();
   }
 
   const watchedRequest = streamRequest && streamRequest.sessionId === sessionId
     ? streamRequest.requestId
     : generation?.status === 'running' ? generation.request_id : undefined;
 
+  const recovering = recovery?.sessionId === sessionId ? recovery : null;
   useEffect(() => {
-    if (!sessionId || (generationStatus !== 'running' && !enrichmentPending) || paused) return;
+    if (!sessionId || (generationStatus !== 'running' && !enrichmentPending && !recovering) || paused) return;
     let active = true;
     let timer: ReturnType<typeof setTimeout>;
     const poll = async () => {
       try {
         const response = await api.getCharacterChat(sessionId);
         if (!active) return;
-        onPoll(response);
+        const saved = recovering && includesTurn(response, recovering.body.request_id);
+        onPoll(response, saved ? recovering.error : undefined);
         const waiting = pending.current;
         if (waiting?.sessionId === sessionId && includesTurn(response, waiting.body.request_id)) {
           pending.current = null;
           setDraft(current => current === waiting.body.message ? '' : current);
           setEditing(undefined);
         }
-        if (response.generation?.status !== 'running' && !response.enrichment_pending) return;
-      } catch { /* Keep polling after a transient disconnect; manual refresh remains available. */ }
+        const attempt = response.generation;
+        const stopped = recovering && attempt && attempt.request_id === recovering.body.request_id
+          && attempt.status !== 'running' && attempt.attempt !== recovering.previousAttempt;
+        if (recovering && (saved || stopped || response.session.revision !== recovering.body.revision)) {
+          setRecovery(null);
+          return;
+        }
+        if (!recovering && response.generation?.status !== 'running' && !response.enrichment_pending) return;
+      } catch (error) {
+        if (!active) return;
+        if (error instanceof ApiRequestError && [401, 403, 404].includes(error.status)) {
+          setRecovery(null);
+          return;
+        }
+      }
+      if (recovering && Date.now() >= recovering.deadline) {
+        setRecovery(null);
+        return;
+      }
       if (active) timer = setTimeout(poll, 3000);
     };
     timer = setTimeout(poll, 1500);
@@ -119,7 +155,7 @@ export function useCharacterChatGeneration(
       active = false;
       clearTimeout(timer);
     };
-  }, [sessionId, generationStatus, enrichmentPending, paused, onPoll]);
+  }, [sessionId, generationStatus, enrichmentPending, paused, onPoll, recovering]);
 
   return { draft, setDraft, editing, editDraft, clearDraft, restoreDraft, watchedRequest, send };
 }
