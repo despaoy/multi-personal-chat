@@ -147,7 +147,7 @@ def retry_source_index(character_id: str, corpus_id: str, body: RetrySourceIndex
     return source_call(repo.retry_index_job, owner, corpus_id, body.attempt)
 
 
-def call(operation, *args):
+def call(operation, *args, conflict_detail=None):
     try:
         return operation(*args)
     except CharacterNotFoundError as exc:
@@ -155,7 +155,7 @@ def call(operation, *args):
     except SourceMergeBlockedError as exc:
         raise HTTPException(409, str(exc)) from exc
     except RevisionConflictError as exc:
-        raise HTTPException(409, "角色已被修改，请刷新后重试") from exc
+        raise HTTPException(409, conflict_detail or "角色已被修改，请刷新后重试") from exc
 
 
 @router.get("")
