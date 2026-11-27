@@ -115,7 +115,8 @@ function ChatWorkspace() {
   const loadVersion = useRef(0);
   const requestedSession = useRef<{ characterId: string; sessionId: string } | null>(null);
 
-  const applySnapshot = useCallback((response: CharacterChatSnapshot) => {
+  const applySnapshot = useCallback((response: CharacterChatSnapshot, recoveredError?: string) => {
+    if (recoveredError) setError(current => current === recoveredError ? '' : current);
     setSnapshot(response);
     const { id, revision } = response.session;
     setSessions(previous => previous.map(item => item.id === id ? { ...item, revision } : item));
