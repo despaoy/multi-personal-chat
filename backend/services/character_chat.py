@@ -20,7 +20,7 @@ from repositories.character_chat import CharacterChatRepository
 from repositories.character_chat_generation import CharacterChatGenerationRepository
 from services.character_chat_evidence import CharacterChatCompletion, evidence_snapshot
 from services.character_chat_policy import is_local_only, require_local_endpoint, require_local_provider
-from services.character_chat_summary import RECENT_TURNS, summaries_for_prompt, valid_summaries
+from services.character_chat_summary import RECENT_TURNS, requests_original_words, summaries_for_prompt, valid_summaries
 
 
 def _branch_premise_for_prompt(session):
@@ -60,6 +60,9 @@ def prepare_request(session, turns, message, retrieved_memories=None, *, proacti
     recent = {turn["id"] for turn in retained[-RECENT_TURNS:]}
     settings = session["character"]["settings"]
     persona = f"扮演以下角色，以人物的立场自然回应。角色名：{settings['name']}\n{settings['persona']}"
+    recall_wording = bool(summaries) and requests_original_words(message)
+    if recall_wording:
+        persona += "\n分段摘要的 summary 是转述。用户要原话时，从对应说话人的可见消息或 evidence 引文逐字摘录；只有转述时说明无法确认原句。"
     if settings["scenario"]:
         persona += "\n初始场景：" + settings["scenario"]
     if settings["relationships"]:
@@ -150,21 +153,7 @@ def prepare_request(session, turns, message, retrieved_memories=None, *, proacti
             "新的长期说法与手动记录冲突时，可按新说法继续聊，同时说明保存的仍是原来的内容。"
             "只有实际修改成功后，才能说旧记忆已经更改或失效。"
         )
-    context = CompiledCharacterContext(
-        profile_context=persona,
-        dynamic_context="",
-        reference_context="",
-        conversation_reference_context=json.dumps(
-            {
-                "relationship": relationship,
-                "memories": confirmed_memories,
-                "branch_hypothesis": _branch_premise_for_prompt(session),
-                "conversation_summaries": summaries_for_prompt(summaries, message),
-                **({"previous_assistant_outreach": proactive_messages} if proactive_messages else {}),
-            },
-            ensure_ascii=False,
-        ),
-    )
+    folded_sources = {}
     greeting = {"role": "assistant", "content": settings["greeting"]}
     history = [] if mixed_settings else [greeting]
     complete_history = list(history) if covered - recent else None
@@ -192,11 +181,28 @@ def prepare_request(session, turns, message, retrieved_memories=None, *, proacti
                 if not all(memory_write_allowed(row["content"]) for row in pair):
                     continue
                 folded_offsets.append(len(complete_history))
+                if recall_wording:
+                    folded_sources[turn["id"]] = turn
             complete_history.extend(pair)
     if mixed_settings and not turns:
         history.append(greeting)
         if complete_history is not None:
             complete_history.append(greeting)
+    context = CompiledCharacterContext(
+        profile_context=persona,
+        dynamic_context="",
+        reference_context="",
+        conversation_reference_context=json.dumps(
+            {
+                "relationship": relationship,
+                "memories": confirmed_memories,
+                "branch_hypothesis": _branch_premise_for_prompt(session),
+                "conversation_summaries": summaries_for_prompt(summaries, message, folded_sources),
+                **({"previous_assistant_outreach": proactive_messages} if proactive_messages else {}),
+            },
+            ensure_ascii=False,
+        ),
+    )
     return GenerationRequest(
         message=message, persona_prompt=persona, history=history, character_context=context, memory_write_enabled=False,
         creator_examples=tuple(settings["examples"]), creator_reference=settings["reference_text"],

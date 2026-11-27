@@ -108,6 +108,24 @@ def test_partial_compaction_preserves_unsummarized_turn_with_repeated_wording(co
     assert partial.messages == (*full.messages[:4], *full.messages[6:])
 
 
+def test_literal_recall_uses_visible_source_even_when_summary_omits_its_wording(conversation):
+    _, _, session, turns = conversation
+    turns[2] = {**turns[2], "message": "窗边的台灯还能用。"}
+    turns[3] = {**turns[3], "message": "坏台灯放在暗柜。", "reply": "这一轮不要保存，也不要记住。"}
+    state = asyncio.run(summarizer(Writer(turns[0]))(session, turns, "summary"))
+    session = {**session, "state": state}
+
+    def evidence(query):
+        request = prepare_request(session, turns, query)
+        context = json.loads(request.character_context.conversation_reference_context)
+        return context["conversation_summaries"][0]["evidence"]
+
+    quotes = evidence("台灯还能不能用，我当时的原话是什么？")
+    assert {"role": "user", "quote": turns[2]["message"]} in quotes
+    assert not any("暗柜" in item["quote"] for item in quotes)
+    assert {"role": "user", "quote": turns[2]["message"]} not in evidence("台灯还能不能用？")
+
+
 def test_one_restricted_folded_turn_does_not_hide_other_visible_turns(conversation):
     _, _, session, turns = conversation
     turns[2] = {**turns[2], "reply": "这一轮不要保存，也不要记住。"}
