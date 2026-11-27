@@ -27,6 +27,11 @@ from services.character_chat_vectors import embedding_identity
 logger = logging.getLogger(__name__)
 
 
+class MissingSourceSearchURLError(ValueError):
+    def __init__(self):
+        super().__init__("原作资料检索已启用，但未配置 CHARACTER_SEARCH_URL。请联系管理员配置检索地址后重试。")
+
+
 def _unavailable(request, reason='retrieval_unavailable'):
     return replace(request, retrieval=RetrievalResult(
         status='character_abstention', reason=reason,
@@ -110,7 +115,7 @@ async def retrieve_configured_sources(request, session, *, database):
 
     url = os.getenv('CHARACTER_SEARCH_URL', '').strip()
     if not url:
-        raise ValueError('CHARACTER_SEARCH_URL is required for original-source retrieval')
+        raise MissingSourceSearchURLError()
     require_local_endpoint(session, url, service="原作资料检索")
     provider = get_default_embedding_provider()
     rerank = rerank_source_model if read_bool(os.environ, 'RERANKER_ENABLED') else None
