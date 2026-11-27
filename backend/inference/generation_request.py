@@ -357,7 +357,10 @@ def _system_prompt(request: GenerationRequest) -> str:
     elif request.retrieval.status == "character_abstention":
         prompt = "\n\n".join(part for part in (prompt, CHARACTER_ABSTENTION_POLICY) if part)
         if request.retrieval.reason == "retrieval_unavailable":
-            prompt += "\n本轮依据暂时无法核实；这不代表知识库中不存在答案。请自然表达暂时不能确认。"
+            prompt += (
+                "\n这次未能读到原作片段。若用户问的是原作事实，用自己的口吻告诉对方眼下读不到资料，"
+                "可以稍后再问。此前提到的片段也不能代替本次核对。不要评价资料里写了什么或漏写了什么。"
+            )
     if request.apply_prompt_policy and (
         request.retrieval.source_coverage
         or request.retrieval.packet_coverage
