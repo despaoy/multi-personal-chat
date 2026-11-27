@@ -825,6 +825,35 @@ def test_web_memory_auto_confirmation_requires_user_assertion(repo, message, evi
         assert pending["status"] == "pending" and pending["memory_key"] == candidate["memory_key"]
 
 
+@pytest.mark.parametrize("with_keyed_memory", [False, True])
+def test_manual_note_is_read_only_context_for_the_memory_writer(repo, with_keyed_memory):
+    from character.memory_llm import MemoryLlmConfig
+    from services.character_chat_memory import enrich_state
+
+    session = repo.create("1", character(repo)["id"], "手动偏好")
+    session = repo.manage_memory("1", session["id"], session["revision"], content="我平时不喝热可可。")
+    if with_keyed_memory:
+        session["state"]["memories"].append({
+            "id": "tea", "content": "用户喜欢茶", "memory_key": "preference_茶", "status": "confirmed",
+        })
+
+    class Writer:
+        async def complete(self, messages):
+            payload = json.loads(messages[-1]["content"])
+            assert payload["read_only_memories"] == ["我平时不喝热可可。"]
+            targets = [row["memory_id"] for row in payload["existing_memories"]]
+            assert targets == (["tea"] if with_keyed_memory else [])
+            if not targets:
+                assert set(payload["proposal_constraints"]["operations"]) == {"ADD", "PENDING", "NOOP"}
+            return '{"memories":[]}'
+
+    state = asyncio.run(enrich_state(
+        "今天破例喝一杯。", session, "once", config=MemoryLlmConfig(True, "https://test.invalid", "test"),
+        completion=Writer(),
+    ))
+    assert state["memory_processing"] == "completed" and state["memories"] == session["state"]["memories"]
+
+
 def test_semantic_memory_is_committed_with_turn_and_conflicts_need_confirmation(repo):
     import json
     from functools import partial
