@@ -481,10 +481,13 @@ def _plan_dialogue(request: GenerationRequest) -> GenerationPlan:
             current = with_omitted_quote(plan.messages[-1], omitted, len(request.folded_turn_offsets))
             if current is plan.messages[-1]:
                 return plan
-            messages = (*plan.messages[:-1], current)
-            cost = sum(_estimated_tokens(m["content"]) + 4 for m in messages)
-            if cost + request.max_tokens + CONTEXT_SAFETY_MARGIN_TOKENS <= request.context_window_tokens:
-                return replace(plan, messages=messages)
+            fixed = [m for m in plan.messages[:-1] if m["role"] == "system"]
+            fixed_cost = sum(_estimated_tokens(m["content"]) + 4 for m in (*fixed, current))
+            available = request.context_window_tokens - request.max_tokens - CONTEXT_SAFETY_MARGIN_TOKENS - fixed_cost
+            if available >= 0:
+                history = [m for m in plan.messages[:-1] if m["role"] != "system"]
+                history = _trim_history_to_budget(history, available_tokens=available)
+                return replace(plan, messages=(*fixed, *history, current))
     return plan
 
 
