@@ -225,6 +225,26 @@ def test_trimmed_quote_has_room_after_unsummarized_history_fills_window(conversa
     assert sum(estimated_tokens(m["content"]) + 4 for m in messages) + reserve <= limit
 
 
+@pytest.mark.parametrize(("recent", "recall_old"), [
+    ("信封的校验词是银杏三六。", True),
+    ("木匣的校验词是银杏三六。", False),
+    ("它的校验词是银杏三六。", False),
+    ("信封的校验词是银杏三六，木匣也改成了这个。", False),
+])
+def test_trimmed_attribute_question_respects_the_recent_subject(conversation, recent, recall_old):
+    _, _, session, turns = conversation
+    turns[0] = {**turns[0], "message": "木匣的校验词是纸鸢四七。"}
+    turns[1] = {**turns[1], "message": "清点工具。" * 150}
+    turns[-1] = {**turns[-1], "message": recent}
+    request = prepare_request(session, turns, "木匣的校验词是什么？")
+    full = build_generation_request(replace(request, context_window_tokens=1_000_000)).messages
+    limit = (sum(estimated_tokens(m["content"]) + 4 for m in (full[0], *full[4:]))
+             + request.max_tokens + CONTEXT_SAFETY_MARGIN_TOKENS)
+    messages = build_generation_request(replace(request, context_window_tokens=limit)).messages
+    assert messages[-3]["content"] == recent
+    assert ("纸鸢四七" in messages[-1]["content"]) == recall_old
+
+
 def test_literal_recall_uses_visible_source_even_when_summary_omits_its_wording(conversation):
     _, _, session, turns = conversation
     turns[2] = {**turns[2], "message": "窗边的台灯还能用。"}

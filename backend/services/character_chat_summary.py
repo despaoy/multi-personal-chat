@@ -69,6 +69,26 @@ def requests_original_words(message):
     ))
 
 
+def _different_subject_statement(text, question):
+    """Recognize a standalone value for the same field on another named item."""
+    statement = re.fullmatch(r"([\u4e00-\u9fff]{2,12})的([\u4e00-\u9fff]{1,12}?)是[^，,。；;！？!?\n]{1,100}。?", text)
+    if not statement:
+        return False
+    subject, field = statement.groups()
+    query_subject, separator, _ = question.partition("的" + field)
+    if not separator or not query_subject or subject in query_subject or query_subject in text:
+        return False
+    from jieba.posseg import cut
+
+    # A pronoun or modifier can still refer to the requested item. Limit this
+    # shortcut to single, explicitly named subjects on both sides.
+    def named(word):
+        parts = list(cut(word))
+        return len(parts) == 1 and parts[0].flag.startswith(("n", "v"))
+
+    return named(subject) and named(query_subject)
+
+
 def trimmed_dialogue_quote(question, dialogue_turns, available, omitted_primary, omitted_folded):
     """Recover one bounded statement from budget-trimmed dialogue."""
     from character.quoted_erasure_authority import masked_quotes
@@ -101,10 +121,15 @@ def trimmed_dialogue_quote(question, dialogue_turns, available, omitted_primary,
     turns = dialogue_turns if earliest_user else reversed(dialogue_turns)
     speakers = (("user", "message"),) if earliest_user else (("user", "message"), ("assistant", "reply"))
     for turn, allowed, folded, index in turns:
-        if not any(score(turn[key]) for _, key in speakers):
+        matches = [turn[key] for _, key in speakers if score(turn[key])]
+        if not matches:
             continue
         omitted = omitted_folded if folded else omitted_primary
-        if index >= omitted or not allowed or not all(memory_write_allowed(turn[k]) for k in ("message", "reply")):
+        if not allowed or not all(memory_write_allowed(turn[k]) for k in ("message", "reply")):
+            return None
+        if not earliest_user and "的" in query and all(_different_subject_statement(text, query) for text in matches):
+            continue
+        if index >= omitted:
             return None
         best = None
         best_score = 0
