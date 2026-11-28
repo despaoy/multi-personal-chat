@@ -210,6 +210,21 @@ def test_long_chat_focus_uses_admitted_turns_and_only_spare_capacity(conversatio
     assert build_generation_request(replace(request, context_window_tokens=limit)).messages == plain
 
 
+def test_trimmed_quote_has_room_after_unsummarized_history_fills_window(conversation):
+    _, _, session, turns = conversation
+    turns[0] = {**turns[0], "message": "木匣的校验词是纸鸢四七。"}
+    turns[1] = {**turns[1], "message": "逐项清点箱内物件。" * 100}
+    request = prepare_request(session, turns, "木匣的校验词是什么？")
+    full = build_generation_request(replace(request, context_window_tokens=1_000_000)).messages
+    reserve = request.max_tokens + CONTEXT_SAFETY_MARGIN_TOKENS
+    # Fit all turns except the greeting and the pair containing the answer.
+    limit = reserve + sum(estimated_tokens(m["content"]) + 4 for m in (full[0], *full[4:]))
+    messages = build_generation_request(replace(request, context_window_tokens=limit)).messages
+    assert messages[0] == full[0] and messages[1:-1] == full[6:-1]
+    assert turns[0]["message"] in messages[-1]["content"]
+    assert sum(estimated_tokens(m["content"]) + 4 for m in messages) + reserve <= limit
+
+
 def test_literal_recall_uses_visible_source_even_when_summary_omits_its_wording(conversation):
     _, _, session, turns = conversation
     turns[2] = {**turns[2], "message": "窗边的台灯还能用。"}
