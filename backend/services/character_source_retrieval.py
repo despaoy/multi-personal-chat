@@ -52,31 +52,34 @@ async def retrieve_source_context(request, session, *, database, index, provider
     owner = session['owner_user_id']
     repo = CharacterSourceRepository(database)
     chats = CharacterChatRepository(database)
-    identity = await asyncio.to_thread(embedding_identity, provider)
-    if provider.dimension != index.dimension:
-        raise ValueError('Source query embedding dimension mismatch')
 
     def validate(*, initial=False):
         current = chats.get(owner, session['id'])
         if current['revision'] != session['revision'] or current['source_corpus_id'] != corpus_id:
             raise RevisionConflictError()
         try:
-            corpus = repo.require_indexed(owner, corpus_id, index.index, identity)
+            corpus = repo.completed_edition(owner, corpus_id)
         except CharacterNotFoundError:
             if initial and _revoked_branch_edition(repo, session):
                 return None
             raise
         if corpus['character_id'] != session['character_id'] or corpus['character_revision'] != session['character_revision']:
             raise ValueError('Bound source edition no longer matches the character')
-        return corpus
+        if provider.dimension != index.dimension:
+            raise ValueError('Source query embedding dimension mismatch')
+        identity = embedding_identity(provider)
+        repo.verify_index_receipt(corpus, index.index, identity)
+        return corpus, identity
 
     try:
-        if await asyncio.to_thread(validate, initial=True) is None:
+        validated = await asyncio.to_thread(validate, initial=True)
+        if validated is None:
             return _unavailable(request, 'source_version_revoked')
     except SourceIndexNotReadyError:
         # A newly published or copied corpus may still be indexing. Admit
         # no source text or citations, while allowing an in-character reply.
         return _unavailable(request)
+    _, identity = validated
     vector = await asyncio.to_thread(provider.embed_query, request.message)
     vector = vector.tolist() if hasattr(vector, 'tolist') else list(vector)
     scope = CharacterSearchScope(owner, session['character_id'], session['character_revision'], corpus_id, identity)
@@ -88,7 +91,7 @@ async def retrieve_source_context(request, session, *, database, index, provider
     documents = await asyncio.to_thread(repo.verify_candidates, owner, session['character_id'],
                                         session['character_revision'], corpus_id, candidates)
     ranked = await rank_source_candidates(request.message, documents, rerank=rerank, timeout=rerank_timeout)
-    corpus = await asyncio.to_thread(validate)
+    corpus, _ = await asyncio.to_thread(validate)
     documents = await asyncio.to_thread(expand_source_context, ranked, corpus)
     packets = document_evidence_packets(documents)
     retrieval = RetrievalResult(status='ok' if documents else 'character_abstention',

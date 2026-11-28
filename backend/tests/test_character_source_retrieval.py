@@ -96,8 +96,14 @@ def test_unfinished_index_allows_reply_without_source_admission(tmp_path):
             async def candidates(self, *args, **kwargs):
                 pytest.fail('Unfinished corpus must not use search candidates')
 
+        class UninstalledProvider(Provider):
+            @property
+            def model_fingerprint(self):
+                pytest.fail('A pending edition must allow chat before embedding weights are installed')
+
         request = GenerationRequest(message='想聊聊天')
-        result = asyncio.run(retrieve_source_context(request, session, database=db, index=Index(), provider=Provider()))
+        result = asyncio.run(retrieve_source_context(request, session, database=db, index=Index(),
+                                                    provider=UninstalledProvider()))
         assert result.retrieval.status == 'character_abstention'
         assert result.retrieval.reason == 'retrieval_unavailable'
         assert not result.retrieval.citations and not result.retrieval.evidence

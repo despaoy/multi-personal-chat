@@ -154,14 +154,22 @@ class CharacterSourceRepository:
               'receipt': json.dumps(receipt, sort_keys=True)}, 1),
         ])
 
-    def require_indexed(self, owner, corpus_id, index_name, embedding_identity):
+    def completed_edition(self, owner, corpus_id):
         corpus = self.get(owner, corpus_id)
         if corpus['index_status'] != 'completed':
             raise SourceIndexNotReadyError('资料索引尚未准备完成')
+        return corpus
+
+    @staticmethod
+    def verify_index_receipt(corpus, index_name, embedding_identity):
         receipt = json.loads(corpus.get('index_receipt_json') or '{}')
         if (receipt.get('index_name') != index_name or receipt.get('embedding_identity') != embedding_identity
                 or receipt.get('corpus_digest') != corpus['content_digest'] or receipt.get('chunk_count', 0) < 1):
             raise ValueError('资料索引尚未准备完成')
+
+    def require_indexed(self, owner, corpus_id, index_name, embedding_identity):
+        corpus = self.completed_edition(owner, corpus_id)
+        self.verify_index_receipt(corpus, index_name, embedding_identity)
         return corpus
 
     def verify_candidate(self, owner, character_id, character_revision, corpus_id, candidate):
